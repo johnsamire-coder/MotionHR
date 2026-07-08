@@ -31,6 +31,9 @@ urlpatterns = [
     
     # Dashboard
     path('dashboard/', accounts_views.dashboard, name='dashboard'),
+    
+    # Employees
+    path('employees/', include('employees.urls')),
 ]
 
 # Media files

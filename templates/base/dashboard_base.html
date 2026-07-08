@@ -223,10 +223,12 @@
         <div class="menu-section">
             <div class="menu-title">الموارد البشرية</div>
             
-            <a href="#" class="menu-item">
-                <i class="bi bi-people-fill"></i>
-                <span>الموظفون</span>
-            </a>
+            <a href="{% url 'employees:list' %}" 
+   class="menu-item {% if 'employees' in request.resolver_match.namespace %}active{% endif %}">
+    <i class="bi bi-people-fill"></i>
+    <span>الموظفون</span>
+</a>
+
             
             <a href="#" class="menu-item">
                 <i class="bi bi-building"></i>

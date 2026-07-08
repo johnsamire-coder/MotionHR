@@ -1,0 +1,313 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}{{ employee.full_name_ar }}{% endblock %}
+
+{% block page_title %}تفاصيل الموظف{% endblock %}
+{% block page_subtitle %}{{ employee.full_name_ar }}{% endblock %}
+
+{% block dashboard_content %}
+
+<!-- Back Button -->
+<div class="mb-3">
+    <a href="{% url 'employees:list' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        الرجوع للقائمة
+    </a>
+</div>
+
+<div class="row g-4">
+    
+    <!-- Employee Info Card -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center p-4">
+                
+                {% if employee.photo %}
+                <img src="{{ employee.photo.url }}" 
+                     class="rounded-circle mb-3" 
+                     style="width: 120px; height: 120px; object-fit: cover;">
+                {% else %}
+                <div class="rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center text-white fw-bold" 
+                     style="width: 120px; height: 120px; background: linear-gradient(135deg, #06B6D4, #3B82F6); font-size: 3rem;">
+                    {{ employee.first_name_ar|first }}
+                </div>
+                {% endif %}
+                
+                <h4 class="fw-bold mb-1">{{ employee.full_name_ar }}</h4>
+                <p class="text-muted mb-2">{{ employee.job_title.name_ar }}</p>
+                
+                <div class="mb-3">
+                    <span class="badge bg-secondary bg-opacity-10 text-secondary">
+                        {{ employee.employee_code }}
+                    </span>
+                    {% if employee.status == 'active' %}
+                        <span class="badge bg-success">نشط</span>
+                    {% elif employee.status == 'on_leave' %}
+                        <span class="badge bg-info">في إجازة</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ employee.get_status_display }}</span>
+                    {% endif %}
+                    
+                    {% if employee.is_field_worker %}
+                    <span class="badge bg-info">
+                        <i class="bi bi-geo-alt-fill"></i> ميداني
+                    </span>
+                    {% endif %}
+                </div>
+                
+                <hr>
+                
+                <div class="row text-center">
+                    <div class="col">
+                        <h5 class="fw-bold mb-0">{{ employee.years_of_service }}</h5>
+                        <small class="text-muted">سنوات الخدمة</small>
+                    </div>
+                    <div class="col border-start">
+                        <h5 class="fw-bold mb-0">{{ employee.age }}</h5>
+                        <small class="text-muted">العمر</small>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="d-grid gap-2">
+                    <a href="{% url 'employees:edit' employee.pk %}" class="btn btn-primary">
+                        <i class="bi bi-pencil-square"></i>
+                        تعديل البيانات
+                    </a>
+                    <a href="{% url 'employees:delete' employee.pk %}" class="btn btn-outline-danger">
+                        <i class="bi bi-trash"></i>
+                        حذف الموظف
+                    </a>
+                </div>
+                
+            </div>
+        </div>
+        
+        <!-- Contact Card -->
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3">
+                    <i class="bi bi-telephone text-primary"></i>
+                    التواصل
+                </h6>
+                
+                <div class="mb-2">
+                    <small class="text-muted">رقم الموبايل</small>
+                    <div>
+                        <a href="tel:{{ employee.phone }}" class="text-decoration-none">
+                            <i class="bi bi-phone text-success"></i>
+                            {{ employee.phone }}
+                        </a>
+                    </div>
+                </div>
+                
+                {% if employee.email %}
+                <div class="mb-2">
+                    <small class="text-muted">البريد الإلكتروني</small>
+                    <div>
+                        <a href="mailto:{{ employee.email }}" class="text-decoration-none">
+                            <i class="bi bi-envelope text-primary"></i>
+                            {{ employee.email }}
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if employee.address %}
+                <div>
+                    <small class="text-muted">العنوان</small>
+                    <div>
+                        <i class="bi bi-geo-alt text-danger"></i>
+                        {{ employee.address }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Details Tabs -->
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom">
+                <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#personal">
+                            <i class="bi bi-person"></i>
+                            البيانات الشخصية
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#employment">
+                            <i class="bi bi-briefcase"></i>
+                            بيانات التعيين
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#financial">
+                            <i class="bi bi-cash-stack"></i>
+                            البيانات المالية
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#documents">
+                            <i class="bi bi-file-earmark"></i>
+                            المستندات
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content">
+                    
+                    <!-- Personal Info -->
+                    <div class="tab-pane fade show active" id="personal">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small">الاسم بالعربي</label>
+                                <p class="fw-semibold mb-0">{{ employee.full_name_ar }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">الاسم بالإنجليزي</label>
+                                <p class="fw-semibold mb-0">{{ employee.full_name_en|default:"-" }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">الرقم القومي</label>
+                                <p class="fw-semibold mb-0">{{ employee.national_id }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">تاريخ الميلاد</label>
+                                <p class="fw-semibold mb-0">{{ employee.birth_date }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">النوع</label>
+                                <p class="fw-semibold mb-0">{{ employee.get_gender_display }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">الحالة الاجتماعية</label>
+                                <p class="fw-semibold mb-0">{{ employee.get_marital_status_display }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">الديانة</label>
+                                <p class="fw-semibold mb-0">{{ employee.get_religion_display|default:"-" }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">الجنسية</label>
+                                <p class="fw-semibold mb-0">{{ employee.nationality }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Employment Info -->
+                    <div class="tab-pane fade" id="employment">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small">تاريخ التعيين</label>
+                                <p class="fw-semibold mb-0">{{ employee.hire_date }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">نوع العقد</label>
+                                <p class="fw-semibold mb-0">{{ employee.get_contract_type_display }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">الفرع</label>
+                                <p class="fw-semibold mb-0">{{ employee.branch.name_ar }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">الإدارة</label>
+                                <p class="fw-semibold mb-0">{{ employee.department.name_ar }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">المسمى الوظيفي</label>
+                                <p class="fw-semibold mb-0">{{ employee.job_title.name_ar }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">المدير المباشر</label>
+                                <p class="fw-semibold mb-0">
+                                    {% if employee.direct_manager %}
+                                        {{ employee.direct_manager.full_name_ar }}
+                                    {% else %}-{% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Financial Info -->
+                    <div class="tab-pane fade" id="financial">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small">الراتب الأساسي</label>
+                                <p class="fw-semibold mb-0">
+                                    {{ employee.basic_salary }} 
+                                    <small class="text-muted">جنيه</small>
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">اسم البنك</label>
+                                <p class="fw-semibold mb-0">{{ employee.bank_name|default:"-" }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">رقم الحساب</label>
+                                <p class="fw-semibold mb-0">{{ employee.bank_account|default:"-" }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">IBAN</label>
+                                <p class="fw-semibold mb-0">{{ employee.iban|default:"-" }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">مؤمن عليه</label>
+                                <p class="fw-semibold mb-0">
+                                    {% if employee.has_insurance %}
+                                        <span class="text-success">✓ نعم</span>
+                                    {% else %}
+                                        <span class="text-muted">✗ لا</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">الرقم التأميني</label>
+                                <p class="fw-semibold mb-0">{{ employee.insurance_number|default:"-" }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Documents -->
+                    <div class="tab-pane fade" id="documents">
+                        {% if employee.documents.all %}
+                            <div class="list-group">
+                                {% for doc in employee.documents.all %}
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="mb-1">{{ doc.title }}</h6>
+                                            <small class="text-muted">
+                                                {{ doc.get_document_type_display }}
+                                                {% if doc.expiry_date %}
+                                                - ينتهي في {{ doc.expiry_date }}
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                        <a href="{{ doc.file.url }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                            <i class="bi bi-download"></i>
+                                            تحميل
+                                        </a>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="bi bi-folder2-open text-muted" style="font-size: 3rem;"></i>
+                                <p class="text-muted mt-2">لا توجد مستندات مرفقة</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
