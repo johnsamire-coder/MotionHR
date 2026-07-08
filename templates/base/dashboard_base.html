@@ -1,0 +1,408 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+    /* Layout */
+    .sidebar {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 260px;
+        height: 100vh;
+        background: #1E293B;
+        color: white;
+        overflow-y: auto;
+        z-index: 1000;
+        transition: transform 0.3s ease;
+    }
+    
+    .main-content {
+        margin-right: 260px;
+        min-height: 100vh;
+        background: #F1F5F9;
+        transition: margin-right 0.3s ease;
+    }
+    
+    .top-header {
+        background: white;
+        padding: 15px 25px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+    
+    .content-area {
+        padding: 25px;
+    }
+    
+    /* Sidebar Logo */
+    .sidebar-logo {
+        padding: 20px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .sidebar-logo-icon {
+        width: 45px;
+        height: 45px;
+        background: linear-gradient(135deg, #06B6D4, #3B82F6);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+    }
+    
+    .sidebar-logo-text h5 {
+        margin: 0;
+        font-weight: 700;
+        color: white;
+    }
+    
+    .sidebar-logo-text small {
+        color: rgba(255,255,255,0.5);
+        font-size: 0.75rem;
+    }
+    
+    /* Sidebar Menu */
+    .sidebar-menu {
+        padding: 15px 10px;
+    }
+    
+    .menu-section {
+        margin-bottom: 20px;
+    }
+    
+    .menu-title {
+        color: rgba(255,255,255,0.4);
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        padding: 10px 15px;
+        letter-spacing: 1px;
+    }
+    
+    .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 15px;
+        color: rgba(255,255,255,0.7);
+        text-decoration: none;
+        border-radius: 10px;
+        margin-bottom: 3px;
+        transition: all 0.2s;
+        font-size: 0.95rem;
+    }
+    
+    .menu-item:hover {
+        background: rgba(255,255,255,0.05);
+        color: white;
+    }
+    
+    .menu-item.active {
+        background: linear-gradient(135deg, #06B6D4, #3B82F6);
+        color: white;
+        box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+    }
+    
+    .menu-item i {
+        font-size: 1.2rem;
+        width: 24px;
+        text-align: center;
+    }
+    
+    .menu-badge {
+        margin-right: auto;
+        background: rgba(255,255,255,0.2);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.7rem;
+    }
+    
+    /* Top Header */
+    .header-user {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #06B6D4, #3B82F6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+    }
+    
+    /* Mobile Toggle */
+    .sidebar-toggle {
+        display: none;
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        color: #1E293B;
+    }
+    
+    /* Responsive */
+    @media (max-width: 991px) {
+        .sidebar {
+            transform: translateX(100%);
+        }
+        
+        .sidebar.show {
+            transform: translateX(0);
+        }
+        
+        .main-content {
+            margin-right: 0;
+        }
+        
+        .sidebar-toggle {
+            display: block;
+        }
+    }
+    
+    /* Overlay for mobile */
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 999;
+    }
+    
+    .sidebar-overlay.show {
+        display: block;
+    }
+</style>
+{% block dashboard_css %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+    
+    <!-- Logo -->
+    <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">
+            <i class="bi bi-people-fill"></i>
+        </div>
+        <div class="sidebar-logo-text">
+            <h5>MotionHR</h5>
+            <small>إدارة الموارد البشرية</small>
+        </div>
+    </div>
+    
+    <!-- Menu -->
+    <div class="sidebar-menu">
+        
+        <div class="menu-section">
+            <div class="menu-title">الرئيسية</div>
+            
+            <a href="{% url 'dashboard' %}" 
+               class="menu-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                <i class="bi bi-grid-1x2-fill"></i>
+                <span>لوحة التحكم</span>
+            </a>
+        </div>
+        
+        <div class="menu-section">
+            <div class="menu-title">الموارد البشرية</div>
+            
+            <a href="#" class="menu-item">
+                <i class="bi bi-people-fill"></i>
+                <span>الموظفون</span>
+            </a>
+            
+            <a href="#" class="menu-item">
+                <i class="bi bi-building"></i>
+                <span>الشركات والفروع</span>
+            </a>
+            
+            <a href="#" class="menu-item">
+                <i class="bi bi-diagram-3"></i>
+                <span>الإدارات</span>
+            </a>
+        </div>
+        
+        <div class="menu-section">
+            <div class="menu-title">الحضور والتتبع</div>
+            
+            <a href="#" class="menu-item">
+                <i class="bi bi-clock-history"></i>
+                <span>سجلات الحضور</span>
+            </a>
+            
+            <a href="#" class="menu-item">
+                <i class="bi bi-geo-alt-fill"></i>
+                <span>خريطة التتبع</span>
+                <span class="menu-badge">Live</span>
+            </a>
+            
+            <a href="#" class="menu-item">
+                <i class="bi bi-pin-map-fill"></i>
+                <span>الزيارات</span>
+            </a>
+            
+            <a href="#" class="menu-item">
+                <i class="bi bi-calendar-week"></i>
+                <span>الشيفتات</span>
+            </a>
+        </div>
+        
+        <div class="menu-section">
+            <div class="menu-title">الطلبات</div>
+            
+            <a href="#" class="menu-item">
+                <i class="bi bi-calendar-check"></i>
+                <span>الإجازات</span>
+            </a>
+            
+            <a href="#" class="menu-item">
+                <i class="bi bi-file-earmark-text"></i>
+                <span>الطلبات</span>
+            </a>
+        </div>
+        
+        <div class="menu-section">
+            <div class="menu-title">التقارير</div>
+            
+            <a href="#" class="menu-item">
+                <i class="bi bi-graph-up"></i>
+                <span>التقارير</span>
+            </a>
+        </div>
+        
+        <div class="menu-section">
+            <div class="menu-title">الإعدادات</div>
+            
+            <a href="/admin/" class="menu-item">
+                <i class="bi bi-gear-fill"></i>
+                <span>لوحة الإدارة</span>
+            </a>
+        </div>
+        
+    </div>
+</aside>
+
+<!-- Overlay for mobile -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- Main Content -->
+<div class="main-content">
+    
+    <!-- Top Header -->
+    <header class="top-header">
+        <div class="d-flex justify-content-between align-items-center">
+            
+            <div class="d-flex align-items-center gap-3">
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <i class="bi bi-list"></i>
+                </button>
+                
+                <div>
+                    <h5 class="mb-0 fw-bold">{% block page_title %}لوحة التحكم{% endblock %}</h5>
+                    <small class="text-muted">{% block page_subtitle %}مرحباً بك مرة أخرى{% endblock %}</small>
+                </div>
+            </div>
+            
+            <div class="d-flex align-items-center gap-3">
+                
+                <!-- Notifications -->
+                <button class="btn btn-light position-relative">
+                    <i class="bi bi-bell"></i>
+                    <span class="position-absolute top-0 start-0 translate-middle badge rounded-pill bg-danger" 
+                          style="font-size: 0.6rem;">
+                        0
+                    </span>
+                </button>
+                
+                <!-- User Dropdown -->
+                <div class="dropdown">
+                    <button class="btn header-user" data-bs-toggle="dropdown">
+                        <div class="user-avatar">
+                            {{ user.username|first|upper }}
+                        </div>
+                        <div class="text-start d-none d-md-block">
+                            <div class="fw-semibold" style="font-size: 0.9rem;">
+                                {{ user.get_full_name|default:user.username }}
+                            </div>
+                            <small class="text-muted">
+                                {{ user.get_role_display|default:"مستخدم" }}
+                            </small>
+                        </div>
+                        <i class="bi bi-chevron-down text-muted"></i>
+                    </button>
+                    
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <div class="dropdown-item-text">
+                                <div class="fw-semibold">{{ user.get_full_name|default:user.username }}</div>
+                                <small class="text-muted">{{ user.email }}</small>
+                            </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="#">
+                                <i class="bi bi-person ms-2"></i> الملف الشخصي
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="#">
+                                <i class="bi bi-gear ms-2"></i> الإعدادات
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <form method="post" action="{% url 'logout' %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="dropdown-item text-danger">
+                                    <i class="bi bi-box-arrow-right ms-2"></i>
+                                    تسجيل الخروج
+                                </button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+                
+            </div>
+        </div>
+    </header>
+    
+    <!-- Content -->
+    <main class="content-area">
+        {% block dashboard_content %}{% endblock %}
+    </main>
+    
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Sidebar Toggle for Mobile
+    document.getElementById('sidebarToggle').addEventListener('click', function() {
+        document.getElementById('sidebar').classList.toggle('show');
+        document.getElementById('sidebarOverlay').classList.toggle('show');
+    });
+    
+    document.getElementById('sidebarOverlay').addEventListener('click', function() {
+        document.getElementById('sidebar').classList.remove('show');
+        this.classList.remove('show');
+    });
+</script>
+{% block dashboard_js %}{% endblock %}
+{% endblock %}
