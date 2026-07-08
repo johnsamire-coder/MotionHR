@@ -240,40 +240,46 @@
             </a>
         </div>
         
-        <div class="menu-section">
-            <div class="menu-title">الحضور والتتبع</div>
-            
-            <a href="{% url 'attendance:list' %}" 
-               class="menu-item {% if request.resolver_match.url_name == 'list' and 'attendance' in request.path %}active{% endif %}">
-                <i class="bi bi-clock-history"></i>
-                <span>سجلات الحضور</span>
-            </a>
-            
-            <a href="{% url 'attendance:check_in' %}" 
-               class="menu-item {% if request.resolver_match.url_name == 'check_in' %}active{% endif %}">
-                <i class="bi bi-fingerprint"></i>
-                <span>تسجيل حضور</span>
-            </a>
-            
-            <a href="{% url 'attendance:live_map' %}" 
-               class="menu-item {% if request.resolver_match.url_name == 'live_map' %}active{% endif %}">
-                <i class="bi bi-geo-alt-fill"></i>
-                <span>خريطة التتبع</span>
-                <span class="menu-badge">Live</span>
-            </a>
-            
-            <a href="{% url 'attendance:visits' %}" 
-               class="menu-item {% if request.resolver_match.url_name == 'visits' %}active{% endif %}">
-                <i class="bi bi-pin-map-fill"></i>
-                <span>الزيارات</span>
-            </a>
-            
-            <a href="#" class="menu-item">
-                <i class="bi bi-calendar-week"></i>
-                <span>الشيفتات</span>
-            </a>
-        </div>
-        
+<div class="menu-section">
+    <div class="menu-title">الحضور والتتبع</div>
+    
+    <a href="{% url 'attendance:list' %}" 
+       class="menu-item {% if request.resolver_match.url_name == 'list' and 'attendance' in request.path %}active{% endif %}">
+        <i class="bi bi-clock-history"></i>
+        <span>سجلات الحضور</span>
+    </a>
+    
+    <a href="{% url 'attendance:check_in' %}" 
+       class="menu-item {% if request.resolver_match.url_name == 'check_in' %}active{% endif %}">
+        <i class="bi bi-fingerprint"></i>
+        <span>تسجيل حضور</span>
+    </a>
+    
+    <a href="{% url 'attendance:tracking' %}" 
+       class="menu-item {% if request.resolver_match.url_name == 'tracking' %}active{% endif %}">
+        <i class="bi bi-broadcast"></i>
+        <span>التتبع المستمر</span>
+    </a>
+    
+    <a href="{% url 'attendance:live_map' %}" 
+       class="menu-item {% if request.resolver_match.url_name == 'live_map' %}active{% endif %}">
+        <i class="bi bi-geo-alt-fill"></i>
+        <span>خريطة التتبع</span>
+        <span class="menu-badge">Live</span>
+    </a>
+    
+    <a href="{% url 'attendance:visits' %}" 
+       class="menu-item {% if request.resolver_match.url_name == 'visits' %}active{% endif %}">
+        <i class="bi bi-pin-map-fill"></i>
+        <span>الزيارات</span>
+    </a>
+    
+    <a href="#" class="menu-item">
+        <i class="bi bi-calendar-week"></i>
+        <span>الشيفتات</span>
+    </a>
+</div>
+
         <div class="menu-section">
             <div class="menu-title">الطلبات</div>
             

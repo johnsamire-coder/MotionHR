@@ -18,11 +18,8 @@ from employees.models import Employee
 
 
 def calculate_distance(lat1, lon1, lat2, lon2):
-    """
-    حساب المسافة بين نقطتين GPS بالمتر
-    باستخدام Haversine Formula
-    """
-    R = 6371000  # نصف قطر الأرض بالمتر
+    """حساب المسافة بين نقطتين GPS بالمتر"""
+    R = 6371000
     
     lat1_rad = math.radians(float(lat1))
     lat2_rad = math.radians(float(lat2))
@@ -32,8 +29,7 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     a = math.sin(delta_lat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon/2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     
-    distance = R * c
-    return round(distance, 2)
+    return round(R * c, 2)
 
 
 @login_required
@@ -42,7 +38,6 @@ def attendance_list(request):
     
     attendances = Attendance.objects.all().select_related('employee', 'shift')
     
-    # فلترة بالتاريخ
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
     
@@ -51,17 +46,14 @@ def attendance_list(request):
     if date_to:
         attendances = attendances.filter(date__lte=date_to)
     
-    # فلترة بالموظف
     employee_id = request.GET.get('employee', '')
     if employee_id:
         attendances = attendances.filter(employee_id=employee_id)
     
-    # فلترة بالحالة
     status = request.GET.get('status', '')
     if status:
         attendances = attendances.filter(status=status)
     
-    # إحصائيات اليوم
     today = date.today()
     today_stats = {
         'total': Attendance.objects.filter(date=today).count(),
@@ -70,7 +62,6 @@ def attendance_list(request):
         'absent': Attendance.objects.filter(date=today, status='absent').count(),
     }
     
-    # Pagination
     paginator = Paginator(attendances, 30)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
@@ -97,13 +88,11 @@ def attendance_list(request):
 def check_in_page(request):
     """صفحة تسجيل الحضور والانصراف"""
     
-    # جلب الموظف الحالي
     try:
         employee = Employee.objects.get(user=request.user)
     except Employee.DoesNotExist:
         employee = None
     
-    # سجل حضور اليوم
     today = date.today()
     today_attendance = None
     if employee:
@@ -139,7 +128,6 @@ def api_check_in(request):
                 'message': 'لم يتم تحديد الموقع'
             })
         
-        # جلب الموظف
         try:
             employee = Employee.objects.get(user=request.user)
         except Employee.DoesNotExist:
@@ -150,7 +138,6 @@ def api_check_in(request):
         
         today = date.today()
         
-        # هل سجل حضور اليوم؟
         existing = Attendance.objects.filter(employee=employee, date=today).first()
         if existing and existing.check_in_time:
             return JsonResponse({
@@ -158,7 +145,6 @@ def api_check_in(request):
                 'message': f'تم تسجيل الحضور مسبقاً في {existing.check_in_time.strftime("%H:%M")}'
             })
         
-        # التحقق من نطاق الفرع
         within_range = False
         distance = None
         if employee.branch and employee.branch.latitude and employee.branch.longitude:
@@ -168,9 +154,8 @@ def api_check_in(request):
             )
             within_range = distance <= employee.branch.check_in_radius
         else:
-            within_range = True  # لو الفرع مش محدد موقعه
+            within_range = True
         
-        # جلب الشيفت الحالي
         current_shift = EmployeeShift.objects.filter(
             employee=employee,
             is_active=True,
@@ -179,7 +164,6 @@ def api_check_in(request):
         
         shift = current_shift.shift if current_shift else None
         
-        # إنشاء أو تحديث سجل الحضور
         if existing:
             attendance = existing
         else:
@@ -187,9 +171,8 @@ def api_check_in(request):
                 employee=employee,
                 date=today,
                 shift=shift,
-                company=employee.company  # ← ضيف السطر ده
+                company=employee.company
             )
-
         
         attendance.check_in_time = timezone.now()
         attendance.check_in_latitude = latitude
@@ -198,7 +181,6 @@ def api_check_in(request):
         attendance.check_in_within_range = within_range
         attendance.status = 'present'
         
-        # حساب التأخير
         if shift:
             attendance.calculate_late_minutes()
             if attendance.late_minutes > 0:
@@ -240,7 +222,6 @@ def api_check_out(request):
                 'message': 'لم يتم تحديد الموقع'
             })
         
-        # جلب الموظف
         try:
             employee = Employee.objects.get(user=request.user)
         except Employee.DoesNotExist:
@@ -250,8 +231,6 @@ def api_check_out(request):
             })
         
         today = date.today()
-        
-        # سجل الحضور اليوم
         attendance = Attendance.objects.filter(employee=employee, date=today).first()
         
         if not attendance or not attendance.check_in_time:
@@ -266,7 +245,6 @@ def api_check_out(request):
                 'message': f'تم تسجيل الانصراف مسبقاً في {attendance.check_out_time.strftime("%H:%M")}'
             })
         
-        # التحقق من النطاق
         within_range = False
         if employee.branch and employee.branch.latitude and employee.branch.longitude:
             distance = calculate_distance(
@@ -277,16 +255,12 @@ def api_check_out(request):
         else:
             within_range = True
         
-        # تحديث سجل الحضور
         attendance.check_out_time = timezone.now()
         attendance.check_out_latitude = latitude
         attendance.check_out_longitude = longitude
         attendance.check_out_address = address
         attendance.check_out_within_range = within_range
-        
-        # حساب ساعات العمل
         attendance.calculate_work_hours()
-        
         attendance.save()
         
         return JsonResponse({
@@ -326,7 +300,6 @@ def visits_list(request):
 def visit_add(request):
     """إضافة زيارة موقع"""
     
-    # جلب الموظف
     try:
         employee = Employee.objects.get(user=request.user)
     except Employee.DoesNotExist:
@@ -367,7 +340,6 @@ def visit_add(request):
         except Exception as e:
             messages.error(request, f'خطأ: {str(e)}')
     
-    # قائمة الموظفين للاختيار منها
     employees = Employee.objects.filter(status='active')
     
     context = {
@@ -383,7 +355,6 @@ def visit_add(request):
 def live_map(request):
     """خريطة الموظفين الميدانيين Live"""
     
-    # الموظفين الميدانيين
     field_employees = Employee.objects.filter(
         is_field_worker=True,
         status='active'
@@ -401,7 +372,6 @@ def live_map(request):
 def api_live_locations(request):
     """API لآخر مواقع الموظفين الميدانيين"""
     
-    # آخر ساعتين (بدل ساعة عشان يظهر أي حاجة قريبة)
     two_hours_ago = timezone.now() - timedelta(hours=2)
     
     locations = []
@@ -411,13 +381,11 @@ def api_live_locations(request):
     )
     
     for emp in field_employees:
-        # آخر موقع
         last_location = LocationLog.objects.filter(
             employee=emp,
             timestamp__gte=two_hours_ago
         ).order_by('-timestamp').first()
         
-        # لو ملقاش تتبع، شوف آخر حضور
         if not last_location:
             today_attendance = Attendance.objects.filter(
                 employee=emp,
@@ -461,3 +429,123 @@ def api_live_locations(request):
         'count': len(locations),
         'last_update': timezone.now().strftime('%H:%M:%S'),
     })
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_track_location(request):
+    """API لاستقبال المواقع من التطبيق"""
+    
+    try:
+        data = json.loads(request.body)
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        accuracy = data.get('accuracy', 0)
+        speed = data.get('speed', 0)
+        battery = data.get('battery')
+        address = data.get('address', '')
+        
+        if not latitude or not longitude:
+            return JsonResponse({
+                'success': False,
+                'message': 'الموقع غير محدد'
+            })
+        
+        try:
+            employee = Employee.objects.get(user=request.user)
+        except Employee.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'لم يتم العثور على الموظف'
+            })
+        
+        if not employee.is_field_worker:
+            return JsonResponse({
+                'success': False,
+                'message': 'التتبع متاح للموظفين الميدانيين فقط'
+            })
+        
+        LocationLog.objects.create(
+            company=employee.company,
+            employee=employee,
+            timestamp=timezone.now(),
+            latitude=latitude,
+            longitude=longitude,
+            accuracy=accuracy,
+            speed=speed,
+            battery_level=battery,
+            address=address,
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'تم تسجيل الموقع'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'خطأ: {str(e)}'
+        })
+
+
+@login_required
+def tracking_page(request):
+    """صفحة التتبع للموظف الميداني"""
+    
+    try:
+        employee = Employee.objects.get(user=request.user)
+    except Employee.DoesNotExist:
+        employee = None
+    
+    today_locations = []
+    today_count = 0
+    if employee:
+        today_start = timezone.now().replace(hour=0, minute=0, second=0)
+        today_locations = LocationLog.objects.filter(
+            employee=employee,
+            timestamp__gte=today_start
+        ).order_by('-timestamp')[:50]
+        today_count = today_locations.count()
+    
+    context = {
+        'employee': employee,
+        'today_locations': today_locations,
+        'today_count': today_count,
+    }
+    
+    return render(request, 'attendance/tracking.html', context)
+
+
+@login_required
+def employee_tracking_detail(request, employee_id):
+    """عرض تتبع موظف معين (للمدير)"""
+    
+    employee = get_object_or_404(Employee, pk=employee_id)
+    
+    date_str = request.GET.get('date', '')
+    if date_str:
+        try:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except:
+            selected_date = date.today()
+    else:
+        selected_date = date.today()
+    
+    day_start = timezone.make_aware(datetime.combine(selected_date, datetime.min.time()))
+    day_end = timezone.make_aware(datetime.combine(selected_date, datetime.max.time()))
+    
+    locations = LocationLog.objects.filter(
+        employee=employee,
+        timestamp__gte=day_start,
+        timestamp__lte=day_end,
+    ).order_by('timestamp')
+    
+    context = {
+        'employee': employee,
+        'locations': locations,
+        'selected_date': selected_date,
+        'total_points': locations.count(),
+    }
+    
+    return render(request, 'attendance/tracking_detail.html', context)
