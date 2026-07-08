@@ -7,6 +7,16 @@
 
 {% block dashboard_content %}
 
+<!-- Messages -->
+{% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+{% endif %}
+
 <!-- Header Actions -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
@@ -26,7 +36,6 @@
                                value="{{ search }}">
                     </div>
                     
-                    <!-- Hidden filters to preserve them -->
                     {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
                     {% if branch_filter %}<input type="hidden" name="branch" value="{{ branch_filter }}">{% endif %}
                     {% if department_filter %}<input type="hidden" name="department" value="{{ department_filter }}">{% endif %}
@@ -37,19 +46,49 @@
             
             <!-- Count -->
             <div class="col-md-6 col-lg-4">
-                <span class="badge bg-primary bg-opacity-10 text-primary p-2">
-                    <i class="bi bi-people-fill"></i>
-                    إجمالي: {{ total_count }} موظف
-                </span>
+                <div class="d-flex align-items-center gap-2 p-2 rounded-3" 
+                     style="background: rgba(6, 182, 212, 0.1);">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" 
+                         style="width: 40px; height: 40px; background: #06B6D4;">
+                        <i class="bi bi-people-fill text-white"></i>
+                    </div>
+                    <div>
+                        <small class="text-muted d-block">إجمالي الموظفين</small>
+                        <h5 class="mb-0 fw-bold text-primary">{{ total_count }}</h5>
+                    </div>
+                </div>
             </div>
             
             <!-- Actions -->
             <div class="col-lg-4 text-lg-end">
                 <div class="btn-group">
-                    <button class="btn btn-outline-secondary">
-                        <i class="bi bi-download"></i>
-                        تصدير
-                    </button>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="bi bi-download"></i>
+                            تصدير
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item" href="?export=excel{% if search %}&search={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if branch_filter %}&branch={{ branch_filter }}{% endif %}{% if department_filter %}&department={{ department_filter }}{% endif %}">
+                                    <i class="bi bi-file-earmark-excel text-success"></i>
+                                    Excel
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="?export=pdf{% if search %}&search={{ search }}{% endif %}">
+                                    <i class="bi bi-file-earmark-pdf text-danger"></i>
+                                    PDF
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="window.print(); return false;">
+                                    <i class="bi bi-printer"></i>
+                                    طباعة
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                     <a href="{% url 'employees:add' %}" class="btn btn-primary">
                         <i class="bi bi-person-plus-fill"></i>
                         إضافة موظف

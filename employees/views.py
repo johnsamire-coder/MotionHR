@@ -3,6 +3,9 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
+from django.http import HttpResponse
+import csv
+from datetime import datetime
 
 from .models import Employee, JobTitle
 from .forms import EmployeeForm
@@ -42,6 +45,14 @@ def employee_list(request):
     if department_filter:
         employees = employees.filter(department_id=department_filter)
     
+    # التصدير
+    export_type = request.GET.get('export', '')
+    if export_type == 'excel':
+        return export_employees_excel(employees)
+    elif export_type == 'pdf':
+        messages.info(request, 'تصدير PDF قيد التطوير - جرب Excel')
+        return redirect('employees:list')
+    
     # Pagination
     paginator = Paginator(employees, 20)
     page_number = request.GET.get('page', 1)
@@ -64,6 +75,60 @@ def employee_list(request):
     }
     
     return render(request, 'employees/list.html', context)
+
+
+def export_employees_excel(employees):
+    """تصدير الموظفين إلى ملف Excel/CSV"""
+    
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    filename = f"employees_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    # BOM للـ Excel يقرأ العربي صح
+    response.write('\ufeff')
+    
+    writer = csv.writer(response)
+    
+    # Headers
+    writer.writerow([
+        'الرقم الوظيفي',
+        'الاسم بالعربي',
+        'الاسم بالإنجليزي',
+        'الرقم القومي',
+        'تاريخ الميلاد',
+        'النوع',
+        'رقم الموبايل',
+        'البريد الإلكتروني',
+        'الفرع',
+        'الإدارة',
+        'المسمى الوظيفي',
+        'تاريخ التعيين',
+        'الراتب الأساسي',
+        'الحالة',
+        'موظف ميداني',
+    ])
+    
+    # البيانات
+    for emp in employees:
+        writer.writerow([
+            emp.employee_code,
+            emp.full_name_ar,
+            emp.full_name_en or '',
+            emp.national_id,
+            emp.birth_date,
+            emp.get_gender_display(),
+            emp.phone,
+            emp.email or '',
+            emp.branch.name_ar,
+            emp.department.name_ar,
+            emp.job_title.name_ar,
+            emp.hire_date,
+            emp.basic_salary,
+            emp.get_status_display(),
+            'نعم' if emp.is_field_worker else 'لا',
+        ])
+    
+    return response
 
 
 @login_required
