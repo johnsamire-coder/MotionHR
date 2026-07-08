@@ -1,0 +1,15 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}زيارات المواقع{% endblock %}
+{% block page_title %}زيارات المواقع{% endblock %}
+{% block page_subtitle %}زيارات الموظفين للعملاء والمواقع{% endblock %}
+
+{% block dashboard_content %}
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-pin-map text-primary" style="font-size: 5rem;"></i>
+        <h4 class="fw-bold mt-3">صفحة الزيارات قيد التطوير</h4>
+        <p class="text-muted">إجمالي الزيارات: {{ total_count }}</p>
+    </div>
+</div>
+{% endblock %}

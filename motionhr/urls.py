@@ -34,6 +34,7 @@ urlpatterns = [
     
     # Employees
     path('employees/', include('employees.urls')),
+    path('attendance/', include('attendance.urls')),
 ]
 
 # Media files
