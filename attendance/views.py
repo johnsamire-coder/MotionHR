@@ -325,8 +325,58 @@ def visits_list(request):
 @login_required
 def visit_add(request):
     """إضافة زيارة موقع"""
-    messages.info(request, 'صفحة إضافة الزيارة قيد التطوير')
-    return redirect('attendance:visits')
+    
+    # جلب الموظف
+    try:
+        employee = Employee.objects.get(user=request.user)
+    except Employee.DoesNotExist:
+        employee = None
+    
+    if request.method == 'POST':
+        try:
+            employee_id = request.POST.get('employee_id')
+            visit_type = request.POST.get('visit_type')
+            location_name = request.POST.get('location_name')
+            purpose = request.POST.get('purpose', '')
+            latitude = request.POST.get('latitude')
+            longitude = request.POST.get('longitude')
+            address = request.POST.get('address', '')
+            
+            if not all([employee_id, visit_type, location_name, latitude, longitude]):
+                messages.error(request, 'يرجى ملء جميع الحقول المطلوبة وتحديد الموقع')
+                return redirect('attendance:visit_add')
+            
+            selected_employee = Employee.objects.get(id=employee_id)
+            
+            visit = LocationCheckIn.objects.create(
+                company=selected_employee.company,
+                employee=selected_employee,
+                visit_type=visit_type,
+                location_name=location_name,
+                purpose=purpose,
+                arrival_time=timezone.now(),
+                arrival_latitude=latitude,
+                arrival_longitude=longitude,
+                arrival_address=address,
+                status='arrived'
+            )
+            
+            messages.success(request, f'تم تسجيل الزيارة بنجاح ✅')
+            return redirect('attendance:visits')
+            
+        except Exception as e:
+            messages.error(request, f'خطأ: {str(e)}')
+    
+    # قائمة الموظفين للاختيار منها
+    employees = Employee.objects.filter(status='active')
+    
+    context = {
+        'employees': employees,
+        'current_employee': employee,
+        'visit_types': LocationCheckIn.VISIT_TYPE_CHOICES,
+    }
+    
+    return render(request, 'attendance/visit_form.html', context)
 
 
 @login_required
@@ -351,8 +401,8 @@ def live_map(request):
 def api_live_locations(request):
     """API لآخر مواقع الموظفين الميدانيين"""
     
-    # آخر ساعة
-    one_hour_ago = timezone.now() - timedelta(hours=1)
+    # آخر ساعتين (بدل ساعة عشان يظهر أي حاجة قريبة)
+    two_hours_ago = timezone.now() - timedelta(hours=2)
     
     locations = []
     field_employees = Employee.objects.filter(
@@ -361,12 +411,35 @@ def api_live_locations(request):
     )
     
     for emp in field_employees:
+        # آخر موقع
         last_location = LocationLog.objects.filter(
             employee=emp,
-            timestamp__gte=one_hour_ago
+            timestamp__gte=two_hours_ago
         ).order_by('-timestamp').first()
         
-        if last_location:
+        # لو ملقاش تتبع، شوف آخر حضور
+        if not last_location:
+            today_attendance = Attendance.objects.filter(
+                employee=emp,
+                date=date.today(),
+                check_in_latitude__isnull=False
+            ).first()
+            
+            if today_attendance:
+                locations.append({
+                    'id': emp.id,
+                    'name': emp.full_name_ar,
+                    'code': emp.employee_code,
+                    'latitude': float(today_attendance.check_in_latitude),
+                    'longitude': float(today_attendance.check_in_longitude),
+                    'timestamp': today_attendance.check_in_time.strftime('%Y-%m-%d %H:%M:%S'),
+                    'address': today_attendance.check_in_address or 'غير محدد',
+                    'source': 'attendance',
+                    'photo': emp.photo.url if emp.photo else None,
+                    'phone': emp.phone,
+                    'job_title': emp.job_title.name_ar,
+                })
+        else:
             locations.append({
                 'id': emp.id,
                 'name': emp.full_name_ar,
@@ -374,11 +447,17 @@ def api_live_locations(request):
                 'latitude': float(last_location.latitude),
                 'longitude': float(last_location.longitude),
                 'timestamp': last_location.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                'address': last_location.address or 'جاري التحديد...',
                 'battery': last_location.battery_level,
+                'source': 'live',
+                'photo': emp.photo.url if emp.photo else None,
+                'phone': emp.phone,
+                'job_title': emp.job_title.name_ar,
             })
     
     return JsonResponse({
         'success': True,
         'locations': locations,
         'count': len(locations),
+        'last_update': timezone.now().strftime('%H:%M:%S'),
     })

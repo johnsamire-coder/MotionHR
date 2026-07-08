@@ -1,0 +1,205 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}تسجيل زيارة{% endblock %}
+
+{% block page_title %}تسجيل زيارة موقع{% endblock %}
+{% block page_subtitle %}سجل وصولك للعميل أو الموقع{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="mb-3">
+    <a href="{% url 'attendance:visits' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        رجوع
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <form method="post" id="visitForm">
+            {% csrf_token %}
+            
+            <!-- Location Card -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0 fw-bold">
+                        <i class="bi bi-geo-alt-fill text-danger"></i>
+                        الموقع الحالي
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="gpsStatus" class="alert alert-info d-flex align-items-center mb-3">
+                        <div class="spinner-border spinner-border-sm ms-2" role="status"></div>
+                        <div>جاري تحديد موقعك...</div>
+                    </div>
+                    
+                    <div id="addressInfo" style="display: none;">
+                        <div class="p-3 bg-light rounded-3 mb-3">
+                            <small class="text-muted d-block">عنوان الموقع</small>
+                            <div class="fw-semibold" id="addressText">-</div>
+                        </div>
+                    </div>
+                    
+                    <div id="mapContainer" style="display: none;">
+                        <div id="map" style="height: 250px; border-radius: 10px;"></div>
+                    </div>
+                    
+                    <input type="hidden" name="latitude" id="latitudeInput">
+                    <input type="hidden" name="longitude" id="longitudeInput">
+                    <input type="hidden" name="address" id="addressInput">
+                </div>
+            </div>
+            
+            <!-- Visit Info Card -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0 fw-bold">
+                        <i class="bi bi-info-circle text-primary"></i>
+                        بيانات الزيارة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                                الموظف <span class="text-danger">*</span>
+                            </label>
+                            <select name="employee_id" class="form-select" required>
+                                <option value="">اختر الموظف</option>
+                                {% for emp in employees %}
+                                <option value="{{ emp.id }}" 
+                                        {% if current_employee and current_employee.id == emp.id %}selected{% endif %}>
+                                    {{ emp.full_name_ar }} ({{ emp.employee_code }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                                نوع الزيارة <span class="text-danger">*</span>
+                            </label>
+                            <select name="visit_type" class="form-select" required>
+                                <option value="">اختر نوع الزيارة</option>
+                                {% for value, label in visit_types %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">
+                                اسم الموقع / العميل <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" name="location_name" class="form-control" 
+                                   placeholder="مثال: شركة ABC - فرع مدينة نصر" required>
+                        </div>
+                        
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">الغرض من الزيارة</label>
+                            <textarea name="purpose" class="form-control" rows="3" 
+                                      placeholder="اكتب تفاصيل الزيارة..."></textarea>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Submit Button -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="submitBtn" disabled>
+                        <i class="bi bi-check-circle-fill"></i>
+                        تسجيل الوصول
+                    </button>
+                </div>
+            </div>
+            
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block dashboard_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+
+{% block dashboard_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    let map = null;
+    let marker = null;
+    
+    function requestLocation() {
+        if (!navigator.geolocation) {
+            document.getElementById('gpsStatus').className = 'alert alert-danger';
+            document.getElementById('gpsStatus').innerHTML = '<i class="bi bi-x-circle"></i> المتصفح لا يدعم GPS';
+            return;
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                
+                // Update hidden inputs
+                document.getElementById('latitudeInput').value = lat;
+                document.getElementById('longitudeInput').value = lng;
+                
+                // GPS Status
+                document.getElementById('gpsStatus').className = 'alert alert-success d-flex align-items-center mb-3';
+                document.getElementById('gpsStatus').innerHTML = '<i class="bi bi-check-circle-fill fs-4 ms-2"></i><div>تم تحديد الموقع ✅</div>';
+                
+                // Show Address
+                document.getElementById('addressInfo').style.display = 'block';
+                getAddressName(lat, lng);
+                
+                // Show Map
+                document.getElementById('mapContainer').style.display = 'block';
+                showMap(lat, lng);
+                
+                // Enable Submit
+                document.getElementById('submitBtn').disabled = false;
+            },
+            (error) => {
+                document.getElementById('gpsStatus').className = 'alert alert-danger';
+                document.getElementById('gpsStatus').innerHTML = '<i class="bi bi-x-circle"></i> يجب السماح بالوصول للموقع';
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 0
+            }
+        );
+    }
+    
+    async function getAddressName(lat, lng) {
+        try {
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ar`
+            );
+            const data = await response.json();
+            
+            if (data.display_name) {
+                document.getElementById('addressText').textContent = data.display_name;
+                document.getElementById('addressInput').value = data.display_name;
+            }
+        } catch (error) {
+            document.getElementById('addressText').textContent = 'تم تحديد الموقع بنجاح';
+        }
+    }
+    
+    function showMap(lat, lng) {
+        if (map) map.remove();
+        
+        map = L.map('map').setView([lat, lng], 16);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        marker = L.marker([lat, lng]).addTo(map).bindPopup('موقعك الحالي').openPopup();
+    }
+    
+    window.addEventListener('load', requestLocation);
+</script>
+{% endblock %}
