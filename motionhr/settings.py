@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     # MotionHR Apps
+    'core',           # ← جديد (لازم يكون الأول)
     'accounts',
     'companies',
 ]
@@ -51,6 +52,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
+    # MotionHR Middlewares
+    'core.middleware.TenantMiddleware',
 ]
 
 ROOT_URLCONF = 'motionhr.urls'
