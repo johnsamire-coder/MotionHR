@@ -70,3 +70,53 @@ class CurrentEmployeeMiddleware:
         
         response = self.get_response(request)
         return response
+
+
+class SubscriptionMiddleware:
+    """
+    Middleware للتحقق من اشتراك الشركة
+    يضيف subscription info للـ request
+    """
+    
+    def __init__(self, get_response):
+        self.get_response = get_response
+    
+    def __call__(self, request):
+        request.subscription = None
+        request.subscription_features = set()
+        request.subscription_valid = False
+        request.days_remaining = 0
+        
+        if hasattr(request, 'user') and request.user.is_authenticated:
+            # Super Admin عنده كل الصلاحيات
+            if hasattr(request.user, 'role') and request.user.role == 'super_admin':
+                request.subscription_valid = True
+                request.subscription_features = self._all_features()
+            else:
+                # جلب اشتراك الشركة
+                if hasattr(request.user, 'company') and request.user.company:
+                    try:
+                        from subscriptions.models import CompanySubscription
+                        sub = CompanySubscription.objects.filter(
+                            company=request.user.company
+                        ).select_related('plan').first()
+                        
+                        if sub:
+                            request.subscription = sub
+                            request.subscription_valid = sub.is_valid
+                            request.days_remaining = sub.days_remaining
+                            if sub.is_valid:
+                                request.subscription_features = sub.all_features
+                    except Exception:
+                        pass
+        
+        response = self.get_response(request)
+        return response
+    
+    def _all_features(self):
+        """كل الميزات المتاحة (للـ Super Admin)"""
+        try:
+            from subscriptions.models import FeatureFlag
+            return set(FeatureFlag.objects.filter(is_active=True).values_list('key', flat=True))
+        except Exception:
+            return set()

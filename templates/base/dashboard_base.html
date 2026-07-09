@@ -304,6 +304,19 @@
         </div>
         
         <div class="menu-section">
+            <div class="menu-title">إدارة النظام</div>
+            
+            {% if user.role == 'super_admin' %}
+            <a href="{% url 'subscriptions:admin_dashboard' %}" 
+               class="menu-item {% if 'sub-admin' in request.path %}active{% endif %}">
+                <i class="bi bi-briefcase-fill"></i>
+                <span>إدارة الاشتراكات</span>
+                <span class="menu-badge">Admin</span>
+            </a>
+            {% endif %}
+        </div>
+        
+        <div class="menu-section">
             <div class="menu-title">الإعدادات</div>
             
             <a href="/admin/" class="menu-item">

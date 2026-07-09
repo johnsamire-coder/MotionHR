@@ -1,0 +1,219 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}{{ subscription.company.name_ar }}{% endblock %}
+
+{% block page_title %}تفاصيل الاشتراك{% endblock %}
+{% block page_subtitle %}{{ subscription.company.name_ar }}{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="mb-3">
+    <a href="{% url 'subscriptions:subscriptions_list' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        رجوع للقائمة
+    </a>
+</div>
+
+<!-- Header -->
+<div class="card border-0 shadow-sm mb-4" 
+     style="background: linear-gradient(135deg, {{ subscription.plan.color }} 0%, #06B6D4 100%);">
+    <div class="card-body p-4 text-white">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h3 class="fw-bold mb-2">{{ subscription.company.name_ar }}</h3>
+                <p class="mb-0 opacity-75">
+                    <i class="bi bi-award"></i>
+                    {{ subscription.plan.name_ar }} - {{ subscription.get_billing_cycle_display }}
+                </p>
+            </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                {% if subscription.status == 'active' %}
+                    <span class="badge bg-success fs-6">نشط</span>
+                {% elif subscription.status == 'trial' %}
+                    <span class="badge bg-info fs-6">تجربة</span>
+                {% elif subscription.status == 'expired' %}
+                    <span class="badge bg-danger fs-6">منتهي</span>
+                {% else %}
+                    <span class="badge bg-secondary fs-6">{{ subscription.get_status_display }}</span>
+                {% endif %}
+                
+                <div class="mt-2">
+                    {% if subscription.days_remaining > 0 %}
+                    <strong>{{ subscription.days_remaining }}</strong> يوم متبقي
+                    {% else %}
+                    <strong>منتهي</strong>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body">
+                <i class="bi bi-calendar-check text-primary fs-1"></i>
+                <div class="small text-muted">تاريخ البداية</div>
+                <div class="fw-bold">{{ subscription.start_date|date:"Y-m-d" }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body">
+                <i class="bi bi-calendar-x text-danger fs-1"></i>
+                <div class="small text-muted">تاريخ الانتهاء</div>
+                <div class="fw-bold">{{ subscription.end_date|date:"Y-m-d" }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body">
+                <i class="bi bi-cash-stack text-success fs-1"></i>
+                <div class="small text-muted">المبلغ المدفوع</div>
+                <div class="fw-bold">{{ subscription.price_paid|floatformat:0 }} ج.م</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body">
+                <i class="bi bi-people-fill text-info fs-1"></i>
+                <div class="small text-muted">حد الموظفين</div>
+                <div class="fw-bold">
+                    {% if subscription.max_employees %}{{ subscription.max_employees }}{% else %}غير محدود{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- Actions -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h6 class="mb-0 fw-bold">
+                    <i class="bi bi-lightning-fill text-warning"></i>
+                    إجراءات
+                </h6>
+            </div>
+            <div class="card-body">
+                <!-- ترقية -->
+                <form method="post" action="{% url 'subscriptions:upgrade' subscription.pk %}" class="mb-3">
+                    {% csrf_token %}
+                    <label class="form-label small fw-semibold">ترقية/تخفيض الخطة</label>
+                    <div class="d-flex gap-2">
+                        <select name="new_plan_id" class="form-select form-select-sm" required>
+                            <option value="">اختر خطة</option>
+                            {% for plan in all_plans %}
+                            <option value="{{ plan.id }}">{{ plan.name_ar }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary">تغيير</button>
+                    </div>
+                </form>
+                
+                <!-- تمديد -->
+                <form method="post" action="{% url 'subscriptions:extend' subscription.pk %}" class="mb-3">
+                    {% csrf_token %}
+                    <label class="form-label small fw-semibold">تمديد الاشتراك</label>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <input type="number" name="days" class="form-control form-control-sm" placeholder="أيام" value="30" required>
+                        </div>
+                        <div class="col-6">
+                            <input type="number" name="price" class="form-control form-control-sm" placeholder="سعر" step="0.01">
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-sm btn-success w-100">
+                                <i class="bi bi-arrow-clockwise"></i> تمديد
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                
+                <!-- تفعيل / إلغاء -->
+                <hr>
+                {% if subscription.status == 'trial' or subscription.status == 'suspended' %}
+                <form method="post" action="{% url 'subscriptions:activate' subscription.pk %}" class="mb-2">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-success w-100">
+                        <i class="bi bi-check-circle"></i>
+                        تفعيل الاشتراك
+                    </button>
+                </form>
+                {% endif %}
+                
+                {% if subscription.status != 'cancelled' %}
+                <form method="post" action="{% url 'subscriptions:cancel' subscription.pk %}"
+                      onsubmit="return confirm('هل أنت متأكد من إلغاء الاشتراك؟');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger w-100">
+                        <i class="bi bi-x-circle"></i>
+                        إلغاء الاشتراك
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Features -->
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h6 class="mb-0 fw-bold">
+                    <i class="bi bi-check2-square text-success"></i>
+                    الميزات المتاحة ({{ subscription.plan.features.count }})
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    {% for feature in subscription.plan.features.all %}
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center gap-2 p-2 rounded">
+                            <i class="{{ feature.icon }} text-success"></i>
+                            <span class="small">{{ feature.name_ar }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                {% if subscription.extra_features.all %}
+                <hr>
+                <h6 class="fw-bold small mb-2">ميزات إضافية:</h6>
+                <div class="row g-2">
+                    {% for feature in subscription.extra_features.all %}
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center gap-2 p-2 rounded bg-warning bg-opacity-10">
+                            <i class="{{ feature.icon }} text-warning"></i>
+                            <span class="small">{{ feature.name_ar }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if subscription.notes %}
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-header bg-white">
+                <h6 class="mb-0 fw-bold">
+                    <i class="bi bi-sticky text-warning"></i>
+                    الملاحظات
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">{{ subscription.notes|linebreaks }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

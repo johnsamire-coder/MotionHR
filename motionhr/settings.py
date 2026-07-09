@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'companies',
     'employees',   # ← جديد
     'attendance',
+    'subscriptions',
 ]   
 
 MIDDLEWARE = [
@@ -58,6 +59,7 @@ MIDDLEWARE = [
     # MotionHR Middlewares
     'core.middleware.TenantMiddleware',
     'core.middleware.CurrentEmployeeMiddleware',
+    'core.middleware.SubscriptionMiddleware',
 ]
 
 ROOT_URLCONF = 'motionhr.urls'

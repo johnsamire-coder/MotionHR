@@ -63,6 +63,7 @@ urlpatterns = [
     # Employees
     path('employees/', include('employees.urls')),
     path('attendance/', include('attendance.urls')),
+    path('sub-admin/', include('subscriptions.urls')),
 ]
 
 # Media files
