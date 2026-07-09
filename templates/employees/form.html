@@ -8,12 +8,21 @@
 {% block dashboard_content %}
 
 <!-- Back Button -->
-<div class="mb-3">
-    <a href="{% if is_edit %}{% url 'employees:detail' employee.pk %}{% else %}{% url 'employees:list' %}{% endif %}" 
-       class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-right"></i>
-        رجوع
+<div class="mb-3 d-flex gap-2 flex-wrap">
+    <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-house-fill"></i>
+        الرئيسية
     </a>
+    <a href="{% url 'employees:list' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-people-fill"></i>
+        قائمة الموظفين
+    </a>
+    {% if is_edit %}
+    <a href="{% url 'employees:detail' employee.pk %}" class="btn btn-sm btn-outline-info">
+        <i class="bi bi-eye-fill"></i>
+        عرض الموظف
+    </a>
+    {% endif %}
 </div>
 
 <!-- Messages -->

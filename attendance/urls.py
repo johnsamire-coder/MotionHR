@@ -24,4 +24,8 @@ urlpatterns = [
     path('tracking/', views.tracking_page, name='tracking'),
     path('api/track/', views.api_track_location, name='api_track'),
     path('tracking/employee/<int:employee_id>/', views.employee_tracking_detail, name='tracking_detail'),
+    
+    # متابعة الموظفين للمدير
+    path('monitor/', views.field_employees_monitor, name='monitor'),
+    path('api/monitor/', views.api_monitor_data, name='api_monitor'),
 ]

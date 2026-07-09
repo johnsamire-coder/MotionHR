@@ -549,3 +549,218 @@ def employee_tracking_detail(request, employee_id):
     }
     
     return render(request, 'attendance/tracking_detail.html', context)
+
+
+@login_required
+def field_employees_monitor(request):
+    """صفحة متابعة الموظفين الميدانيين للمدير"""
+    
+    field_employees = Employee.objects.filter(
+        is_field_worker=True,
+        status='active'
+    ).select_related('job_title', 'branch', 'department')
+    
+    employees_data = []
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    for emp in field_employees:
+        last_location = LocationLog.objects.filter(
+            employee=emp
+        ).order_by('-timestamp').first()
+        
+        today_locations = LocationLog.objects.filter(
+            employee=emp,
+            timestamp__gte=today_start
+        ).order_by('timestamp')
+        
+        total_distance = 0
+        if today_locations.count() >= 2:
+            prev = None
+            for loc in today_locations:
+                if prev:
+                    total_distance += calculate_distance(
+                        prev.latitude, prev.longitude,
+                        loc.latitude, loc.longitude
+                    )
+                prev = loc
+        
+        is_moving = False
+        minutes_since_update = None
+        
+        if last_location:
+            time_diff = (now - last_location.timestamp).total_seconds() / 60
+            minutes_since_update = int(time_diff)
+            
+            if time_diff < 5 and today_locations.count() >= 2:
+                last_two = list(today_locations.reverse()[:2])
+                if len(last_two) == 2:
+                    distance_moved = calculate_distance(
+                        last_two[0].latitude, last_two[0].longitude,
+                        last_two[1].latitude, last_two[1].longitude
+                    )
+                    if distance_moved > 50:
+                        is_moving = True
+        
+        connection_status = 'offline'
+        if last_location:
+            time_diff = (now - last_location.timestamp).total_seconds() / 60
+            if time_diff < 5:
+                connection_status = 'online'
+            elif time_diff < 30:
+                connection_status = 'idle'
+        
+        employees_data.append({
+            'employee': emp,
+            'last_location': last_location,
+            'today_points': today_locations.count(),
+            'total_distance_km': round(total_distance / 1000, 2),
+            'is_moving': is_moving,
+            'minutes_since_update': minutes_since_update,
+            'connection_status': connection_status,
+        })
+    
+    online_count = sum(1 for e in employees_data if e['connection_status'] == 'online')
+    moving_count = sum(1 for e in employees_data if e['is_moving'])
+    offline_count = sum(1 for e in employees_data if e['connection_status'] == 'offline')
+    
+    context = {
+        'employees_data': employees_data,
+        'total_count': len(employees_data),
+        'online_count': online_count,
+        'moving_count': moving_count,
+        'offline_count': offline_count,
+    }
+    
+    return render(request, 'attendance/monitor.html', context)
+
+
+@login_required
+def api_monitor_data(request):
+    """API للتحديث المباشر لبيانات المتابعة"""
+    
+    field_employees = Employee.objects.filter(
+        is_field_worker=True,
+        status='active'
+    )
+    
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    employees_data = []
+    
+    for emp in field_employees:
+        last_location = LocationLog.objects.filter(
+            employee=emp
+        ).order_by('-timestamp').first()
+        
+        today_locations = LocationLog.objects.filter(
+            employee=emp,
+            timestamp__gte=today_start
+        ).order_by('timestamp')
+        
+        total_distance = 0
+        if today_locations.count() >= 2:
+            prev = None
+            for loc in today_locations:
+                if prev:
+                    total_distance += calculate_distance(
+                        prev.latitude, prev.longitude,
+                        loc.latitude, loc.longitude
+                    )
+                prev = loc
+        
+        is_moving = False
+        minutes_since_update = None
+        connection_status = 'offline'
+        distance_moved_recently = 0
+        
+        if last_location:
+            time_diff = (now - last_location.timestamp).total_seconds() / 60
+            minutes_since_update = int(time_diff)
+            
+            if time_diff < 5:
+                connection_status = 'online'
+                if today_locations.count() >= 2:
+                    last_two = list(today_locations.reverse()[:2])
+                    if len(last_two) == 2:
+                        distance_moved_recently = calculate_distance(
+                            last_two[0].latitude, last_two[0].longitude,
+                            last_two[1].latitude, last_two[1].longitude
+                        )
+                        if distance_moved_recently > 50:
+                            is_moving = True
+            elif time_diff < 30:
+                connection_status = 'idle'
+        
+        employees_data.append({
+            'id': emp.id,
+            'name': emp.full_name_ar,
+            'code': emp.employee_code,
+            'job_title': emp.job_title.name_ar,
+            'phone': emp.phone,
+            'photo': emp.photo.url if emp.photo else None,
+            'latitude': float(last_location.latitude) if last_location else None,
+            'longitude': float(last_location.longitude) if last_location else None,
+            'address': last_location.address if last_location else 'لم يبدأ التتبع',
+            'last_update': last_location.timestamp.strftime('%H:%M:%S') if last_location else None,
+            'minutes_since_update': minutes_since_update,
+            'battery': last_location.battery_level if last_location else None,
+            'today_points': today_locations.count(),
+            'total_distance_km': round(total_distance / 1000, 2),
+            'is_moving': is_moving,
+            'distance_moved': round(distance_moved_recently, 0),
+            'connection_status': connection_status,
+        })
+    
+    online_count = sum(1 for e in employees_data if e['connection_status'] == 'online')
+    moving_count = sum(1 for e in employees_data if e['is_moving'])
+    offline_count = sum(1 for e in employees_data if e['connection_status'] == 'offline')
+    
+    return JsonResponse({
+        'success': True,
+        'employees': employees_data,
+        'stats': {
+            'total': len(employees_data),
+            'online': online_count,
+            'moving': moving_count,
+            'offline': offline_count,
+        },
+        'last_update': now.strftime('%H:%M:%S'),
+    })
+
+
+@login_required
+def employee_tracking_detail(request, employee_id):
+    """عرض تتبع موظف معين (للمدير)"""
+    
+    from datetime import datetime as dt
+    
+    employee = get_object_or_404(Employee, pk=employee_id)
+    
+    date_str = request.GET.get('date', '')
+    if date_str:
+        try:
+            selected_date = dt.strptime(date_str, '%Y-%m-%d').date()
+        except:
+            selected_date = date.today()
+    else:
+        selected_date = date.today()
+    
+    day_start = timezone.make_aware(dt.combine(selected_date, dt.min.time()))
+    day_end = timezone.make_aware(dt.combine(selected_date, dt.max.time()))
+    
+    locations = LocationLog.objects.filter(
+        employee=employee,
+        timestamp__gte=day_start,
+        timestamp__lte=day_end,
+    ).order_by('timestamp')
+    
+    context = {
+        'employee': employee,
+        'locations': locations,
+        'selected_date': selected_date,
+        'total_points': locations.count(),
+    }
+    
+    return render(request, 'attendance/tracking_detail.html', context)

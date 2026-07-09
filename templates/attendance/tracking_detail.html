@@ -1,0 +1,199 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}مسار {{ employee.full_name_ar }}{% endblock %}
+
+{% block page_title %}مسار الموظف 🗺️{% endblock %}
+{% block page_subtitle %}{{ employee.full_name_ar }}{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="mb-3 d-flex gap-2 flex-wrap">
+    <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-house-fill"></i>
+        الرئيسية
+    </a>
+    <a href="{% url 'attendance:monitor' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        رجوع للمتابعة
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <div class="d-flex align-items-center gap-3">
+                    {% if employee.photo %}
+                    <img src="{{ employee.photo.url }}" 
+                         class="rounded-circle" 
+                         style="width: 60px; height: 60px; object-fit: cover;">
+                    {% else %}
+                    <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold" 
+                         style="width: 60px; height: 60px; background: linear-gradient(135deg, #06B6D4, #3B82F6); font-size: 1.5rem;">
+                        {{ employee.first_name_ar|first }}
+                    </div>
+                    {% endif %}
+                    <div>
+                        <h5 class="mb-0 fw-bold">{{ employee.full_name_ar }}</h5>
+                        <small class="text-muted">
+                            {{ employee.job_title.name_ar }} • {{ employee.employee_code }}
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <form method="get" class="d-flex gap-2 justify-content-md-end">
+                    <input type="date" 
+                           name="date" 
+                           class="form-control" 
+                           value="{{ selected_date|date:'Y-m-d' }}"
+                           style="max-width: 200px;">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-calendar-check"></i>
+                        عرض
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-geo-alt-fill text-primary fs-1"></i>
+                <h3 class="fw-bold mb-0">{{ total_points }}</h3>
+                <small class="text-muted">نقطة مسجلة</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-calendar-day text-info fs-1"></i>
+                <h5 class="fw-bold mb-0">{{ selected_date|date:"Y-m-d" }}</h5>
+                <small class="text-muted">التاريخ</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-clock text-success fs-1"></i>
+                <h5 class="fw-bold mb-0">
+                    {% if locations %}
+                        {{ locations.first.timestamp|time:"H:i" }} - {{ locations.last.timestamp|time:"H:i" }}
+                    {% else %}
+                        --
+                    {% endif %}
+                </h5>
+                <small class="text-muted">فترة النشاط</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h6 class="mb-0 fw-bold">
+                    <i class="bi bi-map-fill text-danger"></i>
+                    الخريطة
+                </h6>
+            </div>
+            <div class="card-body p-0">
+                {% if locations %}
+                <div id="map" style="height: 500px;"></div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-map text-muted" style="font-size: 4rem;"></i>
+                    <p class="text-muted mt-3">لا توجد بيانات تتبع لهذا اليوم</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h6 class="mb-0 fw-bold">
+                    <i class="bi bi-list-ul text-primary"></i>
+                    سجل النقاط
+                </h6>
+            </div>
+            <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
+                {% if locations %}
+                <ul class="list-group list-group-flush">
+                    {% for loc in locations %}
+                    <li class="list-group-item">
+                        <div class="d-flex align-items-start gap-2">
+                            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center flex-shrink-0" 
+                                 style="width: 30px; height: 30px; font-size: 0.75rem;">
+                                {{ forloop.counter }}
+                            </div>
+                            <div class="flex-grow-1 small">
+                                <div class="fw-semibold">{{ loc.timestamp|time:"H:i:s" }}</div>
+                                <div class="text-muted">{{ loc.address|default:"جاري تحديد العنوان..."|truncatechars:60 }}</div>
+                            </div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-inbox text-muted fs-1"></i>
+                    <p class="text-muted mt-2 small">لا توجد نقاط</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block dashboard_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+
+{% block dashboard_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    {% if locations %}
+    const map = L.map('map').setView([{{ locations.first.latitude }}, {{ locations.first.longitude }}], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    
+    const points = [];
+    
+    {% for loc in locations %}
+    points.push([{{ loc.latitude }}, {{ loc.longitude }}]);
+    
+    L.circleMarker([{{ loc.latitude }}, {{ loc.longitude }}], {
+        radius: 6,
+        fillColor: '#06B6D4',
+        color: 'white',
+        weight: 2,
+        fillOpacity: 0.8
+    }).addTo(map).bindPopup(`
+        <strong>نقطة {{ forloop.counter }}</strong><br>
+        الوقت: {{ loc.timestamp|time:"H:i:s" }}<br>
+        {% if loc.address %}{{ loc.address|truncatechars:80 }}{% endif %}
+    `);
+    {% endfor %}
+    
+    if (points.length > 1) {
+        const polyline = L.polyline(points, { 
+            color: '#06B6D4', 
+            weight: 4,
+            opacity: 0.7
+        }).addTo(map);
+        
+        map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+    }
+    {% endif %}
+</script>
+{% endblock %}

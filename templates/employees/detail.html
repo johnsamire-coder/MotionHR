@@ -8,10 +8,14 @@
 {% block dashboard_content %}
 
 <!-- Back Button -->
-<div class="mb-3">
+<div class="mb-3 d-flex gap-2 flex-wrap">
+    <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-house-fill"></i>
+        الرئيسية
+    </a>
     <a href="{% url 'employees:list' %}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-right"></i>
-        الرجوع للقائمة
+        <i class="bi bi-people-fill"></i>
+        قائمة الموظفين
     </a>
 </div>
 
