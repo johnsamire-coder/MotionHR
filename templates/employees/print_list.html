@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title|default:"قائمة الموظفين" }} - MotionHR</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 1.5cm;
+        }
+        
+        * {
+            font-family: 'Cairo', 'Arial', sans-serif;
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: 20px;
+            color: #1E293B;
+        }
+        
+        .header {
+            border-bottom: 3px solid #06B6D4;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #06B6D4, #3B82F6);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        h1 {
+            color: #06B6D4;
+            margin: 0;
+            font-size: 24px;
+        }
+        
+        .subtitle {
+            color: #64748B;
+            font-size: 12px;
+            margin-top: 3px;
+        }
+        
+        .info-box {
+            background: #F1F5F9;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #64748B;
+        }
+        
+        .stats {
+            background: linear-gradient(135deg, #06B6D4, #3B82F6);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        
+        .stat-item {
+            flex: 1;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        
+        thead {
+            background: #1E293B;
+            color: white;
+        }
+        
+        th {
+            padding: 10px 8px;
+            text-align: right;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #E2E8F0;
+        }
+        
+        tbody tr:nth-child(even) {
+            background: #F8FAFC;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background: #D1FAE5;
+            color: #065F46;
+        }
+        
+        .badge-warning {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+        
+        .badge-danger {
+            background: #FEE2E2;
+            color: #991B1B;
+        }
+        
+        .badge-info {
+            background: #DBEAFE;
+            color: #1E40AF;
+        }
+        
+        .badge-secondary {
+            background: #F1F5F9;
+            color: #475569;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #E2E8F0;
+            text-align: center;
+            color: #94A3B8;
+            font-size: 10px;
+        }
+        
+        .no-print {
+            display: none !important;
+        }
+        
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">M</div>
+            <div>
+                <h1>MotionHR</h1>
+                <div class="subtitle">إدارة الموارد البشرية</div>
+            </div>
+        </div>
+        <div class="info-box">
+            <div><strong>{{ title|default:"قائمة الموظفين" }}</strong></div>
+            <div>تاريخ الطباعة: {{ generated_at|date:"Y-m-d H:i" }}</div>
+        </div>
+    </div>
+    
+    <!-- Stats -->
+    <div class="stats">
+        <div class="stat-item">
+            <div class="stat-value">{{ total_count|default:employees.count }}</div>
+            <div class="stat-label">إجمالي الموظفين</div>
+        </div>
+    </div>
+    
+    <!-- Table -->
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 10%;">الرقم الوظيفي</th>
+                <th style="width: 20%;">الاسم</th>
+                <th style="width: 15%;">المسمى الوظيفي</th>
+                <th style="width: 12%;">الإدارة</th>
+                <th style="width: 12%;">الفرع</th>
+                <th style="width: 12%;">الموبايل</th>
+                <th style="width: 9%;">تاريخ التعيين</th>
+                <th style="width: 5%;">الحالة</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for employee in employees %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td><strong>{{ employee.employee_code }}</strong></td>
+                <td>{{ employee.full_name_ar }}</td>
+                <td>{{ employee.job_title.name_ar }}</td>
+                <td>{{ employee.department.name_ar }}</td>
+                <td>{{ employee.branch.name_ar }}</td>
+                <td>{{ employee.phone }}</td>
+                <td>{{ employee.hire_date }}</td>
+                <td>
+                    {% if employee.status == 'active' %}
+                        <span class="badge badge-success">نشط</span>
+                    {% elif employee.status == 'on_leave' %}
+                        <span class="badge badge-info">إجازة</span>
+                    {% elif employee.status == 'suspended' %}
+                        <span class="badge badge-warning">موقوف</span>
+                    {% else %}
+                        <span class="badge badge-secondary">{{ employee.get_status_display }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" style="text-align: center; padding: 30px; color: #94A3B8;">
+                    لا يوجد موظفون
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <!-- Footer -->
+    <div class="footer">
+        <div>MotionHR © 2025 - جميع الحقوق محفوظة</div>
+        <div>تم إنشاء هذا التقرير في {{ generated_at|date:"Y-m-d H:i:s" }}</div>
+    </div>
+    
+    <script>
+        // طباعة تلقائية لما الصفحة تفتح
+        if (window.location.search.includes('auto=1')) {
+            window.print();
+        }
+    </script>
+    
+</body>
+</html>

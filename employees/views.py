@@ -50,8 +50,7 @@ def employee_list(request):
     if export_type == 'excel':
         return export_employees_excel(employees)
     elif export_type == 'pdf':
-        messages.info(request, 'تصدير PDF قيد التطوير - جرب Excel')
-        return redirect('employees:list')
+        return export_employees_pdf(employees)
     
     # Pagination
     paginator = Paginator(employees, 20)
@@ -206,3 +205,59 @@ def employee_delete(request, pk):
         return redirect('employees:list')
     
     return render(request, 'employees/delete_confirm.html', {'employee': employee})
+
+def export_employees_pdf(employees):
+    """تصدير قائمة الموظفين إلى PDF"""
+    from django.template.loader import render_to_string
+    from weasyprint import HTML
+    from django.utils import timezone
+    
+    html_string = render_to_string('employees/print_list.html', {
+        'employees': employees,
+        'generated_at': timezone.now(),
+        'total_count': employees.count() if hasattr(employees, 'count') else len(employees),
+    })
+    
+    html = HTML(string=html_string)
+    pdf = html.write_pdf()
+    
+    response = HttpResponse(pdf, content_type='application/pdf')
+    filename = f"employees_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    return response
+
+
+@login_required
+def employee_print(request, pk=None):
+    """صفحة طباعة (موظف واحد أو الكل)"""
+    if pk:
+        employees = Employee.objects.filter(pk=pk)
+        title = f"بيانات {employees.first().full_name_ar}" if employees.exists() else "موظف"
+    else:
+        employees = Employee.objects.all().select_related('branch', 'department', 'job_title')
+        title = "قائمة الموظفين"
+    
+    from django.utils import timezone
+    context = {
+        'employees': employees,
+        'title': title,
+        'generated_at': timezone.now(),
+        'is_single': pk is not None,
+    }
+    
+    return render(request, 'employees/print_list.html', context)
+
+
+@login_required
+def employee_print_detail(request, pk):
+    """طباعة بيانات موظف واحد بالتفصيل"""
+    employee = get_object_or_404(Employee, pk=pk)
+    from django.utils import timezone
+    
+    context = {
+        'employee': employee,
+        'generated_at': timezone.now(),
+    }
+    
+    return render(request, 'employees/print_detail.html', context)

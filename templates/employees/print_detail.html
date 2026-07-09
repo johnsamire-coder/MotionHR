@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ employee.full_name_ar }} - MotionHR</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        
+        * {
+            font-family: 'Cairo', 'Arial', sans-serif;
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: 20px;
+            color: #1E293B;
+        }
+        
+        .header {
+            border-bottom: 3px solid #06B6D4;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #06B6D4, #3B82F6);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .header h1 {
+            color: #06B6D4;
+            margin: 0;
+            font-size: 22px;
+        }
+        
+        .employee-header {
+            background: linear-gradient(135deg, #06B6D4, #3B82F6);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .avatar {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: white;
+            color: #06B6D4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 42px;
+            font-weight: bold;
+        }
+        
+        .employee-info h2 {
+            margin: 0 0 5px 0;
+            font-size: 24px;
+        }
+        
+        .employee-info .job {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .employee-info .code {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        
+        .section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+        
+        .section-title {
+            background: #F1F5F9;
+            padding: 10px 15px;
+            border-right: 4px solid #06B6D4;
+            margin-bottom: 12px;
+            font-weight: bold;
+            color: #1E293B;
+            border-radius: 4px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        .info-item {
+            padding: 8px 12px;
+            background: #F8FAFC;
+            border-radius: 6px;
+            border-right: 3px solid #E2E8F0;
+        }
+        
+        .info-label {
+            font-size: 10px;
+            color: #64748B;
+            margin-bottom: 3px;
+        }
+        
+        .info-value {
+            font-size: 12px;
+            color: #1E293B;
+            font-weight: 600;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 15px;
+            border-top: 1px solid #E2E8F0;
+            text-align: center;
+            color: #94A3B8;
+            font-size: 10px;
+        }
+        
+        .signature-box {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+            gap: 40px;
+        }
+        
+        .signature {
+            flex: 1;
+            border-top: 2px solid #1E293B;
+            padding-top: 8px;
+            text-align: center;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="logo">M</div>
+            <div>
+                <h1>MotionHR</h1>
+                <div style="color: #64748B; font-size: 11px;">بطاقة موظف</div>
+            </div>
+        </div>
+        <div style="text-align: left; color: #64748B; font-size: 11px;">
+            <div>تاريخ الطباعة</div>
+            <div><strong>{{ generated_at|date:"Y-m-d H:i" }}</strong></div>
+        </div>
+    </div>
+    
+    <div class="employee-header">
+        <div class="avatar">{{ employee.first_name_ar|first }}</div>
+        <div class="employee-info">
+            <h2>{{ employee.full_name_ar }}</h2>
+            <div class="job">{{ employee.job_title.name_ar }}</div>
+            <span class="code">{{ employee.employee_code }}</span>
+        </div>
+    </div>
+    
+    <!-- البيانات الشخصية -->
+    <div class="section">
+        <div class="section-title">📋 البيانات الشخصية</div>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">الاسم بالعربي</div>
+                <div class="info-value">{{ employee.full_name_ar }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">الاسم بالإنجليزي</div>
+                <div class="info-value">{{ employee.full_name_en|default:"-" }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">الرقم القومي</div>
+                <div class="info-value">{{ employee.national_id }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">تاريخ الميلاد</div>
+                <div class="info-value">{{ employee.birth_date }} ({{ employee.age }} سنة)</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">النوع</div>
+                <div class="info-value">{{ employee.get_gender_display }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">الحالة الاجتماعية</div>
+                <div class="info-value">{{ employee.get_marital_status_display }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">الديانة</div>
+                <div class="info-value">{{ employee.get_religion_display|default:"-" }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">الجنسية</div>
+                <div class="info-value">{{ employee.nationality }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- بيانات التواصل -->
+    <div class="section">
+        <div class="section-title">📞 بيانات التواصل</div>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">رقم الموبايل</div>
+                <div class="info-value">{{ employee.phone }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">رقم موبايل آخر</div>
+                <div class="info-value">{{ employee.phone2|default:"-" }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">البريد الإلكتروني</div>
+                <div class="info-value">{{ employee.email|default:"-" }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">المدينة</div>
+                <div class="info-value">{{ employee.city|default:"-" }}</div>
+            </div>
+        </div>
+        {% if employee.address %}
+        <div style="margin-top: 10px;" class="info-item">
+            <div class="info-label">العنوان</div>
+            <div class="info-value">{{ employee.address }}</div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- بيانات التعيين -->
+    <div class="section">
+        <div class="section-title">💼 بيانات التعيين</div>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">تاريخ التعيين</div>
+                <div class="info-value">{{ employee.hire_date }} ({{ employee.years_of_service }} سنة)</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">نوع العقد</div>
+                <div class="info-value">{{ employee.get_contract_type_display }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">الفرع</div>
+                <div class="info-value">{{ employee.branch.name_ar }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">الإدارة</div>
+                <div class="info-value">{{ employee.department.name_ar }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">المسمى الوظيفي</div>
+                <div class="info-value">{{ employee.job_title.name_ar }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">المدير المباشر</div>
+                <div class="info-value">
+                    {% if employee.direct_manager %}
+                        {{ employee.direct_manager.full_name_ar }}
+                    {% else %}-{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- التوقيعات -->
+    <div class="signature-box">
+        <div class="signature">
+            <div>توقيع الموظف</div>
+        </div>
+        <div class="signature">
+            <div>توقيع الموارد البشرية</div>
+        </div>
+        <div class="signature">
+            <div>توقيع المدير المباشر</div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <div><strong>MotionHR</strong> © 2025 - جميع الحقوق محفوظة</div>
+        <div>هذه الوثيقة صادرة عن نظام إدارة الموارد البشرية</div>
+    </div>
+    
+    <script>
+        if (window.location.search.includes('auto=1')) {
+            window.print();
+        }
+    </script>
+    
+</body>
+</html>
