@@ -18,4 +18,10 @@ urlpatterns = [
     path('subscriptions/<int:pk>/extend/', views.extend_subscription, name='extend'),
     path('subscriptions/<int:pk>/cancel/', views.cancel_subscription, name='cancel'),
     path('subscriptions/<int:pk>/activate/', views.activate_subscription, name='activate'),
+
+    # Client-side URLs
+    path('my-subscription/', views.my_subscription, name='my_subscription'),
+    path('upgrade/', views.upgrade_plan, name='upgrade'),
+    path('feature-locked/', views.feature_locked, name='feature_locked'),
 ]
+

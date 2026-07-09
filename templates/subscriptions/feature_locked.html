@@ -1,0 +1,93 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}الميزة غير متاحة{% endblock %}
+
+{% block page_title %}الميزة غير متاحة 🔒{% endblock %}
+{% block page_subtitle %}هذه الميزة تتطلب ترقية الخطة{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="mb-3">
+    <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        رجوع للرئيسية
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body p-5">
+                <div class="mb-4">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle" 
+                         style="width: 120px; height: 120px; background: linear-gradient(135deg, #F59E0B, #EF4444);">
+                        <i class="bi bi-lock-fill text-white" style="font-size: 4rem;"></i>
+                    </div>
+                </div>
+                
+                <h3 class="fw-bold mb-3">
+                    {% if feature %}
+                    {{ feature.name_ar }} غير متاحة في خطتك
+                    {% else %}
+                    هذه الميزة غير متاحة
+                    {% endif %}
+                </h3>
+                
+                <p class="text-muted mb-4">
+                    قم بترقية خطتك للاستفادة من هذه الميزة والمزيد
+                </p>
+                
+                {% if subscription %}
+                <div class="alert alert-info d-inline-block">
+                    خطتك الحالية: <strong>{{ subscription.plan.name_ar }}</strong>
+                </div>
+                {% endif %}
+                
+                <div class="mt-4">
+                    <a href="{% url 'subscriptions:upgrade' %}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-arrow-up-circle-fill"></i>
+                        عرض خطط الترقية
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        {% if plans_with_feature %}
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-white">
+                <h6 class="mb-0 fw-bold">
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                    هذه الميزة متاحة في الخطط التالية:
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    {% for plan in plans_with_feature %}
+                    <div class="col-md-4">
+                        <div class="border rounded-3 p-3 text-center" 
+                             style="border-color: {{ plan.color }} !important; border-width: 2px !important;">
+                            <h6 class="fw-bold" style="color: {{ plan.color }};">
+                                {{ plan.name_ar }}
+                            </h6>
+                            <div class="my-2">
+                                <span class="h4 fw-bold">{{ plan.price_monthly|floatformat:0 }}</span>
+                                <small class="text-muted">ج.م/شهر</small>
+                            </div>
+                            <a href="{% url 'subscriptions:upgrade' %}" 
+                               class="btn btn-sm w-100"
+                               style="background: {{ plan.color }}; color: white;">
+                                ترقية
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+    </div>
+</div>
+
+{% endblock %}

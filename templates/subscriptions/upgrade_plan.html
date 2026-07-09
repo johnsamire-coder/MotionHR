@@ -1,0 +1,144 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}ترقية الخطة{% endblock %}
+
+{% block page_title %}ترقية الخطة 🚀{% endblock %}
+{% block page_subtitle %}احصل على المزيد من الميزات{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="mb-3">
+    <a href="{% url 'subscriptions:my_subscription' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        رجوع لخطتي
+    </a>
+</div>
+
+{% if subscription %}
+<div class="alert alert-info mb-4">
+    <i class="bi bi-info-circle-fill"></i>
+    خطتك الحالية: <strong>{{ subscription.plan.name_ar }}</strong>
+    {% if subscription.days_remaining > 0 %}
+    - متبقي {{ subscription.days_remaining }} يوم
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Plans Cards -->
+<div class="row g-3 mb-4">
+    {% for plan in all_plans %}
+    {% if not plan.is_trial %}
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100 
+             {% if subscription.plan.id == plan.id %}border-primary border-3{% endif %}
+             {% if plan.is_featured %}shadow-lg{% endif %}"
+             style="border-top: 4px solid {{ plan.color }};">
+            
+            {% if plan.is_featured %}
+            <div style="background: {{ plan.color }}; color: white; padding: 5px; text-align: center;">
+                <small><i class="bi bi-star-fill"></i> الأكثر شعبية</small>
+            </div>
+            {% endif %}
+            
+            {% if subscription.plan.id == plan.id %}
+            <div style="background: #10B981; color: white; padding: 5px; text-align: center;">
+                <small><i class="bi bi-check-circle-fill"></i> خطتك الحالية</small>
+            </div>
+            {% endif %}
+            
+            <div class="card-body p-4 text-center">
+                <h4 class="fw-bold" style="color: {{ plan.color }};">
+                    {{ plan.name_ar }}
+                </h4>
+                <p class="text-muted small">{{ plan.description }}</p>
+                
+                <div class="my-4">
+                    <div class="display-5 fw-bold" style="color: {{ plan.color }};">
+                        {{ plan.price_monthly|floatformat:0 }}
+                    </div>
+                    <small class="text-muted">ج.م / شهر</small>
+                    {% if plan.price_yearly %}
+                    <div class="mt-1">
+                        <small class="text-success">
+                            أو {{ plan.price_yearly|floatformat:0 }} ج.م/سنة
+                            {% if plan.yearly_discount %}
+                            (وفر {{ plan.yearly_discount }}%)
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="border-top pt-3 mb-3">
+                    <div class="d-flex justify-content-around">
+                        <div>
+                            <div class="fw-bold">
+                                {% if plan.max_employees %}{{ plan.max_employees }}{% else %}∞{% endif %}
+                            </div>
+                            <small class="text-muted">موظف</small>
+                        </div>
+                        <div>
+                            <div class="fw-bold">
+                                {% if plan.max_branches %}{{ plan.max_branches }}{% else %}∞{% endif %}
+                            </div>
+                            <small class="text-muted">فرع</small>
+                        </div>
+                        <div>
+                            <div class="fw-bold">{{ plan.features.count }}</div>
+                            <small class="text-muted">ميزة</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <ul class="list-unstyled small text-start" style="max-height: 200px; overflow-y: auto;">
+                    {% for feature in plan.features.all|slice:":6" %}
+                    <li class="mb-1">
+                        <i class="bi bi-check-circle-fill text-success"></i>
+                        {{ feature.name_ar }}
+                    </li>
+                    {% endfor %}
+                    {% if plan.features.count > 6 %}
+                    <li class="text-muted">
+                        <i class="bi bi-three-dots"></i>
+                        + {{ plan.features.count|add:"-6" }} ميزة أخرى
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <div class="mt-3">
+                    {% if subscription.plan.id == plan.id %}
+                    <button class="btn btn-secondary w-100" disabled>
+                        <i class="bi bi-check-circle"></i>
+                        خطتك الحالية
+                    </button>
+                    {% else %}
+                    <a href="mailto:sales@motionhr.com?subject=طلب%20ترقية%20للخطة%20{{ plan.name_ar }}" 
+                       class="btn w-100" 
+                       style="background: {{ plan.color }}; color: white;">
+                        <i class="bi bi-arrow-up-circle"></i>
+                        اطلب هذه الخطة
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+
+<!-- Contact -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-4">
+        <h5 class="fw-bold mb-3">تحتاج خطة مخصصة؟ 🎯</h5>
+        <p class="text-muted">
+            للشركات الكبيرة أو الاحتياجات الخاصة، نوفر خطط مخصصة تناسب متطلباتك
+        </p>
+        <a href="mailto:sales@motionhr.com" class="btn btn-primary">
+            <i class="bi bi-telephone"></i>
+            تواصل معنا
+        </a>
+    </div>
+</div>
+
+{% endblock %}

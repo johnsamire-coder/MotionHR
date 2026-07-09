@@ -327,3 +327,82 @@ def activate_subscription(request, pk):
         messages.success(request, '✅ تم تفعيل الاشتراك')
     
     return redirect('subscriptions:detail', pk=pk)
+
+
+# ═══════════════════════════════════════════════════════════
+# Client-side Subscription Views
+# ═══════════════════════════════════════════════════════════
+
+@login_required
+def my_subscription(request):
+    """صفحة خطتي - للعميل"""
+    
+    subscription = None
+    all_plans = SubscriptionPlan.objects.filter(is_active=True).order_by('order')
+    
+    if request.user.role != 'super_admin' and request.user.company:
+        subscription = CompanySubscription.objects.filter(
+            company=request.user.company
+        ).select_related('plan').first()
+    
+    context = {
+        'subscription': subscription,
+        'all_plans': all_plans,
+    }
+    
+    return render(request, 'subscriptions/my_subscription.html', context)
+
+
+@login_required
+def upgrade_plan(request):
+    """صفحة ترقية الخطة - للعميل"""
+    
+    subscription = None
+    if request.user.company:
+        subscription = CompanySubscription.objects.filter(
+            company=request.user.company
+        ).select_related('plan').first()
+    
+    all_plans = SubscriptionPlan.objects.filter(is_active=True).order_by('order')
+    
+    context = {
+        'subscription': subscription,
+        'all_plans': all_plans,
+    }
+    
+    return render(request, 'subscriptions/upgrade_plan.html', context)
+
+
+@login_required
+def feature_locked(request):
+    """صفحة الميزة غير متاحة"""
+    feature_key = request.GET.get('feature', '')
+    
+    feature = None
+    if feature_key:
+        try:
+            feature = FeatureFlag.objects.get(key=feature_key)
+        except FeatureFlag.DoesNotExist:
+            pass
+    
+    subscription = None
+    if request.user.company:
+        subscription = CompanySubscription.objects.filter(
+            company=request.user.company
+        ).select_related('plan').first()
+    
+    # جلب الخطط اللي فيها الميزة دي
+    plans_with_feature = []
+    if feature:
+        plans_with_feature = SubscriptionPlan.objects.filter(
+            features=feature,
+            is_active=True
+        ).order_by('order')
+    
+    context = {
+        'feature': feature,
+        'subscription': subscription,
+        'plans_with_feature': plans_with_feature,
+    }
+    
+    return render(request, 'subscriptions/feature_locked.html', context)

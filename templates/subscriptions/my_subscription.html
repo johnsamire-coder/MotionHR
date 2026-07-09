@@ -1,0 +1,197 @@
+{% extends 'base/dashboard_base.html' %}
+{% load subscription_tags %}
+
+{% block title %}خطتي{% endblock %}
+
+{% block page_title %}خطتي 💎{% endblock %}
+{% block page_subtitle %}تفاصيل اشتراكك الحالي{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="mb-3">
+    <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        رجوع للرئيسية
+    </a>
+</div>
+
+{% if subscription %}
+
+<!-- Subscription Info Card -->
+<div class="card border-0 shadow-sm mb-4" 
+     style="background: linear-gradient(135deg, {{ subscription.plan.color }} 0%, #06B6D4 100%);">
+    <div class="card-body p-4 p-md-5 text-white">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <div class="mb-2">
+                    <span class="badge bg-white bg-opacity-25 mb-2">
+                        {% if subscription.is_trial %}
+                            <i class="bi bi-star-fill"></i> تجربة مجانية
+                        {% else %}
+                            <i class="bi bi-award-fill"></i> {{ subscription.get_billing_cycle_display }}
+                        {% endif %}
+                    </span>
+                </div>
+                <h2 class="fw-bold mb-2">{{ subscription.plan.name_ar }}</h2>
+                <p class="mb-0 opacity-75">{{ subscription.plan.description }}</p>
+            </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <div class="display-4 fw-bold">{{ subscription.days_remaining }}</div>
+                <div>يوم متبقي</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Alert -->
+{% if subscription.days_remaining <= 7 and subscription.days_remaining > 0 %}
+<div class="alert alert-warning d-flex align-items-center mb-4">
+    <i class="bi bi-exclamation-triangle-fill fs-4 ms-3"></i>
+    <div class="flex-grow-1">
+        <strong>اشتراكك ينتهي قريباً!</strong>
+        متبقي {{ subscription.days_remaining }} أيام فقط. قم بالتجديد الآن لتجنب انقطاع الخدمة.
+    </div>
+    <a href="{% url 'subscriptions:upgrade' %}" class="btn btn-warning">جدد الآن</a>
+</div>
+{% elif subscription.days_remaining == 0 or subscription.is_expired %}
+<div class="alert alert-danger d-flex align-items-center mb-4">
+    <i class="bi bi-x-circle-fill fs-4 ms-3"></i>
+    <div class="flex-grow-1">
+        <strong>اشتراكك انتهى!</strong>
+        قم بالتجديد للاستمرار في استخدام النظام.
+    </div>
+    <a href="{% url 'subscriptions:upgrade' %}" class="btn btn-light">جدد الاشتراك</a>
+</div>
+{% endif %}
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body">
+                <i class="bi bi-calendar-check text-success fs-1"></i>
+                <div class="small text-muted mt-2">تاريخ البداية</div>
+                <div class="fw-bold">{{ subscription.start_date|date:"Y-m-d" }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body">
+                <i class="bi bi-calendar-x text-danger fs-1"></i>
+                <div class="small text-muted mt-2">تاريخ الانتهاء</div>
+                <div class="fw-bold">{{ subscription.end_date|date:"Y-m-d" }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body">
+                <i class="bi bi-people-fill text-primary fs-1"></i>
+                <div class="small text-muted mt-2">حد الموظفين</div>
+                <div class="fw-bold">
+                    {% if subscription.max_employees %}
+                        {{ subscription.max_employees }}
+                    {% else %}
+                        غير محدود
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body">
+                <i class="bi bi-shop text-info fs-1"></i>
+                <div class="small text-muted mt-2">حد الفروع</div>
+                <div class="fw-bold">
+                    {% if subscription.plan.max_branches %}
+                        {{ subscription.plan.max_branches }}
+                    {% else %}
+                        غير محدود
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Features -->
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h6 class="fw-bold mb-0">
+                    <i class="bi bi-check2-square text-success"></i>
+                    الميزات المتاحة في خطتك ({{ subscription.plan.features.count }})
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    {% for feature in subscription.plan.features.all %}
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center gap-2 p-2 rounded bg-success bg-opacity-10">
+                            <i class="{{ feature.icon }} text-success"></i>
+                            <span class="small">{{ feature.name_ar }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <!-- Upgrade Card -->
+        <div class="card border-0 shadow-sm mb-3" 
+             style="background: linear-gradient(135deg, #F59E0B, #EF4444);">
+            <div class="card-body p-4 text-white text-center">
+                <i class="bi bi-rocket-takeoff-fill" style="font-size: 3rem;"></i>
+                <h5 class="fw-bold mt-3">قم بترقية خطتك!</h5>
+                <p class="opacity-75">احصل على المزيد من الميزات والقدرات</p>
+                <a href="{% url 'subscriptions:upgrade' %}" class="btn btn-light">
+                    <i class="bi bi-arrow-up-circle"></i>
+                    عرض الخطط
+                </a>
+            </div>
+        </div>
+        
+        <!-- Support -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3">
+                    <i class="bi bi-headset text-primary"></i>
+                    تحتاج مساعدة؟
+                </h6>
+                <p class="small text-muted mb-3">
+                    فريقنا جاهز للرد على استفساراتك
+                </p>
+                <a href="mailto:support@motionhr.com" class="btn btn-sm btn-outline-primary w-100">
+                    <i class="bi bi-envelope"></i>
+                    تواصل مع الدعم
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+
+<!-- No Subscription -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-x-circle text-danger" style="font-size: 5rem;"></i>
+        <h4 class="fw-bold mt-3">لا يوجد اشتراك</h4>
+        <p class="text-muted">
+            لم يتم تفعيل اشتراك لشركتك بعد. يرجى التواصل مع البائع.
+        </p>
+        <a href="mailto:sales@motionhr.com" class="btn btn-primary">
+            <i class="bi bi-envelope"></i>
+            تواصل مع المبيعات
+        </a>
+    </div>
+</div>
+
+{% endif %}
+
+{% endblock %}
