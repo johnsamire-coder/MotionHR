@@ -57,6 +57,7 @@ MIDDLEWARE = [
     
     # MotionHR Middlewares
     'core.middleware.TenantMiddleware',
+    'core.middleware.CurrentEmployeeMiddleware',
 ]
 
 ROOT_URLCONF = 'motionhr.urls'

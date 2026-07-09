@@ -422,6 +422,58 @@ class Employee(TenantModel):
         super().save(*args, **kwargs)
 
 
+
+    
+    # ═══════════════════════════════
+    # Hierarchical Permissions Methods
+    # ═══════════════════════════════
+    
+    def get_all_subordinates(self):
+        """
+        جلب كل المرؤوسين (بشكل شجري)
+        يعني الموظفين المباشرين + موظفينهم + هكذا
+        """
+        subordinates = list(self.subordinates.all())
+        all_subs = list(subordinates)
+        
+        for sub in subordinates:
+            all_subs.extend(sub.get_all_subordinates())
+        
+        return all_subs
+    
+    def get_all_subordinates_ids(self):
+        """جلب IDs كل المرؤوسين + نفسه"""
+        ids = [self.id]
+        for sub in self.get_all_subordinates():
+            ids.append(sub.id)
+        return ids
+    
+    def get_manager_chain(self):
+        """جلب سلسلة المديرين من فوق"""
+        chain = []
+        current = self.direct_manager
+        while current:
+            chain.append(current)
+            current = current.direct_manager
+        return chain
+    
+    def can_view_employee(self, other_employee):
+        """هل يقدر يشوف بيانات موظف تاني؟"""
+        # لو نفس الموظف
+        if self.id == other_employee.id:
+            return True
+        
+        # لو المدير المباشر أو من فوق
+        if other_employee in self.get_all_subordinates():
+            return True
+        
+        return False
+    
+    def is_manager_of(self, other_employee):
+        """هل هو مدير للموظف ده؟"""
+        return other_employee in self.get_all_subordinates()
+
+
 class EmployeeDocument(TenantModel):
     """مستندات الموظف"""
     

@@ -48,3 +48,25 @@ class TenantMiddleware:
         set_current_company(None)
         
         return response
+
+class CurrentEmployeeMiddleware:
+    """
+    Middleware يضيف employee profile للـ request
+    عشان نقدر نستخدمه في الـ views و templates
+    """
+    
+    def __init__(self, get_response):
+        self.get_response = get_response
+    
+    def __call__(self, request):
+        request.current_employee = None
+        
+        if hasattr(request, 'user') and request.user.is_authenticated:
+            try:
+                from employees.models import Employee
+                request.current_employee = Employee.objects.filter(user=request.user).first()
+            except Exception:
+                pass
+        
+        response = self.get_response(request)
+        return response
