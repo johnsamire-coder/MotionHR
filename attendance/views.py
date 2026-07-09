@@ -13,6 +13,7 @@ from decimal import Decimal
 import json
 import math
 
+from subscriptions.helpers import feature_required
 from .models import Shift, EmployeeShift, Attendance, LocationLog, LocationCheckIn
 from employees.models import Employee
 
@@ -33,6 +34,7 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 
 
 @login_required
+@feature_required('attendance_records')
 def attendance_list(request):
     """قائمة سجلات الحضور"""
     
@@ -85,6 +87,7 @@ def attendance_list(request):
 
 
 @login_required
+@feature_required('attendance_gps')
 def check_in_page(request):
     """صفحة تسجيل الحضور والانصراف"""
     
@@ -279,6 +282,7 @@ def api_check_out(request):
 
 
 @login_required
+@feature_required('location_visits')
 def visits_list(request):
     """قائمة زيارات المواقع"""
     visits = LocationCheckIn.objects.all().select_related('employee').order_by('-arrival_time')
@@ -297,6 +301,7 @@ def visits_list(request):
 
 
 @login_required
+@feature_required('location_visits')
 def visit_add(request):
     """إضافة زيارة موقع"""
     
@@ -352,6 +357,7 @@ def visit_add(request):
 
 
 @login_required
+@feature_required('live_map')
 def live_map(request):
     """خريطة الموظفين الميدانيين Live"""
     
@@ -490,6 +496,7 @@ def api_track_location(request):
 
 
 @login_required
+@feature_required('continuous_tracking')
 def tracking_page(request):
     """صفحة التتبع للموظف الميداني"""
     
@@ -552,6 +559,7 @@ def employee_tracking_detail(request, employee_id):
 
 
 @login_required
+@feature_required('continuous_tracking')
 def field_employees_monitor(request):
     """صفحة متابعة الموظفين الميدانيين للمدير"""
     

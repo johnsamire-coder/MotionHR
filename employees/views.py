@@ -11,6 +11,7 @@ from datetime import datetime
 from .models import Employee, JobTitle
 from .forms import EmployeeForm
 from companies.models import Branch, Department
+from subscriptions.helpers import feature_required
 from core.permissions import (
     get_accessible_employees,
     can_user_edit_employee,
@@ -21,6 +22,7 @@ from core.permissions import (
 
 
 @login_required
+@feature_required('employees_management')
 def employee_list(request):
     """قائمة الموظفين - محكومة بالصلاحيات الهرمية"""
     

@@ -28,15 +28,11 @@ def feature_required(feature_key):
             # التحقق من الاشتراك
             if not getattr(request, 'subscription_valid', False):
                 messages.warning(request, 'اشتراكك منتهي. يرجى التجديد للوصول لهذه الميزة')
-                return redirect('subscription_upgrade')
+                return redirect(f'/sub-admin/upgrade/')
             
             # التحقق من الميزة
             if feature_key not in getattr(request, 'subscription_features', set()):
-                messages.info(
-                    request,
-                    f'هذه الميزة غير متاحة في خطتك الحالية. قم بترقية الخطة للاستفادة منها'
-                )
-                return redirect('subscription_upgrade')
+                return redirect(f'/sub-admin/feature-locked/?feature={feature_key}')
             
             return view_func(request, *args, **kwargs)
         return wrapper

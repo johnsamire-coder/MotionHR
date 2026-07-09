@@ -1,4 +1,5 @@
 {% extends 'base/base.html' %}
+{% load subscription_tags %}
 {% load static %}
 
 {% block extra_css %}
@@ -223,63 +224,102 @@
         <div class="menu-section">
             <div class="menu-title">الموارد البشرية</div>
             
+            {% has_feature 'employees_management' as can_employees %}
+            {% if can_employees %}
             <a href="{% url 'employees:list' %}" 
                class="menu-item {% if 'employees' in request.resolver_match.namespace %}active{% endif %}">
                 <i class="bi bi-people-fill"></i>
                 <span>الموظفون</span>
             </a>
+            {% endif %}
             
+            {% has_feature 'companies_management' as can_companies %}
+            {% if can_companies %}
             <a href="#" class="menu-item">
                 <i class="bi bi-building"></i>
                 <span>الشركات والفروع</span>
             </a>
+            {% endif %}
             
+            {% has_feature 'departments_management' as can_depts %}
+            {% if can_depts %}
             <a href="#" class="menu-item">
                 <i class="bi bi-diagram-3"></i>
                 <span>الإدارات</span>
             </a>
+            {% endif %}
         </div>
         
-<div class="menu-section">
-    <div class="menu-title">الحضور والتتبع</div>
-    
-    <a href="{% url 'attendance:list' %}" 
-       class="menu-item {% if request.resolver_match.url_name == 'list' and 'attendance' in request.path %}active{% endif %}">
-        <i class="bi bi-clock-history"></i>
-        <span>سجلات الحضور</span>
-    </a>
-    
-    <a href="{% url 'attendance:check_in' %}" 
-       class="menu-item {% if request.resolver_match.url_name == 'check_in' %}active{% endif %}">
-        <i class="bi bi-fingerprint"></i>
-        <span>تسجيل حضور</span>
-    </a>
-    
-    <a href="{% url 'attendance:tracking' %}" 
-       class="menu-item {% if request.resolver_match.url_name == 'tracking' %}active{% endif %}">
-        <i class="bi bi-broadcast"></i>
-        <span>التتبع المستمر</span>
-    </a>
-    
-    <a href="{% url 'attendance:live_map' %}" 
-       class="menu-item {% if request.resolver_match.url_name == 'live_map' %}active{% endif %}">
-        <i class="bi bi-geo-alt-fill"></i>
-        <span>خريطة التتبع</span>
-        <span class="menu-badge">Live</span>
-    </a>
-    
-    <a href="{% url 'attendance:visits' %}" 
-       class="menu-item {% if request.resolver_match.url_name == 'visits' %}active{% endif %}">
-        <i class="bi bi-pin-map-fill"></i>
-        <span>الزيارات</span>
-    </a>
-    
-    <a href="#" class="menu-item">
-        <i class="bi bi-calendar-week"></i>
-        <span>الشيفتات</span>
-    </a>
-</div>
-
+        {% has_feature 'attendance_gps' as can_attendance %}
+        {% has_feature 'attendance_records' as can_records %}
+        {% has_feature 'continuous_tracking' as can_tracking %}
+        {% has_feature 'live_map' as can_map %}
+        {% has_feature 'location_visits' as can_visits %}
+        {% has_feature 'shifts_management' as can_shifts %}
+        
+        {% if can_attendance or can_records or can_tracking or can_map or can_visits or can_shifts %}
+        <div class="menu-section">
+            <div class="menu-title">الحضور والتتبع</div>
+            
+            {% if can_records %}
+            <a href="{% url 'attendance:list' %}" 
+               class="menu-item {% if request.resolver_match.url_name == 'list' and 'attendance' in request.path %}active{% endif %}">
+                <i class="bi bi-clock-history"></i>
+                <span>سجلات الحضور</span>
+            </a>
+            {% endif %}
+            
+            {% if can_attendance %}
+            <a href="{% url 'attendance:check_in' %}" 
+               class="menu-item {% if request.resolver_match.url_name == 'check_in' %}active{% endif %}">
+                <i class="bi bi-fingerprint"></i>
+                <span>تسجيل حضور</span>
+            </a>
+            {% endif %}
+            
+            {% if can_tracking %}
+            <a href="{% url 'attendance:tracking' %}" 
+               class="menu-item {% if request.resolver_match.url_name == 'tracking' %}active{% endif %}">
+                <i class="bi bi-broadcast"></i>
+                <span>التتبع المستمر</span>
+            </a>
+            
+            <a href="{% url 'attendance:monitor' %}" 
+               class="menu-item {% if request.resolver_match.url_name == 'monitor' %}active{% endif %}">
+                <i class="bi bi-people-fill"></i>
+                <span>متابعة الميدانيين</span>
+                <span class="menu-badge">HR</span>
+            </a>
+            {% endif %}
+            
+            {% if can_map %}
+            <a href="{% url 'attendance:live_map' %}" 
+               class="menu-item {% if request.resolver_match.url_name == 'live_map' %}active{% endif %}">
+                <i class="bi bi-geo-alt-fill"></i>
+                <span>خريطة التتبع</span>
+                <span class="menu-badge">Live</span>
+            </a>
+            {% endif %}
+            
+            {% if can_visits %}
+            <a href="{% url 'attendance:visits' %}" 
+               class="menu-item {% if request.resolver_match.url_name == 'visits' %}active{% endif %}">
+                <i class="bi bi-pin-map-fill"></i>
+                <span>الزيارات</span>
+            </a>
+            {% endif %}
+            
+            {% if can_shifts %}
+            <a href="#" class="menu-item">
+                <i class="bi bi-calendar-week"></i>
+                <span>الشيفتات</span>
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% has_feature 'leaves_management' as can_leaves %}
+        {% if can_leaves %}
         <div class="menu-section">
             <div class="menu-title">الطلبات</div>
             
@@ -293,7 +333,22 @@
                 <span>الطلبات</span>
             </a>
         </div>
+        {% endif %}
         
+        {% has_feature 'payroll_basic' as can_payroll %}
+        {% if can_payroll %}
+        <div class="menu-section">
+            <div class="menu-title">المرتبات</div>
+            
+            <a href="#" class="menu-item">
+                <i class="bi bi-cash-stack"></i>
+                <span>المرتبات</span>
+            </a>
+        </div>
+        {% endif %}
+        
+        {% has_feature 'basic_reports' as can_reports %}
+        {% if can_reports %}
         <div class="menu-section">
             <div class="menu-title">التقارير</div>
             
@@ -302,28 +357,31 @@
                 <span>التقارير</span>
             </a>
         </div>
+        {% endif %}
         
+        {% if user.role == 'super_admin' %}
         <div class="menu-section">
             <div class="menu-title">إدارة النظام</div>
             
-            {% if user.role == 'super_admin' %}
             <a href="{% url 'subscriptions:admin_dashboard' %}" 
-               class="menu-item {% if 'sub-admin' in request.path %}active{% endif %}">
+               class="menu-item {% if 'sub-admin' in request.path and 'my-subscription' not in request.path and 'upgrade' not in request.path %}active{% endif %}">
                 <i class="bi bi-briefcase-fill"></i>
                 <span>إدارة الاشتراكات</span>
                 <span class="menu-badge">Admin</span>
             </a>
-            {% endif %}
         </div>
+        {% endif %}
         
         <div class="menu-section">
             <div class="menu-title">الإعدادات</div>
             
+            {% if user.role != 'super_admin' %}
             <a href="{% url 'subscriptions:my_subscription' %}" 
                class="menu-item {% if 'my-subscription' in request.path or 'upgrade' in request.path %}active{% endif %}">
                 <i class="bi bi-award-fill"></i>
                 <span>خطتي</span>
             </a>
+            {% endif %}
             
             <a href="/admin/" class="menu-item">
                 <i class="bi bi-gear-fill"></i>
