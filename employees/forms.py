@@ -131,8 +131,15 @@ class EmployeeForm(forms.ModelForm):
         
         # فلترة القوائم حسب الشركة الحالية
         company = get_current_company()
+        user = get_current_user()
         
-        if company:
+        # لو Super Admin يشوف كل حاجة
+        if user and hasattr(user, 'role') and user.role == 'super_admin':
+            self.fields['branch'].queryset = Branch.objects.all()
+            self.fields['department'].queryset = Department.objects.all()
+            self.fields['job_title'].queryset = JobTitle.all_objects.all()
+            self.fields['direct_manager'].queryset = Employee.all_objects.all()
+        elif company:
             self.fields['branch'].queryset = Branch.objects.filter(company=company)
             self.fields['department'].queryset = Department.objects.filter(company=company)
             self.fields['job_title'].queryset = JobTitle.objects.filter(company=company)
