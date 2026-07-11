@@ -1,0 +1,59 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}ميزة غير متاحة - MotionHR{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-6 text-center">
+
+      <!-- أيقونة -->
+      <div class="mb-4">
+        <div class="rounded-circle d-inline-flex align-items-center justify-content-center"
+             style="width:100px;height:100px;background:#fff3cd;">
+          <i class="bi bi-lock-fill" style="font-size:3rem;color:#f59e0b;"></i>
+        </div>
+      </div>
+
+      <!-- العنوان -->
+      <h3 class="fw-bold mb-2">هذه الميزة غير متاحة في خطتك</h3>
+      <p class="text-muted fs-5 mb-4">
+        {% if feature_name %}
+          <strong>{{ feature_name }}</strong> متاحة في خطط أعلى
+        {% else %}
+          هذه الميزة تتطلب ترقية خطتك
+        {% endif %}
+      </p>
+
+      <!-- الخطط المطلوبة -->
+      {% if required_plan %}
+      <div class="alert border-0 mb-4" style="background:#e0f7fa;">
+        <i class="bi bi-info-circle me-2" style="color:#06B6D4;"></i>
+        متاحة من خطة <strong>{{ required_plan }}</strong> فأعلى
+      </div>
+      {% endif %}
+
+      <!-- أزرار -->
+      <div class="d-flex gap-3 justify-content-center">
+        <a href="{% url 'subscriptions:contact_sales' %}"
+           class="btn btn-lg text-white px-4"
+           style="background:#06B6D4;">
+          <i class="bi bi-rocket me-2"></i>
+          ترقية الخطة
+        </a>
+        <a href="{% url 'subscriptions:my_plan' %}"
+           class="btn btn-lg btn-outline-secondary px-4">
+          <i class="bi bi-star me-2"></i>
+          خطتي الحالية
+        </a>
+        <button onclick="history.back()"
+                class="btn btn-lg btn-light px-4">
+          <i class="bi bi-arrow-right me-2"></i>
+          رجوع
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

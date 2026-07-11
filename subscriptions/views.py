@@ -406,3 +406,296 @@ def feature_locked(request):
     }
     
     return render(request, 'subscriptions/feature_locked.html', context)
+
+
+# ─────────────────────────────────────────────
+# صفحة التواصل / البيع
+# ─────────────────────────────────────────────
+from django.conf import settings as django_settings
+
+def contact_sales_view(request):
+    """صفحة التواصل مع فريق المبيعات"""
+    contact_info = getattr(django_settings, 'MOTIONHR_SALES_CONTACT', {})
+    context = {
+        'contact_phone':   contact_info.get('phone',     '01000000000'),
+        'contact_email':   contact_info.get('email',     'sales@motionhr.com'),
+        'whatsapp_number': contact_info.get('whatsapp',  '201000000000'),
+        'page_title': 'تواصل معنا',
+    }
+    return render(request, 'subscriptions/contact_sales.html', context)
+
+
+
+# ─────────────────────────────────────────────
+# صفحة خطتي
+# ─────────────────────────────────────────────
+@login_required
+def my_plan_view(request):
+    """صفحة خطتي - تفاصيل الاشتراك الحالي"""
+    from .models import CompanySubscription, SubscriptionPlan
+
+    subscription    = None
+    active_features = []
+
+    if request.user.company:
+        subscription = CompanySubscription.objects.filter(
+            company=request.user.company,
+            status__in=['active', 'trial']
+        ).select_related('plan').first()
+
+    # قائمة الميزات مع أسمائها العربية
+    features_list = [
+        ('employee_management',    'إدارة الموظفين'),
+        ('attendance_tracking',    'تتبع الحضور'),
+        ('gps_attendance',         'حضور GPS'),
+        ('field_tracking',         'التتبع الميداني'),
+        ('live_map',               'الخريطة الحية'),
+        ('location_visits',        'تسجيل الزيارات'),
+        ('reports_basic',          'التقارير الأساسية'),
+        ('reports_advanced',       'التقارير المتقدمة'),
+        ('excel_export',           'تصدير Excel'),
+        ('pdf_export',             'تصدير PDF'),
+        ('login_by_employee_code', 'دخول بالرقم الوظيفي'),
+        ('login_by_phone',         'دخول بالموبايل'),
+        ('leave_management',       'إدارة الإجازات'),
+        ('multi_branch',           'فروع متعددة'),
+        ('payroll_basic',          'مرتبات أساسي'),
+    ]
+
+    # حساب عدد الموظفين
+    current_employees = 0
+    if request.user.company:
+        try:
+            from employees.models import Employee
+            current_employees = Employee.objects.filter(
+                company=request.user.company,
+                status='active'
+            ).count()
+        except Exception:
+            pass
+
+    context = {
+        'subscription':      subscription,
+        'active_features':   active_features,
+        'features_list':     features_list,
+        'current_employees': current_employees,
+        'page_title':        'خطتي',
+    }
+    return render(request, 'subscriptions/my_plan.html', context)
+
+
+# ═════════════════════════════════════════════════════════════
+# Patch 49j-Hooks v3 — Premium Module Upsell Pages
+# ═════════════════════════════════════════════════════════════
+
+@login_required
+def feature_upsell_page(request, feature_code):
+    """صفحة تسويقية للموديولات الإضافية"""
+
+    # ═══ تعريف المنتجات ═══
+    features_meta = {
+
+        # ── 1) الرواتب ──
+        'payroll': {
+            'title': 'نظام الرواتب والأجور',
+            'subtitle': 'Payroll Management',
+            'icon': 'bi-cash-coin',
+            'color': '#10b981',
+            'gradient': 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            'description': 'نظام آلي متكامل لحساب الرواتب بضغطة زر واحدة. يسحب بيانات الحضور والتأخيرات والخصومات تلقائياً ويحسب صافي الراتب لكل موظف.',
+            'benefits': [
+                {'title': 'حساب آلي للرواتب', 'desc': 'يسحب التأخيرات والغياب والخصومات من سجلات الحضور ويحسب الراتب تلقائياً بدون تدخل بشري.', 'icon': 'bi-calculator'},
+                {'title': 'مسيرات الرواتب (Payslips)', 'desc': 'إصدار كشف راتب مفصّل لكل موظف بصيغة PDF جاهز للطباعة أو الإرسال بالإيميل.', 'icon': 'bi-file-earmark-pdf'},
+                {'title': 'إدارة البدلات والسلف', 'desc': 'تسجيل البدلات (سكن/مواصلات/طعام) والسلف وخصمها تلقائياً من الراتب.', 'icon': 'bi-wallet2'},
+                {'title': 'تصدير بنكي', 'desc': 'تصدير ملف إكسل جاهز بفورمات البنوك المصرية لتحويل الرواتب مباشرة.', 'icon': 'bi-bank'},
+                {'title': 'التأمينات والضرائب', 'desc': 'حساب حصة التأمينات الاجتماعية وضريبة كسب العمل تلقائياً حسب القانون المصري.', 'icon': 'bi-shield-check'},
+                {'title': 'إقفال شهري', 'desc': 'إقفال الشهر بضغطة زر وأرشفة مسير الرواتب للرجوع إليه في أي وقت.', 'icon': 'bi-lock'},
+            ],
+            'price_hint': 'يبدأ من 200 ج.م / شهر',
+            'whatsapp_text': 'السلام عليكم، أنا مهتم بتفعيل موديول الرواتب والأجور في نظام MotionHR لشركتي. أرجو التواصل معي لمعرفة التفاصيل والتكلفة.',
+        },
+
+        # ── 2) التوظيف ──
+        'recruitment': {
+            'title': 'إدارة التوظيف',
+            'subtitle': 'Applicant Tracking System (ATS)',
+            'icon': 'bi-person-badge',
+            'color': '#8b5cf6',
+            'gradient': 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+            'description': 'نظّم عملية التوظيف بالكامل من لحظة نشر الوظيفة حتى توقيع العقد وتحويل المرشح إلى موظف رسمي في النظام.',
+            'benefits': [
+                {'title': 'نشر الوظائف', 'desc': 'أنشئ إعلانات وظائف احترافية وشاركها مع المرشحين عبر رابط مباشر.', 'icon': 'bi-megaphone'},
+                {'title': 'استقبال السير الذاتية', 'desc': 'استقبل طلبات التوظيف والسير الذاتية إلكترونياً في مكان واحد منظم.', 'icon': 'bi-inbox'},
+                {'title': 'جدولة المقابلات', 'desc': 'حدد مواعيد المقابلات وأرسل إشعارات للمرشحين والمديرين تلقائياً.', 'icon': 'bi-calendar-event'},
+                {'title': 'تقييم المرشحين', 'desc': 'نماذج تقييم مخصصة يملأها المدير بعد كل مقابلة لاتخاذ قرار موضوعي.', 'icon': 'bi-star-half'},
+                {'title': 'تحويل لموظف', 'desc': 'بضغطة زر واحدة حوّل المرشح المقبول إلى موظف رسمي في النظام بكل بياناته.', 'icon': 'bi-person-check'},
+                {'title': 'تقارير التوظيف', 'desc': 'تقارير عن عدد المتقدمين ومعدل القبول ومتوسط وقت التوظيف.', 'icon': 'bi-bar-chart-line'},
+            ],
+            'price_hint': 'يبدأ من 150 ج.م / شهر',
+            'whatsapp_text': 'السلام عليكم، أنا مهتم بتفعيل موديول التوظيف (ATS) في نظام MotionHR لشركتي. أرجو التواصل معي لمعرفة التفاصيل والتكلفة.',
+        },
+
+        # ── 3) تقييم الأداء ──
+        'performance': {
+            'title': 'تقييم الأداء',
+            'subtitle': 'Performance Management & KPIs',
+            'icon': 'bi-graph-up-arrow',
+            'color': '#f59e0b',
+            'gradient': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+            'description': 'ارتقِ بأداء فريقك من خلال نظام تقييم موضوعي يعتمد على مؤشرات أداء رئيسية (KPIs) واضحة ومحددة.',
+            'benefits': [
+                {'title': 'تقييم دوري', 'desc': 'إعداد دورات تقييم (شهرية / ربع سنوية / سنوية) بنماذج مخصصة لكل إدارة.', 'icon': 'bi-calendar-range'},
+                {'title': 'مؤشرات أداء (KPIs)', 'desc': 'تعريف مؤشرات أداء قابلة للقياس لكل وظيفة وربطها بالتقييم.', 'icon': 'bi-speedometer'},
+                {'title': 'تقييم 360 درجة', 'desc': 'تقييم من المدير + الزميل + تقييم ذاتي للحصول على صورة شاملة.', 'icon': 'bi-arrow-repeat'},
+                {'title': 'ربط بالمكافآت', 'desc': 'ربط نتائج التقييم بالترقيات والمكافآت والعلاوات تلقائياً.', 'icon': 'bi-trophy'},
+                {'title': 'خطط تطوير', 'desc': 'إنشاء خطط تطوير فردية للموظفين بناءً على نقاط الضعف في التقييم.', 'icon': 'bi-lightbulb'},
+                {'title': 'تقارير وإحصائيات', 'desc': 'رسوم بيانية توضح أداء الإدارات والفرق ومقارنات بين الفترات.', 'icon': 'bi-pie-chart'},
+            ],
+            'price_hint': 'يبدأ من 150 ج.م / شهر',
+            'whatsapp_text': 'السلام عليكم، أنا مهتم بتفعيل موديول تقييم الأداء في نظام MotionHR لشركتي. أرجو التواصل معي لمعرفة التفاصيل والتكلفة.',
+        },
+
+        # ── 4) إدارة التدريب ──
+        'training': {
+            'title': 'إدارة التدريب والتطوير',
+            'subtitle': 'Training & Development',
+            'icon': 'bi-mortarboard',
+            'color': '#06b6d4',
+            'gradient': 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+            'description': 'تابع البرامج التدريبية لموظفيك وطوّر مهاراتهم بشكل منظم ومتابع.',
+            'benefits': [
+                {'title': 'خطة تدريب سنوية', 'desc': 'إعداد خطة تدريب لكل إدارة تشمل الدورات المطلوبة والميزانية.', 'icon': 'bi-journal-text'},
+                {'title': 'تسجيل الدورات', 'desc': 'تسجيل كل دورة تدريبية بتفاصيلها (المدرب، المكان، المدة، التكلفة).', 'icon': 'bi-bookmark-plus'},
+                {'title': 'متابعة الحضور', 'desc': 'تسجيل حضور الموظفين للدورات ومتابعة نسبة الإتمام.', 'icon': 'bi-check2-square'},
+                {'title': 'الشهادات', 'desc': 'رفع شهادات التدريب وربطها بملف الموظف تلقائياً.', 'icon': 'bi-award'},
+                {'title': 'تقييم أثر التدريب', 'desc': 'نماذج لتقييم مدى استفادة الموظف من الدورة التدريبية.', 'icon': 'bi-clipboard-data'},
+                {'title': 'تقارير التدريب', 'desc': 'تقارير عن ميزانية التدريب وعدد الساعات التدريبية لكل موظف.', 'icon': 'bi-file-earmark-bar-graph'},
+            ],
+            'price_hint': 'يبدأ من 100 ج.م / شهر',
+            'whatsapp_text': 'السلام عليكم، أنا مهتم بتفعيل موديول إدارة التدريب في نظام MotionHR لشركتي. أرجو التواصل معي لمعرفة التفاصيل والتكلفة.',
+        },
+
+        # ── 5) إدارة الأصول والعهد ──
+        'assets': {
+            'title': 'إدارة الأصول والعهد',
+            'subtitle': 'Asset & Custody Management',
+            'icon': 'bi-laptop',
+            'color': '#64748b',
+            'gradient': 'linear-gradient(135deg, #64748b 0%, #475569 100%)',
+            'description': 'تابع أصول الشركة (لابتوبات، موبايلات، سيارات، أدوات) وربطها بالموظفين المسؤولين عنها.',
+            'benefits': [
+                {'title': 'سجل الأصول', 'desc': 'تسجيل كل أصل بتفاصيله (نوع، رقم تسلسلي، قيمة، تاريخ شراء).', 'icon': 'bi-box-seam'},
+                {'title': 'تسليم واستلام', 'desc': 'توثيق تسليم الأصول للموظفين واستلامها عند المغادرة بمحاضر رسمية.', 'icon': 'bi-arrow-left-right'},
+                {'title': 'إخلاء الطرف', 'desc': 'ربط الأصول بإخلاء الطرف — الموظف ما يقدرش يخلي طرفه إلا بعد تسليم كل العهد.', 'icon': 'bi-clipboard-check'},
+                {'title': 'صيانة وتتبع', 'desc': 'جدولة صيانة الأصول وتتبع حالتها (جديد / مستخدم / يحتاج صيانة / تالف).', 'icon': 'bi-tools'},
+                {'title': 'تنبيهات الضمان', 'desc': 'تنبيه قبل انتهاء ضمان الأصول أو عقود الصيانة.', 'icon': 'bi-bell'},
+                {'title': 'تقارير الأصول', 'desc': 'تقارير عن قيمة الأصول وتوزيعها على الإدارات والموظفين.', 'icon': 'bi-bar-chart'},
+            ],
+            'price_hint': 'يبدأ من 100 ج.م / شهر',
+            'whatsapp_text': 'السلام عليكم، أنا مهتم بتفعيل موديول إدارة الأصول والعهد في نظام MotionHR لشركتي. أرجو التواصل معي لمعرفة التفاصيل والتكلفة.',
+        },
+
+        # ── 6) الربط البرمجي (API) ──
+        'api': {
+            'title': 'الربط البرمجي',
+            'subtitle': 'API & System Integration',
+            'icon': 'bi-plug',
+            'color': '#ef4444',
+            'gradient': 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+            'description': 'اربط MotionHR مع أنظمتك الحالية (ERP، برامج محاسبية، أجهزة بصمة) عبر واجهة برمجة تطبيقات (API) آمنة.',
+            'benefits': [
+                {'title': 'REST API كامل', 'desc': 'واجهة برمجية تدعم قراءة وكتابة بيانات الموظفين والحضور والإجازات.', 'icon': 'bi-code-slash'},
+                {'title': 'ربط مع ERP', 'desc': 'تصدير القيود المحاسبية للرواتب مباشرة لبرامج (Odoo, SAP, QuickBooks).', 'icon': 'bi-diagram-3'},
+                {'title': 'أجهزة البصمة', 'desc': 'استيراد بيانات الحضور من أجهزة ZKTeco وغيرها عبر ملفات أو API.', 'icon': 'bi-fingerprint'},
+                {'title': 'Webhooks', 'desc': 'إشعارات لحظية لأنظمتك الخارجية عند حدوث أي حدث (تعيين، إجازة، استقالة).', 'icon': 'bi-broadcast'},
+                {'title': 'SSO / Active Directory', 'desc': 'تسجيل دخول موحد مع Microsoft 365 أو Google Workspace.', 'icon': 'bi-shield-lock'},
+                {'title': 'توثيق API', 'desc': 'توثيق كامل ومفصل لكل Endpoints مع أمثلة عملية.', 'icon': 'bi-book'},
+            ],
+            'price_hint': 'حسب متطلبات الربط',
+            'whatsapp_text': 'السلام عليكم، أنا مهتم بتفعيل موديول الربط البرمجي (API) في نظام MotionHR لشركتي. أرجو التواصل معي لمعرفة التفاصيل والتكلفة.',
+        },
+    }
+
+    feature = features_meta.get(feature_code)
+    if not feature:
+        return redirect('dashboard')
+
+    context = {
+        'feature': feature,
+        'feature_code': feature_code,
+        'page_title': feature['title'],
+        'sales_phone': '(+20) 015 0155 1593',
+        'sales_whatsapp': '2001501551593',
+        'sales_email': 'info@jssolutions.com',
+    }
+    return render(request, 'subscriptions/upsell_page.html', context)
+
+
+# ═════════════════════════════════════════════════════════════
+# Patch 49N-A — Safe Admin Dashboard Override
+# ═════════════════════════════════════════════════════════════
+
+@login_required
+def admin_dashboard(request):
+    from decimal import Decimal
+    from datetime import date
+    from companies.models import Company
+    from .models import CompanySubscription, SubscriptionPlan
+
+    today = date.today()
+
+    subscriptions = CompanySubscription.objects.select_related('company', 'plan').order_by('-id')
+    plans = SubscriptionPlan.objects.all().order_by('id')
+    companies_count = Company.objects.count()
+
+    def _is_active(sub):
+        status = str(getattr(sub, 'status', '') or '').lower()
+        if status in ['cancelled', 'expired', 'inactive']:
+            return False
+
+        if hasattr(sub, 'is_active'):
+            try:
+                if sub.is_active is False:
+                    return False
+            except Exception:
+                pass
+
+        end_date = getattr(sub, 'end_date', None)
+        if end_date and end_date < today:
+            return False
+
+        return True
+
+    active_subscriptions = [s for s in subscriptions if _is_active(s)]
+    expired_subscriptions = [s for s in subscriptions if not _is_active(s)]
+
+    total_revenue = Decimal('0.00')
+    for s in active_subscriptions:
+        price = None
+        if getattr(s, 'plan', None) and hasattr(s.plan, 'price'):
+            price = s.plan.price
+        elif hasattr(s, 'price'):
+            price = s.price
+        else:
+            price = Decimal('0.00')
+
+        try:
+            total_revenue += Decimal(str(price))
+        except Exception:
+            pass
+
+    monthly_revenue = total_revenue
+
+    context = {
+        'page_title': 'لوحة الاشتراكات',
+        'subscriptions': subscriptions[:10],
+        'recent_subscriptions': subscriptions[:10],
+        'plans': plans,
+        'companies_count': companies_count,
+        'active_count': len(active_subscriptions),
+        'expired_count': len(expired_subscriptions),
+        'total_revenue': total_revenue,
+        'monthly_revenue': monthly_revenue,
+    }
+    return render(request, 'subscriptions/admin_dashboard.html', context)
+

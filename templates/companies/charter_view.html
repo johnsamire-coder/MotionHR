@@ -1,0 +1,91 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}ميثاق العمل{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+
+      {% if charter %}
+
+      <!-- العنوان -->
+      <div class="text-center mb-4">
+        <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+             style="width:70px; height:70px; background:#e0f7fa;">
+          <i class="bi bi-file-earmark-text-fill" style="font-size:2rem; color:#06B6D4;"></i>
+        </div>
+        <h4 class="fw-bold">{{ charter.title }}</h4>
+        <small class="text-muted">الإصدار {{ charter.version }}</small>
+      </div>
+
+      <!-- حالة الموافقة -->
+      {% if accepted %}
+      <div class="alert border-0 shadow-sm mb-4"
+           style="background:#e8f5e9; border-radius:12px;">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-check-circle-fill text-success fs-4"></i>
+          <div>
+            <strong class="text-success">تمت الموافقة</strong>
+            <div class="text-muted small">لقد وافقت على ميثاق العمل بالفعل</div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- الميثاق -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+
+          {% if charter.introduction %}
+          <div class="p-3 mb-4 rounded" style="background:#f0f9ff; border-right:4px solid #06B6D4;">
+            <p class="mb-0">{{ charter.introduction }}</p>
+          </div>
+          {% endif %}
+
+          <div class="charter-content" style="line-height:2; font-size:1rem;">
+            {{ charter.content|linebreaksbr }}
+          </div>
+
+        </div>
+      </div>
+
+      <!-- زرار الموافقة -->
+      {% if not accepted and employee %}
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+          <p class="mb-3 fw-semibold">
+            بالضغط على "أوافق" أنت تؤكد أنك قرأت ميثاق العمل وتوافق على جميع بنوده.
+          </p>
+          <form method="post" action="{% url 'companies:charter_accept' %}">
+            {% csrf_token %}
+            <div class="form-check d-flex align-items-center justify-content-center gap-2 mb-3">
+              <input class="form-check-input" type="checkbox"
+                     id="agreeCheck" required
+                     style="width:1.3rem; height:1.3rem;">
+              <label class="form-check-label fw-semibold" for="agreeCheck">
+                قرأت ميثاق العمل وأوافق على جميع البنود
+              </label>
+            </div>
+            <button type="submit" class="btn btn-lg text-white fw-bold px-5"
+                    style="background:#06B6D4; border-radius:12px;">
+              <i class="bi bi-check-lg me-2"></i>
+              أوافق على الميثاق
+            </button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+      {% else %}
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-5">
+          <i class="bi bi-file-earmark-x" style="font-size:4rem; color:#d1d5db;"></i>
+          <h5 class="mt-3 fw-bold text-muted">لا يوجد ميثاق عمل بعد</h5>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}

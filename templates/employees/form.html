@@ -1,598 +1,613 @@
 {% extends 'base/dashboard_base.html' %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{{ page_title|default:"إضافة موظف" }}{% endblock %}
 
-{% block page_title %}{{ title }}{% endblock %}
-{% block page_subtitle %}{% if is_edit %}تحديث بيانات الموظف{% else %}إضافة موظف جديد للنظام{% endif %}{% endblock %}
-
-{% block dashboard_content %}
-
-<!-- Back Button -->
-<div class="mb-3 d-flex gap-2 flex-wrap">
-    <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-primary">
-        <i class="bi bi-house-fill"></i>
-        الرئيسية
-    </a>
-    <a href="{% url 'employees:list' %}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-people-fill"></i>
-        قائمة الموظفين
-    </a>
-    {% if is_edit %}
-    <a href="{% url 'employees:detail' employee.pk %}" class="btn btn-sm btn-outline-info">
-        <i class="bi bi-eye-fill"></i>
-        عرض الموظف
-    </a>
-    {% endif %}
-</div>
-
-<!-- Messages -->
-{% if messages %}
-    {% for message in messages %}
-    <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-    {% endfor %}
-{% endif %}
-
-<form method="post" enctype="multipart/form-data" id="employeeForm">
-    {% csrf_token %}
-    
-    <!-- Error Summary -->
-    {% if form.errors %}
-    <div class="alert alert-danger">
-        <h6 class="fw-bold mb-2">
-            <i class="bi bi-exclamation-triangle-fill"></i>
-            يوجد أخطاء في الفورم:
-        </h6>
-        <ul class="mb-0">
-            {% for field, errors in form.errors.items %}
-                {% for error in errors %}
-                <li>
-                    {% if field != '__all__' %}
-                        <strong>{{ form.fields|dictsort:field|first }}:</strong>
-                    {% endif %}
-                    {{ error }}
-                </li>
-                {% endfor %}
-            {% endfor %}
-        </ul>
-    </div>
-    {% endif %}
-    
-    <!-- Progress Steps -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body">
-            <div class="row text-center">
-                <div class="col">
-                    <div class="step-item active" data-step="1">
-                        <div class="step-icon">
-                            <i class="bi bi-person"></i>
-                        </div>
-                        <p class="mb-0 mt-2 small fw-semibold">البيانات الشخصية</p>
-                    </div>
-                </div>
-                <div class="col">
-                    <div class="step-item" data-step="2">
-                        <div class="step-icon">
-                            <i class="bi bi-telephone"></i>
-                        </div>
-                        <p class="mb-0 mt-2 small fw-semibold">التواصل</p>
-                    </div>
-                </div>
-                <div class="col">
-                    <div class="step-item" data-step="3">
-                        <div class="step-icon">
-                            <i class="bi bi-briefcase"></i>
-                        </div>
-                        <p class="mb-0 mt-2 small fw-semibold">التعيين</p>
-                    </div>
-                </div>
-                <div class="col">
-                    <div class="step-item" data-step="4">
-                        <div class="step-icon">
-                            <i class="bi bi-cash-stack"></i>
-                        </div>
-                        <p class="mb-0 mt-2 small fw-semibold">مالية</p>
-                    </div>
-                </div>
-                <div class="col">
-                    <div class="step-item" data-step="5">
-                        <div class="step-icon">
-                            <i class="bi bi-shield-check"></i>
-                        </div>
-                        <p class="mb-0 mt-2 small fw-semibold">أخرى</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Step 1: Personal Info -->
-    <div class="form-step" data-step="1">
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="mb-0 fw-bold">
-                    <i class="bi bi-person-fill text-primary"></i>
-                    البيانات الشخصية
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    
-                    <!-- Photo -->
-                    <div class="col-12 text-center">
-                        <label class="form-label fw-semibold">الصورة الشخصية</label>
-                        <div>
-                            {% if employee and employee.photo %}
-                            <img src="{{ employee.photo.url }}" 
-                                 id="photoPreview"
-                                 class="rounded-circle mb-2" 
-                                 style="width: 120px; height: 120px; object-fit: cover;">
-                            {% else %}
-                            <div id="photoPreview" 
-                                 class="rounded-circle mx-auto mb-2 d-flex align-items-center justify-content-center bg-light" 
-                                 style="width: 120px; height: 120px;">
-                                <i class="bi bi-person text-muted" style="font-size: 3rem;"></i>
-                            </div>
-                            {% endif %}
-                        </div>
-                        {{ form.photo }}
-                        <small class="text-muted d-block mt-1">اختر صورة (اختياري)</small>
-                    </div>
-                    
-                    <!-- Employee Code -->
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">الرقم الوظيفي</label>
-                        {{ form.employee_code }}
-                        <small class="text-muted">اتركه فارغاً للتوليد التلقائي</small>
-                    </div>
-                    
-                    <!-- Names -->
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold">
-                            الاسم الأول (عربي) <span class="text-danger">*</span>
-                        </label>
-                        {{ form.first_name_ar }}
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold">الاسم الأوسط (عربي)</label>
-                        {{ form.middle_name_ar }}
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold">
-                            اسم العائلة (عربي) <span class="text-danger">*</span>
-                        </label>
-                        {{ form.last_name_ar }}
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">الاسم الأول (English)</label>
-                        {{ form.first_name_en }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Last Name (English)</label>
-                        {{ form.last_name_en }}
-                    </div>
-                    
-                    <!-- IDs -->
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">
-                            الرقم القومي <span class="text-danger">*</span>
-                        </label>
-                        {{ form.national_id }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">
-                            تاريخ الميلاد <span class="text-danger">*</span>
-                        </label>
-                        {{ form.birth_date }}
-                    </div>
-                    
-                    <!-- Personal -->
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">
-                            النوع <span class="text-danger">*</span>
-                        </label>
-                        {{ form.gender }}
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">الحالة الاجتماعية</label>
-                        {{ form.marital_status }}
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">الديانة</label>
-                        {{ form.religion }}
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">الجنسية</label>
-                        {{ form.nationality }}
-                    </div>
-                    
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Step 2: Contact -->
-    <div class="form-step" data-step="2" style="display: none;">
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="mb-0 fw-bold">
-                    <i class="bi bi-telephone-fill text-primary"></i>
-                    بيانات التواصل
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">
-                            رقم الموبايل <span class="text-danger">*</span>
-                        </label>
-                        {{ form.phone }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">رقم موبايل آخر</label>
-                        {{ form.phone2 }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">البريد الإلكتروني</label>
-                        {{ form.email }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">المدينة</label>
-                        {{ form.city }}
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label fw-semibold">العنوان</label>
-                        {{ form.address }}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Step 3: Employment -->
-    <div class="form-step" data-step="3" style="display: none;">
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="mb-0 fw-bold">
-                    <i class="bi bi-briefcase-fill text-primary"></i>
-                    بيانات التعيين
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">
-                            تاريخ التعيين <span class="text-danger">*</span>
-                        </label>
-                        {{ form.hire_date }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">نوع العقد</label>
-                        {{ form.contract_type }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">تاريخ انتهاء العقد</label>
-                        {{ form.contract_end_date }}
-                        <small class="text-muted">للعقود المؤقتة فقط</small>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">
-                            الفرع <span class="text-danger">*</span>
-                        </label>
-                        {{ form.branch }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">
-                            الإدارة <span class="text-danger">*</span>
-                        </label>
-                        {{ form.department }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">
-                            المسمى الوظيفي <span class="text-danger">*</span>
-                        </label>
-                        {{ form.job_title }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">المدير المباشر</label>
-                        {{ form.direct_manager }}
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-check mt-4">
-                            {{ form.is_field_worker }}
-                            <label class="form-check-label fw-semibold">
-                                <i class="bi bi-geo-alt-fill text-info"></i>
-                                موظف ميداني (يتم تتبع موقعه)
-                            </label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Step 4: Financial -->
-    <div class="form-step" data-step="4" style="display: none;">
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="mb-0 fw-bold">
-                    <i class="bi bi-cash-stack text-primary"></i>
-                    البيانات المالية
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">الراتب الأساسي</label>
-                        <div class="input-group">
-                            {{ form.basic_salary }}
-                            <span class="input-group-text">جنيه</span>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">اسم البنك</label>
-                        {{ form.bank_name }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">رقم الحساب</label>
-                        {{ form.bank_account }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">IBAN</label>
-                        {{ form.iban }}
-                    </div>
-                </div>
-                
-                <hr>
-                
-                <h6 class="fw-bold mb-3">
-                    <i class="bi bi-shield-check text-info"></i>
-                    التأمينات
-                </h6>
-                <div class="row g-3">
-                    <div class="col-12">
-                        <div class="form-check">
-                            {{ form.has_insurance }}
-                            <label class="form-check-label fw-semibold">
-                                مؤمن عليه
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">الرقم التأميني</label>
-                        {{ form.insurance_number }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">تاريخ التأمين</label>
-                        {{ form.insurance_date }}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Step 5: Others -->
-    <div class="form-step" data-step="5" style="display: none;">
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="mb-0 fw-bold">
-                    <i class="bi bi-telephone-plus text-primary"></i>
-                    جهة اتصال للطوارئ
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold">الاسم</label>
-                        {{ form.emergency_contact_name }}
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold">صلة القرابة</label>
-                        {{ form.emergency_contact_relation }}
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold">رقم الموبايل</label>
-                        {{ form.emergency_contact_phone }}
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="mb-0 fw-bold">
-                    <i class="bi bi-info-circle text-primary"></i>
-                    الحالة والملاحظات
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">حالة الموظف</label>
-                        {{ form.status }}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">تاريخ انتهاء الخدمة</label>
-                        {{ form.termination_date }}
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label fw-semibold">سبب انتهاء الخدمة</label>
-                        {{ form.termination_reason }}
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label fw-semibold">ملاحظات</label>
-                        {{ form.notes }}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Navigation Buttons -->
-    <div class="card border-0 shadow-sm">
-        <div class="card-body">
-            <div class="d-flex justify-content-between">
-                
-                <button type="button" 
-                        class="btn btn-outline-secondary" 
-                        id="prevBtn" 
-                        onclick="changeStep(-1)"
-                        style="display: none;">
-                    <i class="bi bi-arrow-right"></i>
-                    السابق
-                </button>
-                
-                <div class="ms-auto d-flex gap-2">
-                    <button type="button" 
-                            class="btn btn-primary" 
-                            id="nextBtn" 
-                            onclick="changeStep(1)">
-                        التالي
-                        <i class="bi bi-arrow-left"></i>
-                    </button>
-                    
-                    <button type="button" 
-                            onclick="document.getElementById('employeeForm').submit();"
-                            class="btn btn-success" 
-                            id="submitBtn"
-                            style="display: none;">
-                        <i class="bi bi-check-circle-fill"></i>
-                        {% if is_edit %}حفظ التعديلات{% else %}حفظ الموظف{% endif %}
-                    </button>
-                </div>
-                
-            </div>
-        </div>
-    </div>
-    
-</form>
-
-{% endblock %}
-
-{% block dashboard_css %}
+{% block extra_css %}
 <style>
-    .step-item {
-        position: relative;
-        opacity: 0.4;
-        transition: all 0.3s;
-    }
-    
-    .step-item.active {
-        opacity: 1;
-    }
-    
-    .step-item.completed {
-        opacity: 1;
-    }
-    
-    .step-icon {
-        width: 50px;
-        height: 50px;
-        margin: 0 auto;
-        border-radius: 50%;
-        background: #E2E8F0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #64748B;
-        font-size: 1.3rem;
-        transition: all 0.3s;
-    }
-    
-    .step-item.active .step-icon {
-        background: linear-gradient(135deg, #06B6D4, #3B82F6);
-        color: white;
-        box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
-    }
-    
-    .step-item.completed .step-icon {
-        background: #10B981;
-        color: white;
-    }
-    
-    .form-control:focus, .form-select:focus {
-        border-color: #06B6D4;
-        box-shadow: 0 0 0 0.25rem rgba(6, 182, 212, 0.15);
-    }
-    
-    .form-check-input:checked {
-        background-color: #06B6D4;
-        border-color: #06B6D4;
-    }
+  .wizard-shell { border: 1px solid #e2e8f0; border-radius: 20px; background: linear-gradient(180deg, #ffffff 0%, #f8fdff 100%); }
+  .wizard-stepper { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+  .wizard-step { border: 1px solid #dbeafe; background: #fff; border-radius: 16px; padding: 14px 12px; cursor: pointer; transition: .2s ease; min-height: 88px; }
+  .wizard-step:hover { border-color: #06B6D4; transform: translateY(-1px); }
+  .wizard-step.active { background: #06B6D4; border-color: #06B6D4; color: white; box-shadow: 0 10px 24px rgba(6,182,212,.18); }
+  .wizard-step.done { background: #ecfeff; border-color: #67e8f9; }
+  .wizard-step-number { width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; background: rgba(6,182,212,.12); color: #0891b2; margin-bottom: 10px; }
+  .wizard-step.active .wizard-step-number { background: rgba(255,255,255,.18); color: #fff; }
+  .wizard-step-title { font-weight: 800; font-size: .95rem; margin-bottom: 3px; }
+  .wizard-step-note { font-size: .78rem; opacity: .85; }
+  .wizard-panel { display: none; }
+  .wizard-panel.active { display: block; animation: fadePanel .18s ease; }
+  @keyframes fadePanel { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .section-card { border: 1px solid #e2e8f0; border-radius: 18px; overflow: hidden; }
+  .section-head { background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 14px 18px; }
+  .section-head h6 { margin: 0; font-weight: 800; }
+  .section-head small { color: #64748b; }
+  .field-box { margin-bottom: 1rem; }
+  .field-box label { display: block; margin-bottom: .45rem; font-weight: 700; color: #0f172a; }
+  .field-box .required-star { color: #dc2626; margin-right: 4px; }
+  .field-box .errorlist { list-style: none; padding: 0; margin: .35rem 0 0; color: #dc2626; font-size: .82rem; }
+  .wizard-actions { position: sticky; bottom: 0; background: #fff; border-top: 1px solid #e2e8f0; padding: 16px 0 0; margin-top: 24px; }
+  .wizard-status { border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 14px; padding: 12px 14px; }
+  .wizard-status .status-title { font-weight: 800; margin-bottom: 6px; }
+  .missing-list { margin: 0; padding-right: 18px; }
+  .missing-list li { margin-bottom: 4px; }
+  .field-invalid { border-color: #dc2626 !important; box-shadow: 0 0 0 .2rem rgba(220,38,38,.08) !important; }
+  .form-check-wrap { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #fff; }
+  .mini-note { color: #64748b; font-size: .8rem; }
+  .hierarchy-note { border: 1px solid #bae6fd; background: #f0f9ff; border-radius: 14px; padding: 12px 14px; color: #0c4a6e; font-size: .88rem; }
+  .hierarchy-note strong { color: #075985; }
+  @media (max-width: 991.98px) { .wizard-stepper { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
 
-{% block dashboard_js %}
+{% block content %}
+<div class="container-fluid">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <h4 class="mb-1 fw-bold">
+        <i class="bi bi-person-plus-fill text-primary me-2"></i>{{ form_title|default:"إضافة موظف جديد" }}
+      </h4>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 small">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">الرئيسية</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'employees:list' %}">الموظفون</a></li>
+          <li class="breadcrumb-item active">{{ form_title|default:"إضافة موظف جديد" }}</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'employees:hierarchy_manage' %}" class="btn btn-outline-primary">
+        <i class="bi bi-diagram-3 me-1"></i>إدارة الهيكل الوظيفي
+      </a>
+      <a href="{% url 'employees:list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right-circle me-1"></i>العودة للقائمة
+      </a>
+    </div>
+  </div>
+
+  {% if form.errors %}
+  <div class="alert alert-danger border-0 shadow-sm">
+    <div class="fw-bold mb-2">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>يوجد حقول مطلوبة أو بيانات غير صحيحة:
+    </div>
+    <ul class="mb-0">
+      {% for field in form %}
+        {% for error in field.errors %}
+          <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+        {% endfor %}
+      {% endfor %}
+      {% for error in form.non_field_errors %}
+        <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="card border-0 shadow-sm wizard-shell">
+    <div class="card-body p-4">
+
+      <div class="wizard-stepper mb-4" id="wizard-stepper">
+        <div class="wizard-step active" data-step="1">
+          <div class="wizard-step-number">1</div>
+          <div class="wizard-step-title">البيانات الأساسية</div>
+          <div class="wizard-step-note">الاسم والهوية والبيانات الشخصية</div>
+        </div>
+        <div class="wizard-step" data-step="2">
+          <div class="wizard-step-number">2</div>
+          <div class="wizard-step-title">التواصل</div>
+          <div class="wizard-step-note">الهاتف والعنوان والطوارئ</div>
+        </div>
+        <div class="wizard-step" data-step="3">
+          <div class="wizard-step-number">3</div>
+          <div class="wizard-step-title">بيانات التعيين</div>
+          <div class="wizard-step-note">الإدارة والمسمى والمدير المباشر</div>
+        </div>
+        <div class="wizard-step" data-step="4">
+          <div class="wizard-step-number">4</div>
+          <div class="wizard-step-title">المالية والتأمين</div>
+          <div class="wizard-step-note">الراتب والبنك والتأمين</div>
+        </div>
+        <div class="wizard-step" data-step="5">
+          <div class="wizard-step-number">5</div>
+          <div class="wizard-step-title">الحضور والتتبع</div>
+          <div class="wizard-step-note">الحضور والتتبع والموظف الميداني</div>
+        </div>
+      </div>
+
+      <div class="wizard-status mb-4" id="wizard-status-box">
+        <div class="status-title">
+          <i class="bi bi-info-circle-fill text-primary me-1"></i>
+          الخطوة الحالية: <span id="current-step-title">البيانات الأساسية</span>
+        </div>
+        <div class="mini-note">
+          لا يمكن الانتقال للخطوة التالية إلا بعد استكمال الحقول الإلزامية في الخطوة الحالية.
+        </div>
+        <div id="missing-fields-box" class="mt-2" style="display:none;">
+          <div class="fw-bold text-danger mb-1">الحقول الناقصة:</div>
+          <ul class="missing-list text-danger" id="missing-fields-list"></ul>
+        </div>
+      </div>
+
+      <form method="post" enctype="multipart/form-data" id="employeeWizardForm" novalidate>
+        {% csrf_token %}
+        {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+
+        <!-- STEP 1 -->
+        <div class="wizard-panel active" data-step-panel="1">
+          <div class="section-card">
+            <div class="section-head">
+              <h6><i class="bi bi-person-vcard me-2 text-primary"></i>البيانات الأساسية</h6>
+              <small>أدخل هوية الموظف الأساسية والبيانات الشخصية</small>
+            </div>
+            <div class="p-4">
+              <div class="row">
+                {% if form.employee_code %}<div class="col-md-4 field-box">{{ form.employee_code.label_tag }}{{ form.employee_code }}{{ form.employee_code.errors }}</div>{% endif %}
+                {% if form.first_name_ar %}<div class="col-md-4 field-box">{{ form.first_name_ar.label_tag }}{{ form.first_name_ar }}{{ form.first_name_ar.errors }}</div>{% endif %}
+                {% if form.middle_name_ar %}<div class="col-md-4 field-box">{{ form.middle_name_ar.label_tag }}{{ form.middle_name_ar }}{{ form.middle_name_ar.errors }}</div>{% endif %}
+                {% if form.last_name_ar %}<div class="col-md-4 field-box">{{ form.last_name_ar.label_tag }}{{ form.last_name_ar }}{{ form.last_name_ar.errors }}</div>{% endif %}
+                {% if form.first_name_en %}<div class="col-md-4 field-box">{{ form.first_name_en.label_tag }}{{ form.first_name_en }}{{ form.first_name_en.errors }}</div>{% endif %}
+                {% if form.last_name_en %}<div class="col-md-4 field-box">{{ form.last_name_en.label_tag }}{{ form.last_name_en }}{{ form.last_name_en.errors }}</div>{% endif %}
+                {% if form.national_id %}<div class="col-md-4 field-box">{{ form.national_id.label_tag }}{{ form.national_id }}{{ form.national_id.errors }}</div>{% endif %}
+                {% if form.birth_date %}<div class="col-md-4 field-box">{{ form.birth_date.label_tag }}{{ form.birth_date }}{{ form.birth_date.errors }}</div>{% endif %}
+                {% if form.gender %}<div class="col-md-4 field-box">{{ form.gender.label_tag }}{{ form.gender }}{{ form.gender.errors }}</div>{% endif %}
+                {% if form.marital_status %}<div class="col-md-4 field-box">{{ form.marital_status.label_tag }}{{ form.marital_status }}{{ form.marital_status.errors }}</div>{% endif %}
+                {% if form.religion %}<div class="col-md-4 field-box">{{ form.religion.label_tag }}{{ form.religion }}{{ form.religion.errors }}</div>{% endif %}
+                {% if form.nationality %}<div class="col-md-4 field-box">{{ form.nationality.label_tag }}{{ form.nationality }}{{ form.nationality.errors }}</div>{% endif %}
+                {% if form.photo %}<div class="col-md-6 field-box">{{ form.photo.label_tag }}{{ form.photo }}{{ form.photo.errors }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2 -->
+        <div class="wizard-panel" data-step-panel="2">
+          <div class="section-card">
+            <div class="section-head">
+              <h6><i class="bi bi-telephone-forward me-2 text-primary"></i>بيانات التواصل والطوارئ</h6>
+              <small>بيانات الاتصال الأساسية ووسيلة التواصل في الحالات الطارئة</small>
+            </div>
+            <div class="p-4">
+              <div class="row">
+                {% if form.email %}<div class="col-md-4 field-box">{{ form.email.label_tag }}{{ form.email }}{{ form.email.errors }}</div>{% endif %}
+                {% if form.phone %}<div class="col-md-4 field-box">{{ form.phone.label_tag }}{{ form.phone }}{{ form.phone.errors }}</div>{% endif %}
+                {% if form.phone2 %}<div class="col-md-4 field-box">{{ form.phone2.label_tag }}{{ form.phone2 }}{{ form.phone2.errors }}</div>{% endif %}
+                {% if form.city %}<div class="col-md-4 field-box">{{ form.city.label_tag }}{{ form.city }}{{ form.city.errors }}</div>{% endif %}
+                {% if form.address %}<div class="col-md-8 field-box">{{ form.address.label_tag }}{{ form.address }}{{ form.address.errors }}</div>{% endif %}
+                {% if form.emergency_contact_name %}<div class="col-md-4 field-box">{{ form.emergency_contact_name.label_tag }}{{ form.emergency_contact_name }}{{ form.emergency_contact_name.errors }}</div>{% endif %}
+                {% if form.emergency_contact_relation %}<div class="col-md-4 field-box">{{ form.emergency_contact_relation.label_tag }}{{ form.emergency_contact_relation }}{{ form.emergency_contact_relation.errors }}</div>{% endif %}
+                {% if form.emergency_contact_phone %}<div class="col-md-4 field-box">{{ form.emergency_contact_phone.label_tag }}{{ form.emergency_contact_phone }}{{ form.emergency_contact_phone.errors }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 3 -->
+        <div class="wizard-panel" data-step-panel="3">
+          <div class="section-card">
+            <div class="section-head">
+              <h6><i class="bi bi-briefcase-fill me-2 text-primary"></i>بيانات التعيين</h6>
+              <small>الإدارة والمسمى الوظيفي والمدير المباشر</small>
+            </div>
+            <div class="p-4">
+              <div class="hierarchy-note mb-3" id="managerHierarchyNote">
+                <strong>المنطق الحالي:</strong>
+                اختر الإدارة + المسمى الوظيفي أولًا، وسيظهر لك فقط المديرون الأعلى المناسبون حسب القواعد المعرفة في شاشة الهيكل الوظيفي.
+              </div>
+
+              <div class="row">
+                {% if form.hire_date %}<div class="col-md-4 field-box">{{ form.hire_date.label_tag }}{{ form.hire_date }}{{ form.hire_date.errors }}</div>{% endif %}
+                {% if form.contract_type %}<div class="col-md-4 field-box">{{ form.contract_type.label_tag }}{{ form.contract_type }}{{ form.contract_type.errors }}</div>{% endif %}
+                {% if form.contract_end_date %}<div class="col-md-4 field-box">{{ form.contract_end_date.label_tag }}{{ form.contract_end_date }}{{ form.contract_end_date.errors }}</div>{% endif %}
+                {% if form.branch %}<div class="col-md-4 field-box">{{ form.branch.label_tag }}{{ form.branch }}{{ form.branch.errors }}</div>{% endif %}
+                {% if form.department %}<div class="col-md-4 field-box">{{ form.department.label_tag }}{{ form.department }}{{ form.department.errors }}</div>{% endif %}
+                {% if form.job_title %}<div class="col-md-4 field-box">{{ form.job_title.label_tag }}{{ form.job_title }}{{ form.job_title.errors }}</div>{% endif %}
+                {% if form.direct_manager %}<div class="col-md-6 field-box">{{ form.direct_manager.label_tag }}{{ form.direct_manager }}{{ form.direct_manager.errors }}</div>{% endif %}
+                {% if form.status %}<div class="col-md-3 field-box">{{ form.status.label_tag }}{{ form.status }}{{ form.status.errors }}</div>{% endif %}
+                {% if form.termination_date %}<div class="col-md-3 field-box">{{ form.termination_date.label_tag }}{{ form.termination_date }}{{ form.termination_date.errors }}</div>{% endif %}
+                {% if form.termination_reason %}<div class="col-md-12 field-box">{{ form.termination_reason.label_tag }}{{ form.termination_reason }}{{ form.termination_reason.errors }}</div>{% endif %}
+                {% if form.notes %}<div class="col-md-12 field-box">{{ form.notes.label_tag }}{{ form.notes }}{{ form.notes.errors }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4 -->
+        <div class="wizard-panel" data-step-panel="4">
+          <div class="section-card">
+            <div class="section-head">
+              <h6><i class="bi bi-cash-coin me-2 text-primary"></i>البيانات المالية والتأمين</h6>
+              <small>الراتب وبيانات البنك والتأمينات</small>
+            </div>
+            <div class="p-4">
+              <div class="row">
+                {% if form.basic_salary %}<div class="col-md-4 field-box">{{ form.basic_salary.label_tag }}{{ form.basic_salary }}{{ form.basic_salary.errors }}</div>{% endif %}
+                {% if form.bank_name %}<div class="col-md-4 field-box">{{ form.bank_name.label_tag }}{{ form.bank_name }}{{ form.bank_name.errors }}</div>{% endif %}
+                {% if form.bank_account %}<div class="col-md-4 field-box">{{ form.bank_account.label_tag }}{{ form.bank_account }}{{ form.bank_account.errors }}</div>{% endif %}
+                {% if form.iban %}<div class="col-md-4 field-box">{{ form.iban.label_tag }}{{ form.iban }}{{ form.iban.errors }}</div>{% endif %}
+                {% if form.insurance_number %}<div class="col-md-4 field-box">{{ form.insurance_number.label_tag }}{{ form.insurance_number }}{{ form.insurance_number.errors }}</div>{% endif %}
+                {% if form.insurance_date %}<div class="col-md-4 field-box">{{ form.insurance_date.label_tag }}{{ form.insurance_date }}{{ form.insurance_date.errors }}</div>{% endif %}
+                {% if form.has_insurance %}
+                <div class="col-md-12 field-box">
+                  <label>{{ form.has_insurance.label }}</label>
+                  <div class="form-check-wrap">
+                    <div class="form-check">
+                      {{ form.has_insurance }}
+                      <label class="form-check-label ms-2" for="{{ form.has_insurance.id_for_label }}">الموظف مشترك في التأمينات</label>
+                    </div>
+                  </div>
+                  {{ form.has_insurance.errors }}
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 5 -->
+        <div class="wizard-panel" data-step-panel="5">
+          <div class="section-card">
+            <div class="section-head">
+              <h6><i class="bi bi-fingerprint me-2 text-primary"></i>الحضور والتتبع</h6>
+              <small>إعدادات الحضور ونمط العمل والتتبع</small>
+            </div>
+            <div class="p-4">
+              <div class="row">
+                {% if form.attendance_mode %}<div class="col-md-4 field-box">{{ form.attendance_mode.label_tag }}{{ form.attendance_mode }}{{ form.attendance_mode.errors }}</div>{% endif %}
+                {% if form.required_daily_hours %}<div class="col-md-4 field-box">{{ form.required_daily_hours.label_tag }}{{ form.required_daily_hours }}{{ form.required_daily_hours.errors }}</div>{% endif %}
+                {% if form.stealth_tracking_enabled %}
+                <div class="col-md-6 field-box">
+                  <label>{{ form.stealth_tracking_enabled.label }}</label>
+                  <div class="form-check-wrap">
+                    <div class="form-check">
+                      {{ form.stealth_tracking_enabled }}
+                      <label class="form-check-label ms-2" for="{{ form.stealth_tracking_enabled.id_for_label }}">تفعيل التتبع الصامت لهذا الموظف</label>
+                    </div>
+                  </div>
+                  {{ form.stealth_tracking_enabled.errors }}
+                </div>
+                {% endif %}
+                {% if form.is_field_worker %}
+                <div class="col-md-6 field-box">
+                  <label>{{ form.is_field_worker.label }}</label>
+                  <div class="form-check-wrap">
+                    <div class="form-check">
+                      {{ form.is_field_worker }}
+                      <label class="form-check-label ms-2" for="{{ form.is_field_worker.id_for_label }}">موظف ميداني</label>
+                    </div>
+                  </div>
+                  {{ form.is_field_worker.errors }}
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="wizard-actions">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="mini-note">
+              <i class="bi bi-lightbulb me-1 text-warning"></i>
+              النظام سيمنعك من الانتقال لو الحقول الإلزامية في الخطوة الحالية غير مكتملة.
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-outline-secondary" id="prevStepBtn">
+                <i class="bi bi-arrow-right me-1"></i>السابق
+              </button>
+              <button type="button" class="btn btn-primary" id="nextStepBtn">
+                التالي<i class="bi bi-arrow-left ms-1"></i>
+              </button>
+              <button type="submit" class="btn btn-success" id="submitFormBtn" style="display:none;">
+                <i class="bi bi-check2-circle me-1"></i>حفظ الموظف
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
 <script>
-    let currentStep = 1;
-    const totalSteps = 5;
-    
-    function changeStep(direction) {
-        const newStep = currentStep + direction;
-        
-        if (newStep < 1 || newStep > totalSteps) return;
-        
-        // إخفاء الخطوة الحالية
-        document.querySelector(`.form-step[data-step="${currentStep}"]`).style.display = 'none';
-        
-        // إظهار الخطوة الجديدة
-        document.querySelector(`.form-step[data-step="${newStep}"]`).style.display = 'block';
-        
-        // تحديث الـ Steps Bar
-        document.querySelectorAll('.step-item').forEach((item, index) => {
-            const step = index + 1;
-            item.classList.remove('active', 'completed');
-            
-            if (step < newStep) {
-                item.classList.add('completed');
-            } else if (step === newStep) {
-                item.classList.add('active');
-            }
-        });
-        
-        currentStep = newStep;
-        
-        // تحديث الأزرار
-        document.getElementById('prevBtn').style.display = currentStep > 1 ? 'inline-block' : 'none';
-        document.getElementById('nextBtn').style.display = currentStep < totalSteps ? 'inline-block' : 'none';
-        document.getElementById('submitBtn').style.display = currentStep === totalSteps ? 'inline-block' : 'none';
-        
-        // Scroll لفوق
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-    
-    // Preview الصورة
-    const photoInput = document.querySelector('input[name="photo"]');
-    if (photoInput) {
-        photoInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const preview = document.getElementById('photoPreview');
-                    preview.outerHTML = `<img src="${e.target.result}" 
-                                             id="photoPreview" 
-                                             class="rounded-circle mb-2" 
-                                             style="width: 120px; height: 120px; object-fit: cover;">`;
-                }
-                reader.readAsDataURL(file);
-            }
-        });
-    }
-    
-    // لو فيه أخطاء، اعرض الخطوة الأولى
-    {% if form.errors %}
-    // ابحث عن أول خطوة فيها خطأ
-    document.querySelectorAll('.form-step').forEach((step, index) => {
-        if (step.querySelector('.is-invalid, .text-danger')) {
-            currentStep = index + 1;
-            changeStep(0);
-            return;
-        }
+(function() {
+  const form = document.getElementById('employeeWizardForm');
+  const stepButtons = Array.from(document.querySelectorAll('.wizard-step'));
+  const panels = Array.from(document.querySelectorAll('.wizard-panel'));
+  const prevBtn = document.getElementById('prevStepBtn');
+  const nextBtn = document.getElementById('nextStepBtn');
+  const submitBtn = document.getElementById('submitFormBtn');
+  const currentStepTitle = document.getElementById('current-step-title');
+  const missingBox = document.getElementById('missing-fields-box');
+  const missingList = document.getElementById('missing-fields-list');
+
+  let currentStep = 1;
+
+  const stepMeta = {
+    1: 'البيانات الأساسية',
+    2: 'التواصل',
+    3: 'بيانات التعيين',
+    4: 'المالية والتأمين',
+    5: 'الحضور والتتبع'
+  };
+
+  function bootstrapizeFields() {
+    document.querySelectorAll('input, select, textarea').forEach(el => {
+      if (el.type === 'hidden') return;
+      if (el.type === 'checkbox') {
+        el.classList.add('form-check-input');
+        return;
+      }
+      if (el.tagName === 'SELECT') {
+        el.classList.add('form-select');
+      } else {
+        el.classList.add('form-control');
+      }
     });
-    {% endif %}
+
+    document.querySelectorAll('.field-box label').forEach(label => {
+      const box = label.closest('.field-box');
+      if (!box) return;
+      const input = box.querySelector('input, select, textarea');
+      if (!input) return;
+
+      if (input.required && !label.querySelector('.required-star')) {
+        const star = document.createElement('span');
+        star.className = 'required-star';
+        star.textContent = '*';
+        label.appendChild(star);
+      }
+    });
+  }
+
+  function getPanel(step) {
+    return document.querySelector('.wizard-panel[data-step-panel="' + step + '"]');
+  }
+
+  function getVisibleRequiredInputs(step) {
+    const panel = getPanel(step);
+    if (!panel) return [];
+    return Array.from(panel.querySelectorAll('input, select, textarea')).filter(el => {
+      if (el.disabled) return false;
+      if (el.type === 'hidden') return false;
+      if (!el.required) return false;
+      if (el.offsetParent === null) return false;
+      return true;
+    });
+  }
+
+  function clearInvalid(step) {
+    const panel = getPanel(step);
+    if (!panel) return;
+    panel.querySelectorAll('.field-invalid').forEach(el => el.classList.remove('field-invalid'));
+  }
+
+  function getLabelText(input) {
+    const box = input.closest('.field-box');
+    if (box) {
+      const label = box.querySelector('label');
+      if (label) return label.textContent.replace('*', '').trim();
+    }
+    return input.getAttribute('placeholder') || input.name || 'حقل مطلوب';
+  }
+
+  function validateStep(step, focusFirst=true) {
+    clearInvalid(step);
+    const requiredInputs = getVisibleRequiredInputs(step);
+    const missing = [];
+    let firstInvalid = null;
+
+    requiredInputs.forEach(input => {
+      let valid = true;
+
+      if (input.type === 'checkbox') {
+        valid = input.checked;
+      } else if (input.tagName === 'SELECT') {
+        valid = !!String(input.value || '').trim();
+      } else {
+        valid = input.checkValidity() && !!String(input.value || '').trim();
+      }
+
+      if (!valid) {
+        input.classList.add('field-invalid');
+        const label = getLabelText(input);
+        if (!missing.includes(label)) missing.push(label);
+        if (!firstInvalid) firstInvalid = input;
+      }
+    });
+
+    if (missing.length) {
+      missingBox.style.display = 'block';
+      missingList.innerHTML = missing.map(item => '<li>' + item + '</li>').join('');
+      if (focusFirst && firstInvalid) firstInvalid.focus();
+      return false;
+    }
+
+    missingBox.style.display = 'none';
+    missingList.innerHTML = '';
+    return true;
+  }
+
+  function updateStepper() {
+    stepButtons.forEach(btn => {
+      const step = parseInt(btn.dataset.step, 10);
+      btn.classList.remove('active', 'done');
+      if (step === currentStep) btn.classList.add('active');
+      else if (step < currentStep) btn.classList.add('done');
+    });
+
+    panels.forEach(panel => {
+      const step = parseInt(panel.dataset.stepPanel, 10);
+      panel.classList.toggle('active', step === currentStep);
+    });
+
+    currentStepTitle.textContent = stepMeta[currentStep] || 'الخطوة الحالية';
+    prevBtn.style.visibility = currentStep === 1 ? 'hidden' : 'visible';
+    nextBtn.style.display = currentStep === panels.length ? 'none' : 'inline-block';
+    submitBtn.style.display = currentStep === panels.length ? 'inline-block' : 'none';
+  }
+
+  function goToStep(step) {
+    if (step < 1 || step > panels.length) return;
+    currentStep = step;
+    updateStepper();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  prevBtn.addEventListener('click', function() {
+    if (currentStep > 1) {
+      missingBox.style.display = 'none';
+      goToStep(currentStep - 1);
+    }
+  });
+
+  nextBtn.addEventListener('click', function() {
+    if (validateStep(currentStep)) goToStep(currentStep + 1);
+  });
+
+  stepButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      const target = parseInt(btn.dataset.step, 10);
+      if (target < currentStep) {
+        missingBox.style.display = 'none';
+        goToStep(target);
+        return;
+      }
+      if (target === currentStep) return;
+      if (validateStep(currentStep)) goToStep(target);
+    });
+  });
+
+  form.addEventListener('submit', function(e) {
+    for (let step = 1; step <= panels.length; step++) {
+      const ok = validateStep(step, false);
+      if (!ok) {
+        e.preventDefault();
+        goToStep(step);
+        validateStep(step, true);
+        return;
+      }
+    }
+  });
+
+  bootstrapizeFields();
+  updateStepper();
+})();
+</script>
+
+<script>
+(function() {
+  const departmentSelect = document.querySelector('[name="department"]');
+  const jobTitleSelect = document.querySelector('[name="job_title"]');
+  const directManagerSelect = document.querySelector('[name="direct_manager"]');
+  const noteBox = document.getElementById('managerHierarchyNote');
+  const employeeId = "{{ employee.id|default:'' }}";
+
+  if (!departmentSelect || !jobTitleSelect || !directManagerSelect) return;
+
+  directManagerSelect.dataset.originalRequired = directManagerSelect.required ? '1' : '0';
+
+  function setNote(html) {
+    if (noteBox) noteBox.innerHTML = html;
+  }
+
+  function disableManagerSelect(placeholderText) {
+    directManagerSelect.innerHTML = '';
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = placeholderText || 'اختر الإدارة والمسمى الوظيفي أولًا';
+    directManagerSelect.appendChild(opt);
+    directManagerSelect.disabled = true;
+    directManagerSelect.required = false;
+    directManagerSelect.value = '';
+  }
+
+  function enableManagerSelect() {
+    directManagerSelect.disabled = false;
+    if (directManagerSelect.dataset.originalRequired === '1') {
+      directManagerSelect.required = true;
+    }
+  }
+
+  function renderManagers(items, keepValue) {
+    directManagerSelect.innerHTML = '';
+    const first = document.createElement('option');
+    first.value = '';
+    first.textContent = 'اختر المدير المباشر';
+    directManagerSelect.appendChild(first);
+
+    items.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.id;
+      opt.textContent = `${item.name} — ${item.job_title} — ${item.department}`;
+      if (String(keepValue || '') === String(item.id)) {
+        opt.selected = true;
+      }
+      directManagerSelect.appendChild(opt);
+    });
+  }
+
+  function loadManagerOptions() {
+    const departmentId = (departmentSelect.value || '').trim();
+    const jobTitleId = (jobTitleSelect.value || '').trim();
+    const keepValue = directManagerSelect.value || '';
+
+    if (!departmentId && !jobTitleId) {
+      disableManagerSelect('اختر الإدارة والمسمى الوظيفي أولًا');
+      setNote('<strong>المنطق الحالي:</strong> اختر الإدارة + المسمى الوظيفي أولًا، وسيظهر لك فقط المديرون الأعلى المناسبون حسب القواعد المعرفة في شاشة الهيكل الوظيفي.');
+      return;
+    }
+
+    if (!departmentId) {
+      disableManagerSelect('اختر الإدارة أولًا');
+      setNote('<strong>مطلوب:</strong> اختر الإدارة أولًا حتى يتم تحديد المدراء المحتملين.');
+      return;
+    }
+
+    if (!jobTitleId) {
+      disableManagerSelect('اختر المسمى الوظيفي أولًا');
+      setNote('<strong>مطلوب:</strong> اختر المسمى الوظيفي أولًا حتى يتم تحديد المدراء المحتملين.');
+      return;
+    }
+
+    setNote('<strong>جارٍ التحليل:</strong> يتم الآن تحميل المديرين الأعلى المناسبين حسب الإدارة والمسمى الوظيفي...');
+    directManagerSelect.disabled = true;
+
+    const params = new URLSearchParams({
+      department_id: departmentId,
+      job_title_id: jobTitleId
+    });
+
+    if (employeeId) params.append('employee_id', employeeId);
+
+    fetch("{% url 'employees:manager_options_api' %}?" + params.toString(), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => response.json())
+    .then(data => {
+      const items = data.results || [];
+
+      if (!items.length) {
+        disableManagerSelect('لا يوجد مدير أعلى مناسب حاليًا');
+        setNote('<strong>نتيجة التحليل:</strong> لا يوجد مدير أعلى مناسب حاليًا حسب القواعد الحالية. يمكنك تعديلها من شاشة إدارة الهيكل الوظيفي.');
+        return;
+      }
+
+      renderManagers(items, keepValue);
+      enableManagerSelect();
+      setNote(`<strong>نتيجة التحليل:</strong> تم العثور على <strong>${items.length}</strong> مدير/قائد أعلى مناسب لهذا المسمى داخل هذا السياق التنظيمي.`);
+    })
+    .catch(() => {
+      disableManagerSelect('تعذر تحميل المديرين المحتملين');
+      setNote('<strong>تعذر التحليل:</strong> حدث خطأ أثناء تحميل قائمة المديرين المحتملين.');
+    });
+  }
+
+  departmentSelect.addEventListener('change', loadManagerOptions);
+  jobTitleSelect.addEventListener('change', loadManagerOptions);
+  window.addEventListener('load', loadManagerOptions);
+})();
 </script>
 {% endblock %}

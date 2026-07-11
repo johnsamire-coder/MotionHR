@@ -1,0 +1,155 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}جدول العمل{% endblock %}
+
+{% block extra_css %}
+<style>
+  .schedule-table { font-size:0.82rem; }
+  .schedule-table th { text-align:center; white-space:nowrap; }
+  .schedule-cell {
+    min-width:100px; text-align:center; padding:6px 4px;
+    border-radius:6px; font-size:0.78rem; cursor:pointer;
+    transition:all 0.2s;
+  }
+  .schedule-cell:hover { transform:scale(1.05); box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+  .cell-work { background:#e0f7fa; color:#0e7490; }
+  .cell-off { background:#f3f4f6; color:#9ca3af; }
+  .cell-leave { background:#fde8e8; color:#dc2626; }
+  .cell-holiday { background:#fef3c7; color:#d97706; }
+  .cell-field { background:#d1fae5; color:#059669; }
+  .cell-extra { background:#ede9fe; color:#7c3aed; }
+  .cell-mission { background:#dbeafe; color:#2563eb; }
+  .cell-empty { background:#fafafa; color:#d1d5db; border:1px dashed #e5e7eb; }
+  .today-col { background:#f0f9ff !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <i class="bi bi-calendar3 me-2" style="color:#06B6D4;"></i>
+        جدول العمل الأسبوعي
+      </h4>
+      <p class="text-muted mb-0">
+        {{ week_start|date:"d/m/Y" }} — {{ week_end|date:"d/m/Y" }}
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="?week={{ prev_week }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-chevron-right"></i> الأسبوع السابق
+      </a>
+      <a href="?week=0" class="btn btn-sm btn-outline-primary">اليوم</a>
+      <a href="?week={{ next_week }}" class="btn btn-sm btn-outline-secondary">
+        الأسبوع التالي <i class="bi bi-chevron-left"></i>
+      </a>
+      <a href="{% url 'attendance:assignment_add' %}"
+         class="btn btn-sm text-white" style="background:#06B6D4;">
+        <i class="bi bi-plus-lg me-1"></i>تكليف جديد
+      </a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered mb-0 schedule-table">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th class="px-3 py-3 text-end" style="min-width:160px;">الموظف</th>
+              {% for day in days %}
+              <th class="py-3 {% if day.is_today %}today-col{% endif %}">
+                <div>{{ day.name }}</div>
+                <small class="text-muted">{{ day.date|date:"d/m" }}</small>
+              </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in schedule_rows %}
+            <tr>
+              <td class="px-3 py-2 text-end">
+                <div class="fw-semibold">{{ row.employee.full_name_ar }}</div>
+                <small class="text-muted">{{ row.employee.employee_code }}</small>
+              </td>
+              {% for day_data in row.days %}
+              <td class="p-1 {% if day_data.date == today %}today-col{% endif %}">
+                {% if day_data.assignment %}
+                  {% with a=day_data.assignment %}
+                  <a href="{% url 'attendance:assignment_add' %}?employee={{ row.employee.pk }}&date={{ day_data.date|date:'Y-m-d' }}"
+                     class="d-block schedule-cell
+                       {% if a.day_type == 'off_day' %}cell-off
+                       {% elif a.day_type == 'leave_day' %}cell-leave
+                       {% elif a.day_type == 'holiday' %}cell-holiday
+                       {% elif a.day_type == 'mission_day' %}cell-mission
+                       {% elif a.is_extra_shift %}cell-extra
+                       {% elif a.work_mode == 'field' %}cell-field
+                       {% else %}cell-work{% endif %}"
+                     title="{{ a.get_day_type_display }} - {{ a.get_work_mode_display }}">
+                    {% if a.day_type == 'off_day' %}راحة
+                    {% elif a.day_type == 'leave_day' %}إجازة
+                    {% elif a.day_type == 'holiday' %}رسمية
+                    {% elif a.day_type == 'mission_day' %}مهمة
+                    {% elif a.is_extra_shift %}إضافي
+                    {% elif a.work_mode == 'field' %}ميداني
+                    {% elif a.work_mode == 'flexible' %}مرن
+                    {% elif a.work_mode == 'split' %}متقسم
+                    {% elif a.work_mode == 'remote' %}عن بُعد
+                    {% else %}عمل{% endif %}
+                    {% if a.start_time %}
+                    <br><small>{{ a.start_time|time:"H:i" }}</small>
+                    {% endif %}
+                  </a>
+                  {% endwith %}
+                {% else %}
+                  <a href="{% url 'attendance:assignment_add' %}?employee={{ row.employee.pk }}&date={{ day_data.date|date:'Y-m-d' }}"
+                     class="d-block schedule-cell cell-empty"
+                     title="إضافة تكليف">
+                    +
+                  </a>
+                {% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="card border-0 shadow-sm mt-3">
+    <div class="card-body p-3">
+      <div class="d-flex flex-wrap gap-3">
+        <span class="d-flex align-items-center gap-1">
+          <span class="schedule-cell cell-work px-2">عمل</span>
+        </span>
+        <span class="d-flex align-items-center gap-1">
+          <span class="schedule-cell cell-off px-2">راحة</span>
+        </span>
+        <span class="d-flex align-items-center gap-1">
+          <span class="schedule-cell cell-leave px-2">إجازة</span>
+        </span>
+        <span class="d-flex align-items-center gap-1">
+          <span class="schedule-cell cell-holiday px-2">رسمية</span>
+        </span>
+        <span class="d-flex align-items-center gap-1">
+          <span class="schedule-cell cell-field px-2">ميداني</span>
+        </span>
+        <span class="d-flex align-items-center gap-1">
+          <span class="schedule-cell cell-extra px-2">إضافي</span>
+        </span>
+        <span class="d-flex align-items-center gap-1">
+          <span class="schedule-cell cell-mission px-2">مهمة</span>
+        </span>
+        <span class="d-flex align-items-center gap-1">
+          <span class="schedule-cell cell-empty px-2">+</span> فارغ
+        </span>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

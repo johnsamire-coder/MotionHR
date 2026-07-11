@@ -1,0 +1,102 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}نتائج البحث{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <!-- فورم البحث -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body p-3">
+      <form method="get" action="{% url 'global_search' %}">
+        <div class="input-group">
+          <span class="input-group-text border-0 bg-light">
+            <i class="bi bi-search" style="color:#06B6D4;"></i>
+          </span>
+          <input type="text" name="q" class="form-control border-0 bg-light"
+                 value="{{ query }}"
+                 placeholder="ابحث عن موظف، رقم وظيفي، إدارة..."
+                 style="font-size:1.1rem;" autofocus>
+          <button type="submit" class="btn text-white px-4"
+                  style="background:#06B6D4; border-radius:0 10px 10px 0;">
+            بحث
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if query %}
+
+  <!-- إحصائيات النتائج -->
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <h5 class="fw-bold mb-0">
+      نتائج البحث عن:
+      <span style="color:#06B6D4;">"{{ query }}"</span>
+    </h5>
+    <span class="badge bg-light text-dark border">
+      {{ total_results }} نتيجة
+    </span>
+  </div>
+
+  {% if employees %}
+  <!-- الموظفون -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white border-0 pt-3 pb-2 px-4">
+      <h6 class="fw-bold mb-0">
+        <i class="bi bi-people me-2" style="color:#06B6D4;"></i>
+        الموظفون ({{ employees|length }})
+      </h6>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <tbody>
+            {% for emp in employees %}
+            <tr>
+              <td class="px-4 py-3">
+                <a href="{% url 'employees:detail' emp.pk %}"
+                   class="text-decoration-none">
+                  <div class="fw-semibold text-dark">{{ emp.full_name_ar }}</div>
+                  <small class="text-muted">
+                    {{ emp.employee_code }} |
+                    {{ emp.job_title.name_ar|default:"" }} |
+                    {{ emp.department.name_ar|default:"" }}
+                  </small>
+                </a>
+              </td>
+              <td class="text-end pe-4">
+                <span class="badge
+                  {% if emp.status == 'active' %}bg-success
+                  {% else %}bg-secondary{% endif %}">
+                  {{ emp.get_status_display }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not employees and query %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-search" style="font-size:4rem;color:#d1d5db;"></i>
+      <h5 class="mt-3 fw-bold text-muted">لا يوجد نتائج</h5>
+      <p class="text-muted">لم نجد نتائج لـ "{{ query }}"</p>
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-search" style="font-size:4rem;color:#d1d5db;"></i>
+    <h5 class="mt-3 fw-bold">ابحث عن أي شيء</h5>
+    <p>اكتب اسم موظف أو رقم وظيفي أو رقم قومي</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

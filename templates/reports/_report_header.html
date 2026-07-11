@@ -1,0 +1,44 @@
+{% load tz %}
+<!-- Patch 49k — Report Header -->
+<div class="report-branded-header mb-4">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 py-3 px-4 rounded-4"
+       style="background: linear-gradient(135deg, #f0fdff 0%, #e0f2fe 100%); border: 1px solid #bae6fd;">
+
+    <div class="d-flex align-items-center gap-3">
+      {% if company and company.logo %}
+      <img src="{{ company.logo.url }}" alt="Logo"
+           style="max-height: 56px; max-width: 160px; border-radius: 10px;"
+           class="shadow-sm">
+      {% else %}
+      <div style="width:56px; height:56px; border-radius:14px; background:#06B6D4; display:flex; align-items:center; justify-content:center;">
+        <i class="bi bi-building text-white" style="font-size:1.6rem;"></i>
+      </div>
+      {% endif %}
+
+      <div>
+        <div style="font-size:1.25rem; font-weight:800; color:#0c4a6e;">
+          {% if company %}
+            {{ company.name_ar|default:company.name_en|default:"JS Solutionss" }}
+          {% else %}
+            JS Solutionss
+          {% endif %}
+        </div>
+        <div style="font-size:.88rem; color:#475569; font-weight:600;">
+          {{ report_title|default:"تقرير" }}
+        </div>
+      </div>
+    </div>
+
+    <div class="text-end">
+      <div style="font-size:.82rem; color:#64748b;">
+        <i class="bi bi-calendar3 me-1"></i>
+        {% now "Y/m/d H:i" %}
+      </div>
+      {% if start_date and end_date %}
+      <div style="font-size:.78rem; color:#94a3b8; margin-top:2px;">
+        الفترة: {{ start_date }} — {{ end_date }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>

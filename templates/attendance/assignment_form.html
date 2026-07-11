@@ -1,0 +1,322 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center mb-4">
+    <a href="{% url 'attendance:schedule_week' %}" class="btn btn-outline-secondary btn-sm me-3">
+      <i class="bi bi-arrow-right"></i>
+    </a>
+    <h4 class="fw-bold mb-0">{{ page_title }}</h4>
+  </div>
+
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <form method="post">
+            {% csrf_token %}
+            <div class="row g-3">
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الموظف <span class="text-danger">*</span></label>
+                <select name="employee" class="form-select" required>
+                  <option value="">اختر الموظف</option>
+                  {% for emp in employees %}
+                  <option value="{{ emp.pk }}"
+                    {% if pre_employee == emp.pk|stringformat:"d" %}selected{% endif %}>
+                    {{ emp.full_name_ar }} ({{ emp.employee_code }})
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">التاريخ <span class="text-danger">*</span></label>
+                <input type="date" name="date" class="form-control" required
+                       value="{{ pre_date }}">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">نوع اليوم</label>
+                <select name="day_type" class="form-select">
+                  <option value="work_day">يوم عمل</option>
+                  <option value="off_day">راحة أسبوعية</option>
+                  <option value="leave_day">إجازة</option>
+                  <option value="holiday">إجازة رسمية</option>
+                  <option value="mission_day">مأمورية / مهمة</option>
+                  <option value="standby_day">استدعاء</option>
+                  <option value="training_day">يوم تدريب</option>
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">طريقة التنفيذ</label>
+                <select name="work_mode" class="form-select">
+                  <option value="fixed">ثابت</option>
+                  <option value="flexible">مرن</option>
+                  <option value="split">متقسم</option>
+                  <option value="field">ميداني</option>
+                  <option value="remote">عن بُعد</option>
+                  <option value="mixed">مختلط</option>
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الشيفت</label>
+                <select name="shift" class="form-select">
+                  <option value="">بدون</option>
+                  {% for s in shifts %}
+                  <option value="{{ s.pk }}">{{ s.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الساعات المتوقعة</label>
+                <input type="number" name="expected_hours" class="form-control"
+                       step="0.5" min="0" value="8">
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label fw-semibold small">بداية العمل</label>
+                <input type="time" name="start_time" class="form-control">
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label fw-semibold small">نهاية العمل</label>
+                <input type="time" name="end_time" class="form-control">
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label fw-semibold small">جزء 2 بداية</label>
+                <input type="time" name="segment_2_start" class="form-control">
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label fw-semibold small">جزء 2 نهاية</label>
+                <input type="time" name="segment_2_end" class="form-control">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">عنوان المهمة</label>
+                <input type="text" name="task_title" class="form-control"
+                       placeholder="لو مهمة محددة">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الموقع</label>
+                <input type="text" name="location_name" class="form-control"
+                       placeholder="اسم الموقع">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">بديل عن موظف</label>
+                <select name="replaces_employee" class="form-select">
+                  <option value="">لا أحد</option>
+                  {% for emp in employees %}
+                  <option value="{{ emp.pk }}">{{ emp.full_name_ar }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <!-- Flags -->
+              <div class="col-12">
+                <div class="d-flex flex-wrap gap-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="is_replacement" id="isReplacement">
+                    <label class="form-check-label small" for="isReplacement">بديل لزميل</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="is_extra_shift" id="isExtra">
+                    <label class="form-check-label small" for="isExtra">شيفت إضافي</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="count_as_overtime" id="asOvertime">
+                    <label class="form-check-label small" for="asOvertime">يحسب أوفر تايم</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="requires_tracking" id="needsTracking">
+                    <label class="form-check-label small" for="needsTracking">يحتاج تتبع GPS</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="requires_visits" id="needsVisits">
+                    <label class="form-check-label small" for="needsVisits">يحتاج زيارات</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="requires_geofence" id="needsGeo" checked>
+                    <label class="form-check-label small" for="needsGeo">يحتاج نطاق الفرع</label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold small">ملاحظات</label>
+                <textarea name="notes" class="form-control" rows="2"></textarea>
+              </div>
+
+            </div>
+
+            <div class="d-flex gap-2 mt-4 pt-3 border-top">
+              <button type="submit" class="btn text-white px-4"
+                      style="background:#06B6D4; border-radius:10px;">
+                <i class="bi bi-check-lg me-1"></i>حفظ التكليف
+              </button>
+              <a href="{% url 'attendance:schedule_week' %}"
+                 class="btn btn-outline-secondary px-4" style="border-radius:10px;">
+                إلغاء
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+
+<style id="patch49d-schedule-style">
+  .schedule-mode-note {
+    border: 1px solid #bae6fd;
+    background: #f0f9ff;
+    border-radius: 14px;
+    padding: 12px 14px;
+    color: #0c4a6e;
+    font-size: .9rem;
+    margin-bottom: 1rem;
+  }
+  .schedule-mode-note strong {
+    color: #075985;
+  }
+</style>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script id="patch49d-schedule-script">
+(function() {
+  const workMode = document.querySelector('[name="work_mode"]');
+  if (!workMode) return;
+
+  const FIXED_FIELDS = ['start_time', 'end_time', 'segment_2_start', 'segment_2_end', 'count_as_compensatory', 'is_auto_generated'];
+  const HOURS_FIELDS = ['expected_hours'];
+  const PART1_FIELDS = [];
+  const PART2_FIELDS = ['segment_2_start', 'segment_2_end'];
+  const EXTRA_SPLIT_FIELDS = [];
+
+  function findWrap(input) {
+    if (!input) return null;
+    return input.closest('.field-box')
+      || input.closest('[class*="col-"]')
+      || input.closest('.mb-3')
+      || input.closest('.form-group')
+      || input.parentElement;
+  }
+
+  function findInputByName(name) {
+    return document.querySelector('[name="' + name + '"]');
+  }
+
+  function setFieldVisibility(fieldNames, show) {
+    fieldNames.forEach(function(name) {
+      const input = findInputByName(name);
+      if (!input) return;
+      const wrap = findWrap(input);
+      if (!wrap) return;
+      wrap.style.display = show ? '' : 'none';
+    });
+  }
+
+  function ensureModeNote() {
+    let note = document.getElementById('scheduleModeNote');
+    if (note) return note;
+
+    note = document.createElement('div');
+    note.id = 'scheduleModeNote';
+    note.className = 'schedule-mode-note';
+
+    const wrap = findWrap(workMode);
+    if (wrap && wrap.parentElement) {
+      wrap.parentElement.insertBefore(note, wrap.nextSibling);
+    } else {
+      workMode.parentElement.appendChild(note);
+    }
+    return note;
+  }
+
+  function updateNote(text) {
+    const note = ensureModeNote();
+    note.innerHTML = text;
+  }
+
+  function showAllRelevant() {
+    setFieldVisibility(FIXED_FIELDS, true);
+    setFieldVisibility(HOURS_FIELDS, true);
+    setFieldVisibility(PART1_FIELDS, true);
+    setFieldVisibility(PART2_FIELDS, true);
+    setFieldVisibility(EXTRA_SPLIT_FIELDS, true);
+  }
+
+  function applyMode() {
+    const mode = String(workMode.value || '').toLowerCase().trim();
+
+    // reset
+    showAllRelevant();
+
+    if (!mode) {
+      updateNote('<strong>اختر طريقة التنفيذ:</strong> عند اختيار طريقة التنفيذ سيظهر لك فقط الحقول المناسبة لها.');
+      return;
+    }
+
+    // Fixed
+    if (mode === 'fixed') {
+      setFieldVisibility(HOURS_FIELDS, false);
+      setFieldVisibility(PART1_FIELDS, false);
+      setFieldVisibility(PART2_FIELDS, false);
+      setFieldVisibility(EXTRA_SPLIT_FIELDS, false);
+
+      updateNote('<strong>تنفيذ ثابت:</strong> تم إظهار حقول البداية والنهاية فقط، وإخفاء الحقول الخاصة بالمرن أو التقسيم.');
+      return;
+    }
+
+    // Flexible
+    if (mode === 'flexible' || mode === 'flex' || mode === 'flexi' || mode === 'مرن') {
+      setFieldVisibility(FIXED_FIELDS, false);
+      setFieldVisibility(PART1_FIELDS, false);
+      setFieldVisibility(PART2_FIELDS, false);
+      setFieldVisibility(EXTRA_SPLIT_FIELDS, false);
+
+      updateNote('<strong>تنفيذ مرن:</strong> تم إظهار إجمالي الساعات/المدة فقط، وإخفاء البداية والنهاية والتقسيم.');
+      return;
+    }
+
+    // Split
+    if (mode === 'split') {
+      setFieldVisibility(FIXED_FIELDS, false);
+      setFieldVisibility(HOURS_FIELDS, false);
+
+      updateNote('<strong>تنفيذ متقسم:</strong> تم إظهار حقول الجزء الأول والجزء الثاني فقط.');
+      return;
+    }
+
+    // Mixed
+    if (mode === 'mixed') {
+      setFieldVisibility(HOURS_FIELDS, false);
+
+      updateNote('<strong>تنفيذ مختلط:</strong> تم إظهار الحقول المناسبة للتنفيذ المقسم/المختلط.');
+      return;
+    }
+
+    // fallback
+    updateNote('<strong>وضع مخصص:</strong> تم الإبقاء على الحقول الظاهرة كما هي لأن طريقة التنفيذ الحالية غير قياسية.');
+  }
+
+  workMode.addEventListener('change', applyMode);
+  window.addEventListener('load', applyMode);
+})();
+</script>
+
+{% endblock %}

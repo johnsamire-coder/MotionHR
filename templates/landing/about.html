@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عن MotionHR</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>* { font-family: 'Cairo', sans-serif; }</style>
+</head>
+<body>
+
+{% include 'landing/_navbar.html' %}
+
+<!-- Hero -->
+<section style="background:linear-gradient(135deg,#0f172a,#1e3a5f); padding:80px 0; text-align:center; color:white;">
+  <div class="container">
+    <h1 class="fw-black mb-3" style="font-size:3rem;">عن MotionHR</h1>
+    <p class="fs-5 mb-0" style="color:rgba(255,255,255,0.75); max-width:600px; margin:0 auto;">
+      نظام إدارة الموارد البشرية الأذكى للشركات العربية الصغيرة والمتوسطة
+    </p>
+  </div>
+</section>
+
+<div class="container py-5">
+
+  <!-- لماذا MotionHR -->
+  <div class="row justify-content-center mb-5">
+    <div class="col-lg-8 text-center">
+      <h2 class="fw-bold mb-4">لماذا MotionHR؟</h2>
+      <p class="text-muted fs-5 lh-lg">
+        وُلد MotionHR من حاجة حقيقية — الشركات العربية بمختلف أحجامها
+        تعاني من غياب نظام HR محترف يناسب احتياجاتها وميزانيتها.
+        معظم الأنظمة إما مكلفة جداً أو معقدة أو غير مصممة للسوق العربي.
+      </p>
+      <p class="text-muted fs-5 lh-lg">
+        MotionHR يختلف — نظام سهل، احترافي، بسعر مناسب،
+        مع ميزة تنافسية لا مثيل لها:
+        <strong style="color:#06B6D4;">تتبع الموظفين الميدانيين في الوقت الفعلي</strong>.
+      </p>
+    </div>
+  </div>
+
+  <!-- القيم الأربعة -->
+  <div class="row g-4 mb-5">
+    <div class="col-md-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100 text-center p-4">
+        <div class="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
+             style="width:64px;height:64px;background:#fff3e0;">
+          <i class="bi bi-trophy-fill" style="font-size:1.8rem;color:#f59e0b;"></i>
+        </div>
+        <h5 class="fw-bold">البساطة</h5>
+        <p class="text-muted small">نظام بسيط يتعلمه أي موظف في دقائق</p>
+      </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100 text-center p-4">
+        <div class="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
+             style="width:64px;height:64px;background:#e8f5e9;">
+          <i class="bi bi-shield-check-fill" style="font-size:1.8rem;color:#10b981;"></i>
+        </div>
+        <h5 class="fw-bold">الأمان</h5>
+        <p class="text-muted small">بياناتك محمية ومشفرة تماماً</p>
+      </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100 text-center p-4">
+        <div class="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
+             style="width:64px;height:64px;background:#e0f7fa;">
+          <i class="bi bi-lightning-fill" style="font-size:1.8rem;color:#06B6D4;"></i>
+        </div>
+        <h5 class="fw-bold">السرعة</h5>
+        <p class="text-muted small">إعداد كامل في ساعة واحدة</p>
+      </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100 text-center p-4">
+        <div class="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
+             style="width:64px;height:64px;background:#ede7f6;">
+          <i class="bi bi-headset-fill" style="font-size:1.8rem;color:#7c3aed;"></i>
+        </div>
+        <h5 class="fw-bold">الدعم</h5>
+        <p class="text-muted small">فريق دعم متخصص يساعدك دايماً</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- المميزات الرئيسية -->
+  <div class="row g-4 mb-5">
+    <div class="col-12 text-center mb-2">
+      <h2 class="fw-bold">ما يميز MotionHR</h2>
+    </div>
+
+    {% for icon, color, bg, title, desc in features %}
+    <div class="col-md-6 col-lg-4">
+      <div class="d-flex gap-3 p-3 rounded-3 h-100" style="background:#f8fafc;">
+        <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+             style="width:48px;height:48px;background:{{ bg }};">
+          <i class="bi bi-{{ icon }}" style="color:{{ color }};font-size:1.2rem;"></i>
+        </div>
+        <div>
+          <h6 class="fw-bold mb-1">{{ title }}</h6>
+          <p class="text-muted small mb-0">{{ desc }}</p>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- CTA -->
+  <div class="text-center py-5 rounded-3"
+       style="background:linear-gradient(135deg,#0f172a,#1e3a5f);">
+    <h3 class="fw-bold text-white mb-3">جاهز تجرب MotionHR؟</h3>
+    <p class="text-white-50 mb-4">14 يوم مجاناً بدون أي التزام</p>
+    <a href="{% url 'landing:contact' %}"
+       class="btn btn-lg fw-bold rounded-pill px-5 text-white"
+       style="background:#06B6D4;">
+      ابدأ الآن
+    </a>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

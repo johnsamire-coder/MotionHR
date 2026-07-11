@@ -45,7 +45,7 @@
                 {% endif %}
                 
                 <div class="mt-4">
-                    <a href="{% url 'subscriptions:upgrade' %}" class="btn btn-primary btn-lg">
+                    <a href="{% url 'subscriptions:contact_sales' %}" class="btn btn-primary btn-lg">
                         <i class="bi bi-arrow-up-circle-fill"></i>
                         عرض خطط الترقية
                     </a>
@@ -74,7 +74,7 @@
                                 <span class="h4 fw-bold">{{ plan.price_monthly|floatformat:0 }}</span>
                                 <small class="text-muted">ج.م/شهر</small>
                             </div>
-                            <a href="{% url 'subscriptions:upgrade' %}" 
+                            <a href="{% url 'subscriptions:contact_sales' %}" 
                                class="btn btn-sm w-100"
                                style="background: {{ plan.color }}; color: white;">
                                 ترقية

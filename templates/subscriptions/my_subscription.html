@@ -51,7 +51,7 @@
         <strong>اشتراكك ينتهي قريباً!</strong>
         متبقي {{ subscription.days_remaining }} أيام فقط. قم بالتجديد الآن لتجنب انقطاع الخدمة.
     </div>
-    <a href="{% url 'subscriptions:upgrade' %}" class="btn btn-warning">جدد الآن</a>
+    <a href="{% url 'subscriptions:contact_sales' %}" class="btn btn-warning">جدد الآن</a>
 </div>
 {% elif subscription.days_remaining == 0 or subscription.is_expired %}
 <div class="alert alert-danger d-flex align-items-center mb-4">
@@ -60,7 +60,7 @@
         <strong>اشتراكك انتهى!</strong>
         قم بالتجديد للاستمرار في استخدام النظام.
     </div>
-    <a href="{% url 'subscriptions:upgrade' %}" class="btn btn-light">جدد الاشتراك</a>
+    <a href="{% url 'subscriptions:contact_sales' %}" class="btn btn-light">جدد الاشتراك</a>
 </div>
 {% endif %}
 
@@ -149,7 +149,7 @@
                 <i class="bi bi-rocket-takeoff-fill" style="font-size: 3rem;"></i>
                 <h5 class="fw-bold mt-3">قم بترقية خطتك!</h5>
                 <p class="opacity-75">احصل على المزيد من الميزات والقدرات</p>
-                <a href="{% url 'subscriptions:upgrade' %}" class="btn btn-light">
+                <a href="{% url 'subscriptions:contact_sales' %}" class="btn btn-light">
                     <i class="bi bi-arrow-up-circle"></i>
                     عرض الخطط
                 </a>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>غير متصل - MotionHR</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap"
+        rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: linear-gradient(135deg, #0f172a, #1e3a5f);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    .container { max-width: 400px; }
+    .icon { font-size: 5rem; margin-bottom: 24px; }
+    h1 { font-size: 1.8rem; font-weight: 900; margin-bottom: 12px; }
+    p { color: rgba(255,255,255,0.7); margin-bottom: 32px; line-height: 1.6; }
+    .btn {
+      display: inline-block;
+      padding: 12px 32px;
+      background: #06B6D4;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.9; }
+    .status {
+      margin-top: 24px;
+      padding: 12px 20px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.6);
+    }
+    .dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      margin-left: 8px;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">📡</div>
+    <h1>أنت غير متصل بالإنترنت</h1>
+    <p>
+      تحقق من اتصالك بالإنترنت وحاول مرة أخرى.
+      <br>
+      بعض الصفحات متاحة بدون إنترنت.
+    </p>
+    <button class="btn" onclick="window.location.reload()">
+      🔄 إعادة المحاولة
+    </button>
+    <a class="btn" href="/dashboard/" style="margin-right:12px; background:rgba(255,255,255,0.15);">
+      🏠 الرئيسية
+    </a>
+    <div class="status">
+      <span class="dot"></span>
+      لا يوجد اتصال بالإنترنت
+    </div>
+  </div>
+
+  <script>
+    // لما يرجع الإنترنت - رجّعه للصفحة اللي كان فيها
+    window.addEventListener('online', () => {
+      window.location.reload();
+    });
+
+    // اختبار الاتصال كل 5 ثواني
+    setInterval(() => {
+      fetch('/dashboard/', { method: 'HEAD', cache: 'no-store' })
+        .then(() => window.location.reload())
+        .catch(() => {});
+    }, 5000);
+  </script>
+</body>
+</html>

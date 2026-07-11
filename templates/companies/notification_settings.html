@@ -1,0 +1,71 @@
+{% extends 'base/dashboard_base.html' %}
+{% load custom_filters %}
+{% block title %}إعدادات الإشعارات{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="mb-4">
+    <h4 class="fw-bold mb-1">
+      <i class="bi bi-bell-fill me-2" style="color:#06B6D4;"></i>
+      إعدادات Push Notifications
+    </h4>
+    <p class="text-muted mb-0">
+      حدد مين يوصله إشعار Push لكل نوع حدث
+    </p>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+
+    <div class="card border-0 shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead style="background:#f8fafc;">
+            <tr>
+              <th class="px-4 py-3">نوع الإشعار</th>
+              {% for r in roles %}
+              <th class="text-center py-3">{{ role_labels|get_item:r }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for nt, nt_label in notification_types %}
+            <tr>
+              <td class="px-4 fw-semibold small">{{ nt_label }}</td>
+              {% for r in roles %}
+              <td class="text-center">
+                <div class="form-check d-flex justify-content-center">
+                  <input class="form-check-input"
+                         type="checkbox"
+                         name="{{ r }}_{{ nt }}"
+                         id="{{ r }}_{{ nt }}"
+                         {% with key=r|add:"_"|add:nt %}
+                           {% if key in prefs_map %}
+                             {% if prefs_map|get_item:key %}checked{% endif %}
+                           {% else %}
+                             checked
+                           {% endif %}
+                         {% endwith %}
+                         style="width:1.2rem;height:1.2rem;">
+                </div>
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <button type="submit" class="btn text-white px-5"
+              style="background:#06B6D4; border-radius:10px;">
+        <i class="bi bi-check-lg me-2"></i>
+        حفظ الإعدادات
+      </button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}الفروع{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <i class="bi bi-geo-alt me-2" style="color:#06B6D4;"></i>
+        الفروع
+      </h4>
+      <p class="text-muted mb-0">إدارة فروع الشركة</p>
+    </div>
+    <a href="{% url 'companies:branch_add' %}"
+       class="btn text-white"
+       style="background:#06B6D4; border-radius:10px;">
+      <i class="bi bi-plus-lg me-1"></i>
+      فرع جديد
+    </a>
+  </div>
+
+  {% if branches %}
+  <div class="row g-3">
+    {% for branch in branches %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body p-4">
+
+          <div class="d-flex align-items-start justify-content-between mb-3">
+            <div class="d-flex align-items-center gap-3">
+              <div class="rounded-circle d-flex align-items-center justify-content-center"
+                   style="width:48px;height:48px;
+                          background:{% if branch.is_main %}#e0f7fa{% else %}#f3f4f6{% endif %};">
+                <i class="bi bi-{% if branch.is_main %}star-fill{% else %}geo-alt-fill{% endif %}"
+                   style="color:{% if branch.is_main %}#06B6D4{% else %}#6b7280{% endif %};"></i>
+              </div>
+              <div>
+                <h6 class="fw-bold mb-0">{{ branch.name_ar }}</h6>
+                {% if branch.name_en %}
+                  <small class="text-muted" dir="ltr">{{ branch.name_en }}</small>
+                {% endif %}
+              </div>
+            </div>
+            <div class="d-flex gap-1">
+              {% if branch.is_main %}
+                <span class="badge" style="background:#06B6D4;">رئيسي</span>
+              {% endif %}
+              {% if not branch.is_active %}
+                <span class="badge bg-danger">موقوف</span>
+              {% endif %}
+            </div>
+          </div>
+
+          {% if branch.address %}
+          <div class="d-flex align-items-start gap-2 mb-2">
+            <i class="bi bi-pin-map text-muted mt-1" style="font-size:0.8rem;"></i>
+            <small class="text-muted">{{ branch.address }}</small>
+          </div>
+          {% endif %}
+
+          {% if branch.phone %}
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-telephone text-muted" style="font-size:0.8rem;"></i>
+            <small class="text-muted">{{ branch.phone }}</small>
+          </div>
+          {% endif %}
+
+          {% if branch.latitude %}
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-crosshair text-success" style="font-size:0.8rem;"></i>
+            <small class="text-muted">
+              GPS: {{ branch.latitude|floatformat:4 }}, {{ branch.longitude|floatformat:4 }}
+              <span class="badge bg-light text-dark ms-1">نطاق {{ branch.check_in_radius }}م</span>
+            </small>
+          </div>
+          {% endif %}
+
+          <div class="d-flex gap-2 mt-3 pt-3 border-top">
+            <a href="{% url 'companies:branch_edit' branch.pk %}"
+               class="btn btn-sm btn-outline-primary flex-fill">
+              <i class="bi bi-pencil me-1"></i>تعديل
+            </a>
+            <form method="post"
+                  action="{% url 'companies:branch_delete' branch.pk %}"
+                  onsubmit="return confirm('حذف الفرع {{ branch.name_ar }}؟')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-geo-alt" style="font-size:4rem;color:#d1d5db;"></i>
+      <h5 class="mt-3 fw-bold text-muted">لا يوجد فروع بعد</h5>
+      <a href="{% url 'companies:branch_add' %}"
+         class="btn mt-2 text-white"
+         style="background:#06B6D4;">
+        <i class="bi bi-plus me-1"></i>أضف أول فرع
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

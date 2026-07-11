@@ -1,0 +1,84 @@
+/* PWA Styles */
+
+/* منع التحديد على الموبايل للعناصر التفاعلية */
+.nav-link, .btn, .card {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* تحسين الـ touch */
+button, a, .btn {
+  touch-action: manipulation;
+}
+
+/* Safe Area لـ iPhone X+ */
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.sidebar {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 20px);
+}
+
+/* Splash Screen */
+@media (display-mode: standalone) {
+  body::before {
+    content: '';
+    display: none;
+  }
+
+  /* إخفاء بعض العناصر في وضع التطبيق */
+  .hide-in-app {
+    display: none !important;
+  }
+}
+
+/* تحسين الـ Scrolling على الموبايل */
+.table-responsive,
+.sidebar,
+.content-area {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Loading Indicator */
+.pwa-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #06B6D4, #0891B2, #06B6D4);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  z-index: 10000;
+}
+
+@keyframes loading {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Online/Offline Indicator */
+.connection-status {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  z-index: 9998;
+  transition: all 0.3s;
+}
+
+.connection-status.online {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #4caf50;
+}
+
+.connection-status.offline {
+  background: #fde8e8;
+  color: #c62828;
+  border: 1px solid #ef5350;
+}

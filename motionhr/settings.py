@@ -44,6 +44,10 @@ INSTALLED_APPS = [
     'companies',
     'employees',   # ← جديد
     'attendance',
+    'leaves',
+    'reports',
+    'requests_app',
+    'landing',
     'subscriptions',
 ]   
 
@@ -53,11 +57,15 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.CompanyPolicyStealthFinalSyncMiddleware',
+    'core.middleware.CompanyPolicyStealthSyncMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     
     # MotionHR Middlewares
     'core.middleware.TenantMiddleware',
+    'accounts.middleware.ForcePasswordChangeMiddleware',
+    'core.middleware.CharterMiddleware',
     'core.middleware.CurrentEmployeeMiddleware',
     'core.middleware.SubscriptionMiddleware',
 ]
@@ -72,6 +80,8 @@ TEMPLATES = [
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
+                'core.breadcrumb_processor.breadcrumb_processor',
+                'core.breadcrumb_processor.vapid_key_processor',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
@@ -147,3 +157,111 @@ LOGOUT_REDIRECT_URL = '/login/'
 # Email Settings (للتطوير - يطبع في التيرمنال)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'MotionHR <noreply@motionhr.com>'
+
+# ─────────────────────────────────────────────
+# بيانات التواصل للمبيعات (عدّلها بياناتك)
+# ─────────────────────────────────────────────
+MOTIONHR_SALES_CONTACT = {
+    'company_name': 'MotionHR',
+    'phone':        '01000000000',      # ← غيّر لرقمك
+    'whatsapp':     '201000000000',     # ← غيّر لرقم الواتساب (بدون +)
+    'email':        'sales@motionhr.com',  # ← غيّر لإيميلك
+    'facebook':     '',
+    'website':      '',
+}
+
+# ─────────────────────────────────────────────
+# Authentication Backends
+# ─────────────────────────────────────────────
+AUTHENTICATION_BACKENDS = [
+    'accounts.login_backend.SmartLoginBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# ─────────────────────────────────────────────
+# Custom Error Pages
+# ─────────────────────────────────────────────
+# handler404 و handler500 بيتحددوا في urls.py
+
+# ─────────────────────────────────────────────
+# Web Push VAPID Keys
+# ─────────────────────────────────────────────
+# في الإنتاج: ولّد مفاتيح حقيقية بـ:
+# pip install pywebpush
+# python -c "from pywebpush import webpush; from py_vapid import Vapid; v=Vapid(); v.generate_keys(); print(v.public_key); print(v.private_key)"
+VAPID_PUBLIC_KEY = "BDummyKeyForDevelopment_ReplaceInProduction_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+VAPID_PRIVATE_KEY = "dummyprivatekey_replace_in_production"
+VAPID_ADMIN_EMAIL = "admin@motionhr.com"
+
+
+# ═════════════════════════════════════════════════════════════
+# Patch 50a — Production Deployment Overrides
+# ═════════════════════════════════════════════════════════════
+import os
+
+# ── Environment helpers ─────────────────────────────────────
+def _env_bool(name, default=False):
+    value = os.getenv(name, str(default))
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+def _env_list(name, default=''):
+    value = os.getenv(name, default)
+    return [item.strip() for item in str(value).split(',') if item.strip()]
+
+# ── Core ────────────────────────────────────────────────────
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', SECRET_KEY)
+DEBUG = _env_bool('DJANGO_DEBUG', DEBUG)
+
+try:
+    _default_hosts = ",".join(ALLOWED_HOSTS) if isinstance(ALLOWED_HOSTS, (list, tuple)) else str(ALLOWED_HOSTS)
+except Exception:
+    _default_hosts = ''
+ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS', _default_hosts or '127.0.0.1,localhost')
+
+# CSRF trusted origins
+_default_csrf = os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS', '')
+if _default_csrf:
+    CSRF_TRUSTED_ORIGINS = _env_list('DJANGO_CSRF_TRUSTED_ORIGINS', _default_csrf)
+else:
+    try:
+        if not DEBUG:
+            CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS if host not in ['127.0.0.1', 'localhost']]
+    except Exception:
+        pass
+
+# ── Database: PostgreSQL if env exists ──────────────────────
+if os.getenv('POSTGRES_DB'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('POSTGRES_DB', ''),
+            'USER': os.getenv('POSTGRES_USER', ''),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
+            'HOST': os.getenv('POSTGRES_HOST', '127.0.0.1'),
+            'PORT': os.getenv('POSTGRES_PORT', '5432'),
+            'CONN_MAX_AGE': 60,
+        }
+    }
+
+# ── Static / Media ──────────────────────────────────────────
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# ── Security for production behind Nginx ────────────────────
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = _env_bool('DJANGO_SECURE_SSL_REDIRECT', True)
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'SAMEORIGIN'
+else:
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+
+# ── Default admin contacts ──────────────────────────────────
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'info@jssolutions.com')
+SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
+

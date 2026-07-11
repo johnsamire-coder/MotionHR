@@ -1,325 +1,446 @@
 {% extends 'base/dashboard_base.html' %}
-{% load permissions %}
 
-{% block title %}الموظفون{% endblock %}
+{% block title %}قائمة الموظفين{% endblock %}
 
-{% block page_title %}الموظفون{% endblock %}
-{% block page_subtitle %}إدارة بيانات الموظفين{% endblock %}
+{% block extra_css %}
+<style>
+  .search-hero {
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fdff 100%);
+  }
 
-{% block dashboard_content %}
+  .search-box {
+    position: relative;
+  }
 
-<!-- Messages -->
-{% if messages %}
-    {% for message in messages %}
-    <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  .search-box .form-control {
+    padding-right: 44px;
+    border-radius: 14px;
+    height: 48px;
+    font-size: 1rem;
+  }
+
+  .search-box .search-icon {
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    transform: translateY(-50%);
+    color: #64748b;
+    z-index: 3;
+  }
+
+  .live-badge {
+    border-radius: 999px;
+    font-size: .78rem;
+    padding: .45rem .8rem;
+  }
+
+  .search-note {
+    font-size: .82rem;
+    color: #64748b;
+  }
+
+  .result-pill {
+    border-radius: 999px;
+    font-size: .78rem;
+    padding: .35rem .7rem;
+  }
+
+  .table thead th {
+    white-space: nowrap;
+  }
+
+  .employee-name {
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .employee-sub {
+    font-size: .78rem;
+    color: #64748b;
+  }
+
+  .search-loading {
+    display: none;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: #64748b;
+  }
+
+  .empty-state i {
+    font-size: 2rem;
+    opacity: .35;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Header -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <h4 class="mb-1 fw-bold">
+        <i class="bi bi-people-fill text-primary me-2"></i>قائمة الموظفين
+      </h4>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 small">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">الرئيسية</a></li>
+          <li class="breadcrumb-item active">الموظفون</li>
+        </ol>
+      </nav>
     </div>
-    {% endfor %}
-{% endif %}
 
-<!-- Header Actions -->
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body">
-        <div class="row g-3 align-items-center">
-            
-            <!-- Search -->
-            <div class="col-md-6 col-lg-4">
-                <form method="get" class="d-flex gap-2">
-                    <div class="input-group">
-                        <span class="input-group-text bg-white border-end-0">
-                            <i class="bi bi-search text-muted"></i>
-                        </span>
-                        <input type="text" 
-                               name="search" 
-                               class="form-control border-start-0" 
-                               placeholder="بحث بالاسم أو الرقم الوظيفي..."
-                               value="{{ search }}">
-                    </div>
-                    
-                    {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
-                    {% if branch_filter %}<input type="hidden" name="branch" value="{{ branch_filter }}">{% endif %}
-                    {% if department_filter %}<input type="hidden" name="department" value="{{ department_filter }}">{% endif %}
-                    
-                    <button type="submit" class="btn btn-primary">بحث</button>
-                </form>
-            </div>
-            
-            <!-- Count -->
-            <div class="col-md-6 col-lg-4">
-                <div class="d-flex align-items-center gap-2 p-2 rounded-3" 
-                     style="background: rgba(6, 182, 212, 0.1);">
-                    <div class="rounded-circle d-flex align-items-center justify-content-center" 
-                         style="width: 40px; height: 40px; background: #06B6D4;">
-                        <i class="bi bi-people-fill text-white"></i>
-                    </div>
-                    <div>
-                        <small class="text-muted d-block">إجمالي الموظفين</small>
-                        <h5 class="mb-0 fw-bold text-primary">{{ total_count }}</h5>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Actions -->
-            <div class="col-lg-4 text-lg-end">
-                <div class="btn-group">
-                    <div class="dropdown">
-                        <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-                            <i class="bi bi-download"></i>
-                            تصدير
-                        </button>
-                        <ul class="dropdown-menu">
-                            <li>
-                                <a class="dropdown-item" href="?export=excel{% if search %}&search={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if branch_filter %}&branch={{ branch_filter }}{% endif %}{% if department_filter %}&department={{ department_filter }}{% endif %}">
-                                    <i class="bi bi-file-earmark-excel text-success"></i>
-                                    Excel
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="?export=pdf{% if search %}&search={{ search }}{% endif %}">
-                                    <i class="bi bi-file-earmark-pdf text-danger"></i>
-                                    PDF
-                                </a>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <a class="dropdown-item" href="{% url 'employees:print_all' %}" target="_blank">
-                                    <i class="bi bi-printer"></i>
-                                    طباعة
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
-                    <a href="{% url 'employees:add' %}" class="btn btn-primary">
-                        <i class="bi bi-person-plus-fill"></i>
-                        إضافة موظف
-                    </a>
-                </div>
-            </div>
-            
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="?export=excel" class="btn btn-success">
+        <i class="bi bi-file-earmark-excel me-1"></i>تصدير Excel
+      </a>
+      <a href="?export=pdf" class="btn btn-danger">
+        <i class="bi bi-file-earmark-pdf me-1"></i>تصدير PDF
+      </a>
+    </div>
+  </div>
+
+  <!-- Live Search -->
+  <div class="card border-0 shadow-sm search-hero mb-4">
+    <div class="card-body p-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+        <div>
+          <h5 class="mb-1 fw-bold">
+            <i class="bi bi-search text-primary me-2"></i>البحث الذكي عن الموظفين
+          </h5>
+          <div class="search-note">
+            اكتب أي حرف من الاسم أو الكود أو الوظيفة أو الإدارة أو الفرع أو رقم الهاتف
+          </div>
         </div>
-    </div>
-</div>
+        <span class="badge bg-info-subtle text-info border border-info-subtle live-badge">
+          <i class="bi bi-lightning-charge-fill me-1"></i>Live Search
+        </span>
+      </div>
 
-<!-- Filters Row -->
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3">
-            
-            {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
-            
-            <div class="col-md-4">
-                <label class="form-label small fw-semibold">الحالة</label>
-                <select name="status" class="form-select" onchange="this.form.submit()">
-                    <option value="">كل الحالات</option>
-                    {% for value, label in status_choices %}
-                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
-                        {{ label }}
-                    </option>
-                    {% endfor %}
-                </select>
+      <form method="get" id="employee-filter-form">
+        <div class="row g-3">
+          <div class="col-lg-7">
+            <div class="search-box">
+              <i class="bi bi-search search-icon"></i>
+              <input
+                type="text"
+                class="form-control"
+                id="live-search-input"
+                name="search"
+                value="{{ request.GET.search }}"
+                placeholder="ابحث بالاسم / الكود / الوظيفة / الإدارة / الفرع / التليفون..."
+                autocomplete="off">
             </div>
-            
-            <div class="col-md-4">
-                <label class="form-label small fw-semibold">الفرع</label>
-                <select name="branch" class="form-select" onchange="this.form.submit()">
-                    <option value="">كل الفروع</option>
-                    {% for branch in branches %}
-                    <option value="{{ branch.id }}" {% if branch_filter == branch.id|stringformat:"s" %}selected{% endif %}>
-                        {{ branch.name_ar }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <div class="col-md-4">
-                <label class="form-label small fw-semibold">الإدارة</label>
-                <select name="department" class="form-select" onchange="this.form.submit()">
-                    <option value="">كل الإدارات</option>
-                    {% for dept in departments %}
-                    <option value="{{ dept.id }}" {% if department_filter == dept.id|stringformat:"s" %}selected{% endif %}>
-                        {{ dept.name_ar }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            {% if search or status_filter or branch_filter or department_filter %}
-            <div class="col-12">
-                <a href="{% url 'employees:list' %}" class="btn btn-sm btn-outline-danger">
-                    <i class="bi bi-x-circle"></i>
-                    مسح كل الفلاتر
-                </a>
-            </div>
-            {% endif %}
-            
-        </form>
-    </div>
-</div>
+          </div>
 
-<!-- Employees Table -->
-<div class="card border-0 shadow-sm">
+          <div class="col-lg-2">
+            <select class="form-select" id="branch-filter" name="branch">
+              <option value="">كل الفروع</option>
+              {% for branch in branches %}
+                <option value="{{ branch.id }}" {% if request.GET.branch == branch.id|stringformat:'s' %}selected{% endif %}>
+                  {{ branch.name_ar|default:branch.name_en }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-lg-2">
+            <select class="form-select" id="department-filter" name="department">
+              <option value="">كل الإدارات</option>
+              {% for department in departments %}
+                <option value="{{ department.id }}" {% if request.GET.department == department.id|stringformat:'s' %}selected{% endif %}>
+                  {{ department.name_ar|default:department.name_en }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-lg-1">
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="bi bi-funnel"></i>
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <div class="d-flex align-items-center justify-content-between mt-3 flex-wrap gap-2">
+        <div class="search-note">
+          النتائج تظهر تلقائيًا أثناء الكتابة بدون الضغط على زر
+        </div>
+        <div class="search-loading" id="search-loading">
+          <span class="spinner-border spinner-border-sm text-primary me-2"></span>
+          <span class="small text-muted">جارٍ البحث...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Search Results -->
+  <div class="card border-0 shadow-sm mb-4" id="live-results-card" style="display:none;">
+    <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+      <div class="fw-bold">
+        <i class="bi bi-lightning-charge text-primary me-2"></i>نتائج البحث المباشر
+      </div>
+      <span class="badge bg-primary result-pill" id="live-results-count">0 نتيجة</span>
+    </div>
     <div class="card-body p-0">
-        
-        {% if employees %}
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th class="ps-4">الرقم الوظيفي</th>
-                        <th>الموظف</th>
-                        <th>المسمى الوظيفي</th>
-                        <th>الإدارة</th>
-                        <th>الفرع</th>
-                        <th>رقم الموبايل</th>
-                        <th>الحالة</th>
-                        <th class="pe-4 text-center">إجراءات</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for employee in employees %}
-                    <tr>
-                        <td class="ps-4">
-                            <span class="badge bg-secondary bg-opacity-10 text-secondary">
-                                {{ employee.employee_code }}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="d-flex align-items-center gap-2">
-                                {% if employee.photo %}
-                                <img src="{{ employee.photo.url }}" 
-                                     class="rounded-circle" 
-                                     style="width: 40px; height: 40px; object-fit: cover;">
-                                {% else %}
-                                <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold" 
-                                     style="width: 40px; height: 40px; background: linear-gradient(135deg, #06B6D4, #3B82F6);">
-                                    {{ employee.first_name_ar|first }}
-                                </div>
-                                {% endif %}
-                                <div>
-                                    <div class="fw-semibold">{{ employee.full_name_ar }}</div>
-                                    <small class="text-muted">{{ employee.email|default:"-" }}</small>
-                                </div>
-                            </div>
-                        </td>
-                        <td>{{ employee.job_title.name_ar }}</td>
-                        <td>{{ employee.department.name_ar }}</td>
-                        <td>{{ employee.branch.name_ar }}</td>
-                        <td>
-                            <a href="tel:{{ employee.phone }}" class="text-decoration-none">
-                                <i class="bi bi-telephone-fill text-success"></i>
-                                {{ employee.phone }}
-                            </a>
-                        </td>
-                        <td>
-                            {% if employee.status == 'active' %}
-                                <span class="badge bg-success">نشط</span>
-                            {% elif employee.status == 'on_leave' %}
-                                <span class="badge bg-info">في إجازة</span>
-                            {% elif employee.status == 'suspended' %}
-                                <span class="badge bg-warning">موقوف</span>
-                            {% elif employee.status == 'resigned' %}
-                                <span class="badge bg-secondary">مستقيل</span>
-                            {% elif employee.status == 'terminated' %}
-                                <span class="badge bg-danger">مفصول</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ employee.get_status_display }}</span>
-                            {% endif %}
-                            
-                            {% if employee.is_field_worker %}
-                            <span class="badge bg-info ms-1" title="موظف ميداني">
-                                <i class="bi bi-geo-alt-fill"></i>
-                            </span>
-                            {% endif %}
-                        </td>
-                        <td class="pe-4 text-center">
-                            <div class="btn-group btn-group-sm">
-                                <a href="{% url 'employees:detail' employee.pk %}" 
-                                   class="btn btn-outline-primary" 
-                                   title="عرض">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-                                <a href="{% url 'employees:edit' employee.pk %}" 
-                                   class="btn btn-outline-warning" 
-                                   title="تعديل">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                <a href="{% url 'employees:delete' employee.pk %}" 
-                                   class="btn btn-outline-danger" 
-                                   title="حذف">
-                                    <i class="bi bi-trash"></i>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        
-        <!-- Pagination -->
-        {% if page_obj.has_other_pages %}
-        <div class="card-footer bg-white border-top">
-            <nav>
-                <ul class="pagination pagination-sm justify-content-center mb-0">
-                    
-                    {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}">
-                            <i class="bi bi-chevron-right"></i>
-                        </a>
-                    </li>
-                    {% endif %}
-                    
-                    {% for num in page_obj.paginator.page_range %}
-                        {% if page_obj.number == num %}
-                            <li class="page-item active">
-                                <span class="page-link">{{ num }}</span>
-                            </li>
-                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}{% if search %}&search={{ search }}{% endif %}">
-                                    {{ num }}
-                                </a>
-                            </li>
-                        {% endif %}
-                    {% endfor %}
-                    
-                    {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}">
-                            <i class="bi bi-chevron-left"></i>
-                        </a>
-                    </li>
-                    {% endif %}
-                    
-                </ul>
-            </nav>
-        </div>
-        {% endif %}
-        
-        {% else %}
-        <!-- Empty State -->
-        <div class="text-center py-5">
-            <i class="bi bi-people text-muted" style="font-size: 4rem;"></i>
-            <h5 class="mt-3 fw-bold">لا يوجد موظفون</h5>
-            {% if search or status_filter or branch_filter or department_filter %}
-                <p class="text-muted">لا توجد نتائج تطابق البحث أو الفلاتر</p>
-                <a href="{% url 'employees:list' %}" class="btn btn-outline-primary">
-                    <i class="bi bi-arrow-clockwise"></i>
-                    مسح الفلاتر
-                </a>
-            {% else %}
-                <p class="text-muted">ابدأ بإضافة أول موظف</p>
-                <a href="{% url 'employees:add' %}" class="btn btn-primary">
-                    <i class="bi bi-person-plus-fill"></i>
-                    إضافة موظف
-                </a>
-            {% endif %}
-        </div>
-        {% endif %}
-        
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>الموظف</th>
+              <th>الكود</th>
+              <th>الوظيفة</th>
+              <th>الإدارة</th>
+              <th>الفرع</th>
+              <th>المدير المباشر</th>
+              <th>التليفون</th>
+              <th>الإيميل</th>
+              <th>الحالة</th>
+            </tr>
+          </thead>
+          <tbody id="live-results-body">
+          </tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="live-empty-state" style="display:none;">
+        <i class="bi bi-search"></i>
+        <div class="mt-2">لا توجد نتائج مطابقة</div>
+      </div>
     </div>
-</div>
+  </div>
 
+  <!-- Server Rendered Default List -->
+  <div id="default-list-wrapper">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+        <div class="fw-bold">
+          <i class="bi bi-list-ul text-primary me-2"></i>قائمة الموظفين
+        </div>
+        <span class="badge bg-secondary result-pill">
+          {{ page_obj.paginator.count }} موظف
+        </span>
+      </div>
+
+      <div class="card-body p-0">
+        {% if page_obj %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>الموظف</th>
+                <th>الكود</th>
+                <th>الوظيفة</th>
+                <th>الإدارة</th>
+                <th>الفرع</th>
+                <th>المدير المباشر</th>
+                <th>التليفون</th>
+                <th>الإيميل</th>
+                <th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for emp in page_obj %}
+              <tr>
+                <td>
+                  <div class="employee-name">{{ emp.full_name_ar }}</div>
+                  <div class="employee-sub">
+                    {{ emp.national_id|default:"—" }}
+                  </div>
+                </td>
+                <td>{{ emp.employee_code }}</td>
+                <td>{{ emp.job_title.name_ar|default:emp.job_title.name_en|default:"—" }}</td>
+                <td>{{ emp.department.name_ar|default:emp.department.name_en|default:"—" }}</td>
+                <td>{{ emp.branch.name_ar|default:emp.branch.name_en|default:"—" }}</td>
+                <td>{{ emp.direct_manager.full_name_ar|default:"—" }}</td>
+                <td>{{ emp.phone|default:"—" }}</td>
+                <td>{{ emp.email|default:"—" }}</td>
+                <td>
+                  <span class="badge bg-light text-dark border">
+                    {{ emp.get_status_display|default:emp.status }}
+                  </span>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="9">
+                  <div class="empty-state">
+                    <i class="bi bi-people"></i>
+                    <div class="mt-2">لا يوجد موظفون</div>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+        <div class="p-3">
+          <nav>
+            <ul class="pagination pagination-sm justify-content-center mb-0">
+              {% if page_obj.has_previous %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}&branch={{ request.GET.branch }}&department={{ request.GET.department }}&search={{ request.GET.search }}">
+                  السابق
+                </a>
+              </li>
+              {% endif %}
+
+              <li class="page-item active">
+                <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+              </li>
+
+              {% if page_obj.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}&branch={{ request.GET.branch }}&department={{ request.GET.department }}&search={{ request.GET.search }}">
+                  التالي
+                </a>
+              </li>
+              {% endif %}
+            </ul>
+          </nav>
+        </div>
+        {% endif %}
+
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const searchInput = document.getElementById('live-search-input');
+  const branchFilter = document.getElementById('branch-filter');
+  const departmentFilter = document.getElementById('department-filter');
+  const loadingBox = document.getElementById('search-loading');
+
+  const defaultWrapper = document.getElementById('default-list-wrapper');
+  const liveCard = document.getElementById('live-results-card');
+  const liveBody = document.getElementById('live-results-body');
+  const liveCount = document.getElementById('live-results-count');
+  const emptyState = document.getElementById('live-empty-state');
+
+  let timer = null;
+
+  function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function showDefaultList() {
+    liveCard.style.display = 'none';
+    defaultWrapper.style.display = 'block';
+    emptyState.style.display = 'none';
+    liveBody.innerHTML = '';
+  }
+
+  function showLoading(show) {
+    loadingBox.style.display = show ? 'inline-flex' : 'none';
+  }
+
+  function renderResults(results) {
+    liveBody.innerHTML = '';
+
+    if (!results.length) {
+      emptyState.style.display = 'block';
+      return;
+    }
+
+    emptyState.style.display = 'none';
+
+    let html = '';
+    results.forEach(emp => {
+      html += `
+        <tr>
+          <td>
+            <div class="employee-name">${escapeHtml(emp.full_name_ar || '—')}</div>
+            <div class="employee-sub">${escapeHtml(emp.phone || '—')}</div>
+          </td>
+          <td>${escapeHtml(emp.employee_code || '—')}</td>
+          <td>${escapeHtml(emp.job_title || '—')}</td>
+          <td>${escapeHtml(emp.department || '—')}</td>
+          <td>${escapeHtml(emp.branch || '—')}</td>
+          <td>${escapeHtml(emp.manager || '—')}</td>
+          <td>${escapeHtml(emp.phone || '—')}</td>
+          <td>${escapeHtml(emp.email || '—')}</td>
+          <td><span class="badge bg-light text-dark border">${escapeHtml(emp.status || '—')}</span></td>
+        </tr>
+      `;
+    });
+
+    liveBody.innerHTML = html;
+  }
+
+  function runLiveSearch() {
+    const q = (searchInput.value || '').trim();
+    const branch = branchFilter.value || '';
+    const department = departmentFilter.value || '';
+
+    if (!q) {
+      showDefaultList();
+      showLoading(false);
+      return;
+    }
+
+    defaultWrapper.style.display = 'none';
+    liveCard.style.display = 'block';
+    liveCount.textContent = '...';
+    showLoading(true);
+
+    const params = new URLSearchParams({
+      q: q,
+      branch: branch,
+      department: department
+    });
+
+    fetch("{% url 'employees:search_api' %}?" + params.toString(), {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      const results = data.results || [];
+      liveCount.textContent = `${data.count || 0} نتيجة`;
+      renderResults(results);
+      showLoading(false);
+    })
+    .catch(error => {
+      liveCount.textContent = '0 نتيجة';
+      liveBody.innerHTML = '';
+      emptyState.style.display = 'block';
+      showLoading(false);
+    });
+  }
+
+  function debounceSearch() {
+    clearTimeout(timer);
+    timer = setTimeout(runLiveSearch, 250);
+  }
+
+  searchInput.addEventListener('input', debounceSearch);
+  branchFilter.addEventListener('change', runLiveSearch);
+  departmentFilter.addEventListener('change', runLiveSearch);
+
+  // لو الصفحة مفتوحة وفيها search query بالفعل
+  if ((searchInput.value || '').trim()) {
+    runLiveSearch();
+  }
+})();
+</script>
 {% endblock %}

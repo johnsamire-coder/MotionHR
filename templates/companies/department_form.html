@@ -1,0 +1,103 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center mb-4">
+    <a href="{% url 'companies:departments_list' %}"
+       class="btn btn-outline-secondary btn-sm me-3">
+      <i class="bi bi-arrow-right"></i>
+    </a>
+    <h4 class="fw-bold mb-0">{{ page_title }}</h4>
+  </div>
+
+  <div class="row justify-content-center">
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <form method="post">
+            {% csrf_token %}
+            <div class="row g-3">
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">
+                  الاسم (عربي) <span class="text-danger">*</span>
+                </label>
+                <input type="text" name="name_ar" class="form-control"
+                       value="{{ dept.name_ar|default:'' }}" required>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الاسم (إنجليزي)</label>
+                <input type="text" name="name_en" class="form-control"
+                       value="{{ dept.name_en|default:'' }}" dir="ltr">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الكود</label>
+                <input type="text" name="code" class="form-control"
+                       value="{{ dept.code|default:'' }}" dir="ltr"
+                       placeholder="مثال: HR, FIN, IT">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الإدارة الأم</label>
+                <select name="parent" class="form-select">
+                  <option value="">
+                    ── إدارة رئيسية (بدون إدارة أم) ──
+                  </option>
+                  {% for d in departments %}
+                  <option value="{{ d.pk }}"
+                    {% if dept.parent and dept.parent.pk == d.pk %}selected{% endif %}>
+                    {{ d.name_ar }}
+                  </option>
+                  {% endfor %}
+                </select>
+                <div class="form-text text-muted">
+                  <i class="bi bi-info-circle me-1"></i>
+                  اتركه فاضي لو هذا قسم رئيسي
+                </div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold small">الوصف</label>
+                <textarea name="description" class="form-control" rows="3">{{ dept.description|default:'' }}</textarea>
+              </div>
+
+              {% if action == 'edit' %}
+              <div class="col-12">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox"
+                         name="is_active" id="isActive"
+                         {% if dept.is_active %}checked{% endif %}
+                         style="width:2.5rem;height:1.25rem;">
+                  <label class="form-check-label fw-semibold" for="isActive">
+                    الإدارة نشطة
+                  </label>
+                </div>
+              </div>
+              {% endif %}
+
+            </div>
+
+            <div class="d-flex gap-2 mt-4 pt-3 border-top">
+              <button type="submit"
+                      class="btn text-white px-4"
+                      style="background:#06B6D4; border-radius:10px;">
+                <i class="bi bi-check-lg me-1"></i>
+                {% if action == 'add' %}إضافة{% else %}حفظ{% endif %}
+              </button>
+              <a href="{% url 'companies:departments_list' %}"
+                 class="btn btn-outline-secondary px-4"
+                 style="border-radius:10px;">إلغاء</a>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,130 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .upload-card { border: 1px solid #e2e8f0; border-radius: 20px; background: linear-gradient(180deg, #fff 0%, #f8fdff 100%); }
+  .custom-name-box { display: none; }
+  .custom-name-box.visible { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 800px;">
+
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb small">
+      <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">الرئيسية</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'employees:list' %}">الموظفون</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'employees:detail' employee.pk %}">{{ employee.full_name_ar }}</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'employees:folder' employee.pk %}">ملف المستندات</a></li>
+      <li class="breadcrumb-item active">رفع مستند</li>
+    </ol>
+  </nav>
+
+  <div class="card upload-card border-0 shadow-sm">
+    <div class="card-body p-4">
+      <h5 class="fw-bold mb-4">
+        <i class="bi bi-cloud-upload text-primary me-2"></i>رفع مستند جديد لـ {{ employee.full_name_ar }}
+      </h5>
+
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">تصنيف المستند <span class="text-danger">*</span></label>
+            <select name="category" class="form-select" id="docCategory" required>
+              {% for val, label in category_choices %}
+              <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-6 custom-name-box" id="customNameBox">
+            <label class="form-label fw-semibold">اسم المستند المخصص</label>
+            <input type="text" name="custom_name" class="form-control" placeholder="مثال: تقرير طبي — مستشفى السلام">
+          </div>
+
+          <div class="col-md-12">
+            <label class="form-label fw-semibold">الملف <span class="text-danger">*</span></label>
+            <input type="file" name="file" class="form-control" required>
+            <div class="form-text">PDF / صورة / Word — الحد الأقصى 10 MB</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">الحدث المرتبط</label>
+            <select name="related_event" class="form-select">
+              <option value="">بدون حدث محدد</option>
+              {% for val, label in event_choices %}
+              <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">تاريخ الحدث</label>
+            <input type="date" name="event_date" class="form-control">
+          </div>
+
+          <div class="col-md-12">
+            <label class="form-label fw-semibold">ملاحظات الحدث</label>
+            <textarea name="event_notes" class="form-control" rows="2" placeholder="مثال: تقرير طبي بسبب إصابة عمل"></textarea>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">تاريخ الإصدار</label>
+            <input type="date" name="issue_date" class="form-control">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">تاريخ الانتهاء</label>
+            <input type="date" name="expiry_date" class="form-control">
+          </div>
+
+          <div class="col-md-4">
+            <div class="form-check mt-4">
+              <input class="form-check-input" type="checkbox" name="is_confidential" id="isConfidential">
+              <label class="form-check-label" for="isConfidential">مستند سري</label>
+            </div>
+          </div>
+
+          <div class="col-md-12">
+            <label class="form-label fw-semibold">ملاحظات إضافية</label>
+            <textarea name="notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <a href="{% url 'employees:folder' employee.pk %}" class="btn btn-outline-secondary">إلغاء</a>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-cloud-upload me-1"></i>رفع المستند
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const categorySelect = document.getElementById('docCategory');
+  const customNameBox = document.getElementById('customNameBox');
+
+  function toggleCustomName() {
+    const val = (categorySelect.value || '').trim();
+    if (val === 'other') {
+      customNameBox.classList.add('visible');
+    } else {
+      customNameBox.classList.remove('visible');
+    }
+  }
+
+  categorySelect.addEventListener('change', toggleCustomName);
+  toggleCustomName();
+})();
+</script>
+{% endblock %}

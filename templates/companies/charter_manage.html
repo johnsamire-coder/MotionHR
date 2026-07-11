@@ -1,0 +1,166 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}إدارة ميثاق العمل{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <i class="bi bi-file-earmark-text me-2" style="color:#06B6D4;"></i>
+        إدارة ميثاق العمل
+      </h4>
+      <p class="text-muted mb-0">عدّل بنود الميثاق وتابع موافقات الموظفين</p>
+    </div>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- إحصائيات -->
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body p-4 text-center">
+          <div class="row g-2">
+            <div class="col-4">
+              <div class="fs-3 fw-bold" style="color:#06B6D4;">{{ total_employees }}</div>
+              <small class="text-muted">إجمالي</small>
+            </div>
+            <div class="col-4">
+              <div class="fs-3 fw-bold text-success">{{ accepted_count }}</div>
+              <small class="text-muted">وافقوا</small>
+            </div>
+            <div class="col-4">
+              <div class="fs-3 fw-bold text-danger">{{ not_accepted }}</div>
+              <small class="text-muted">لم يوافقوا</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- قائمة الموافقات -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+          <h6 class="fw-bold mb-0">الموافقات</h6>
+        </div>
+        <div class="card-body p-0">
+          {% if acceptances %}
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <tbody>
+                {% for acc in acceptances %}
+                <tr>
+                  <td class="px-4 py-2">
+                    <div class="fw-semibold small">
+                      {{ acc.employee.full_name_ar }}
+                    </div>
+                    <small class="text-muted">
+                      {{ acc.accepted_at|date:"d/m/Y H:i" }}
+                    </small>
+                  </td>
+                  <td class="text-end pe-4">
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-center py-4 text-muted small">
+            لا يوجد موافقات بعد
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- تعديل الميثاق -->
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <form method="post">
+            {% csrf_token %}
+            <div class="row g-3">
+
+              <div class="col-md-8">
+                <label class="form-label fw-semibold small">
+                  العنوان <span class="text-danger">*</span>
+                </label>
+                <input type="text" name="title" class="form-control"
+                       value="{{ charter.title }}" required>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label fw-semibold small">الإصدار</label>
+                <div class="d-flex align-items-center gap-2">
+                  <input type="text" class="form-control bg-light" readonly
+                         value="v{{ charter.version }}">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="new_version" id="newVersion">
+                    <label class="form-check-label small" for="newVersion">
+                      إصدار جديد
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold small">المقدمة</label>
+                <textarea name="introduction" class="form-control" rows="2"
+                          placeholder="نص تمهيدي اختياري...">{{ charter.introduction }}</textarea>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold small">
+                  بنود الميثاق <span class="text-danger">*</span>
+                </label>
+                <textarea name="content" class="form-control" rows="14"
+                          required style="line-height:1.8;">{{ charter.content }}</textarea>
+                <small class="text-muted">
+                  اكتب كل بند في سطر مستقل
+                </small>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox"
+                         name="is_active" id="isActive"
+                         {% if charter.is_active %}checked{% endif %}
+                         style="width:2.5rem; height:1.25rem;">
+                  <label class="form-check-label fw-semibold" for="isActive">
+                    الميثاق مفعّل
+                  </label>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox"
+                         name="is_mandatory" id="isMandatory"
+                         {% if charter.is_mandatory %}checked{% endif %}
+                         style="width:2.5rem; height:1.25rem;">
+                  <label class="form-check-label fw-semibold" for="isMandatory">
+                    إجباري للموظفين الجدد
+                  </label>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="mt-4 pt-3 border-top">
+              <button type="submit" class="btn text-white px-4"
+                      style="background:#06B6D4; border-radius:10px;">
+                <i class="bi bi-check-lg me-1"></i>
+                حفظ التغييرات
+              </button>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

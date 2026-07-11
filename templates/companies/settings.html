@@ -1,0 +1,142 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}إعدادات الشركة{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <i class="bi bi-building me-2" style="color:#06B6D4;"></i>
+        إعدادات الشركة
+      </h4>
+      <p class="text-muted mb-0">بيانات ومعلومات الشركة</p>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="row g-4">
+
+      <!-- البيانات الأساسية -->
+      <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+            <h5 class="fw-bold mb-0">البيانات الأساسية</h5>
+          </div>
+          <div class="card-body px-4 pb-4">
+            <div class="row g-3">
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">اسم الشركة (عربي) <span class="text-danger">*</span></label>
+                <input type="text" name="name_ar" class="form-control"
+                       value="{{ company.name_ar }}" required>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">اسم الشركة (إنجليزي)</label>
+                <input type="text" name="name_en" class="form-control"
+                       value="{{ company.name_en|default:'' }}" dir="ltr">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">البريد الإلكتروني</label>
+                <input type="email" name="email" class="form-control"
+                       value="{{ company.email|default:'' }}" dir="ltr">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">رقم الهاتف</label>
+                <input type="text" name="phone" class="form-control"
+                       value="{{ company.phone|default:'' }}">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">السجل التجاري</label>
+                <input type="text" name="commercial_register" class="form-control"
+                       value="{{ company.commercial_register|default:'' }}">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الرقم الضريبي</label>
+                <input type="text" name="tax_number" class="form-control"
+                       value="{{ company.tax_number|default:'' }}">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الموقع الإلكتروني</label>
+                <input type="url" name="website" class="form-control"
+                       value="{{ company.website|default:'' }}" dir="ltr">
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold small">العنوان</label>
+                <textarea name="address" class="form-control" rows="2">{{ company.address|default:'' }}</textarea>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- الشعار -->
+      <div class="col-lg-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+            <h5 class="fw-bold mb-0">شعار الشركة</h5>
+          </div>
+          <div class="card-body px-4 pb-4 text-center">
+
+            <!-- عرض الشعار الحالي -->
+            <div class="mb-3">
+              {% if company.logo %}
+                <img src="{{ company.logo.url }}"
+                     class="rounded-3 shadow-sm"
+                     style="max-width:150px; max-height:150px; object-fit:contain;">
+              {% else %}
+                <div class="rounded-3 d-flex align-items-center justify-content-center mx-auto"
+                     style="width:150px;height:150px;background:#e0f7fa;">
+                  <i class="bi bi-building" style="font-size:3rem;color:#06B6D4;"></i>
+                </div>
+              {% endif %}
+            </div>
+
+            <label class="form-label fw-semibold small">رفع شعار جديد</label>
+            <input type="file" name="logo" class="form-control"
+                   accept="image/*">
+            <small class="text-muted d-block mt-1">PNG, JPG - حجم أقصى 2MB</small>
+
+          </div>
+        </div>
+
+        <!-- معلومات الاشتراك -->
+        <div class="card border-0 shadow-sm mt-3">
+          <div class="card-body p-4">
+            <h6 class="fw-bold mb-3">
+              <i class="bi bi-star me-2" style="color:#06B6D4;"></i>
+              معلومات الاشتراك
+            </h6>
+            <a href="{% url 'subscriptions:my_plan' %}"
+               class="btn w-100 text-white"
+               style="background:#06B6D4;">
+              عرض خطتي
+            </a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Save -->
+    <div class="mt-4 d-flex gap-2">
+      <button type="submit"
+              class="btn btn-lg text-white px-5"
+              style="background:#06B6D4; border-radius:10px;">
+        <i class="bi bi-check-lg me-2"></i>
+        حفظ التغييرات
+      </button>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

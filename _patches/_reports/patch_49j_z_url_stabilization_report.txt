@@ -1,0 +1,14 @@
+Patch 49j-Z — URL Stabilization Audit Report
+======================================================================
+Generated at: 2026-07-11 12:51:31
+
+employees/urls.py aliases: تم إضافة namespaced legacy aliases في employees/urls.py
+motionhr/urls.py aliases: تم إضافة global legacy aliases في motionhr/urls.py
+
+Files changed by reference normalization: 0
+
+======================================================================
+Suspicious leftovers scan
+======================================================================
+employees\urls.py: employees:employee_, 'employee_list', 'employee_detail', 'employee_add'
+motionhr\urls.py: 'employee_list', 'employee_detail', 'employee_add'

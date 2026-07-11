@@ -1,0 +1,1688 @@
+﻿role,route_name,path,status,code,note
+anonymous,landing:home,/,OK,200,
+anonymous,landing:about,/about/,OK,200,
+anonymous,landing:contact,/contact/,OK,200,
+anonymous,landing:pricing,/pricing/,OK,200,
+anonymous,landing:free_trial,/free-trial/,OK,200,
+anonymous,landing:free_trial_success,/free-trial/success/,REDIRECT,302,
+anonymous,login,/login/,OK,200,
+anonymous,logout,/logout/,SKIPPED,,Destructive or special route — skipped for safety
+anonymous,password_reset,/password-reset/,OK,200,
+anonymous,password_reset_done,/password-reset/done/,OK,200,
+anonymous,password_reset_confirm,,UNRESOLVED,,"Missing sample kwargs: ['uidb64', 'token']"
+anonymous,password_reset_complete,/password-reset-complete/,OK,200,
+anonymous,password_change,/password-change/,REDIRECT,302,
+anonymous,password_change_done,/password-change/done/,REDIRECT,302,
+anonymous,dashboard,/dashboard/,REDIRECT,302,
+anonymous,global_search,/search/,REDIRECT,302,
+anonymous,offline,/offline/,OK,200,
+anonymous,manifest,/manifest.json,OK,200,
+anonymous,service_worker,/sw.js,OK,200,
+anonymous,accounts:login_settings,/accounts/login-settings/,REDIRECT,302,
+anonymous,accounts:profile,/accounts/profile/,REDIRECT,302,
+anonymous,accounts:profile_update,/accounts/profile/update/,REDIRECT,302,
+anonymous,accounts:notifications,/accounts/notifications/,REDIRECT,302,
+anonymous,accounts:send_employee_notification,/accounts/notifications/send/,REDIRECT,302,
+anonymous,accounts:push_subscribe,/accounts/push-subscribe/,REDIRECT,302,
+anonymous,accounts:push_unsubscribe,/accounts/push-unsubscribe/,REDIRECT,302,
+anonymous,employees:folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+anonymous,employees:folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:search_api,/employees/api/search/,REDIRECT,302,
+anonymous,employees:manager_options_api,/employees/api/manager-options/,REDIRECT,302,
+anonymous,employees:hierarchy_manage,/employees/hierarchy/,REDIRECT,302,
+anonymous,employees:add,/employees/add/,REDIRECT,302,
+anonymous,employees:print_all,/employees/print/,REDIRECT,302,
+anonymous,employees:my_balance,/employees/my-balance/,REDIRECT,302,
+anonymous,employees:my_deductions,/employees/my-deductions/,REDIRECT,302,
+anonymous,employees:edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:create_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:deactivate_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:reset_password,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:list,/employees/,REDIRECT,302,
+anonymous,employees:employee_list,/employees/,REDIRECT,302,
+anonymous,employees:employee_add,/employees/add/,REDIRECT,302,
+anonymous,employees:employee_create,/employees/add/,REDIRECT,302,
+anonymous,employees:add_employee,/employees/add/,REDIRECT,302,
+anonymous,employees:employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_print,/employees/print/,REDIRECT,302,
+anonymous,employees:employee_print_all,/employees/print/,REDIRECT,302,
+anonymous,employees:employees_print,/employees/print/,REDIRECT,302,
+anonymous,employees:employees_print_all,/employees/print/,REDIRECT,302,
+anonymous,employees:employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees:employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+anonymous,employees:my_balance_view,/employees/my-balance/,REDIRECT,302,
+anonymous,employees:employee_balance,/employees/my-balance/,REDIRECT,302,
+anonymous,employees:my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+anonymous,employees:employee_deductions,/employees/my-deductions/,REDIRECT,302,
+anonymous,employees:employee_search_api,/employees/api/search/,REDIRECT,302,
+anonymous,employees:manager_options_api,/employees/api/manager-options/,REDIRECT,302,
+anonymous,employees:hierarchy_manage,/employees/hierarchy/,REDIRECT,302,
+anonymous,attendance:check_in,/attendance/check-in/,REDIRECT,302,
+anonymous,attendance:list,/attendance/,REDIRECT,302,
+anonymous,attendance:check_in_old,/attendance/check-in/,REDIRECT,302,
+anonymous,attendance:api_check_in,/attendance/api/check-in/,REDIRECT,302,
+anonymous,attendance:api_check_out,/attendance/api/check-out/,REDIRECT,302,
+anonymous,attendance:visits,/attendance/visits/,REDIRECT,302,
+anonymous,attendance:visit_add,/attendance/visits/add/,REDIRECT,302,
+anonymous,attendance:live_map,/attendance/map/,REDIRECT,302,
+anonymous,attendance:api_live_locations,/attendance/api/live-locations/,REDIRECT,302,
+anonymous,attendance:tracking,/attendance/tracking/,REDIRECT,302,
+anonymous,attendance:api_track,/attendance/api/track/,REDIRECT,302,
+anonymous,attendance:tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+anonymous,attendance:monitor,/attendance/monitor/,REDIRECT,302,
+anonymous,attendance:api_monitor,/attendance/api/monitor/,REDIRECT,302,
+anonymous,attendance:attendance_list,/attendance/,REDIRECT,302,
+anonymous,attendance:check_in_page_old,/attendance/check-in/,REDIRECT,302,
+anonymous,attendance:visits_list,/attendance/visits/,REDIRECT,302,
+anonymous,attendance:tracking_page,/attendance/tracking/,REDIRECT,302,
+anonymous,attendance:employee_tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+anonymous,attendance:field_employees_monitor,/attendance/monitor/,REDIRECT,302,
+anonymous,attendance:api_track_location,/attendance/api/track/,REDIRECT,302,
+anonymous,attendance:api_monitor_data,/attendance/api/monitor/,REDIRECT,302,
+anonymous,attendance:late_notifications,/attendance/late-notifications/,REDIRECT,302,
+anonymous,attendance:late_notification_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,attendance:my_warnings,/attendance/my-warnings/,REDIRECT,302,
+anonymous,attendance:schedule_week,/attendance/schedule/,REDIRECT,302,
+anonymous,attendance:assignment_add,/attendance/schedule/assignment/,REDIRECT,302,
+anonymous,attendance:stealth_manage,/attendance/stealth-manage/,REDIRECT,302,
+anonymous,attendance:stealth_alerts,/attendance/stealth-alerts/,REDIRECT,302,
+anonymous,attendance:api_stealth_location,/attendance/api/stealth-location/,REDIRECT,302,
+anonymous,attendance:override,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,subscriptions:upsell,/subscriptions/upgrade/module/payroll/,REDIRECT,302,
+anonymous,subscriptions:admin_dashboard,/subscriptions/,REDIRECT,302,
+anonymous,subscriptions:plans_list,/subscriptions/plans/,REDIRECT,302,
+anonymous,subscriptions:subscriptions_list,/subscriptions/subscriptions/,REDIRECT,302,
+anonymous,subscriptions:create,/subscriptions/subscriptions/create/,REDIRECT,302,
+anonymous,subscriptions:detail,/subscriptions/subscriptions/1/,REDIRECT,302,
+anonymous,subscriptions:upgrade,/subscriptions/subscriptions/1/upgrade/,REDIRECT,302,
+anonymous,subscriptions:extend,/subscriptions/subscriptions/1/extend/,REDIRECT,302,
+anonymous,subscriptions:cancel,/subscriptions/subscriptions/1/cancel/,REDIRECT,302,
+anonymous,subscriptions:activate,/subscriptions/subscriptions/1/activate/,REDIRECT,302,
+anonymous,subscriptions:my_subscription,/subscriptions/my-subscription/,REDIRECT,302,
+anonymous,subscriptions:my_plan,/subscriptions/my-plan/,REDIRECT,302,
+anonymous,subscriptions:upgrade_plan,/subscriptions/upgrade/,REDIRECT,302,
+anonymous,subscriptions:feature_locked,/subscriptions/feature-locked/,REDIRECT,302,
+anonymous,subscriptions:contact_sales,/subscriptions/contact-sales/,OK,200,
+anonymous,companies:charter_print_signature,,UNRESOLVED,,Missing sample kwargs: ['signature_id']
+anonymous,companies:charter_acceptance_status,/companies/charter/1/acceptance-status/,REDIRECT,302,
+anonymous,companies:charter_sign,/companies/charter/1/sign/,REDIRECT,302,
+anonymous,companies:settings,/companies/settings/,REDIRECT,302,
+anonymous,companies:charter,/companies/charter/,REDIRECT,302,
+anonymous,companies:charter_accept,/companies/charter/accept/,REDIRECT,302,
+anonymous,companies:charter_manage,/companies/charter/manage/,REDIRECT,302,
+anonymous,companies:policies,/companies/policies/,REDIRECT,302,
+anonymous,companies:branches_list,/companies/branches/,REDIRECT,302,
+anonymous,companies:branch_add,/companies/branches/add/,REDIRECT,302,
+anonymous,companies:branch_edit,/companies/branches/1/edit/,REDIRECT,302,
+anonymous,companies:branch_delete,/companies/branches/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+anonymous,companies:departments_list,/companies/departments/,REDIRECT,302,
+anonymous,companies:department_add,/companies/departments/add/,REDIRECT,302,
+anonymous,companies:department_edit,/companies/departments/1/edit/,REDIRECT,302,
+anonymous,companies:department_delete,/companies/departments/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+anonymous,companies:shifts_list,/companies/shifts/,REDIRECT,302,
+anonymous,companies:shift_add,/companies/shifts/add/,REDIRECT,302,
+anonymous,companies:shift_edit,/companies/shifts/1/edit/,REDIRECT,302,
+anonymous,companies:shift_delete,/companies/shifts/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+anonymous,companies:approval_flows,/companies/approval-flows/,REDIRECT,302,
+anonymous,companies:delegations,/companies/delegations/,REDIRECT,302,
+anonymous,companies:delegation_add,/companies/delegations/add/,REDIRECT,302,
+anonymous,companies:delegation_deactivate,/companies/delegations/1/deactivate/,SKIPPED,,Destructive or special route — skipped for safety
+anonymous,companies:notification_settings,/companies/notification-settings/,REDIRECT,302,
+anonymous,leaves:leave_types_list,/leaves/types/,REDIRECT,302,
+anonymous,leaves:leave_type_add,/leaves/types/add/,REDIRECT,302,
+anonymous,leaves:leave_type_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,leaves:leave_type_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,leaves:leave_requests_list,/leaves/,REDIRECT,302,
+anonymous,leaves:leave_request_add,/leaves/add/,REDIRECT,302,
+anonymous,leaves:leave_request_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,leaves:leave_approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,leaves:leave_reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,leaves:leave_cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,leaves:leave_balances,/leaves/balances/,REDIRECT,302,
+anonymous,leaves:set_leave_balance,/leaves/balances/set/,REDIRECT,302,
+anonymous,requests_app:list,/requests/,REDIRECT,302,
+anonymous,requests_app:add,/requests/add/,REDIRECT,302,
+anonymous,requests_app:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,requests_app:approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,requests_app:reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,requests_app:cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,reports:home,/reports/,REDIRECT,302,
+anonymous,reports:attendance,/reports/attendance/,REDIRECT,302,
+anonymous,reports:late,/reports/late/,REDIRECT,302,
+anonymous,reports:leaves,/reports/leaves/,REDIRECT,302,
+anonymous,reports:field,/reports/field/,REDIRECT,302,
+anonymous,reports:employees,/reports/employees/,REDIRECT,302,
+anonymous,employee_list,/employees/,REDIRECT,302,
+anonymous,employee_add,/employees/add/,REDIRECT,302,
+anonymous,employee_create,/employees/add/,REDIRECT,302,
+anonymous,add_employee,/employees/add/,REDIRECT,302,
+anonymous,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_print,/employees/print/,REDIRECT,302,
+anonymous,employee_print_all,/employees/print/,REDIRECT,302,
+anonymous,employees_print,/employees/print/,REDIRECT,302,
+anonymous,employees_print_all,/employees/print/,REDIRECT,302,
+anonymous,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+anonymous,my_balance_view,/employees/my-balance/,REDIRECT,302,
+anonymous,employee_balance,/employees/my-balance/,REDIRECT,302,
+anonymous,my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+anonymous,employee_deductions,/employees/my-deductions/,REDIRECT,302,
+anonymous,employee_search_api,/employees/api/search/,REDIRECT,302,
+anonymous,manager_options_api,/employees/api/manager-options/,REDIRECT,302,
+anonymous,hierarchy_manage,/employees/hierarchy/,REDIRECT,302,
+anonymous,employee_list,/employees/,REDIRECT,302,
+anonymous,employee_add,/employees/add/,REDIRECT,302,
+anonymous,employee_create,/employees/add/,REDIRECT,302,
+anonymous,add_employee,/employees/add/,REDIRECT,302,
+anonymous,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_print,/employees/print/,REDIRECT,302,
+anonymous,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+anonymous,my_balance_view,/employees/my-balance/,REDIRECT,302,
+anonymous,my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+anonymous,employee_search_api,/employees/api/search/,REDIRECT,302,
+super_admin,landing:home,/,REDIRECT,302,
+super_admin,landing:about,/about/,OK,200,
+super_admin,landing:contact,/contact/,OK,200,
+super_admin,landing:pricing,/pricing/,OK,200,
+super_admin,landing:free_trial,/free-trial/,OK,200,
+super_admin,landing:free_trial_success,/free-trial/success/,REDIRECT,302,
+super_admin,login,/login/,REDIRECT,302,
+super_admin,logout,/logout/,SKIPPED,,Destructive or special route — skipped for safety
+super_admin,password_reset,/password-reset/,OK,200,
+super_admin,password_reset_done,/password-reset/done/,OK,200,
+super_admin,password_reset_confirm,,UNRESOLVED,,"Missing sample kwargs: ['uidb64', 'token']"
+super_admin,password_reset_complete,/password-reset-complete/,OK,200,
+super_admin,password_change,/password-change/,OK,200,
+super_admin,password_change_done,/password-change/done/,OK,200,
+super_admin,dashboard,/dashboard/,OK,200,
+super_admin,global_search,/search/,OK,200,
+super_admin,offline,/offline/,OK,200,
+super_admin,manifest,/manifest.json,OK,200,
+super_admin,service_worker,/sw.js,OK,200,
+super_admin,accounts:login_settings,/accounts/login-settings/,OK,200,
+super_admin,accounts:profile,/accounts/profile/,OK,200,
+super_admin,accounts:profile_update,/accounts/profile/update/,REDIRECT,302,
+super_admin,accounts:notifications,/accounts/notifications/,OK,200,
+super_admin,accounts:send_employee_notification,/accounts/notifications/send/,OK,200,
+super_admin,accounts:push_subscribe,/accounts/push-subscribe/,HTTP_405,405,
+super_admin,accounts:push_unsubscribe,/accounts/push-unsubscribe/,HTTP_405,405,
+super_admin,employees:folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+super_admin,employees:folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:search_api,/employees/api/search/,OK,200,
+super_admin,employees:manager_options_api,/employees/api/manager-options/,OK,200,
+super_admin,employees:hierarchy_manage,/employees/hierarchy/,OK,200,
+super_admin,employees:add,/employees/add/,OK,200,
+super_admin,employees:print_all,/employees/print/,OK,200,
+super_admin,employees:my_balance,/employees/my-balance/,OK,200,
+super_admin,employees:my_deductions,/employees/my-deductions/,OK,200,
+super_admin,employees:edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:create_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:deactivate_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:reset_password,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:list,/employees/,OK,200,
+super_admin,employees:employee_list,/employees/,OK,200,
+super_admin,employees:employee_add,/employees/add/,OK,200,
+super_admin,employees:employee_create,/employees/add/,OK,200,
+super_admin,employees:add_employee,/employees/add/,OK,200,
+super_admin,employees:employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_print,/employees/print/,OK,200,
+super_admin,employees:employee_print_all,/employees/print/,OK,200,
+super_admin,employees:employees_print,/employees/print/,OK,200,
+super_admin,employees:employees_print_all,/employees/print/,OK,200,
+super_admin,employees:employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees:employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+super_admin,employees:my_balance_view,/employees/my-balance/,OK,200,
+super_admin,employees:employee_balance,/employees/my-balance/,OK,200,
+super_admin,employees:my_deductions_view,/employees/my-deductions/,OK,200,
+super_admin,employees:employee_deductions,/employees/my-deductions/,OK,200,
+super_admin,employees:employee_search_api,/employees/api/search/,OK,200,
+super_admin,employees:manager_options_api,/employees/api/manager-options/,OK,200,
+super_admin,employees:hierarchy_manage,/employees/hierarchy/,OK,200,
+super_admin,attendance:check_in,/attendance/check-in/,OK,200,
+super_admin,attendance:list,/attendance/,OK,200,
+super_admin,attendance:check_in_old,/attendance/check-in/,OK,200,
+super_admin,attendance:api_check_in,/attendance/api/check-in/,HTTP_405,405,
+super_admin,attendance:api_check_out,/attendance/api/check-out/,HTTP_405,405,
+super_admin,attendance:visits,/attendance/visits/,OK,200,
+super_admin,attendance:visit_add,/attendance/visits/add/,OK,200,
+super_admin,attendance:live_map,/attendance/map/,OK,200,
+super_admin,attendance:api_live_locations,/attendance/api/live-locations/,OK,200,
+super_admin,attendance:tracking,/attendance/tracking/,OK,200,
+super_admin,attendance:api_track,/attendance/api/track/,HTTP_405,405,
+super_admin,attendance:tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+super_admin,attendance:monitor,/attendance/monitor/,OK,200,
+super_admin,attendance:api_monitor,/attendance/api/monitor/,OK,200,
+super_admin,attendance:attendance_list,/attendance/,OK,200,
+super_admin,attendance:check_in_page_old,/attendance/check-in/,OK,200,
+super_admin,attendance:visits_list,/attendance/visits/,OK,200,
+super_admin,attendance:tracking_page,/attendance/tracking/,OK,200,
+super_admin,attendance:employee_tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+super_admin,attendance:field_employees_monitor,/attendance/monitor/,OK,200,
+super_admin,attendance:api_track_location,/attendance/api/track/,HTTP_405,405,
+super_admin,attendance:api_monitor_data,/attendance/api/monitor/,OK,200,
+super_admin,attendance:late_notifications,/attendance/late-notifications/,OK,200,
+super_admin,attendance:late_notification_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,attendance:my_warnings,/attendance/my-warnings/,OK,200,
+super_admin,attendance:schedule_week,/attendance/schedule/,OK,200,
+super_admin,attendance:assignment_add,/attendance/schedule/assignment/,OK,200,
+super_admin,attendance:stealth_manage,/attendance/stealth-manage/,OK,200,
+super_admin,attendance:stealth_alerts,/attendance/stealth-alerts/,OK,200,
+super_admin,attendance:api_stealth_location,/attendance/api/stealth-location/,OK,200,
+super_admin,attendance:override,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,subscriptions:upsell,/subscriptions/upgrade/module/payroll/,OK,200,
+super_admin,subscriptions:admin_dashboard,/subscriptions/,EXCEPTION,,unsupported operand type(s) for +: 'decimal.Decimal' and 'float'
+super_admin,subscriptions:plans_list,/subscriptions/plans/,OK,200,
+super_admin,subscriptions:subscriptions_list,/subscriptions/subscriptions/,OK,200,
+super_admin,subscriptions:create,/subscriptions/subscriptions/create/,OK,200,
+super_admin,subscriptions:detail,/subscriptions/subscriptions/1/,OK,200,
+super_admin,subscriptions:upgrade,/subscriptions/subscriptions/1/upgrade/,REDIRECT,302,
+super_admin,subscriptions:extend,/subscriptions/subscriptions/1/extend/,REDIRECT,302,
+super_admin,subscriptions:cancel,/subscriptions/subscriptions/1/cancel/,REDIRECT,302,
+super_admin,subscriptions:activate,/subscriptions/subscriptions/1/activate/,REDIRECT,302,
+super_admin,subscriptions:my_subscription,/subscriptions/my-subscription/,OK,200,
+super_admin,subscriptions:my_plan,/subscriptions/my-plan/,OK,200,
+super_admin,subscriptions:upgrade_plan,/subscriptions/upgrade/,OK,200,
+super_admin,subscriptions:feature_locked,/subscriptions/feature-locked/,OK,200,
+super_admin,subscriptions:contact_sales,/subscriptions/contact-sales/,OK,200,
+super_admin,companies:charter_print_signature,,UNRESOLVED,,Missing sample kwargs: ['signature_id']
+super_admin,companies:charter_acceptance_status,/companies/charter/1/acceptance-status/,FORBIDDEN,403,
+super_admin,companies:charter_sign,/companies/charter/1/sign/,OK,200,
+super_admin,companies:settings,/companies/settings/,OK,200,
+super_admin,companies:charter,/companies/charter/,OK,200,
+super_admin,companies:charter_accept,/companies/charter/accept/,REDIRECT,302,
+super_admin,companies:charter_manage,/companies/charter/manage/,OK,200,
+super_admin,companies:policies,/companies/policies/,OK,200,
+super_admin,companies:branches_list,/companies/branches/,OK,200,
+super_admin,companies:branch_add,/companies/branches/add/,OK,200,
+super_admin,companies:branch_edit,/companies/branches/1/edit/,OK,200,
+super_admin,companies:branch_delete,/companies/branches/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+super_admin,companies:departments_list,/companies/departments/,FORBIDDEN,403,
+super_admin,companies:department_add,/companies/departments/add/,OK,200,
+super_admin,companies:department_edit,/companies/departments/1/edit/,OK,200,
+super_admin,companies:department_delete,/companies/departments/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+super_admin,companies:shifts_list,/companies/shifts/,OK,200,
+super_admin,companies:shift_add,/companies/shifts/add/,OK,200,
+super_admin,companies:shift_edit,/companies/shifts/1/edit/,NOT_FOUND,404,
+super_admin,companies:shift_delete,/companies/shifts/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+super_admin,companies:approval_flows,/companies/approval-flows/,OK,200,
+super_admin,companies:delegations,/companies/delegations/,OK,200,
+super_admin,companies:delegation_add,/companies/delegations/add/,OK,200,
+super_admin,companies:delegation_deactivate,/companies/delegations/1/deactivate/,SKIPPED,,Destructive or special route — skipped for safety
+super_admin,companies:notification_settings,/companies/notification-settings/,OK,200,
+super_admin,leaves:leave_types_list,/leaves/types/,OK,200,
+super_admin,leaves:leave_type_add,/leaves/types/add/,OK,200,
+super_admin,leaves:leave_type_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,leaves:leave_type_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,leaves:leave_requests_list,/leaves/,OK,200,
+super_admin,leaves:leave_request_add,/leaves/add/,OK,200,
+super_admin,leaves:leave_request_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,leaves:leave_approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,leaves:leave_reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,leaves:leave_cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,leaves:leave_balances,/leaves/balances/,OK,200,
+super_admin,leaves:set_leave_balance,/leaves/balances/set/,HTTP_405,405,
+super_admin,requests_app:list,/requests/,OK,200,
+super_admin,requests_app:add,/requests/add/,OK,200,
+super_admin,requests_app:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,requests_app:approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,requests_app:reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,requests_app:cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,reports:home,/reports/,OK,200,
+super_admin,reports:attendance,/reports/attendance/,OK,200,
+super_admin,reports:late,/reports/late/,EXCEPTION,,"Reverse for 'comprehensive_profile' with arguments '('',)' not found. 1 pattern(s) tried: ['employees/(?P<pk>[0-9]+)/profile/\\Z']"
+super_admin,reports:leaves,/reports/leaves/,EXCEPTION,,"Reverse for 'comprehensive_profile' with arguments '('',)' not found. 1 pattern(s) tried: ['employees/(?P<pk>[0-9]+)/profile/\\Z']"
+super_admin,reports:field,/reports/field/,OK,200,
+super_admin,reports:employees,/reports/employees/,EXCEPTION,,The view reports.views.employees_report didn't return an HttpResponse object. It returned None instead.
+super_admin,employee_list,/employees/,OK,200,
+super_admin,employee_add,/employees/add/,OK,200,
+super_admin,employee_create,/employees/add/,OK,200,
+super_admin,add_employee,/employees/add/,OK,200,
+super_admin,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_print,/employees/print/,OK,200,
+super_admin,employee_print_all,/employees/print/,OK,200,
+super_admin,employees_print,/employees/print/,OK,200,
+super_admin,employees_print_all,/employees/print/,OK,200,
+super_admin,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+super_admin,my_balance_view,/employees/my-balance/,OK,200,
+super_admin,employee_balance,/employees/my-balance/,OK,200,
+super_admin,my_deductions_view,/employees/my-deductions/,OK,200,
+super_admin,employee_deductions,/employees/my-deductions/,OK,200,
+super_admin,employee_search_api,/employees/api/search/,OK,200,
+super_admin,manager_options_api,/employees/api/manager-options/,OK,200,
+super_admin,hierarchy_manage,/employees/hierarchy/,OK,200,
+super_admin,employee_list,/employees/,OK,200,
+super_admin,employee_add,/employees/add/,OK,200,
+super_admin,employee_create,/employees/add/,OK,200,
+super_admin,add_employee,/employees/add/,OK,200,
+super_admin,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_print,/employees/print/,OK,200,
+super_admin,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+super_admin,my_balance_view,/employees/my-balance/,OK,200,
+super_admin,my_deductions_view,/employees/my-deductions/,OK,200,
+super_admin,employee_search_api,/employees/api/search/,OK,200,
+company_admin,landing:home,/,REDIRECT,302,
+company_admin,landing:about,/about/,OK,200,
+company_admin,landing:contact,/contact/,OK,200,
+company_admin,landing:pricing,/pricing/,OK,200,
+company_admin,landing:free_trial,/free-trial/,OK,200,
+company_admin,landing:free_trial_success,/free-trial/success/,REDIRECT,302,
+company_admin,login,/login/,REDIRECT,302,
+company_admin,logout,/logout/,SKIPPED,,Destructive or special route — skipped for safety
+company_admin,password_reset,/password-reset/,OK,200,
+company_admin,password_reset_done,/password-reset/done/,OK,200,
+company_admin,password_reset_confirm,,UNRESOLVED,,"Missing sample kwargs: ['uidb64', 'token']"
+company_admin,password_reset_complete,/password-reset-complete/,OK,200,
+company_admin,password_change,/password-change/,OK,200,
+company_admin,password_change_done,/password-change/done/,OK,200,
+company_admin,dashboard,/dashboard/,OK,200,
+company_admin,global_search,/search/,OK,200,
+company_admin,offline,/offline/,OK,200,
+company_admin,manifest,/manifest.json,OK,200,
+company_admin,service_worker,/sw.js,OK,200,
+company_admin,accounts:login_settings,/accounts/login-settings/,OK,200,
+company_admin,accounts:profile,/accounts/profile/,OK,200,
+company_admin,accounts:profile_update,/accounts/profile/update/,REDIRECT,302,
+company_admin,accounts:notifications,/accounts/notifications/,OK,200,
+company_admin,accounts:send_employee_notification,/accounts/notifications/send/,OK,200,
+company_admin,accounts:push_subscribe,/accounts/push-subscribe/,HTTP_405,405,
+company_admin,accounts:push_unsubscribe,/accounts/push-unsubscribe/,HTTP_405,405,
+company_admin,employees:folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+company_admin,employees:folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:search_api,/employees/api/search/,OK,200,
+company_admin,employees:manager_options_api,/employees/api/manager-options/,OK,200,
+company_admin,employees:hierarchy_manage,/employees/hierarchy/,OK,200,
+company_admin,employees:add,/employees/add/,OK,200,
+company_admin,employees:print_all,/employees/print/,OK,200,
+company_admin,employees:my_balance,/employees/my-balance/,REDIRECT,302,
+company_admin,employees:my_deductions,/employees/my-deductions/,REDIRECT,302,
+company_admin,employees:edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:create_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:deactivate_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:reset_password,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:list,/employees/,OK,200,
+company_admin,employees:employee_list,/employees/,OK,200,
+company_admin,employees:employee_add,/employees/add/,OK,200,
+company_admin,employees:employee_create,/employees/add/,OK,200,
+company_admin,employees:add_employee,/employees/add/,OK,200,
+company_admin,employees:employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_print,/employees/print/,OK,200,
+company_admin,employees:employee_print_all,/employees/print/,OK,200,
+company_admin,employees:employees_print,/employees/print/,OK,200,
+company_admin,employees:employees_print_all,/employees/print/,OK,200,
+company_admin,employees:employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees:employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+company_admin,employees:my_balance_view,/employees/my-balance/,REDIRECT,302,
+company_admin,employees:employee_balance,/employees/my-balance/,REDIRECT,302,
+company_admin,employees:my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+company_admin,employees:employee_deductions,/employees/my-deductions/,REDIRECT,302,
+company_admin,employees:employee_search_api,/employees/api/search/,OK,200,
+company_admin,employees:manager_options_api,/employees/api/manager-options/,OK,200,
+company_admin,employees:hierarchy_manage,/employees/hierarchy/,OK,200,
+company_admin,attendance:check_in,/attendance/check-in/,OK,200,
+company_admin,attendance:list,/attendance/,OK,200,
+company_admin,attendance:check_in_old,/attendance/check-in/,OK,200,
+company_admin,attendance:api_check_in,/attendance/api/check-in/,HTTP_405,405,
+company_admin,attendance:api_check_out,/attendance/api/check-out/,HTTP_405,405,
+company_admin,attendance:visits,/attendance/visits/,OK,200,
+company_admin,attendance:visit_add,/attendance/visits/add/,OK,200,
+company_admin,attendance:live_map,/attendance/map/,OK,200,
+company_admin,attendance:api_live_locations,/attendance/api/live-locations/,OK,200,
+company_admin,attendance:tracking,/attendance/tracking/,OK,200,
+company_admin,attendance:api_track,/attendance/api/track/,HTTP_405,405,
+company_admin,attendance:tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+company_admin,attendance:monitor,/attendance/monitor/,OK,200,
+company_admin,attendance:api_monitor,/attendance/api/monitor/,OK,200,
+company_admin,attendance:attendance_list,/attendance/,OK,200,
+company_admin,attendance:check_in_page_old,/attendance/check-in/,OK,200,
+company_admin,attendance:visits_list,/attendance/visits/,OK,200,
+company_admin,attendance:tracking_page,/attendance/tracking/,OK,200,
+company_admin,attendance:employee_tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+company_admin,attendance:field_employees_monitor,/attendance/monitor/,OK,200,
+company_admin,attendance:api_track_location,/attendance/api/track/,HTTP_405,405,
+company_admin,attendance:api_monitor_data,/attendance/api/monitor/,OK,200,
+company_admin,attendance:late_notifications,/attendance/late-notifications/,OK,200,
+company_admin,attendance:late_notification_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,attendance:my_warnings,/attendance/my-warnings/,REDIRECT,302,
+company_admin,attendance:schedule_week,/attendance/schedule/,OK,200,
+company_admin,attendance:assignment_add,/attendance/schedule/assignment/,OK,200,
+company_admin,attendance:stealth_manage,/attendance/stealth-manage/,OK,200,
+company_admin,attendance:stealth_alerts,/attendance/stealth-alerts/,OK,200,
+company_admin,attendance:api_stealth_location,/attendance/api/stealth-location/,OK,200,
+company_admin,attendance:override,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,subscriptions:upsell,/subscriptions/upgrade/module/payroll/,OK,200,
+company_admin,subscriptions:admin_dashboard,/subscriptions/,REDIRECT,302,
+company_admin,subscriptions:plans_list,/subscriptions/plans/,REDIRECT,302,
+company_admin,subscriptions:subscriptions_list,/subscriptions/subscriptions/,REDIRECT,302,
+company_admin,subscriptions:create,/subscriptions/subscriptions/create/,REDIRECT,302,
+company_admin,subscriptions:detail,/subscriptions/subscriptions/1/,REDIRECT,302,
+company_admin,subscriptions:upgrade,/subscriptions/subscriptions/1/upgrade/,REDIRECT,302,
+company_admin,subscriptions:extend,/subscriptions/subscriptions/1/extend/,REDIRECT,302,
+company_admin,subscriptions:cancel,/subscriptions/subscriptions/1/cancel/,REDIRECT,302,
+company_admin,subscriptions:activate,/subscriptions/subscriptions/1/activate/,REDIRECT,302,
+company_admin,subscriptions:my_subscription,/subscriptions/my-subscription/,OK,200,
+company_admin,subscriptions:my_plan,/subscriptions/my-plan/,OK,200,
+company_admin,subscriptions:upgrade_plan,/subscriptions/upgrade/,OK,200,
+company_admin,subscriptions:feature_locked,/subscriptions/feature-locked/,OK,200,
+company_admin,subscriptions:contact_sales,/subscriptions/contact-sales/,OK,200,
+company_admin,companies:charter_print_signature,,UNRESOLVED,,Missing sample kwargs: ['signature_id']
+company_admin,companies:charter_acceptance_status,/companies/charter/1/acceptance-status/,OK,200,
+company_admin,companies:charter_sign,/companies/charter/1/sign/,REDIRECT,302,
+company_admin,companies:settings,/companies/settings/,OK,200,
+company_admin,companies:charter,/companies/charter/,OK,200,
+company_admin,companies:charter_accept,/companies/charter/accept/,REDIRECT,302,
+company_admin,companies:charter_manage,/companies/charter/manage/,OK,200,
+company_admin,companies:policies,/companies/policies/,OK,200,
+company_admin,companies:branches_list,/companies/branches/,OK,200,
+company_admin,companies:branch_add,/companies/branches/add/,OK,200,
+company_admin,companies:branch_edit,/companies/branches/1/edit/,OK,200,
+company_admin,companies:branch_delete,/companies/branches/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+company_admin,companies:departments_list,/companies/departments/,OK,200,
+company_admin,companies:department_add,/companies/departments/add/,OK,200,
+company_admin,companies:department_edit,/companies/departments/1/edit/,OK,200,
+company_admin,companies:department_delete,/companies/departments/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+company_admin,companies:shifts_list,/companies/shifts/,OK,200,
+company_admin,companies:shift_add,/companies/shifts/add/,OK,200,
+company_admin,companies:shift_edit,/companies/shifts/1/edit/,NOT_FOUND,404,
+company_admin,companies:shift_delete,/companies/shifts/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+company_admin,companies:approval_flows,/companies/approval-flows/,OK,200,
+company_admin,companies:delegations,/companies/delegations/,OK,200,
+company_admin,companies:delegation_add,/companies/delegations/add/,OK,200,
+company_admin,companies:delegation_deactivate,/companies/delegations/1/deactivate/,SKIPPED,,Destructive or special route — skipped for safety
+company_admin,companies:notification_settings,/companies/notification-settings/,OK,200,
+company_admin,leaves:leave_types_list,/leaves/types/,OK,200,
+company_admin,leaves:leave_type_add,/leaves/types/add/,OK,200,
+company_admin,leaves:leave_type_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,leaves:leave_type_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,leaves:leave_requests_list,/leaves/,OK,200,
+company_admin,leaves:leave_request_add,/leaves/add/,OK,200,
+company_admin,leaves:leave_request_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,leaves:leave_approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,leaves:leave_reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,leaves:leave_cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,leaves:leave_balances,/leaves/balances/,OK,200,
+company_admin,leaves:set_leave_balance,/leaves/balances/set/,HTTP_405,405,
+company_admin,requests_app:list,/requests/,OK,200,
+company_admin,requests_app:add,/requests/add/,OK,200,
+company_admin,requests_app:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,requests_app:approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,requests_app:reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,requests_app:cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,reports:home,/reports/,OK,200,
+company_admin,reports:attendance,/reports/attendance/,OK,200,
+company_admin,reports:late,/reports/late/,EXCEPTION,,"Reverse for 'comprehensive_profile' with arguments '('',)' not found. 1 pattern(s) tried: ['employees/(?P<pk>[0-9]+)/profile/\\Z']"
+company_admin,reports:leaves,/reports/leaves/,EXCEPTION,,"Reverse for 'comprehensive_profile' with arguments '('',)' not found. 1 pattern(s) tried: ['employees/(?P<pk>[0-9]+)/profile/\\Z']"
+company_admin,reports:field,/reports/field/,OK,200,
+company_admin,reports:employees,/reports/employees/,EXCEPTION,,The view reports.views.employees_report didn't return an HttpResponse object. It returned None instead.
+company_admin,employee_list,/employees/,OK,200,
+company_admin,employee_add,/employees/add/,OK,200,
+company_admin,employee_create,/employees/add/,OK,200,
+company_admin,add_employee,/employees/add/,OK,200,
+company_admin,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_print,/employees/print/,OK,200,
+company_admin,employee_print_all,/employees/print/,OK,200,
+company_admin,employees_print,/employees/print/,OK,200,
+company_admin,employees_print_all,/employees/print/,OK,200,
+company_admin,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+company_admin,my_balance_view,/employees/my-balance/,REDIRECT,302,
+company_admin,employee_balance,/employees/my-balance/,REDIRECT,302,
+company_admin,my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+company_admin,employee_deductions,/employees/my-deductions/,REDIRECT,302,
+company_admin,employee_search_api,/employees/api/search/,OK,200,
+company_admin,manager_options_api,/employees/api/manager-options/,OK,200,
+company_admin,hierarchy_manage,/employees/hierarchy/,OK,200,
+company_admin,employee_list,/employees/,OK,200,
+company_admin,employee_add,/employees/add/,OK,200,
+company_admin,employee_create,/employees/add/,OK,200,
+company_admin,add_employee,/employees/add/,OK,200,
+company_admin,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_print,/employees/print/,OK,200,
+company_admin,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+company_admin,my_balance_view,/employees/my-balance/,REDIRECT,302,
+company_admin,my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+company_admin,employee_search_api,/employees/api/search/,OK,200,
+hr_manager,landing:home,/,REDIRECT,302,
+hr_manager,landing:about,/about/,OK,200,
+hr_manager,landing:contact,/contact/,OK,200,
+hr_manager,landing:pricing,/pricing/,OK,200,
+hr_manager,landing:free_trial,/free-trial/,OK,200,
+hr_manager,landing:free_trial_success,/free-trial/success/,REDIRECT,302,
+hr_manager,login,/login/,REDIRECT,302,
+hr_manager,logout,/logout/,SKIPPED,,Destructive or special route — skipped for safety
+hr_manager,password_reset,/password-reset/,OK,200,
+hr_manager,password_reset_done,/password-reset/done/,OK,200,
+hr_manager,password_reset_confirm,,UNRESOLVED,,"Missing sample kwargs: ['uidb64', 'token']"
+hr_manager,password_reset_complete,/password-reset-complete/,OK,200,
+hr_manager,password_change,/password-change/,OK,200,
+hr_manager,password_change_done,/password-change/done/,OK,200,
+hr_manager,dashboard,/dashboard/,OK,200,
+hr_manager,global_search,/search/,OK,200,
+hr_manager,offline,/offline/,OK,200,
+hr_manager,manifest,/manifest.json,OK,200,
+hr_manager,service_worker,/sw.js,OK,200,
+hr_manager,accounts:login_settings,/accounts/login-settings/,OK,200,
+hr_manager,accounts:profile,/accounts/profile/,OK,200,
+hr_manager,accounts:profile_update,/accounts/profile/update/,REDIRECT,302,
+hr_manager,accounts:notifications,/accounts/notifications/,OK,200,
+hr_manager,accounts:send_employee_notification,/accounts/notifications/send/,OK,200,
+hr_manager,accounts:push_subscribe,/accounts/push-subscribe/,HTTP_405,405,
+hr_manager,accounts:push_unsubscribe,/accounts/push-unsubscribe/,HTTP_405,405,
+hr_manager,employees:folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+hr_manager,employees:folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:search_api,/employees/api/search/,OK,200,
+hr_manager,employees:manager_options_api,/employees/api/manager-options/,OK,200,
+hr_manager,employees:hierarchy_manage,/employees/hierarchy/,OK,200,
+hr_manager,employees:add,/employees/add/,OK,200,
+hr_manager,employees:print_all,/employees/print/,OK,200,
+hr_manager,employees:my_balance,/employees/my-balance/,OK,200,
+hr_manager,employees:my_deductions,/employees/my-deductions/,OK,200,
+hr_manager,employees:edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:create_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:deactivate_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:reset_password,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:list,/employees/,OK,200,
+hr_manager,employees:employee_list,/employees/,OK,200,
+hr_manager,employees:employee_add,/employees/add/,OK,200,
+hr_manager,employees:employee_create,/employees/add/,OK,200,
+hr_manager,employees:add_employee,/employees/add/,OK,200,
+hr_manager,employees:employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_print,/employees/print/,OK,200,
+hr_manager,employees:employee_print_all,/employees/print/,OK,200,
+hr_manager,employees:employees_print,/employees/print/,OK,200,
+hr_manager,employees:employees_print_all,/employees/print/,OK,200,
+hr_manager,employees:employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees:employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+hr_manager,employees:my_balance_view,/employees/my-balance/,OK,200,
+hr_manager,employees:employee_balance,/employees/my-balance/,OK,200,
+hr_manager,employees:my_deductions_view,/employees/my-deductions/,OK,200,
+hr_manager,employees:employee_deductions,/employees/my-deductions/,OK,200,
+hr_manager,employees:employee_search_api,/employees/api/search/,OK,200,
+hr_manager,employees:manager_options_api,/employees/api/manager-options/,OK,200,
+hr_manager,employees:hierarchy_manage,/employees/hierarchy/,OK,200,
+hr_manager,attendance:check_in,/attendance/check-in/,OK,200,
+hr_manager,attendance:list,/attendance/,OK,200,
+hr_manager,attendance:check_in_old,/attendance/check-in/,OK,200,
+hr_manager,attendance:api_check_in,/attendance/api/check-in/,HTTP_405,405,
+hr_manager,attendance:api_check_out,/attendance/api/check-out/,HTTP_405,405,
+hr_manager,attendance:visits,/attendance/visits/,OK,200,
+hr_manager,attendance:visit_add,/attendance/visits/add/,OK,200,
+hr_manager,attendance:live_map,/attendance/map/,OK,200,
+hr_manager,attendance:api_live_locations,/attendance/api/live-locations/,OK,200,
+hr_manager,attendance:tracking,/attendance/tracking/,OK,200,
+hr_manager,attendance:api_track,/attendance/api/track/,HTTP_405,405,
+hr_manager,attendance:tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+hr_manager,attendance:monitor,/attendance/monitor/,OK,200,
+hr_manager,attendance:api_monitor,/attendance/api/monitor/,OK,200,
+hr_manager,attendance:attendance_list,/attendance/,OK,200,
+hr_manager,attendance:check_in_page_old,/attendance/check-in/,OK,200,
+hr_manager,attendance:visits_list,/attendance/visits/,OK,200,
+hr_manager,attendance:tracking_page,/attendance/tracking/,OK,200,
+hr_manager,attendance:employee_tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+hr_manager,attendance:field_employees_monitor,/attendance/monitor/,OK,200,
+hr_manager,attendance:api_track_location,/attendance/api/track/,HTTP_405,405,
+hr_manager,attendance:api_monitor_data,/attendance/api/monitor/,OK,200,
+hr_manager,attendance:late_notifications,/attendance/late-notifications/,OK,200,
+hr_manager,attendance:late_notification_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,attendance:my_warnings,/attendance/my-warnings/,OK,200,
+hr_manager,attendance:schedule_week,/attendance/schedule/,OK,200,
+hr_manager,attendance:assignment_add,/attendance/schedule/assignment/,OK,200,
+hr_manager,attendance:stealth_manage,/attendance/stealth-manage/,OK,200,
+hr_manager,attendance:stealth_alerts,/attendance/stealth-alerts/,OK,200,
+hr_manager,attendance:api_stealth_location,/attendance/api/stealth-location/,OK,200,
+hr_manager,attendance:override,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,subscriptions:upsell,/subscriptions/upgrade/module/payroll/,OK,200,
+hr_manager,subscriptions:admin_dashboard,/subscriptions/,REDIRECT,302,
+hr_manager,subscriptions:plans_list,/subscriptions/plans/,REDIRECT,302,
+hr_manager,subscriptions:subscriptions_list,/subscriptions/subscriptions/,REDIRECT,302,
+hr_manager,subscriptions:create,/subscriptions/subscriptions/create/,REDIRECT,302,
+hr_manager,subscriptions:detail,/subscriptions/subscriptions/1/,REDIRECT,302,
+hr_manager,subscriptions:upgrade,/subscriptions/subscriptions/1/upgrade/,REDIRECT,302,
+hr_manager,subscriptions:extend,/subscriptions/subscriptions/1/extend/,REDIRECT,302,
+hr_manager,subscriptions:cancel,/subscriptions/subscriptions/1/cancel/,REDIRECT,302,
+hr_manager,subscriptions:activate,/subscriptions/subscriptions/1/activate/,REDIRECT,302,
+hr_manager,subscriptions:my_subscription,/subscriptions/my-subscription/,OK,200,
+hr_manager,subscriptions:my_plan,/subscriptions/my-plan/,OK,200,
+hr_manager,subscriptions:upgrade_plan,/subscriptions/upgrade/,OK,200,
+hr_manager,subscriptions:feature_locked,/subscriptions/feature-locked/,OK,200,
+hr_manager,subscriptions:contact_sales,/subscriptions/contact-sales/,OK,200,
+hr_manager,companies:charter_print_signature,,UNRESOLVED,,Missing sample kwargs: ['signature_id']
+hr_manager,companies:charter_acceptance_status,/companies/charter/1/acceptance-status/,OK,200,
+hr_manager,companies:charter_sign,/companies/charter/1/sign/,OK,200,
+hr_manager,companies:settings,/companies/settings/,OK,200,
+hr_manager,companies:charter,/companies/charter/,OK,200,
+hr_manager,companies:charter_accept,/companies/charter/accept/,REDIRECT,302,
+hr_manager,companies:charter_manage,/companies/charter/manage/,OK,200,
+hr_manager,companies:policies,/companies/policies/,OK,200,
+hr_manager,companies:branches_list,/companies/branches/,OK,200,
+hr_manager,companies:branch_add,/companies/branches/add/,OK,200,
+hr_manager,companies:branch_edit,/companies/branches/1/edit/,OK,200,
+hr_manager,companies:branch_delete,/companies/branches/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+hr_manager,companies:departments_list,/companies/departments/,OK,200,
+hr_manager,companies:department_add,/companies/departments/add/,OK,200,
+hr_manager,companies:department_edit,/companies/departments/1/edit/,OK,200,
+hr_manager,companies:department_delete,/companies/departments/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+hr_manager,companies:shifts_list,/companies/shifts/,OK,200,
+hr_manager,companies:shift_add,/companies/shifts/add/,OK,200,
+hr_manager,companies:shift_edit,/companies/shifts/1/edit/,NOT_FOUND,404,
+hr_manager,companies:shift_delete,/companies/shifts/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+hr_manager,companies:approval_flows,/companies/approval-flows/,OK,200,
+hr_manager,companies:delegations,/companies/delegations/,OK,200,
+hr_manager,companies:delegation_add,/companies/delegations/add/,OK,200,
+hr_manager,companies:delegation_deactivate,/companies/delegations/1/deactivate/,SKIPPED,,Destructive or special route — skipped for safety
+hr_manager,companies:notification_settings,/companies/notification-settings/,OK,200,
+hr_manager,leaves:leave_types_list,/leaves/types/,OK,200,
+hr_manager,leaves:leave_type_add,/leaves/types/add/,OK,200,
+hr_manager,leaves:leave_type_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,leaves:leave_type_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,leaves:leave_requests_list,/leaves/,OK,200,
+hr_manager,leaves:leave_request_add,/leaves/add/,OK,200,
+hr_manager,leaves:leave_request_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,leaves:leave_approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,leaves:leave_reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,leaves:leave_cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,leaves:leave_balances,/leaves/balances/,OK,200,
+hr_manager,leaves:set_leave_balance,/leaves/balances/set/,HTTP_405,405,
+hr_manager,requests_app:list,/requests/,OK,200,
+hr_manager,requests_app:add,/requests/add/,OK,200,
+hr_manager,requests_app:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,requests_app:approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,requests_app:reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,requests_app:cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,reports:home,/reports/,OK,200,
+hr_manager,reports:attendance,/reports/attendance/,OK,200,
+hr_manager,reports:late,/reports/late/,EXCEPTION,,"Reverse for 'comprehensive_profile' with arguments '('',)' not found. 1 pattern(s) tried: ['employees/(?P<pk>[0-9]+)/profile/\\Z']"
+hr_manager,reports:leaves,/reports/leaves/,EXCEPTION,,"Reverse for 'comprehensive_profile' with arguments '('',)' not found. 1 pattern(s) tried: ['employees/(?P<pk>[0-9]+)/profile/\\Z']"
+hr_manager,reports:field,/reports/field/,OK,200,
+hr_manager,reports:employees,/reports/employees/,EXCEPTION,,The view reports.views.employees_report didn't return an HttpResponse object. It returned None instead.
+hr_manager,employee_list,/employees/,OK,200,
+hr_manager,employee_add,/employees/add/,OK,200,
+hr_manager,employee_create,/employees/add/,OK,200,
+hr_manager,add_employee,/employees/add/,OK,200,
+hr_manager,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_print,/employees/print/,OK,200,
+hr_manager,employee_print_all,/employees/print/,OK,200,
+hr_manager,employees_print,/employees/print/,OK,200,
+hr_manager,employees_print_all,/employees/print/,OK,200,
+hr_manager,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+hr_manager,my_balance_view,/employees/my-balance/,OK,200,
+hr_manager,employee_balance,/employees/my-balance/,OK,200,
+hr_manager,my_deductions_view,/employees/my-deductions/,OK,200,
+hr_manager,employee_deductions,/employees/my-deductions/,OK,200,
+hr_manager,employee_search_api,/employees/api/search/,OK,200,
+hr_manager,manager_options_api,/employees/api/manager-options/,OK,200,
+hr_manager,hierarchy_manage,/employees/hierarchy/,OK,200,
+hr_manager,employee_list,/employees/,OK,200,
+hr_manager,employee_add,/employees/add/,OK,200,
+hr_manager,employee_create,/employees/add/,OK,200,
+hr_manager,add_employee,/employees/add/,OK,200,
+hr_manager,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_print,/employees/print/,OK,200,
+hr_manager,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+hr_manager,my_balance_view,/employees/my-balance/,OK,200,
+hr_manager,my_deductions_view,/employees/my-deductions/,OK,200,
+hr_manager,employee_search_api,/employees/api/search/,OK,200,
+manager,landing:home,/,REDIRECT,302,
+manager,landing:about,/about/,OK,200,
+manager,landing:contact,/contact/,OK,200,
+manager,landing:pricing,/pricing/,OK,200,
+manager,landing:free_trial,/free-trial/,OK,200,
+manager,landing:free_trial_success,/free-trial/success/,REDIRECT,302,
+manager,login,/login/,REDIRECT,302,
+manager,logout,/logout/,SKIPPED,,Destructive or special route — skipped for safety
+manager,password_reset,/password-reset/,OK,200,
+manager,password_reset_done,/password-reset/done/,OK,200,
+manager,password_reset_confirm,,UNRESOLVED,,"Missing sample kwargs: ['uidb64', 'token']"
+manager,password_reset_complete,/password-reset-complete/,OK,200,
+manager,password_change,/password-change/,OK,200,
+manager,password_change_done,/password-change/done/,OK,200,
+manager,dashboard,/dashboard/,OK,200,
+manager,global_search,/search/,OK,200,
+manager,offline,/offline/,OK,200,
+manager,manifest,/manifest.json,OK,200,
+manager,service_worker,/sw.js,OK,200,
+manager,accounts:login_settings,/accounts/login-settings/,OK,200,
+manager,accounts:profile,/accounts/profile/,OK,200,
+manager,accounts:profile_update,/accounts/profile/update/,REDIRECT,302,
+manager,accounts:notifications,/accounts/notifications/,OK,200,
+manager,accounts:send_employee_notification,/accounts/notifications/send/,REDIRECT,302,
+manager,accounts:push_subscribe,/accounts/push-subscribe/,HTTP_405,405,
+manager,accounts:push_unsubscribe,/accounts/push-unsubscribe/,HTTP_405,405,
+manager,employees:folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+manager,employees:folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:search_api,/employees/api/search/,OK,200,
+manager,employees:manager_options_api,/employees/api/manager-options/,OK,200,
+manager,employees:hierarchy_manage,/employees/hierarchy/,FORBIDDEN,403,
+manager,employees:add,/employees/add/,FORBIDDEN,403,
+manager,employees:print_all,/employees/print/,OK,200,
+manager,employees:my_balance,/employees/my-balance/,OK,200,
+manager,employees:my_deductions,/employees/my-deductions/,OK,200,
+manager,employees:edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:create_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:deactivate_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:reset_password,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:list,/employees/,OK,200,
+manager,employees:employee_list,/employees/,OK,200,
+manager,employees:employee_add,/employees/add/,FORBIDDEN,403,
+manager,employees:employee_create,/employees/add/,FORBIDDEN,403,
+manager,employees:add_employee,/employees/add/,FORBIDDEN,403,
+manager,employees:employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_print,/employees/print/,OK,200,
+manager,employees:employee_print_all,/employees/print/,OK,200,
+manager,employees:employees_print,/employees/print/,OK,200,
+manager,employees:employees_print_all,/employees/print/,OK,200,
+manager,employees:employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees:employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+manager,employees:my_balance_view,/employees/my-balance/,OK,200,
+manager,employees:employee_balance,/employees/my-balance/,OK,200,
+manager,employees:my_deductions_view,/employees/my-deductions/,OK,200,
+manager,employees:employee_deductions,/employees/my-deductions/,OK,200,
+manager,employees:employee_search_api,/employees/api/search/,OK,200,
+manager,employees:manager_options_api,/employees/api/manager-options/,OK,200,
+manager,employees:hierarchy_manage,/employees/hierarchy/,FORBIDDEN,403,
+manager,attendance:check_in,/attendance/check-in/,OK,200,
+manager,attendance:list,/attendance/,OK,200,
+manager,attendance:check_in_old,/attendance/check-in/,OK,200,
+manager,attendance:api_check_in,/attendance/api/check-in/,HTTP_405,405,
+manager,attendance:api_check_out,/attendance/api/check-out/,HTTP_405,405,
+manager,attendance:visits,/attendance/visits/,OK,200,
+manager,attendance:visit_add,/attendance/visits/add/,OK,200,
+manager,attendance:live_map,/attendance/map/,OK,200,
+manager,attendance:api_live_locations,/attendance/api/live-locations/,OK,200,
+manager,attendance:tracking,/attendance/tracking/,OK,200,
+manager,attendance:api_track,/attendance/api/track/,HTTP_405,405,
+manager,attendance:tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+manager,attendance:monitor,/attendance/monitor/,OK,200,
+manager,attendance:api_monitor,/attendance/api/monitor/,OK,200,
+manager,attendance:attendance_list,/attendance/,OK,200,
+manager,attendance:check_in_page_old,/attendance/check-in/,OK,200,
+manager,attendance:visits_list,/attendance/visits/,OK,200,
+manager,attendance:tracking_page,/attendance/tracking/,OK,200,
+manager,attendance:employee_tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+manager,attendance:field_employees_monitor,/attendance/monitor/,OK,200,
+manager,attendance:api_track_location,/attendance/api/track/,HTTP_405,405,
+manager,attendance:api_monitor_data,/attendance/api/monitor/,OK,200,
+manager,attendance:late_notifications,/attendance/late-notifications/,OK,200,
+manager,attendance:late_notification_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,attendance:my_warnings,/attendance/my-warnings/,OK,200,
+manager,attendance:schedule_week,/attendance/schedule/,OK,200,
+manager,attendance:assignment_add,/attendance/schedule/assignment/,OK,200,
+manager,attendance:stealth_manage,/attendance/stealth-manage/,OK,200,
+manager,attendance:stealth_alerts,/attendance/stealth-alerts/,OK,200,
+manager,attendance:api_stealth_location,/attendance/api/stealth-location/,OK,200,
+manager,attendance:override,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,subscriptions:upsell,/subscriptions/upgrade/module/payroll/,OK,200,
+manager,subscriptions:admin_dashboard,/subscriptions/,REDIRECT,302,
+manager,subscriptions:plans_list,/subscriptions/plans/,REDIRECT,302,
+manager,subscriptions:subscriptions_list,/subscriptions/subscriptions/,REDIRECT,302,
+manager,subscriptions:create,/subscriptions/subscriptions/create/,REDIRECT,302,
+manager,subscriptions:detail,/subscriptions/subscriptions/1/,REDIRECT,302,
+manager,subscriptions:upgrade,/subscriptions/subscriptions/1/upgrade/,REDIRECT,302,
+manager,subscriptions:extend,/subscriptions/subscriptions/1/extend/,REDIRECT,302,
+manager,subscriptions:cancel,/subscriptions/subscriptions/1/cancel/,REDIRECT,302,
+manager,subscriptions:activate,/subscriptions/subscriptions/1/activate/,REDIRECT,302,
+manager,subscriptions:my_subscription,/subscriptions/my-subscription/,OK,200,
+manager,subscriptions:my_plan,/subscriptions/my-plan/,OK,200,
+manager,subscriptions:upgrade_plan,/subscriptions/upgrade/,OK,200,
+manager,subscriptions:feature_locked,/subscriptions/feature-locked/,OK,200,
+manager,subscriptions:contact_sales,/subscriptions/contact-sales/,OK,200,
+manager,companies:charter_print_signature,,UNRESOLVED,,Missing sample kwargs: ['signature_id']
+manager,companies:charter_acceptance_status,/companies/charter/1/acceptance-status/,FORBIDDEN,403,
+manager,companies:charter_sign,/companies/charter/1/sign/,OK,200,
+manager,companies:settings,/companies/settings/,OK,200,
+manager,companies:charter,/companies/charter/,OK,200,
+manager,companies:charter_accept,/companies/charter/accept/,REDIRECT,302,
+manager,companies:charter_manage,/companies/charter/manage/,OK,200,
+manager,companies:policies,/companies/policies/,OK,200,
+manager,companies:branches_list,/companies/branches/,OK,200,
+manager,companies:branch_add,/companies/branches/add/,OK,200,
+manager,companies:branch_edit,/companies/branches/1/edit/,OK,200,
+manager,companies:branch_delete,/companies/branches/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+manager,companies:departments_list,/companies/departments/,OK,200,
+manager,companies:department_add,/companies/departments/add/,OK,200,
+manager,companies:department_edit,/companies/departments/1/edit/,OK,200,
+manager,companies:department_delete,/companies/departments/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+manager,companies:shifts_list,/companies/shifts/,OK,200,
+manager,companies:shift_add,/companies/shifts/add/,OK,200,
+manager,companies:shift_edit,/companies/shifts/1/edit/,NOT_FOUND,404,
+manager,companies:shift_delete,/companies/shifts/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+manager,companies:approval_flows,/companies/approval-flows/,REDIRECT,302,
+manager,companies:delegations,/companies/delegations/,OK,200,
+manager,companies:delegation_add,/companies/delegations/add/,OK,200,
+manager,companies:delegation_deactivate,/companies/delegations/1/deactivate/,SKIPPED,,Destructive or special route — skipped for safety
+manager,companies:notification_settings,/companies/notification-settings/,REDIRECT,302,
+manager,leaves:leave_types_list,/leaves/types/,OK,200,
+manager,leaves:leave_type_add,/leaves/types/add/,OK,200,
+manager,leaves:leave_type_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,leaves:leave_type_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,leaves:leave_requests_list,/leaves/,OK,200,
+manager,leaves:leave_request_add,/leaves/add/,OK,200,
+manager,leaves:leave_request_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,leaves:leave_approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,leaves:leave_reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,leaves:leave_cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,leaves:leave_balances,/leaves/balances/,OK,200,
+manager,leaves:set_leave_balance,/leaves/balances/set/,HTTP_405,405,
+manager,requests_app:list,/requests/,OK,200,
+manager,requests_app:add,/requests/add/,OK,200,
+manager,requests_app:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,requests_app:approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,requests_app:reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,requests_app:cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,reports:home,/reports/,OK,200,
+manager,reports:attendance,/reports/attendance/,OK,200,
+manager,reports:late,/reports/late/,EXCEPTION,,"Reverse for 'comprehensive_profile' with arguments '('',)' not found. 1 pattern(s) tried: ['employees/(?P<pk>[0-9]+)/profile/\\Z']"
+manager,reports:leaves,/reports/leaves/,EXCEPTION,,"Reverse for 'comprehensive_profile' with arguments '('',)' not found. 1 pattern(s) tried: ['employees/(?P<pk>[0-9]+)/profile/\\Z']"
+manager,reports:field,/reports/field/,OK,200,
+manager,reports:employees,/reports/employees/,EXCEPTION,,The view reports.views.employees_report didn't return an HttpResponse object. It returned None instead.
+manager,employee_list,/employees/,OK,200,
+manager,employee_add,/employees/add/,FORBIDDEN,403,
+manager,employee_create,/employees/add/,FORBIDDEN,403,
+manager,add_employee,/employees/add/,FORBIDDEN,403,
+manager,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_print,/employees/print/,OK,200,
+manager,employee_print_all,/employees/print/,OK,200,
+manager,employees_print,/employees/print/,OK,200,
+manager,employees_print_all,/employees/print/,OK,200,
+manager,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+manager,my_balance_view,/employees/my-balance/,OK,200,
+manager,employee_balance,/employees/my-balance/,OK,200,
+manager,my_deductions_view,/employees/my-deductions/,OK,200,
+manager,employee_deductions,/employees/my-deductions/,OK,200,
+manager,employee_search_api,/employees/api/search/,OK,200,
+manager,manager_options_api,/employees/api/manager-options/,OK,200,
+manager,hierarchy_manage,/employees/hierarchy/,FORBIDDEN,403,
+manager,employee_list,/employees/,OK,200,
+manager,employee_add,/employees/add/,FORBIDDEN,403,
+manager,employee_create,/employees/add/,FORBIDDEN,403,
+manager,add_employee,/employees/add/,FORBIDDEN,403,
+manager,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_print,/employees/print/,OK,200,
+manager,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+manager,my_balance_view,/employees/my-balance/,OK,200,
+manager,my_deductions_view,/employees/my-deductions/,OK,200,
+manager,employee_search_api,/employees/api/search/,OK,200,
+employee,landing:home,/,REDIRECT,302,
+employee,landing:about,/about/,OK,200,
+employee,landing:contact,/contact/,OK,200,
+employee,landing:pricing,/pricing/,OK,200,
+employee,landing:free_trial,/free-trial/,OK,200,
+employee,landing:free_trial_success,/free-trial/success/,REDIRECT,302,
+employee,login,/login/,REDIRECT,302,
+employee,logout,/logout/,SKIPPED,,Destructive or special route — skipped for safety
+employee,password_reset,/password-reset/,OK,200,
+employee,password_reset_done,/password-reset/done/,OK,200,
+employee,password_reset_confirm,,UNRESOLVED,,"Missing sample kwargs: ['uidb64', 'token']"
+employee,password_reset_complete,/password-reset-complete/,OK,200,
+employee,password_change,/password-change/,OK,200,
+employee,password_change_done,/password-change/done/,OK,200,
+employee,dashboard,/dashboard/,OK,200,
+employee,global_search,/search/,OK,200,
+employee,offline,/offline/,OK,200,
+employee,manifest,/manifest.json,OK,200,
+employee,service_worker,/sw.js,OK,200,
+employee,accounts:login_settings,/accounts/login-settings/,REDIRECT,302,
+employee,accounts:profile,/accounts/profile/,OK,200,
+employee,accounts:profile_update,/accounts/profile/update/,REDIRECT,302,
+employee,accounts:notifications,/accounts/notifications/,OK,200,
+employee,accounts:send_employee_notification,/accounts/notifications/send/,REDIRECT,302,
+employee,accounts:push_subscribe,/accounts/push-subscribe/,HTTP_405,405,
+employee,accounts:push_unsubscribe,/accounts/push-unsubscribe/,HTTP_405,405,
+employee,employees:folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+employee,employees:folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:search_api,/employees/api/search/,REDIRECT,302,
+employee,employees:manager_options_api,/employees/api/manager-options/,REDIRECT,302,
+employee,employees:hierarchy_manage,/employees/hierarchy/,REDIRECT,302,
+employee,employees:add,/employees/add/,REDIRECT,302,
+employee,employees:print_all,/employees/print/,REDIRECT,302,
+employee,employees:my_balance,/employees/my-balance/,REDIRECT,302,
+employee,employees:my_deductions,/employees/my-deductions/,REDIRECT,302,
+employee,employees:edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:create_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:deactivate_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:reset_password,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:list,/employees/,REDIRECT,302,
+employee,employees:employee_list,/employees/,REDIRECT,302,
+employee,employees:employee_add,/employees/add/,REDIRECT,302,
+employee,employees:employee_create,/employees/add/,REDIRECT,302,
+employee,employees:add_employee,/employees/add/,REDIRECT,302,
+employee,employees:employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_print,/employees/print/,REDIRECT,302,
+employee,employees:employee_print_all,/employees/print/,REDIRECT,302,
+employee,employees:employees_print,/employees/print/,REDIRECT,302,
+employee,employees:employees_print_all,/employees/print/,REDIRECT,302,
+employee,employees:employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees:employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+employee,employees:my_balance_view,/employees/my-balance/,REDIRECT,302,
+employee,employees:employee_balance,/employees/my-balance/,REDIRECT,302,
+employee,employees:my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+employee,employees:employee_deductions,/employees/my-deductions/,REDIRECT,302,
+employee,employees:employee_search_api,/employees/api/search/,REDIRECT,302,
+employee,employees:manager_options_api,/employees/api/manager-options/,REDIRECT,302,
+employee,employees:hierarchy_manage,/employees/hierarchy/,REDIRECT,302,
+employee,attendance:check_in,/attendance/check-in/,OK,200,
+employee,attendance:list,/attendance/,REDIRECT,302,
+employee,attendance:check_in_old,/attendance/check-in/,OK,200,
+employee,attendance:api_check_in,/attendance/api/check-in/,HTTP_405,405,
+employee,attendance:api_check_out,/attendance/api/check-out/,HTTP_405,405,
+employee,attendance:visits,/attendance/visits/,REDIRECT,302,
+employee,attendance:visit_add,/attendance/visits/add/,REDIRECT,302,
+employee,attendance:live_map,/attendance/map/,REDIRECT,302,
+employee,attendance:api_live_locations,/attendance/api/live-locations/,OK,200,
+employee,attendance:tracking,/attendance/tracking/,REDIRECT,302,
+employee,attendance:api_track,/attendance/api/track/,HTTP_405,405,
+employee,attendance:tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+employee,attendance:monitor,/attendance/monitor/,REDIRECT,302,
+employee,attendance:api_monitor,/attendance/api/monitor/,OK,200,
+employee,attendance:attendance_list,/attendance/,REDIRECT,302,
+employee,attendance:check_in_page_old,/attendance/check-in/,OK,200,
+employee,attendance:visits_list,/attendance/visits/,REDIRECT,302,
+employee,attendance:tracking_page,/attendance/tracking/,REDIRECT,302,
+employee,attendance:employee_tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+employee,attendance:field_employees_monitor,/attendance/monitor/,REDIRECT,302,
+employee,attendance:api_track_location,/attendance/api/track/,HTTP_405,405,
+employee,attendance:api_monitor_data,/attendance/api/monitor/,OK,200,
+employee,attendance:late_notifications,/attendance/late-notifications/,REDIRECT,302,
+employee,attendance:late_notification_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,attendance:my_warnings,/attendance/my-warnings/,REDIRECT,302,
+employee,attendance:schedule_week,/attendance/schedule/,REDIRECT,302,
+employee,attendance:assignment_add,/attendance/schedule/assignment/,REDIRECT,302,
+employee,attendance:stealth_manage,/attendance/stealth-manage/,OK,200,
+employee,attendance:stealth_alerts,/attendance/stealth-alerts/,REDIRECT,302,
+employee,attendance:api_stealth_location,/attendance/api/stealth-location/,OK,200,
+employee,attendance:override,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,subscriptions:upsell,/subscriptions/upgrade/module/payroll/,OK,200,
+employee,subscriptions:admin_dashboard,/subscriptions/,REDIRECT,302,
+employee,subscriptions:plans_list,/subscriptions/plans/,REDIRECT,302,
+employee,subscriptions:subscriptions_list,/subscriptions/subscriptions/,REDIRECT,302,
+employee,subscriptions:create,/subscriptions/subscriptions/create/,REDIRECT,302,
+employee,subscriptions:detail,/subscriptions/subscriptions/1/,REDIRECT,302,
+employee,subscriptions:upgrade,/subscriptions/subscriptions/1/upgrade/,REDIRECT,302,
+employee,subscriptions:extend,/subscriptions/subscriptions/1/extend/,REDIRECT,302,
+employee,subscriptions:cancel,/subscriptions/subscriptions/1/cancel/,REDIRECT,302,
+employee,subscriptions:activate,/subscriptions/subscriptions/1/activate/,REDIRECT,302,
+employee,subscriptions:my_subscription,/subscriptions/my-subscription/,OK,200,
+employee,subscriptions:my_plan,/subscriptions/my-plan/,OK,200,
+employee,subscriptions:upgrade_plan,/subscriptions/upgrade/,OK,200,
+employee,subscriptions:feature_locked,/subscriptions/feature-locked/,OK,200,
+employee,subscriptions:contact_sales,/subscriptions/contact-sales/,OK,200,
+employee,companies:charter_print_signature,,UNRESOLVED,,Missing sample kwargs: ['signature_id']
+employee,companies:charter_acceptance_status,/companies/charter/1/acceptance-status/,FORBIDDEN,403,
+employee,companies:charter_sign,/companies/charter/1/sign/,REDIRECT,302,
+employee,companies:settings,/companies/settings/,REDIRECT,302,
+employee,companies:charter,/companies/charter/,OK,200,
+employee,companies:charter_accept,/companies/charter/accept/,REDIRECT,302,
+employee,companies:charter_manage,/companies/charter/manage/,OK,200,
+employee,companies:policies,/companies/policies/,REDIRECT,302,
+employee,companies:branches_list,/companies/branches/,OK,200,
+employee,companies:branch_add,/companies/branches/add/,OK,200,
+employee,companies:branch_edit,/companies/branches/1/edit/,NOT_FOUND,404,
+employee,companies:branch_delete,/companies/branches/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+employee,companies:departments_list,/companies/departments/,FORBIDDEN,403,
+employee,companies:department_add,/companies/departments/add/,OK,200,
+employee,companies:department_edit,/companies/departments/1/edit/,NOT_FOUND,404,
+employee,companies:department_delete,/companies/departments/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+employee,companies:shifts_list,/companies/shifts/,OK,200,
+employee,companies:shift_add,/companies/shifts/add/,OK,200,
+employee,companies:shift_edit,/companies/shifts/1/edit/,NOT_FOUND,404,
+employee,companies:shift_delete,/companies/shifts/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+employee,companies:approval_flows,/companies/approval-flows/,REDIRECT,302,
+employee,companies:delegations,/companies/delegations/,OK,200,
+employee,companies:delegation_add,/companies/delegations/add/,OK,200,
+employee,companies:delegation_deactivate,/companies/delegations/1/deactivate/,SKIPPED,,Destructive or special route — skipped for safety
+employee,companies:notification_settings,/companies/notification-settings/,REDIRECT,302,
+employee,leaves:leave_types_list,/leaves/types/,OK,200,
+employee,leaves:leave_type_add,/leaves/types/add/,OK,200,
+employee,leaves:leave_type_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,leaves:leave_type_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,leaves:leave_requests_list,/leaves/,OK,200,
+employee,leaves:leave_request_add,/leaves/add/,OK,200,
+employee,leaves:leave_request_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,leaves:leave_approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,leaves:leave_reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,leaves:leave_cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,leaves:leave_balances,/leaves/balances/,OK,200,
+employee,leaves:set_leave_balance,/leaves/balances/set/,HTTP_405,405,
+employee,requests_app:list,/requests/,OK,200,
+employee,requests_app:add,/requests/add/,OK,200,
+employee,requests_app:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,requests_app:approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,requests_app:reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,requests_app:cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,reports:home,/reports/,OK,200,
+employee,reports:attendance,/reports/attendance/,EXCEPTION,,"Reverse for 'comprehensive_profile' with arguments '('',)' not found. 1 pattern(s) tried: ['employees/(?P<pk>[0-9]+)/profile/\\Z']"
+employee,reports:late,/reports/late/,EXCEPTION,,"Reverse for 'comprehensive_profile' with arguments '('',)' not found. 1 pattern(s) tried: ['employees/(?P<pk>[0-9]+)/profile/\\Z']"
+employee,reports:leaves,/reports/leaves/,EXCEPTION,,"Reverse for 'comprehensive_profile' with arguments '('',)' not found. 1 pattern(s) tried: ['employees/(?P<pk>[0-9]+)/profile/\\Z']"
+employee,reports:field,/reports/field/,OK,200,
+employee,reports:employees,/reports/employees/,EXCEPTION,,The view reports.views.employees_report didn't return an HttpResponse object. It returned None instead.
+employee,employee_list,/employees/,REDIRECT,302,
+employee,employee_add,/employees/add/,REDIRECT,302,
+employee,employee_create,/employees/add/,REDIRECT,302,
+employee,add_employee,/employees/add/,REDIRECT,302,
+employee,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_print,/employees/print/,REDIRECT,302,
+employee,employee_print_all,/employees/print/,REDIRECT,302,
+employee,employees_print,/employees/print/,REDIRECT,302,
+employee,employees_print_all,/employees/print/,REDIRECT,302,
+employee,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+employee,my_balance_view,/employees/my-balance/,REDIRECT,302,
+employee,employee_balance,/employees/my-balance/,REDIRECT,302,
+employee,my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+employee,employee_deductions,/employees/my-deductions/,REDIRECT,302,
+employee,employee_search_api,/employees/api/search/,REDIRECT,302,
+employee,manager_options_api,/employees/api/manager-options/,REDIRECT,302,
+employee,hierarchy_manage,/employees/hierarchy/,REDIRECT,302,
+employee,employee_list,/employees/,REDIRECT,302,
+employee,employee_add,/employees/add/,REDIRECT,302,
+employee,employee_create,/employees/add/,REDIRECT,302,
+employee,add_employee,/employees/add/,REDIRECT,302,
+employee,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_print,/employees/print/,REDIRECT,302,
+employee,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+employee,my_balance_view,/employees/my-balance/,REDIRECT,302,
+employee,my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+employee,employee_search_api,/employees/api/search/,REDIRECT,302,
+field_employee,landing:home,/,OK,200,
+field_employee,landing:about,/about/,OK,200,
+field_employee,landing:contact,/contact/,OK,200,
+field_employee,landing:pricing,/pricing/,OK,200,
+field_employee,landing:free_trial,/free-trial/,OK,200,
+field_employee,landing:free_trial_success,/free-trial/success/,REDIRECT,302,
+field_employee,login,/login/,OK,200,
+field_employee,logout,/logout/,SKIPPED,,Destructive or special route — skipped for safety
+field_employee,password_reset,/password-reset/,OK,200,
+field_employee,password_reset_done,/password-reset/done/,OK,200,
+field_employee,password_reset_confirm,,UNRESOLVED,,"Missing sample kwargs: ['uidb64', 'token']"
+field_employee,password_reset_complete,/password-reset-complete/,OK,200,
+field_employee,password_change,/password-change/,REDIRECT,302,
+field_employee,password_change_done,/password-change/done/,REDIRECT,302,
+field_employee,dashboard,/dashboard/,REDIRECT,302,
+field_employee,global_search,/search/,REDIRECT,302,
+field_employee,offline,/offline/,OK,200,
+field_employee,manifest,/manifest.json,OK,200,
+field_employee,service_worker,/sw.js,OK,200,
+field_employee,accounts:login_settings,/accounts/login-settings/,REDIRECT,302,
+field_employee,accounts:profile,/accounts/profile/,REDIRECT,302,
+field_employee,accounts:profile_update,/accounts/profile/update/,REDIRECT,302,
+field_employee,accounts:notifications,/accounts/notifications/,REDIRECT,302,
+field_employee,accounts:send_employee_notification,/accounts/notifications/send/,REDIRECT,302,
+field_employee,accounts:push_subscribe,/accounts/push-subscribe/,REDIRECT,302,
+field_employee,accounts:push_unsubscribe,/accounts/push-unsubscribe/,REDIRECT,302,
+field_employee,employees:folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+field_employee,employees:folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:search_api,/employees/api/search/,REDIRECT,302,
+field_employee,employees:manager_options_api,/employees/api/manager-options/,REDIRECT,302,
+field_employee,employees:hierarchy_manage,/employees/hierarchy/,REDIRECT,302,
+field_employee,employees:add,/employees/add/,REDIRECT,302,
+field_employee,employees:print_all,/employees/print/,REDIRECT,302,
+field_employee,employees:my_balance,/employees/my-balance/,REDIRECT,302,
+field_employee,employees:my_deductions,/employees/my-deductions/,REDIRECT,302,
+field_employee,employees:edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:create_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:deactivate_account,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:reset_password,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:list,/employees/,REDIRECT,302,
+field_employee,employees:employee_list,/employees/,REDIRECT,302,
+field_employee,employees:employee_add,/employees/add/,REDIRECT,302,
+field_employee,employees:employee_create,/employees/add/,REDIRECT,302,
+field_employee,employees:add_employee,/employees/add/,REDIRECT,302,
+field_employee,employees:employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_print,/employees/print/,REDIRECT,302,
+field_employee,employees:employee_print_all,/employees/print/,REDIRECT,302,
+field_employee,employees:employees_print,/employees/print/,REDIRECT,302,
+field_employee,employees:employees_print_all,/employees/print/,REDIRECT,302,
+field_employee,employees:employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees:employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+field_employee,employees:my_balance_view,/employees/my-balance/,REDIRECT,302,
+field_employee,employees:employee_balance,/employees/my-balance/,REDIRECT,302,
+field_employee,employees:my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+field_employee,employees:employee_deductions,/employees/my-deductions/,REDIRECT,302,
+field_employee,employees:employee_search_api,/employees/api/search/,REDIRECT,302,
+field_employee,employees:manager_options_api,/employees/api/manager-options/,REDIRECT,302,
+field_employee,employees:hierarchy_manage,/employees/hierarchy/,REDIRECT,302,
+field_employee,attendance:check_in,/attendance/check-in/,REDIRECT,302,
+field_employee,attendance:list,/attendance/,REDIRECT,302,
+field_employee,attendance:check_in_old,/attendance/check-in/,REDIRECT,302,
+field_employee,attendance:api_check_in,/attendance/api/check-in/,REDIRECT,302,
+field_employee,attendance:api_check_out,/attendance/api/check-out/,REDIRECT,302,
+field_employee,attendance:visits,/attendance/visits/,REDIRECT,302,
+field_employee,attendance:visit_add,/attendance/visits/add/,REDIRECT,302,
+field_employee,attendance:live_map,/attendance/map/,REDIRECT,302,
+field_employee,attendance:api_live_locations,/attendance/api/live-locations/,REDIRECT,302,
+field_employee,attendance:tracking,/attendance/tracking/,REDIRECT,302,
+field_employee,attendance:api_track,/attendance/api/track/,REDIRECT,302,
+field_employee,attendance:tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+field_employee,attendance:monitor,/attendance/monitor/,REDIRECT,302,
+field_employee,attendance:api_monitor,/attendance/api/monitor/,REDIRECT,302,
+field_employee,attendance:attendance_list,/attendance/,REDIRECT,302,
+field_employee,attendance:check_in_page_old,/attendance/check-in/,REDIRECT,302,
+field_employee,attendance:visits_list,/attendance/visits/,REDIRECT,302,
+field_employee,attendance:tracking_page,/attendance/tracking/,REDIRECT,302,
+field_employee,attendance:employee_tracking_detail,,UNRESOLVED,,Missing sample kwargs: ['employee_id']
+field_employee,attendance:field_employees_monitor,/attendance/monitor/,REDIRECT,302,
+field_employee,attendance:api_track_location,/attendance/api/track/,REDIRECT,302,
+field_employee,attendance:api_monitor_data,/attendance/api/monitor/,REDIRECT,302,
+field_employee,attendance:late_notifications,/attendance/late-notifications/,REDIRECT,302,
+field_employee,attendance:late_notification_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,attendance:my_warnings,/attendance/my-warnings/,REDIRECT,302,
+field_employee,attendance:schedule_week,/attendance/schedule/,REDIRECT,302,
+field_employee,attendance:assignment_add,/attendance/schedule/assignment/,REDIRECT,302,
+field_employee,attendance:stealth_manage,/attendance/stealth-manage/,REDIRECT,302,
+field_employee,attendance:stealth_alerts,/attendance/stealth-alerts/,REDIRECT,302,
+field_employee,attendance:api_stealth_location,/attendance/api/stealth-location/,REDIRECT,302,
+field_employee,attendance:override,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,subscriptions:upsell,/subscriptions/upgrade/module/payroll/,REDIRECT,302,
+field_employee,subscriptions:admin_dashboard,/subscriptions/,REDIRECT,302,
+field_employee,subscriptions:plans_list,/subscriptions/plans/,REDIRECT,302,
+field_employee,subscriptions:subscriptions_list,/subscriptions/subscriptions/,REDIRECT,302,
+field_employee,subscriptions:create,/subscriptions/subscriptions/create/,REDIRECT,302,
+field_employee,subscriptions:detail,/subscriptions/subscriptions/1/,REDIRECT,302,
+field_employee,subscriptions:upgrade,/subscriptions/subscriptions/1/upgrade/,REDIRECT,302,
+field_employee,subscriptions:extend,/subscriptions/subscriptions/1/extend/,REDIRECT,302,
+field_employee,subscriptions:cancel,/subscriptions/subscriptions/1/cancel/,REDIRECT,302,
+field_employee,subscriptions:activate,/subscriptions/subscriptions/1/activate/,REDIRECT,302,
+field_employee,subscriptions:my_subscription,/subscriptions/my-subscription/,REDIRECT,302,
+field_employee,subscriptions:my_plan,/subscriptions/my-plan/,REDIRECT,302,
+field_employee,subscriptions:upgrade_plan,/subscriptions/upgrade/,REDIRECT,302,
+field_employee,subscriptions:feature_locked,/subscriptions/feature-locked/,REDIRECT,302,
+field_employee,subscriptions:contact_sales,/subscriptions/contact-sales/,OK,200,
+field_employee,companies:charter_print_signature,,UNRESOLVED,,Missing sample kwargs: ['signature_id']
+field_employee,companies:charter_acceptance_status,/companies/charter/1/acceptance-status/,REDIRECT,302,
+field_employee,companies:charter_sign,/companies/charter/1/sign/,REDIRECT,302,
+field_employee,companies:settings,/companies/settings/,REDIRECT,302,
+field_employee,companies:charter,/companies/charter/,REDIRECT,302,
+field_employee,companies:charter_accept,/companies/charter/accept/,REDIRECT,302,
+field_employee,companies:charter_manage,/companies/charter/manage/,REDIRECT,302,
+field_employee,companies:policies,/companies/policies/,REDIRECT,302,
+field_employee,companies:branches_list,/companies/branches/,REDIRECT,302,
+field_employee,companies:branch_add,/companies/branches/add/,REDIRECT,302,
+field_employee,companies:branch_edit,/companies/branches/1/edit/,REDIRECT,302,
+field_employee,companies:branch_delete,/companies/branches/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+field_employee,companies:departments_list,/companies/departments/,REDIRECT,302,
+field_employee,companies:department_add,/companies/departments/add/,REDIRECT,302,
+field_employee,companies:department_edit,/companies/departments/1/edit/,REDIRECT,302,
+field_employee,companies:department_delete,/companies/departments/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+field_employee,companies:shifts_list,/companies/shifts/,REDIRECT,302,
+field_employee,companies:shift_add,/companies/shifts/add/,REDIRECT,302,
+field_employee,companies:shift_edit,/companies/shifts/1/edit/,REDIRECT,302,
+field_employee,companies:shift_delete,/companies/shifts/1/delete/,SKIPPED,,Destructive or special route — skipped for safety
+field_employee,companies:approval_flows,/companies/approval-flows/,REDIRECT,302,
+field_employee,companies:delegations,/companies/delegations/,REDIRECT,302,
+field_employee,companies:delegation_add,/companies/delegations/add/,REDIRECT,302,
+field_employee,companies:delegation_deactivate,/companies/delegations/1/deactivate/,SKIPPED,,Destructive or special route — skipped for safety
+field_employee,companies:notification_settings,/companies/notification-settings/,REDIRECT,302,
+field_employee,leaves:leave_types_list,/leaves/types/,REDIRECT,302,
+field_employee,leaves:leave_type_add,/leaves/types/add/,REDIRECT,302,
+field_employee,leaves:leave_type_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,leaves:leave_type_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,leaves:leave_requests_list,/leaves/,REDIRECT,302,
+field_employee,leaves:leave_request_add,/leaves/add/,REDIRECT,302,
+field_employee,leaves:leave_request_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,leaves:leave_approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,leaves:leave_reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,leaves:leave_cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,leaves:leave_balances,/leaves/balances/,REDIRECT,302,
+field_employee,leaves:set_leave_balance,/leaves/balances/set/,REDIRECT,302,
+field_employee,requests_app:list,/requests/,REDIRECT,302,
+field_employee,requests_app:add,/requests/add/,REDIRECT,302,
+field_employee,requests_app:detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,requests_app:approve,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,requests_app:reject,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,requests_app:cancel,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,reports:home,/reports/,REDIRECT,302,
+field_employee,reports:attendance,/reports/attendance/,REDIRECT,302,
+field_employee,reports:late,/reports/late/,REDIRECT,302,
+field_employee,reports:leaves,/reports/leaves/,REDIRECT,302,
+field_employee,reports:field,/reports/field/,REDIRECT,302,
+field_employee,reports:employees,/reports/employees/,REDIRECT,302,
+field_employee,employee_list,/employees/,REDIRECT,302,
+field_employee,employee_add,/employees/add/,REDIRECT,302,
+field_employee,employee_create,/employees/add/,REDIRECT,302,
+field_employee,add_employee,/employees/add/,REDIRECT,302,
+field_employee,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_print,/employees/print/,REDIRECT,302,
+field_employee,employee_print_all,/employees/print/,REDIRECT,302,
+field_employee,employees_print,/employees/print/,REDIRECT,302,
+field_employee,employees_print_all,/employees/print/,REDIRECT,302,
+field_employee,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_detail_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employees_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_print_credentials,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_credentials_print,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_folder,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_folder_upload,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_folder_delete,,UNRESOLVED,,"Missing sample kwargs: ['pk', 'doc_id']"
+field_employee,my_balance_view,/employees/my-balance/,REDIRECT,302,
+field_employee,employee_balance,/employees/my-balance/,REDIRECT,302,
+field_employee,my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+field_employee,employee_deductions,/employees/my-deductions/,REDIRECT,302,
+field_employee,employee_search_api,/employees/api/search/,REDIRECT,302,
+field_employee,manager_options_api,/employees/api/manager-options/,REDIRECT,302,
+field_employee,hierarchy_manage,/employees/hierarchy/,REDIRECT,302,
+field_employee,employee_list,/employees/,REDIRECT,302,
+field_employee,employee_add,/employees/add/,REDIRECT,302,
+field_employee,employee_create,/employees/add/,REDIRECT,302,
+field_employee,add_employee,/employees/add/,REDIRECT,302,
+field_employee,employee_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_info,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_edit,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_update,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,edit_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_delete,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,delete_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_remove,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,remove_employee,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_print,/employees/print/,REDIRECT,302,
+field_employee,employee_print_detail,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,print_credentials_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,employee_comprehensive_profile,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,create_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,deactivate_account_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,reset_password_view,,UNRESOLVED,,Missing sample kwargs: ['pk']
+field_employee,my_balance_view,/employees/my-balance/,REDIRECT,302,
+field_employee,my_deductions_view,/employees/my-deductions/,REDIRECT,302,
+field_employee,employee_search_api,/employees/api/search/,REDIRECT,302,

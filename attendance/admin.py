@@ -122,3 +122,54 @@ class LocationCheckInAdmin(admin.ModelAdmin):
             'fields': ('purpose', 'notes', 'photo')
         }),
     )
+
+from .models import AttendanceActionLog
+
+@admin.register(AttendanceActionLog)
+class AttendanceActionLogAdmin(admin.ModelAdmin):
+    list_display = ["attendance", "action_type", "performed_by", "action_at"]
+    list_filter = ["action_type", "action_at"]
+
+
+from .models import LateIncident, LateNotification, DisciplinaryAction
+
+@admin.register(LateIncident)
+class LateIncidentAdmin(admin.ModelAdmin):
+    list_display = ["employee", "date", "late_minutes", "incident_number_in_month", "is_excused"]
+    list_filter = ["month", "year", "is_excused"]
+
+@admin.register(LateNotification)
+class LateNotificationAdmin(admin.ModelAdmin):
+    list_display = ["employee", "notification_type", "title", "is_read", "is_acted_upon", "created_at"]
+    list_filter = ["notification_type", "is_read", "is_acted_upon"]
+
+@admin.register(DisciplinaryAction)
+class DisciplinaryActionAdmin(admin.ModelAdmin):
+    list_display = ["employee", "action_type", "reason", "auto_generated", "performed_at"]
+    list_filter = ["action_type", "auto_generated"]
+
+
+from .models import DailyAssignment
+
+@admin.register(DailyAssignment)
+class DailyAssignmentAdmin(admin.ModelAdmin):
+    list_display = [
+        "employee", "date", "day_type", "work_mode",
+        "expected_hours", "status", "is_extra_shift",
+        "is_replacement", "is_exception"
+    ]
+    list_filter = ["day_type", "work_mode", "status", "is_extra_shift"]
+    search_fields = ["employee__first_name_ar", "employee__employee_code"]
+    date_hierarchy = "date"
+
+
+from .models import TrackingAlert
+
+@admin.register(TrackingAlert)
+class TrackingAlertAdmin(admin.ModelAdmin):
+    list_display = [
+        "employee", "date", "minutes_outside",
+        "status", "notified_manager", "notified_hr",
+        "notified_company_admin", "started_at"
+    ]
+    list_filter = ["status", "date", "notified_manager", "notified_hr", "notified_company_admin"]

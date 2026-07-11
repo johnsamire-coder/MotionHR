@@ -1,0 +1,189 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}تفاصيل طلب الإجازة{% endblock %}
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center mb-4">
+    <a href="{% url 'leaves:leave_requests_list' %}"
+       class="btn btn-outline-secondary btn-sm me-3">
+      <i class="bi bi-arrow-right"></i>
+    </a>
+    <h4 class="fw-bold mb-0">تفاصيل طلب الإجازة</h4>
+    <span class="badge bg-{{ lr.status_color }} ms-3 fs-6 px-3">
+      <i class="bi bi-{{ lr.status_icon }} me-1"></i>
+      {{ lr.get_status_display }}
+    </span>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-8">
+
+      <!-- بيانات الطلب -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+          <h5 class="fw-bold mb-0">بيانات الطلب</h5>
+        </div>
+        <div class="card-body px-4 pb-4">
+          <div class="row g-3">
+
+            <div class="col-md-6">
+              <label class="text-muted small">الموظف</label>
+              <div class="fw-bold">{{ lr.employee.full_name_ar }}</div>
+              <small class="text-muted">{{ lr.employee.employee_code }}</small>
+            </div>
+
+            <div class="col-md-6">
+              <label class="text-muted small">نوع الإجازة</label>
+              <div>
+                <span class="badge rounded-pill fs-6"
+                      style="background:{{ lr.leave_type.color }};">
+                  {{ lr.leave_type.name }}
+                </span>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <label class="text-muted small">من تاريخ</label>
+              <div class="fw-bold">{{ lr.start_date|date:"d/m/Y" }}</div>
+            </div>
+
+            <div class="col-md-4">
+              <label class="text-muted small">إلى تاريخ</label>
+              <div class="fw-bold">{{ lr.end_date|date:"d/m/Y" }}</div>
+            </div>
+
+            <div class="col-md-4">
+              <label class="text-muted small">عدد الأيام</label>
+              <div class="fw-bold fs-4" style="color:#06B6D4;">
+                {{ lr.days_count }}
+              </div>
+            </div>
+
+            <div class="col-12">
+              <label class="text-muted small">السبب</label>
+              <div class="p-3 rounded" style="background:#f8fafc;">
+                {{ lr.reason }}
+              </div>
+            </div>
+
+            {% if lr.notes %}
+            <div class="col-12">
+              <label class="text-muted small">ملاحظات</label>
+              <div>{{ lr.notes }}</div>
+            </div>
+            {% endif %}
+
+            {% if lr.document %}
+            <div class="col-12">
+              <label class="text-muted small">الوثيقة المرفقة</label>
+              <div>
+                <a href="{{ lr.document.url }}" target="_blank"
+                   class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-file-earmark me-1"></i>
+                  عرض الوثيقة
+                </a>
+              </div>
+            </div>
+            {% endif %}
+
+          </div>
+        </div>
+      </div>
+
+      <!-- المراجعة -->
+      {% if lr.reviewed_by %}
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <h6 class="fw-bold mb-3">تفاصيل المراجعة</h6>
+          <div class="d-flex align-items-center gap-3 mb-2">
+            <i class="bi bi-person-check fs-4" style="color:#06B6D4;"></i>
+            <div>
+              <div class="fw-semibold">{{ lr.reviewed_by.get_full_name }}</div>
+              <small class="text-muted">{{ lr.reviewed_at|date:"d/m/Y H:i" }}</small>
+            </div>
+          </div>
+          {% if lr.review_notes %}
+          <div class="p-3 rounded mt-2" style="background:#f8fafc;">
+            {{ lr.review_notes }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+
+    <!-- أزرار الإجراءات -->
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <h6 class="fw-bold mb-3">الإجراءات</h6>
+
+          {% if lr.status == 'pending' %}
+
+          <!-- موافقة -->
+          <form method="post" action="{% url 'leaves:leave_approve' lr.pk %}"
+                class="mb-2">
+            {% csrf_token %}
+            <textarea name="notes" class="form-control form-control-sm mb-2"
+                      placeholder="ملاحظات (اختياري)" rows="2"></textarea>
+            <button type="submit" class="btn btn-success w-100"
+                    onclick="return confirm('الموافقة على الطلب؟')">
+              <i class="bi bi-check-lg me-1"></i>
+              الموافقة
+            </button>
+          </form>
+
+          <!-- رفض -->
+          <form method="post" action="{% url 'leaves:leave_reject' lr.pk %}"
+                class="mb-2">
+            {% csrf_token %}
+            <textarea name="notes" class="form-control form-control-sm mb-2"
+                      placeholder="سبب الرفض" rows="2"></textarea>
+            <button type="submit" class="btn btn-danger w-100"
+                    onclick="return confirm('رفض الطلب؟')">
+              <i class="bi bi-x-lg me-1"></i>
+              رفض
+            </button>
+          </form>
+
+          <!-- إلغاء -->
+          <form method="post" action="{% url 'leaves:leave_cancel' lr.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-secondary w-100"
+                    onclick="return confirm('إلغاء الطلب؟')">
+              <i class="bi bi-slash-circle me-1"></i>
+              إلغاء الطلب
+            </button>
+          </form>
+
+          {% elif lr.status == 'approved' %}
+          <form method="post" action="{% url 'leaves:leave_cancel' lr.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-warning w-100"
+                    onclick="return confirm('إلغاء الموافقة؟')">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>
+              إلغاء الموافقة
+            </button>
+          </form>
+
+          {% else %}
+          <div class="text-center text-muted py-3">
+            <i class="bi bi-check-all fs-3"></i>
+            <p class="mb-0 mt-1 small">تم اتخاذ الإجراء</p>
+          </div>
+          {% endif %}
+
+          <hr>
+          <a href="{% url 'leaves:leave_requests_list' %}"
+             class="btn btn-light w-100">
+            <i class="bi bi-arrow-right me-1"></i>
+            رجوع للقائمة
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

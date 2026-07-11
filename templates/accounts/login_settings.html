@@ -1,0 +1,183 @@
+{% extends 'base/dashboard_base.html' %}
+{% load custom_filters %}
+{% block title %}إعدادات تسجيل الدخول{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <i class="bi bi-shield-lock me-2" style="color:#06B6D4;"></i>
+        إعدادات تسجيل الدخول
+      </h4>
+      <p class="text-muted mb-0">تحكم في طرق الدخول وأمان كلمات المرور</p>
+    </div>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="row g-4">
+
+      <!-- طرق تسجيل الدخول -->
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+            <h5 class="fw-bold mb-0">
+              <i class="bi bi-door-open me-2" style="color:#06B6D4;"></i>
+              طرق تسجيل الدخول
+            </h5>
+          </div>
+          <div class="card-body px-4 pb-4">
+            {% for field_name, label, desc, available in login_methods %}
+            <div class="d-flex align-items-start justify-content-between py-3
+                        border-bottom {% if forloop.last %}border-0{% endif %}">
+              <div>
+                <div class="fw-semibold">{{ label }}</div>
+                <small class="text-muted">{{ desc }}</small>
+                {% if not available %}
+                <span class="badge bg-warning text-dark ms-1">يتطلب ترقية</span>
+                {% endif %}
+              </div>
+              <div class="form-check form-switch ms-3 mt-1">
+                <input class="form-check-input" type="checkbox"
+                       name="{{ field_name }}"
+                       id="{{ field_name }}"
+                       {% if available %}
+                         {% if settings_obj %}
+                           {% if field_name == 'login_by_username' and settings_obj.login_by_username %}checked
+                           {% elif field_name == 'login_by_email' and settings_obj.login_by_email %}checked
+                           {% elif field_name == 'login_by_employee_code' and settings_obj.login_by_employee_code %}checked
+                           {% elif field_name == 'login_by_phone' and settings_obj.login_by_phone %}checked
+                           {% endif %}
+                         {% else %}
+                           {% if field_name == 'login_by_username' %}checked
+                           {% elif field_name == 'login_by_email' %}checked{% endif %}
+                         {% endif %}
+                       {% else %}disabled{% endif %}
+                       style="width:2.5rem; height:1.25rem;">
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- إعدادات كلمة المرور -->
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+            <h5 class="fw-bold mb-0">
+              <i class="bi bi-key me-2" style="color:#06B6D4;"></i>
+              إعدادات كلمة المرور
+            </h5>
+          </div>
+          <div class="card-body px-4 pb-4">
+
+            <div class="mb-4">
+              <label class="fw-semibold small mb-2">الحد الأدنى لطول كلمة المرور</label>
+              <div class="d-flex align-items-center gap-3">
+                <input type="range" name="min_password_length"
+                       class="form-range flex-grow-1" min="6" max="20"
+                       value="{{ settings_obj.min_password_length|default:8 }}"
+                       oninput="document.getElementById('pwdLen').textContent=this.value">
+                <span class="badge fs-6 px-3" style="background:#06B6D4; min-width:40px;">
+                  <span id="pwdLen">{{ settings_obj.min_password_length|default:8 }}</span>
+                </span>
+              </div>
+            </div>
+
+            {% for field_name, label in password_rules %}
+            <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+              <span class="fw-semibold small">{{ label }}</span>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox"
+                       name="{{ field_name }}"
+                       {% if settings_obj %}
+                         {% if field_name == 'require_uppercase' and settings_obj.require_uppercase %}checked
+                         {% elif field_name == 'require_numbers' and settings_obj.require_numbers %}checked
+                         {% elif field_name == 'require_symbols' and settings_obj.require_symbols %}checked
+                         {% endif %}
+                       {% endif %}
+                       style="width:2.5rem; height:1.25rem;">
+              </div>
+            </div>
+            {% endfor %}
+
+            <div class="mt-3">
+              <label class="fw-semibold small mb-2">
+                انتهاء صلاحية كلمة المرور (يوم)
+                <small class="text-muted fw-normal">(0 = لا تنتهي)</small>
+              </label>
+              <input type="number" name="password_expiry_days"
+                     class="form-control" min="0" max="365"
+                     value="{{ settings_obj.password_expiry_days|default:0 }}">
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- إعدادات القفل -->
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+            <h5 class="fw-bold mb-0">
+              <i class="bi bi-shield-x me-2" style="color:#06B6D4;"></i>
+              إعدادات القفل
+            </h5>
+          </div>
+          <div class="card-body px-4 pb-4">
+
+            <div class="mb-3">
+              <label class="fw-semibold small mb-2">أقصى عدد محاولات قبل القفل</label>
+              <select name="max_login_attempts" class="form-select">
+                <option value="3" {% if settings_obj.max_login_attempts == 3 %}selected{% endif %}>3 محاولات</option>
+                <option value="5" {% if settings_obj.max_login_attempts == 5 or not settings_obj %}selected{% endif %}>5 محاولات</option>
+                <option value="10" {% if settings_obj.max_login_attempts == 10 %}selected{% endif %}>10 محاولات</option>
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label class="fw-semibold small mb-2">مدة القفل (بالدقائق)</label>
+              <select name="lockout_duration_minutes" class="form-select">
+                {% for n, label in lockout_options %}
+                <option value="{{ n }}"
+                  {% if settings_obj.lockout_duration_minutes == n %}selected{% endif %}>
+                  {{ label }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-check form-switch mt-4">
+              <input class="form-check-input" type="checkbox"
+                     name="force_change_on_first_login"
+                     id="forceChange"
+                     {% if settings_obj.force_change_on_first_login or not settings_obj %}checked{% endif %}
+                     style="width:2.5rem; height:1.25rem;">
+              <label class="form-check-label fw-semibold" for="forceChange">
+                إجبار تغيير كلمة المرور عند أول دخول
+              </label>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="mt-4 d-flex gap-2">
+      <button type="submit" class="btn btn-lg text-white px-5"
+              style="background:#06B6D4; border-radius:10px;">
+        <i class="bi bi-check-lg me-2"></i>
+        حفظ الإعدادات
+      </button>
+      <a href="{% url 'dashboard' %}"
+         class="btn btn-lg btn-outline-secondary px-4"
+         style="border-radius:10px;">إلغاء</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

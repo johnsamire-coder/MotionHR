@@ -1,0 +1,113 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}طلب إجازة جديد{% endblock %}
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center mb-4">
+    <a href="{% url 'leaves:leave_requests_list' %}"
+       class="btn btn-outline-secondary btn-sm me-3">
+      <i class="bi bi-arrow-right"></i>
+    </a>
+    <h4 class="fw-bold mb-0">طلب إجازة جديد</h4>
+  </div>
+
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="row g-3">
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">
+                  الموظف <span class="text-danger">*</span>
+                </label>
+
+                {% if request.user.role == 'employee' and request.current_employee %}
+                  <!-- الموظف يشوف اسمه بس -->
+                  <input type="hidden" name="employee"
+                         value="{{ request.current_employee.pk }}">
+                  <input type="text" class="form-control" readonly
+                         value="{{ request.current_employee.full_name_ar }} ({{ request.current_employee.employee_code }})">
+                {% else %}
+                  <!-- المدير / HR يختار من القائمة -->
+                  <select name="employee" class="form-select" required>
+                    <option value="">اختر الموظف</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.pk }}">
+                      {{ emp.full_name_ar }} ({{ emp.employee_code }})
+                    </option>
+                    {% endfor %}
+                  </select>
+                {% endif %}
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">
+                  نوع الإجازة <span class="text-danger">*</span>
+                </label>
+                <select name="leave_type" class="form-select" required>
+                  <option value="">اختر النوع</option>
+                  {% for lt in leave_types %}
+                  <option value="{{ lt.pk }}">{{ lt.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">
+                  من تاريخ <span class="text-danger">*</span>
+                </label>
+                <input type="date" name="start_date" class="form-control"
+                       value="{{ today }}" required>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">
+                  إلى تاريخ <span class="text-danger">*</span>
+                </label>
+                <input type="date" name="end_date" class="form-control"
+                       value="{{ today }}" required>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold small">
+                  السبب <span class="text-danger">*</span>
+                </label>
+                <textarea name="reason" class="form-control" rows="3"
+                          placeholder="اذكر سبب طلب الإجازة..." required></textarea>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">
+                  وثيقة مرفقة
+                  <small class="text-muted">(إن وجدت)</small>
+                </label>
+                <input type="file" name="document" class="form-control">
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold small">ملاحظات</label>
+                <textarea name="notes" class="form-control" rows="2"></textarea>
+              </div>
+
+            </div>
+
+            <div class="d-flex gap-2 mt-4 pt-3 border-top">
+              <button type="submit" class="btn text-white px-4"
+                      style="background:#06B6D4; border-radius:10px;">
+                <i class="bi bi-send me-1"></i>
+                تقديم الطلب
+              </button>
+              <a href="{% url 'leaves:leave_requests_list' %}"
+                 class="btn btn-outline-secondary px-4"
+                 style="border-radius:10px;">إلغاء</a>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -164,7 +164,18 @@
                             المستندات
                         </button>
                     </li>
-                </ul>
+                
+              <li class="nav-item" role="presentation">
+                <button class="nav-link d-flex align-items-center gap-2"
+                        id="account-tab"
+                        data-bs-toggle="tab"
+                        data-bs-target="#tab-account"
+                        type="button" role="tab">
+                  <i class="bi bi-person-badge"></i>
+                  <span>الحساب</span>
+                </button>
+              </li>
+            </ul>
             </div>
             <div class="card-body">
                 <div class="tab-content">
@@ -313,7 +324,149 @@
                     </div>
                     
                 </div>
-            </div>
+            
+              <!-- ══ تبويب الحساب ══ -->
+              <div class="tab-pane fade" id="tab-account" role="tabpanel">
+                <div class="row justify-content-center">
+                  <div class="col-lg-8">
+
+                    {% if employee.user %}
+                    <!-- الحساب موجود -->
+                    <div class="card border-0 shadow-sm mb-4">
+                      <div class="card-body p-4">
+
+                        <div class="d-flex align-items-center mb-4">
+                          <div class="rounded-circle d-flex align-items-center justify-content-center me-3"
+                               style="width:56px;height:56px;background:#e0f7fa;">
+                            <i class="bi bi-person-check-fill fs-3" style="color:#06B6D4;"></i>
+                          </div>
+                          <div>
+                            <h5 class="fw-bold mb-0">الحساب نشط</h5>
+                            <span class="badge {% if employee.user.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                              {% if employee.user.is_active %}✅ مفعّل{% else %}❌ موقوف{% endif %}
+                            </span>
+                          </div>
+                        </div>
+
+                        <!-- بيانات الحساب -->
+                        <div class="row g-3 mb-4">
+                          <div class="col-md-6">
+                            <label class="text-muted small">اسم المستخدم</label>
+                            <div class="fw-bold font-monospace">{{ employee.user.username }}</div>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="text-muted small">الدور</label>
+                            <div class="fw-bold">{{ employee.user.get_role_display }}</div>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="text-muted small">آخر دخول</label>
+                            <div class="fw-bold">
+                              {{ employee.user.last_login|date:"d/m/Y H:i"|default:"لم يدخل بعد" }}
+                            </div>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="text-muted small">تغيير كلمة المرور مطلوب</label>
+                            <div class="fw-bold">
+                              {% if employee.user.must_change_password %}
+                                <span class="text-warning">⚠️ نعم</span>
+                              {% else %}
+                                <span class="text-success">✅ لا</span>
+                              {% endif %}
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- أزرار الإجراءات -->
+                        <div class="d-flex flex-wrap gap-2">
+
+                          <!-- إعادة تعيين كلمة المرور -->
+                          <form method="post"
+                                action="{% url 'employees:reset_password' employee.pk %}"
+                                onsubmit="return confirm('إعادة تعيين كلمة المرور؟')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-warning btn-sm">
+                              <i class="bi bi-key me-1"></i>
+                              إعادة تعيين كلمة المرور
+                            </button>
+                          </form>
+
+                          <!-- تعطيل / تفعيل -->
+                          {% if employee.user.is_active %}
+                          <form method="post"
+                                action="{% url 'employees:deactivate_account' employee.pk %}"
+                                onsubmit="return confirm('تعطيل الحساب؟')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger btn-sm">
+                              <i class="bi bi-slash-circle me-1"></i>
+                              تعطيل الحساب
+                            </button>
+                          </form>
+                          {% else %}
+                          <form method="post"
+                                action="{% url 'employees:activate_account' employee.pk %}"
+                                onsubmit="return confirm('تفعيل الحساب؟')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success btn-sm">
+                              <i class="bi bi-check-circle me-1"></i>
+                              تفعيل الحساب
+                            </button>
+                          </form>
+                          {% endif %}
+
+                          <!-- طباعة بيانات الدخول -->
+                          <a href="{% url 'employees:print_credentials' employee.pk %}"
+                             class="btn btn-outline-secondary btn-sm" target="_blank">
+                            <i class="bi bi-printer me-1"></i>
+                            طباعة بيانات الدخول
+                          </a>
+
+                        </div>
+                      </div>
+                    </div>
+
+                    {% else %}
+                    <!-- مفيش حساب -->
+                    <div class="card border-0 shadow-sm">
+                      <div class="card-body text-center py-5">
+                        <i class="bi bi-person-x" style="font-size:4rem;color:#d1d5db;"></i>
+                        <h5 class="mt-3 fw-bold text-muted">لا يوجد حساب لهذا الموظف</h5>
+                        <p class="text-muted">أنشئ حساب للموظف للسماح له بتسجيل الدخول للنظام</p>
+
+                        <!-- فورم إنشاء حساب -->
+                        <form method="post"
+                              action="{% url 'employees:create_account' employee.pk %}">
+                          {% csrf_token %}
+                          <div class="d-flex align-items-center justify-content-center gap-3 mt-3">
+                            <div class="form-check">
+                              <input class="form-check-input" type="checkbox"
+                                     name="send_email" id="sendEmail"
+                                     value="true"
+                                     {% if employee.email %}checked{% endif %}
+                                     {% if not employee.email %}disabled{% endif %}>
+                              <label class="form-check-label" for="sendEmail">
+                                إرسال بيانات الدخول بالإيميل
+                                {% if not employee.email %}
+                                  <small class="text-danger">(لا يوجد إيميل)</small>
+                                {% endif %}
+                              </label>
+                            </div>
+                          </div>
+                          <button type="submit" class="btn btn-lg mt-3 text-white"
+                                  style="background:#06B6D4;"
+                                  onclick="return confirm('إنشاء حساب للموظف؟')">
+                            <i class="bi bi-person-plus me-2"></i>
+                            إنشاء حساب
+                          </button>
+                        </form>
+
+                      </div>
+                    </div>
+                    {% endif %}
+
+                  </div>
+                </div>
+              </div>
+</div>
         </div>
     </div>
 </div>

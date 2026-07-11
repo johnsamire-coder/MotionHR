@@ -46,3 +46,39 @@ class DepartmentAdmin(admin.ModelAdmin):
     list_display = ('name_ar', 'company', 'parent', 'code', 'is_active')
     list_filter = ('company', 'is_active')
     search_fields = ('name_ar', 'name_en', 'code')
+from .models import WorkCharter, CharterAcceptance
+
+@admin.register(WorkCharter)
+class WorkCharterAdmin(admin.ModelAdmin):
+    list_display = ["company", "title", "version", "is_active", "is_mandatory"]
+
+@admin.register(CharterAcceptance)
+class CharterAcceptanceAdmin(admin.ModelAdmin):
+    list_display = ["employee", "charter", "accepted_at"]
+
+from .models import CompanyPolicy
+
+@admin.register(CompanyPolicy)
+class CompanyPolicyAdmin(admin.ModelAdmin):
+    list_display = [
+        "company",
+        "grace_period_minutes",
+        "permission_monthly_limit",
+        "overtime_enabled",
+        "default_checkin_radius",
+        "stealth_tracking_enabled",
+        "hr_can_edit_attendance",
+    ]
+
+from .models import DepartmentHierarchy
+
+
+@admin.register(DepartmentHierarchy)
+class DepartmentHierarchyAdmin(admin.ModelAdmin):
+    list_display = ('parent_department', 'child_department', 'company', 'is_active')
+    list_filter = ('company', 'is_active')
+    search_fields = (
+        'parent_department__name_ar', 'parent_department__name_en',
+        'child_department__name_ar', 'child_department__name_en',
+    )
+

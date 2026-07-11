@@ -1,0 +1,104 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}إرسال إشعار{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-7">
+
+      <div class="d-flex align-items-center mb-4">
+        <a href="{% url 'accounts:notifications' %}" class="btn btn-outline-secondary btn-sm me-3">
+          <i class="bi bi-arrow-right"></i>
+        </a>
+        <h4 class="fw-bold mb-0">إرسال إشعار</h4>
+      </div>
+
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <form method="post">
+            {% csrf_token %}
+            <div class="row g-3">
+
+              <div class="col-md-4">
+                <label class="form-label fw-semibold small">إرسال إلى</label>
+                <select name="audience_type" id="audienceType" class="form-select" onchange="toggleAudienceFields()">
+                  <option value="single">موظف واحد</option>
+                  <option value="department">قسم كامل</option>
+                  <option value="all">كل الموظفين</option>
+                </select>
+              </div>
+
+              <div class="col-md-4" id="employeeField">
+                <label class="form-label fw-semibold small">الموظف</label>
+                <select name="employee" class="form-select">
+                  <option value="">اختر الموظف</option>
+                  {% for emp in employees %}
+                  <option value="{{ emp.pk }}">{{ emp.full_name_ar }} ({{ emp.employee_code }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-4 d-none" id="departmentField">
+                <label class="form-label fw-semibold small">القسم</label>
+                <select name="department" class="form-select">
+                  <option value="">اختر القسم</option>
+                  {% for dept in departments %}
+                  <option value="{{ dept.pk }}">{{ dept.name_ar }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label fw-semibold small">الأهمية</label>
+                <select name="severity" class="form-select">
+                  <option value="info">معلومة</option>
+                  <option value="warning">تحذير</option>
+                  <option value="danger">هام</option>
+                </select>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold small">العنوان</label>
+                <input type="text" name="title" class="form-control" required placeholder="عنوان الإشعار">
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold small">الرسالة</label>
+                <textarea name="message" class="form-control" rows="5" required placeholder="اكتب رسالة الإشعار هنا..."></textarea>
+              </div>
+
+            </div>
+
+            <div class="mt-4">
+              <button type="submit" class="btn text-white px-4"
+                      style="background:#06B6D4; border-radius:10px;">
+                <i class="bi bi-send me-1"></i>إرسال الإشعار
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleAudienceFields() {
+  const audience = document.getElementById('audienceType').value;
+  const empField = document.getElementById('employeeField');
+  const deptField = document.getElementById('departmentField');
+
+  empField.classList.add('d-none');
+  deptField.classList.add('d-none');
+
+  if (audience === 'single') {
+    empField.classList.remove('d-none');
+  } else if (audience === 'department') {
+    deptField.classList.remove('d-none');
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}تفاصيل إشعار التأخير{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+
+      <div class="d-flex align-items-center mb-4">
+        <a href="{% url 'attendance:late_notifications' %}" class="btn btn-outline-secondary btn-sm me-3">
+          <i class="bi bi-arrow-right"></i>
+        </a>
+        <h4 class="fw-bold mb-0">تفاصيل إشعار التأخير</h4>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="text-muted small">الموظف</label>
+              <div class="fw-bold">{{ notif.employee.full_name_ar }}</div>
+              <small class="text-muted">{{ notif.employee.employee_code }}</small>
+            </div>
+            <div class="col-md-6">
+              <label class="text-muted small">نوع الإشعار</label>
+              <div class="fw-bold">
+                {% if notif.notification_type == 'threshold_reached' %}
+                  وصل للحد
+                {% else %}
+                  تأخير عادي
+                {% endif %}
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="text-muted small">العنوان</label>
+              <div class="fw-semibold">{{ notif.title }}</div>
+            </div>
+            <div class="col-12">
+              <label class="text-muted small">الرسالة</label>
+              <div class="p-3 rounded" style="background:#f8fafc;">{{ notif.message }}</div>
+            </div>
+            {% if notif.details %}
+            <div class="col-12">
+              <label class="text-muted small">تفاصيل التأخيرات</label>
+              <div class="p-3 rounded" style="background:#fff7ed; white-space:pre-line;">{{ notif.details }}</div>
+            </div>
+            {% endif %}
+            {% if notif.suggested_action %}
+            <div class="col-12">
+              <label class="text-muted small">الإجراء المقترح</label>
+              <div class="fw-bold text-danger">{{ notif.suggested_action }}</div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% if not notif.is_acted_upon %}
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+          <h5 class="fw-bold mb-0">اتخاذ إجراء</h5>
+        </div>
+        <div class="card-body p-4">
+          <form method="post">
+            {% csrf_token %}
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label fw-semibold small">الإجراء من جانبك</label>
+                <select name="action_taken" class="form-select" required>
+                  <option value="">اختر الإجراء</option>
+                  <option value="verbal_warning">إنذار شفهي</option>
+                  <option value="written_warning">إنذار كتابي</option>
+                  <option value="quarter_day_deduction">خصم ربع يوم</option>
+                  <option value="half_day_deduction">خصم نصف يوم</option>
+                  <option value="full_day_deduction">خصم يوم كامل</option>
+                  <option value="dismissed">إعفاء / تجاهل</option>
+                </select>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold small">ملاحظات / سبب القرار</label>
+                <textarea name="action_notes" class="form-control" rows="3"
+                          placeholder="اكتب سبب اعتماد أو تجاهل الإجراء..."></textarea>
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <button type="submit" class="btn text-white px-4"
+                      style="background:#06B6D4; border-radius:10px;">
+                <i class="bi bi-check-lg me-1"></i>
+                اعتماد الإجراء
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <h5 class="fw-bold text-success mb-3">تم اتخاذ الإجراء</h5>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="text-muted small">الإجراء المتخذ</label>
+              <div class="fw-bold">{{ notif.action_taken }}</div>
+            </div>
+            <div class="col-md-6">
+              <label class="text-muted small">بواسطة</label>
+              <div class="fw-bold">{{ notif.action_by.get_full_name|default:notif.action_by.username }}</div>
+            </div>
+            <div class="col-12">
+              <label class="text-muted small">ملاحظات</label>
+              <div class="p-3 rounded" style="background:#f8fafc;">{{ notif.action_notes|default:"—" }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}

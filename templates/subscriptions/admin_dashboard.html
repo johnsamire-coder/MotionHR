@@ -1,272 +1,64 @@
 {% extends 'base/dashboard_base.html' %}
 
-{% block title %}إدارة الاشتراكات{% endblock %}
+{% block title %}لوحة الاشتراكات{% endblock %}
 
-{% block page_title %}إدارة الاشتراكات 💼{% endblock %}
-{% block page_subtitle %}لوحة تحكم المبيعات والعملاء{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <div>
+      <h4 class="mb-1 fw-bold"><i class="bi bi-stars text-primary me-2"></i>لوحة الاشتراكات</h4>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 small">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">الرئيسية</a></li>
+          <li class="breadcrumb-item active">الاشتراكات</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
 
-{% block dashboard_content %}
+  <div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card border-0 shadow-sm text-center py-3"><div class="fs-3 fw-bold text-primary">{{ companies_count }}</div><div class="small text-muted">الشركات</div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm text-center py-3"><div class="fs-3 fw-bold text-success">{{ active_count }}</div><div class="small text-muted">اشتراكات فعالة</div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm text-center py-3"><div class="fs-3 fw-bold text-danger">{{ expired_count }}</div><div class="small text-muted">منتهية / غير فعالة</div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm text-center py-3"><div class="fs-3 fw-bold text-warning">{{ total_revenue }}</div><div class="small text-muted">إجمالي الإيراد</div></div></div>
+  </div>
 
-<div class="mb-3">
-    <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-right"></i>
-        رجوع للرئيسية
-    </a>
-</div>
-
-<!-- Quick Actions -->
-<div class="card border-0 shadow-sm mb-4" 
-     style="background: linear-gradient(135deg, #8B5CF6 0%, #06B6D4 100%);">
-    <div class="card-body p-4 text-white">
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <h3 class="fw-bold mb-2">مركز التحكم بالاشتراكات 🎯</h3>
-                <p class="mb-0 opacity-75">
-                    إدارة العملاء والخطط والفواتير من مكان واحد
-                </p>
-            </div>
-            <div class="col-md-4 text-md-end mt-3 mt-md-0">
-                <a href="{% url 'subscriptions:create' %}" class="btn btn-light btn-lg">
-                    <i class="bi bi-plus-circle-fill"></i>
-                    عميل جديد
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Stats -->
-<div class="row g-3 mb-4">
-    <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="text-muted mb-1 small">إجمالي العملاء</p>
-                        <h3 class="fw-bold mb-0">{{ total_companies }}</h3>
-                        <small class="text-muted">
-                            <i class="bi bi-building"></i>
-                            {{ total_subscriptions }} اشتراك
-                        </small>
-                    </div>
-                    <div class="rounded-3 p-3" style="background: rgba(6, 182, 212, 0.1);">
-                        <i class="bi bi-people-fill text-primary fs-4"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="text-muted mb-1 small">اشتراكات نشطة</p>
-                        <h3 class="fw-bold mb-0 text-success">{{ active_subs }}</h3>
-                        <small class="text-warning">
-                            {{ trial_subs }} تجربة
-                        </small>
-                    </div>
-                    <div class="rounded-3 p-3" style="background: rgba(16, 185, 129, 0.1);">
-                        <i class="bi bi-check-circle-fill text-success fs-4"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="text-muted mb-1 small">MRR</p>
-                        <h3 class="fw-bold mb-0 text-info">{{ mrr }}</h3>
-                        <small class="text-muted">
-                            جنيه شهرياً
-                        </small>
-                    </div>
-                    <div class="rounded-3 p-3" style="background: rgba(59, 130, 246, 0.1);">
-                        <i class="bi bi-graph-up-arrow text-info fs-4"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="text-muted mb-1 small">ARR</p>
-                        <h3 class="fw-bold mb-0 text-warning">{{ arr }}</h3>
-                        <small class="text-muted">
-                            جنيه سنوياً
-                        </small>
-                    </div>
-                    <div class="rounded-3 p-3" style="background: rgba(245, 158, 11, 0.1);">
-                        <i class="bi bi-cash-stack text-warning fs-4"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Quick Links -->
-<div class="row g-3 mb-4">
-    <div class="col-md-6 col-lg-3">
-        <a href="{% url 'subscriptions:subscriptions_list' %}" class="text-decoration-none">
-            <div class="card border-0 shadow-sm h-100 hover-lift">
-                <div class="card-body text-center py-4">
-                    <i class="bi bi-list-ul text-primary" style="font-size: 3rem;"></i>
-                    <h6 class="fw-bold mt-3 text-dark">كل الاشتراكات</h6>
-                </div>
-            </div>
-        </a>
-    </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <a href="{% url 'subscriptions:plans_list' %}" class="text-decoration-none">
-            <div class="card border-0 shadow-sm h-100 hover-lift">
-                <div class="card-body text-center py-4">
-                    <i class="bi bi-award-fill text-info" style="font-size: 3rem;"></i>
-                    <h6 class="fw-bold mt-3 text-dark">الخطط</h6>
-                </div>
-            </div>
-        </a>
-    </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <a href="{% url 'subscriptions:create' %}" class="text-decoration-none">
-            <div class="card border-0 shadow-sm h-100 hover-lift">
-                <div class="card-body text-center py-4">
-                    <i class="bi bi-plus-circle-fill text-success" style="font-size: 3rem;"></i>
-                    <h6 class="fw-bold mt-3 text-dark">إضافة عميل</h6>
-                </div>
-            </div>
-        </a>
-    </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <a href="/admin/subscriptions/" class="text-decoration-none">
-            <div class="card border-0 shadow-sm h-100 hover-lift">
-                <div class="card-body text-center py-4">
-                    <i class="bi bi-gear-fill text-secondary" style="font-size: 3rem;"></i>
-                    <h6 class="fw-bold mt-3 text-dark">إعدادات متقدمة</h6>
-                </div>
-            </div>
-        </a>
-    </div>
-</div>
-
-<div class="row g-3">
-    <!-- Expiring Soon -->
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white">
-                <h6 class="fw-bold mb-0">
-                    <i class="bi bi-alarm text-warning"></i>
-                    قربوا على الانتهاء (7 أيام)
-                </h6>
-            </div>
-            <div class="card-body p-0">
-                {% if expiring_soon %}
-                <div class="list-group list-group-flush">
-                    {% for sub in expiring_soon %}
-                    <a href="{% url 'subscriptions:detail' sub.pk %}" 
-                       class="list-group-item list-group-item-action">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="fw-semibold">{{ sub.company.name_ar }}</div>
-                                <small class="text-muted">{{ sub.plan.name_ar }}</small>
-                            </div>
-                            <div class="text-end">
-                                <span class="badge bg-warning">
-                                    {{ sub.days_remaining }} يوم متبقي
-                                </span>
-                                <small class="d-block text-muted mt-1">
-                                    {{ sub.end_date|date:"Y-m-d" }}
-                                </small>
-                            </div>
-                        </div>
-                    </a>
-                    {% endfor %}
-                </div>
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white py-3"><h6 class="mb-0 fw-bold">أحدث الاشتراكات</h6></div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>الشركة</th>
+              <th>الباقة</th>
+              <th>البداية</th>
+              <th>النهاية</th>
+              <th>الحالة</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sub in recent_subscriptions %}
+            <tr>
+              <td>{{ sub.company.name_ar|default:sub.company.name_en|default:"—" }}</td>
+              <td>{{ sub.plan.name|default:"—" }}</td>
+              <td>{{ sub.start_date|default:"—" }}</td>
+              <td>{{ sub.end_date|default:"—" }}</td>
+              <td>
+                {% if sub.is_active %}
+                  <span class="badge bg-success-subtle text-success">فعّال</span>
                 {% else %}
-                <div class="text-center py-4">
-                    <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
-                    <p class="text-muted mt-2">لا توجد اشتراكات قربت على الانتهاء</p>
-                </div>
+                  <span class="badge bg-danger-subtle text-danger">غير فعّال</span>
                 {% endif %}
-            </div>
-        </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center py-4 text-muted">لا توجد اشتراكات</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-    
-    <!-- Recent Subscriptions -->
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white">
-                <h6 class="fw-bold mb-0">
-                    <i class="bi bi-clock-history text-primary"></i>
-                    آخر الاشتراكات
-                </h6>
-            </div>
-            <div class="card-body p-0">
-                {% if recent_subscriptions %}
-                <div class="list-group list-group-flush">
-                    {% for sub in recent_subscriptions %}
-                    <a href="{% url 'subscriptions:detail' sub.pk %}" 
-                       class="list-group-item list-group-item-action">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="fw-semibold">{{ sub.company.name_ar }}</div>
-                                <small class="text-muted">
-                                    {{ sub.plan.name_ar }} - {{ sub.get_billing_cycle_display }}
-                                </small>
-                            </div>
-                            <div class="text-end">
-                                {% if sub.status == 'active' %}
-                                    <span class="badge bg-success">نشط</span>
-                                {% elif sub.status == 'trial' %}
-                                    <span class="badge bg-info">تجربة</span>
-                                {% elif sub.status == 'expired' %}
-                                    <span class="badge bg-danger">منتهي</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">{{ sub.get_status_display }}</span>
-                                {% endif %}
-                                <small class="d-block text-muted mt-1">
-                                    {{ sub.created_at|date:"Y-m-d" }}
-                                </small>
-                            </div>
-                        </div>
-                    </a>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="text-center py-4">
-                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-                    <p class="text-muted mt-2">لا يوجد اشتراكات بعد</p>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
+  </div>
 </div>
-
-{% endblock %}
-
-{% block dashboard_css %}
-<style>
-    .hover-lift {
-        transition: all 0.2s;
-        cursor: pointer;
-    }
-    .hover-lift:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.1) !important;
-    }
-</style>
 {% endblock %}

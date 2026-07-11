@@ -1,0 +1,245 @@
+{% extends 'base/dashboard_base.html' %}
+{% load custom_filters %}
+{% block title %}طلب جديد{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center mb-4">
+    <a href="{% url 'requests_app:list' %}"
+       class="btn btn-outline-secondary btn-sm me-3">
+      <i class="bi bi-arrow-right"></i>
+    </a>
+    <h4 class="fw-bold mb-0">طلب جديد</h4>
+  </div>
+
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <form method="post" enctype="multipart/form-data" id="requestForm">
+            {% csrf_token %}
+            <div class="row g-3">
+
+              <!-- الموظف -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">
+                  الموظف <span class="text-danger">*</span>
+                </label>
+                {% if request.user.role == 'employee' and request.current_employee %}
+                  <input type="hidden" name="employee"
+                         value="{{ request.current_employee.pk }}">
+                  <input type="text" class="form-control bg-light" readonly
+                         value="{{ request.current_employee.full_name_ar }}">
+                {% else %}
+                  <select name="employee" class="form-select" required>
+                    <option value="">اختر الموظف</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.pk }}">
+                      {{ emp.full_name_ar }} ({{ emp.employee_code }})
+                    </option>
+                    {% endfor %}
+                  </select>
+                {% endif %}
+              </div>
+
+              <!-- الأولوية -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الأولوية</label>
+                <select name="priority" class="form-select">
+                  <option value="normal">عادي</option>
+                  <option value="urgent">عاجل</option>
+                </select>
+              </div>
+
+              <!-- نوع الطلب -->
+              <div class="col-12">
+                <label class="form-label fw-semibold small">
+                  نوع الطلب <span class="text-danger">*</span>
+                </label>
+
+                <!-- الفئات -->
+                <div class="row g-2 mb-3" id="categoriesSection">
+                  {% for cat in categories %}
+                  <div class="col-6 col-md-3">
+                    <div class="card border-2 category-card text-center p-2"
+                         style="cursor:pointer; border-color:#e5e7eb; border-radius:10px;"
+                         data-cat="{{ cat.pk }}">
+                      <i class="bi {{ cat.icon }} fs-4 mb-1"
+                         style="color:{{ cat.color }};"></i>
+                      <div style="font-size:0.78rem; font-weight:600; color:#374151;">
+                        {{ cat.name }}
+                      </div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+
+                <!-- أنواع الطلب حسب الفئة -->
+                <div id="typesSection" class="d-none">
+                  <select name="request_type" id="requestTypeSelect"
+                          class="form-select" required>
+                    <option value="">اختر نوع الطلب</option>
+                    {% for rt in request_types %}
+                    <option value="{{ rt.pk }}"
+                            data-cat="{{ rt.category.pk }}"
+                            data-dates="{{ rt.requires_date_range|yesno:'true,false' }}"
+                            data-amount="{{ rt.requires_amount|yesno:'true,false' }}"
+                            data-doc="{{ rt.requires_document|yesno:'true,false' }}"
+                            class="type-option d-none">
+                      {{ rt.name }}
+                    </option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+
+              <!-- الموضوع -->
+              <div class="col-12" id="subjectSection" style="display:none;">
+                <label class="form-label fw-semibold small">
+                  الموضوع <span class="text-danger">*</span>
+                </label>
+                <input type="text" name="subject" class="form-control"
+                       placeholder="اكتب موضوع الطلب بإيجاز">
+              </div>
+
+              <!-- تواريخ (اختياري) -->
+              <div class="col-md-6 d-none" id="startDateSection">
+                <label class="form-label fw-semibold small">من تاريخ</label>
+                <input type="date" name="start_date" class="form-control">
+              </div>
+
+              <div class="col-md-6 d-none" id="endDateSection">
+                <label class="form-label fw-semibold small">إلى تاريخ</label>
+                <input type="date" name="end_date" class="form-control">
+              </div>
+
+              <!-- مبلغ (اختياري) -->
+              <div class="col-md-6 d-none" id="amountSection">
+                <label class="form-label fw-semibold small">المبلغ (جنيه)</label>
+                <input type="number" name="amount" class="form-control"
+                       min="0" step="0.01" placeholder="0.00">
+              </div>
+
+              <!-- التفاصيل -->
+              <div class="col-12" id="detailsSection" style="display:none;">
+                <label class="form-label fw-semibold small">
+                  التفاصيل <span class="text-danger">*</span>
+                </label>
+                <textarea name="details" class="form-control" rows="4"
+                          placeholder="اشرح طلبك بالتفصيل..."></textarea>
+              </div>
+
+              <!-- مرفق (اختياري) -->
+              <div class="col-12 d-none" id="documentSection">
+                <label class="form-label fw-semibold small">
+                  مرفق
+                  <small class="text-muted fw-normal">(إن وجد)</small>
+                </label>
+                <input type="file" name="document" class="form-control">
+              </div>
+
+            </div>
+
+            <!-- أزرار -->
+            <div class="d-flex gap-2 mt-4 pt-3 border-top" id="submitSection"
+                 style="display:none !important;">
+              <button type="submit" class="btn text-white px-4"
+                      style="background:#06B6D4; border-radius:10px;">
+                <i class="bi bi-send me-1"></i>
+                تقديم الطلب
+              </button>
+              <a href="{% url 'requests_app:list' %}"
+                 class="btn btn-outline-secondary px-4"
+                 style="border-radius:10px;">إلغاء</a>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.category-card').forEach(card => {
+  card.addEventListener('click', function() {
+    const catId = this.dataset.cat;
+
+    // تلوين الكارت المختار
+    document.querySelectorAll('.category-card').forEach(c => {
+      c.style.borderColor = '#e5e7eb';
+      c.style.background = 'white';
+    });
+    this.style.borderColor = '#06B6D4';
+    this.style.background = '#e0f7fa';
+
+    // إظهار الأنواع
+    const typesSection = document.getElementById('typesSection');
+    const select = document.getElementById('requestTypeSelect');
+
+    typesSection.classList.remove('d-none');
+
+    // إظهار options الفئة المختارة
+    document.querySelectorAll('.type-option').forEach(opt => {
+      if (opt.dataset.cat === catId) {
+        opt.classList.remove('d-none');
+      } else {
+        opt.classList.add('d-none');
+        opt.selected = false;
+      }
+    });
+
+    select.value = '';
+    hideExtraFields();
+  });
+});
+
+document.getElementById('requestTypeSelect').addEventListener('change', function() {
+  const selected = this.options[this.selectedIndex];
+  if (!selected.value) {
+    hideExtraFields();
+    return;
+  }
+
+  const needsDates  = selected.dataset.dates  === 'true';
+  const needsAmount = selected.dataset.amount  === 'true';
+  const needsDoc    = selected.dataset.doc     === 'true';
+
+  // إظهار الحقول
+  document.getElementById('subjectSection').style.display = 'block';
+  document.getElementById('detailsSection').style.display = 'block';
+  document.getElementById('submitSection').style.removeProperty('display');
+
+  toggleSection('startDateSection', needsDates);
+  toggleSection('endDateSection', needsDates);
+  toggleSection('amountSection', needsAmount);
+  toggleSection('documentSection', needsDoc);
+
+  // subject placeholder ذكي
+  document.querySelector('[name="subject"]').placeholder =
+    'طلب ' + selected.text.trim();
+});
+
+function toggleSection(id, show) {
+  const el = document.getElementById(id);
+  if (show) {
+    el.classList.remove('d-none');
+  } else {
+    el.classList.add('d-none');
+  }
+}
+
+function hideExtraFields() {
+  document.getElementById('subjectSection').style.display = 'none';
+  document.getElementById('detailsSection').style.display = 'none';
+  document.getElementById('submitSection').style.display = 'none';
+  ['startDateSection', 'endDateSection', 'amountSection', 'documentSection'].forEach(id => {
+    document.getElementById(id).classList.add('d-none');
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,917 @@
+"""
+Patch 49c — Employee Form Smart Wizard + Manager Filter
+
+الهدف:
+1) تحويل فورم الموظف إلى Wizard واضح متعدد الخطوات
+2) إظهار الخطوة الحالية بوضوح
+3) منع الانتقال للخطوة التالية قبل استيفاء الحقول المطلوبة
+4) عرض أسماء الحقول الناقصة بالاسم
+5) فلترة direct_manager ليعرض المديرين/المشرفين فقط قدر الإمكان
+6) الحفاظ على employees/views.py الحالي بدون المساس بباقي الشغل
+
+هذا الباتش:
+- يحدّث templates/employees/form.html بالكامل
+- يحدّث helper واحدة في employees/views.py
+- لا يلمس exports ولا list ولا urls
+"""
+
+import os
+import re
+import shutil
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def read_file(path):
+    full = os.path.join(BASE_DIR, path)
+    if not os.path.exists(full):
+        return None
+    with open(full, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def write_file(path, content):
+    full = os.path.join(BASE_DIR, path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"✅ كُتب: {path}")
+
+
+print("=" * 60)
+print("Patch 49c — Employee Form Smart Wizard + Manager Filter")
+print("=" * 60)
+
+views_path = "employees/views.py"
+template_path = "templates/employees/form.html"
+
+views_full = os.path.join(BASE_DIR, views_path)
+template_full = os.path.join(BASE_DIR, template_path)
+
+if not os.path.exists(views_full):
+    raise SystemExit("❌ ملف employees/views.py غير موجود")
+
+# ────────────────────────────────────────────────────────────
+# Backups
+# ────────────────────────────────────────────────────────────
+backup_dir = os.path.join(BASE_DIR, "_patches", "_backups")
+os.makedirs(backup_dir, exist_ok=True)
+
+shutil.copy2(
+    views_full,
+    os.path.join(backup_dir, "employees_views_before_patch_49c.py.bak")
+)
+print("✅ Backup created: _patches/_backups/employees_views_before_patch_49c.py.bak")
+
+if os.path.exists(template_full):
+    shutil.copy2(
+        template_full,
+        os.path.join(backup_dir, "employees_form_before_patch_49c.html.bak")
+    )
+    print("✅ Backup created: _patches/_backups/employees_form_before_patch_49c.html.bak")
+
+# ────────────────────────────────────────────────────────────
+# Step 1: تحديث employees/views.py
+# ────────────────────────────────────────────────────────────
+print("\n📌 Step 1: تحديث فلترة المدير المباشر في employees/views.py")
+
+views_content = read_file(views_path)
+
+replacement_block = r'''
+def _get_manager_candidates_queryset(company=None, instance=None):
+    """
+    ترشيح المدير المباشر:
+    - manager / hr_manager / company_admin
+    - أو أي مسمى يحتوي Manager / مدير / Supervisor / مشرف
+    - fallback إلى كل النشطين لو لم نجد نتائج
+    """
+    qs = _safe_qs(Employee, company).select_related('user', 'job_title')
+
+    try:
+        qs = qs.filter(status='active')
+    except Exception:
+        pass
+
+    if instance and instance.pk:
+        qs = qs.exclude(pk=instance.pk)
+
+    manager_filters = Q()
+
+    try:
+        manager_filters |= Q(user__role__in=['manager', 'hr_manager', 'company_admin'])
+    except Exception:
+        pass
+
+    try:
+        manager_filters |= Q(job_title__name_ar__icontains='مدير')
+        manager_filters |= Q(job_title__name_ar__icontains='مشرف')
+        manager_filters |= Q(job_title__name_en__icontains='manager')
+        manager_filters |= Q(job_title__name_en__icontains='supervisor')
+    except Exception:
+        pass
+
+    filtered = qs.filter(manager_filters).distinct()
+
+    try:
+        if filtered.exists():
+            return filtered.order_by('employee_code', 'id')
+    except Exception:
+        pass
+
+    return qs.order_by('employee_code', 'id')
+
+
+def _configure_employee_form(form, company=None, instance=None):
+    try:
+        if 'branch' in form.fields:
+            form.fields['branch'].queryset = _safe_qs(Branch, company).order_by('name_ar', 'name_en')
+    except Exception:
+        pass
+
+    try:
+        if 'department' in form.fields:
+            form.fields['department'].queryset = _safe_qs(Department, company).order_by('name_ar', 'name_en')
+    except Exception:
+        pass
+
+    try:
+        if 'job_title' in form.fields:
+            qs = _safe_qs(JobTitle, company)
+            if hasattr(JobTitle, 'is_active'):
+                try:
+                    qs = qs.filter(is_active=True)
+                except Exception:
+                    pass
+            form.fields['job_title'].queryset = qs.order_by('name_ar', 'name_en')
+    except Exception:
+        pass
+
+    try:
+        if 'direct_manager' in form.fields:
+            form.fields['direct_manager'].queryset = _get_manager_candidates_queryset(company=company, instance=instance)
+            try:
+                form.fields['direct_manager'].empty_label = 'اختر المدير المباشر'
+            except Exception:
+                pass
+    except Exception:
+        pass
+'''
+
+pattern = re.compile(
+    r"def _configure_employee_form\(form, company=None, instance=None\):.*?def _try_sync_employee_account",
+    re.DOTALL
+)
+
+if pattern.search(views_content):
+    views_content = pattern.sub(replacement_block + "\n\ndef _try_sync_employee_account", views_content)
+    write_file(views_path, views_content)
+    print("✅ تم تحديث _configure_employee_form + إضافة _get_manager_candidates_queryset")
+else:
+    print("⚠️ لم أجد البلوك المتوقع — لن أعدل views.py تلقائيًا")
+    # لو لم يجد البلوك، نضيف قبل helper التالية لو وجدت
+    if "def _try_sync_employee_account" in views_content and "_get_manager_candidates_queryset" not in views_content:
+        views_content = views_content.replace(
+            "def _try_sync_employee_account",
+            replacement_block + "\n\ndef _try_sync_employee_account",
+            1
+        )
+        write_file(views_path, views_content)
+        print("✅ تم الحقن قبل _try_sync_employee_account")
+
+# ────────────────────────────────────────────────────────────
+# Step 2: استبدال templates/employees/form.html
+# ────────────────────────────────────────────────────────────
+print("\n📌 Step 2: تحديث templates/employees/form.html")
+
+form_template = """{% extends 'base/dashboard_base.html' %}
+
+{% block title %}{{ page_title|default:"إضافة موظف" }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .wizard-shell {
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fdff 100%);
+  }
+
+  .wizard-stepper {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .wizard-step {
+    border: 1px solid #dbeafe;
+    background: #fff;
+    border-radius: 16px;
+    padding: 14px 12px;
+    cursor: pointer;
+    transition: .2s ease;
+    min-height: 88px;
+  }
+
+  .wizard-step:hover {
+    border-color: #06B6D4;
+    transform: translateY(-1px);
+  }
+
+  .wizard-step.active {
+    background: #06B6D4;
+    border-color: #06B6D4;
+    color: white;
+    box-shadow: 0 10px 24px rgba(6,182,212,.18);
+  }
+
+  .wizard-step.done {
+    background: #ecfeff;
+    border-color: #67e8f9;
+  }
+
+  .wizard-step-number {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    background: rgba(6,182,212,.12);
+    color: #0891b2;
+    margin-bottom: 10px;
+  }
+
+  .wizard-step.active .wizard-step-number {
+    background: rgba(255,255,255,.18);
+    color: #fff;
+  }
+
+  .wizard-step-title {
+    font-weight: 800;
+    font-size: .95rem;
+    margin-bottom: 3px;
+  }
+
+  .wizard-step-note {
+    font-size: .78rem;
+    opacity: .85;
+  }
+
+  .wizard-panel {
+    display: none;
+  }
+
+  .wizard-panel.active {
+    display: block;
+    animation: fadePanel .18s ease;
+  }
+
+  @keyframes fadePanel {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .section-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .section-head {
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 14px 18px;
+  }
+
+  .section-head h6 {
+    margin: 0;
+    font-weight: 800;
+  }
+
+  .section-head small {
+    color: #64748b;
+  }
+
+  .field-box {
+    margin-bottom: 1rem;
+  }
+
+  .field-box label {
+    display: block;
+    margin-bottom: .45rem;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .field-box .required-star {
+    color: #dc2626;
+    margin-right: 4px;
+  }
+
+  .field-box .helptext {
+    display: block;
+    color: #64748b;
+    font-size: .78rem;
+    margin-top: .3rem;
+  }
+
+  .field-box .errorlist {
+    list-style: none;
+    padding: 0;
+    margin: .35rem 0 0;
+    color: #dc2626;
+    font-size: .82rem;
+  }
+
+  .wizard-actions {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    padding: 16px 0 0;
+    margin-top: 24px;
+  }
+
+  .wizard-status {
+    border: 1px dashed #cbd5e1;
+    background: #f8fafc;
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+
+  .wizard-status .status-title {
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+
+  .missing-list {
+    margin: 0;
+    padding-right: 18px;
+  }
+
+  .missing-list li {
+    margin-bottom: 4px;
+  }
+
+  .field-invalid {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 .2rem rgba(220,38,38,.08) !important;
+  }
+
+  .form-check-wrap {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #fff;
+  }
+
+  .mini-note {
+    color: #64748b;
+    font-size: .8rem;
+  }
+
+  @media (max-width: 991.98px) {
+    .wizard-stepper {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Header -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <h4 class="mb-1 fw-bold">
+        <i class="bi bi-person-plus-fill text-primary me-2"></i>{{ form_title|default:"إضافة موظف جديد" }}
+      </h4>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 small">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">الرئيسية</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'employees:list' %}">الموظفون</a></li>
+          <li class="breadcrumb-item active">{{ form_title|default:"إضافة موظف جديد" }}</li>
+        </ol>
+      </nav>
+    </div>
+    <div>
+      <a href="{% url 'employees:list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right-circle me-1"></i>العودة للقائمة
+      </a>
+    </div>
+  </div>
+
+  {% if form.errors %}
+  <div class="alert alert-danger border-0 shadow-sm">
+    <div class="fw-bold mb-2">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>يوجد حقول مطلوبة أو بيانات غير صحيحة:
+    </div>
+    <ul class="mb-0">
+      {% for field in form %}
+        {% for error in field.errors %}
+          <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+        {% endfor %}
+      {% endfor %}
+      {% for error in form.non_field_errors %}
+        <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="card border-0 shadow-sm wizard-shell">
+    <div class="card-body p-4">
+
+      <!-- Stepper -->
+      <div class="wizard-stepper mb-4" id="wizard-stepper">
+        <div class="wizard-step active" data-step="1">
+          <div class="wizard-step-number">1</div>
+          <div class="wizard-step-title">البيانات الأساسية</div>
+          <div class="wizard-step-note">الاسم والهوية والبيانات الشخصية</div>
+        </div>
+
+        <div class="wizard-step" data-step="2">
+          <div class="wizard-step-number">2</div>
+          <div class="wizard-step-title">التواصل</div>
+          <div class="wizard-step-note">الهاتف والعنوان والطوارئ</div>
+        </div>
+
+        <div class="wizard-step" data-step="3">
+          <div class="wizard-step-number">3</div>
+          <div class="wizard-step-title">بيانات التعيين</div>
+          <div class="wizard-step-note">القسم والفرع والوظيفة والمدير</div>
+        </div>
+
+        <div class="wizard-step" data-step="4">
+          <div class="wizard-step-number">4</div>
+          <div class="wizard-step-title">المالية والتأمين</div>
+          <div class="wizard-step-note">الراتب والبنك والتأمين</div>
+        </div>
+
+        <div class="wizard-step" data-step="5">
+          <div class="wizard-step-number">5</div>
+          <div class="wizard-step-title">الحضور والتتبع</div>
+          <div class="wizard-step-note">نمط الحضور والتتبع والصلاحيات</div>
+        </div>
+      </div>
+
+      <div class="wizard-status mb-4" id="wizard-status-box">
+        <div class="status-title">
+          <i class="bi bi-info-circle-fill text-primary me-1"></i>
+          الخطوة الحالية: <span id="current-step-title">البيانات الأساسية</span>
+        </div>
+        <div class="mini-note" id="wizard-status-note">
+          لا يمكن الانتقال للخطوة التالية إلا بعد استكمال الحقول الإلزامية في الخطوة الحالية.
+        </div>
+        <div id="missing-fields-box" class="mt-2" style="display:none;">
+          <div class="fw-bold text-danger mb-1">الحقول الناقصة:</div>
+          <ul class="missing-list text-danger" id="missing-fields-list"></ul>
+        </div>
+      </div>
+
+      <form method="post" enctype="multipart/form-data" id="employeeWizardForm" novalidate>
+        {% csrf_token %}
+        {% for hidden in form.hidden_fields %}
+          {{ hidden }}
+        {% endfor %}
+
+        <!-- STEP 1 -->
+        <div class="wizard-panel active" data-step-panel="1">
+          <div class="section-card">
+            <div class="section-head">
+              <h6><i class="bi bi-person-vcard me-2 text-primary"></i>البيانات الأساسية</h6>
+              <small>أدخل هوية الموظف الأساسية والبيانات الشخصية</small>
+            </div>
+            <div class="p-4">
+              <div class="row">
+                {% if form.employee_code %}<div class="col-md-4 field-box">{{ form.employee_code.label_tag }}{{ form.employee_code }}{{ form.employee_code.errors }}</div>{% endif %}
+                {% if form.first_name_ar %}<div class="col-md-4 field-box">{{ form.first_name_ar.label_tag }}{{ form.first_name_ar }}{{ form.first_name_ar.errors }}</div>{% endif %}
+                {% if form.middle_name_ar %}<div class="col-md-4 field-box">{{ form.middle_name_ar.label_tag }}{{ form.middle_name_ar }}{{ form.middle_name_ar.errors }}</div>{% endif %}
+                {% if form.last_name_ar %}<div class="col-md-4 field-box">{{ form.last_name_ar.label_tag }}{{ form.last_name_ar }}{{ form.last_name_ar.errors }}</div>{% endif %}
+                {% if form.first_name_en %}<div class="col-md-4 field-box">{{ form.first_name_en.label_tag }}{{ form.first_name_en }}{{ form.first_name_en.errors }}</div>{% endif %}
+                {% if form.last_name_en %}<div class="col-md-4 field-box">{{ form.last_name_en.label_tag }}{{ form.last_name_en }}{{ form.last_name_en.errors }}</div>{% endif %}
+                {% if form.national_id %}<div class="col-md-4 field-box">{{ form.national_id.label_tag }}{{ form.national_id }}{{ form.national_id.errors }}</div>{% endif %}
+                {% if form.birth_date %}<div class="col-md-4 field-box">{{ form.birth_date.label_tag }}{{ form.birth_date }}{{ form.birth_date.errors }}</div>{% endif %}
+                {% if form.gender %}<div class="col-md-4 field-box">{{ form.gender.label_tag }}{{ form.gender }}{{ form.gender.errors }}</div>{% endif %}
+                {% if form.marital_status %}<div class="col-md-4 field-box">{{ form.marital_status.label_tag }}{{ form.marital_status }}{{ form.marital_status.errors }}</div>{% endif %}
+                {% if form.religion %}<div class="col-md-4 field-box">{{ form.religion.label_tag }}{{ form.religion }}{{ form.religion.errors }}</div>{% endif %}
+                {% if form.nationality %}<div class="col-md-4 field-box">{{ form.nationality.label_tag }}{{ form.nationality }}{{ form.nationality.errors }}</div>{% endif %}
+                {% if form.photo %}<div class="col-md-6 field-box">{{ form.photo.label_tag }}{{ form.photo }}{{ form.photo.errors }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2 -->
+        <div class="wizard-panel" data-step-panel="2">
+          <div class="section-card">
+            <div class="section-head">
+              <h6><i class="bi bi-telephone-forward me-2 text-primary"></i>بيانات التواصل والطوارئ</h6>
+              <small>بيانات الاتصال الأساسية ووسيلة التواصل في الحالات الطارئة</small>
+            </div>
+            <div class="p-4">
+              <div class="row">
+                {% if form.email %}<div class="col-md-4 field-box">{{ form.email.label_tag }}{{ form.email }}{{ form.email.errors }}</div>{% endif %}
+                {% if form.phone %}<div class="col-md-4 field-box">{{ form.phone.label_tag }}{{ form.phone }}{{ form.phone.errors }}</div>{% endif %}
+                {% if form.phone2 %}<div class="col-md-4 field-box">{{ form.phone2.label_tag }}{{ form.phone2 }}{{ form.phone2.errors }}</div>{% endif %}
+                {% if form.city %}<div class="col-md-4 field-box">{{ form.city.label_tag }}{{ form.city }}{{ form.city.errors }}</div>{% endif %}
+                {% if form.address %}<div class="col-md-8 field-box">{{ form.address.label_tag }}{{ form.address }}{{ form.address.errors }}</div>{% endif %}
+
+                {% if form.emergency_contact_name %}<div class="col-md-4 field-box">{{ form.emergency_contact_name.label_tag }}{{ form.emergency_contact_name }}{{ form.emergency_contact_name.errors }}</div>{% endif %}
+                {% if form.emergency_contact_relation %}<div class="col-md-4 field-box">{{ form.emergency_contact_relation.label_tag }}{{ form.emergency_contact_relation }}{{ form.emergency_contact_relation.errors }}</div>{% endif %}
+                {% if form.emergency_contact_phone %}<div class="col-md-4 field-box">{{ form.emergency_contact_phone.label_tag }}{{ form.emergency_contact_phone }}{{ form.emergency_contact_phone.errors }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 3 -->
+        <div class="wizard-panel" data-step-panel="3">
+          <div class="section-card">
+            <div class="section-head">
+              <h6><i class="bi bi-briefcase-fill me-2 text-primary"></i>بيانات التعيين</h6>
+              <small>الفرع والإدارة والمسمى الوظيفي والمدير المباشر</small>
+            </div>
+            <div class="p-4">
+              <div class="alert alert-info border-0">
+                <i class="bi bi-info-circle me-1"></i>
+                قائمة <strong>المدير المباشر</strong> تم تحسينها لتعرض المديرين/المشرفين فقط قدر الإمكان.
+              </div>
+              <div class="row">
+                {% if form.hire_date %}<div class="col-md-4 field-box">{{ form.hire_date.label_tag }}{{ form.hire_date }}{{ form.hire_date.errors }}</div>{% endif %}
+                {% if form.contract_type %}<div class="col-md-4 field-box">{{ form.contract_type.label_tag }}{{ form.contract_type }}{{ form.contract_type.errors }}</div>{% endif %}
+                {% if form.contract_end_date %}<div class="col-md-4 field-box">{{ form.contract_end_date.label_tag }}{{ form.contract_end_date }}{{ form.contract_end_date.errors }}</div>{% endif %}
+
+                {% if form.branch %}<div class="col-md-4 field-box">{{ form.branch.label_tag }}{{ form.branch }}{{ form.branch.errors }}</div>{% endif %}
+                {% if form.department %}<div class="col-md-4 field-box">{{ form.department.label_tag }}{{ form.department }}{{ form.department.errors }}</div>{% endif %}
+                {% if form.job_title %}<div class="col-md-4 field-box">{{ form.job_title.label_tag }}{{ form.job_title }}{{ form.job_title.errors }}</div>{% endif %}
+
+                {% if form.direct_manager %}<div class="col-md-6 field-box">{{ form.direct_manager.label_tag }}{{ form.direct_manager }}{{ form.direct_manager.errors }}</div>{% endif %}
+                {% if form.status %}<div class="col-md-3 field-box">{{ form.status.label_tag }}{{ form.status }}{{ form.status.errors }}</div>{% endif %}
+                {% if form.termination_date %}<div class="col-md-3 field-box">{{ form.termination_date.label_tag }}{{ form.termination_date }}{{ form.termination_date.errors }}</div>{% endif %}
+                {% if form.termination_reason %}<div class="col-md-12 field-box">{{ form.termination_reason.label_tag }}{{ form.termination_reason }}{{ form.termination_reason.errors }}</div>{% endif %}
+                {% if form.notes %}<div class="col-md-12 field-box">{{ form.notes.label_tag }}{{ form.notes }}{{ form.notes.errors }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4 -->
+        <div class="wizard-panel" data-step-panel="4">
+          <div class="section-card">
+            <div class="section-head">
+              <h6><i class="bi bi-cash-coin me-2 text-primary"></i>البيانات المالية والتأمين</h6>
+              <small>الراتب وبيانات البنك والتأمينات</small>
+            </div>
+            <div class="p-4">
+              <div class="row">
+                {% if form.basic_salary %}<div class="col-md-4 field-box">{{ form.basic_salary.label_tag }}{{ form.basic_salary }}{{ form.basic_salary.errors }}</div>{% endif %}
+                {% if form.bank_name %}<div class="col-md-4 field-box">{{ form.bank_name.label_tag }}{{ form.bank_name }}{{ form.bank_name.errors }}</div>{% endif %}
+                {% if form.bank_account %}<div class="col-md-4 field-box">{{ form.bank_account.label_tag }}{{ form.bank_account }}{{ form.bank_account.errors }}</div>{% endif %}
+                {% if form.iban %}<div class="col-md-4 field-box">{{ form.iban.label_tag }}{{ form.iban }}{{ form.iban.errors }}</div>{% endif %}
+                {% if form.insurance_number %}<div class="col-md-4 field-box">{{ form.insurance_number.label_tag }}{{ form.insurance_number }}{{ form.insurance_number.errors }}</div>{% endif %}
+                {% if form.insurance_date %}<div class="col-md-4 field-box">{{ form.insurance_date.label_tag }}{{ form.insurance_date }}{{ form.insurance_date.errors }}</div>{% endif %}
+
+                {% if form.has_insurance %}
+                <div class="col-md-12 field-box">
+                  <label>{{ form.has_insurance.label }}</label>
+                  <div class="form-check-wrap">
+                    <div class="form-check">
+                      {{ form.has_insurance }}
+                      <label class="form-check-label ms-2" for="{{ form.has_insurance.id_for_label }}">
+                        الموظف مشترك في التأمينات
+                      </label>
+                    </div>
+                  </div>
+                  {{ form.has_insurance.errors }}
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 5 -->
+        <div class="wizard-panel" data-step-panel="5">
+          <div class="section-card">
+            <div class="section-head">
+              <h6><i class="bi bi-fingerprint me-2 text-primary"></i>الحضور والتتبع</h6>
+              <small>إعدادات الحضور ونمط العمل والتتبع</small>
+            </div>
+            <div class="p-4">
+              <div class="row">
+                {% if form.attendance_mode %}<div class="col-md-4 field-box">{{ form.attendance_mode.label_tag }}{{ form.attendance_mode }}{{ form.attendance_mode.errors }}</div>{% endif %}
+                {% if form.required_daily_hours %}<div class="col-md-4 field-box">{{ form.required_daily_hours.label_tag }}{{ form.required_daily_hours }}{{ form.required_daily_hours.errors }}</div>{% endif %}
+
+                {% if form.stealth_tracking_enabled %}
+                <div class="col-md-6 field-box">
+                  <label>{{ form.stealth_tracking_enabled.label }}</label>
+                  <div class="form-check-wrap">
+                    <div class="form-check">
+                      {{ form.stealth_tracking_enabled }}
+                      <label class="form-check-label ms-2" for="{{ form.stealth_tracking_enabled.id_for_label }}">
+                        تفعيل التتبع الصامت لهذا الموظف
+                      </label>
+                    </div>
+                  </div>
+                  {{ form.stealth_tracking_enabled.errors }}
+                </div>
+                {% endif %}
+
+                {% if form.is_field_worker %}
+                <div class="col-md-6 field-box">
+                  <label>{{ form.is_field_worker.label }}</label>
+                  <div class="form-check-wrap">
+                    <div class="form-check">
+                      {{ form.is_field_worker }}
+                      <label class="form-check-label ms-2" for="{{ form.is_field_worker.id_for_label }}">
+                        موظف ميداني
+                      </label>
+                    </div>
+                  </div>
+                  {{ form.is_field_worker.errors }}
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACTIONS -->
+        <div class="wizard-actions">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="mini-note">
+              <i class="bi bi-lightbulb me-1 text-warning"></i>
+              النظام سيمنعك من الانتقال لو الحقول الإلزامية في الخطوة الحالية غير مكتملة.
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-outline-secondary" id="prevStepBtn">
+                <i class="bi bi-arrow-right me-1"></i>السابق
+              </button>
+
+              <button type="button" class="btn btn-primary" id="nextStepBtn">
+                التالي<i class="bi bi-arrow-left ms-1"></i>
+              </button>
+
+              <button type="submit" class="btn btn-success" id="submitFormBtn" style="display:none;">
+                <i class="bi bi-check2-circle me-1"></i>حفظ الموظف
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const form = document.getElementById('employeeWizardForm');
+  const stepButtons = Array.from(document.querySelectorAll('.wizard-step'));
+  const panels = Array.from(document.querySelectorAll('.wizard-panel'));
+  const prevBtn = document.getElementById('prevStepBtn');
+  const nextBtn = document.getElementById('nextStepBtn');
+  const submitBtn = document.getElementById('submitFormBtn');
+
+  const currentStepTitle = document.getElementById('current-step-title');
+  const missingBox = document.getElementById('missing-fields-box');
+  const missingList = document.getElementById('missing-fields-list');
+
+  let currentStep = 1;
+
+  const stepMeta = {
+    1: 'البيانات الأساسية',
+    2: 'التواصل',
+    3: 'بيانات التعيين',
+    4: 'المالية والتأمين',
+    5: 'الحضور والتتبع'
+  };
+
+  function bootstrapizeFields() {
+    document.querySelectorAll('input, select, textarea').forEach(el => {
+      if (el.type === 'hidden') return;
+
+      if (el.type === 'checkbox') {
+        el.classList.add('form-check-input');
+        return;
+      }
+
+      if (el.tagName === 'SELECT') {
+        el.classList.add('form-select');
+      } else if (el.type === 'file') {
+        el.classList.add('form-control');
+      } else {
+        el.classList.add('form-control');
+      }
+    });
+
+    document.querySelectorAll('.field-box label').forEach(label => {
+      const box = label.closest('.field-box');
+      if (!box) return;
+      const input = box.querySelector('input, select, textarea');
+      if (!input) return;
+
+      if (input.required && !label.querySelector('.required-star')) {
+        const star = document.createElement('span');
+        star.className = 'required-star';
+        star.textContent = '*';
+        label.appendChild(star);
+      }
+    });
+  }
+
+  function getPanel(step) {
+    return document.querySelector('.wizard-panel[data-step-panel="' + step + '"]');
+  }
+
+  function getVisibleRequiredInputs(step) {
+    const panel = getPanel(step);
+    if (!panel) return [];
+
+    const all = Array.from(panel.querySelectorAll('input, select, textarea'));
+    return all.filter(el => {
+      if (el.disabled) return false;
+      if (el.type === 'hidden') return false;
+      if (!el.required) return false;
+      if (el.offsetParent === null) return false;
+      return true;
+    });
+  }
+
+  function clearInvalid(step) {
+    const panel = getPanel(step);
+    if (!panel) return;
+    panel.querySelectorAll('.field-invalid').forEach(el => el.classList.remove('field-invalid'));
+  }
+
+  function getLabelText(input) {
+    const box = input.closest('.field-box');
+    if (box) {
+      const label = box.querySelector('label');
+      if (label) {
+        return label.textContent.replace('*', '').trim();
+      }
+    }
+    return input.getAttribute('placeholder') || input.name || 'حقل مطلوب';
+  }
+
+  function validateStep(step, focusFirst=true) {
+    clearInvalid(step);
+    const requiredInputs = getVisibleRequiredInputs(step);
+    const missing = [];
+    let firstInvalid = null;
+
+    requiredInputs.forEach(input => {
+      let valid = true;
+
+      if (input.type === 'checkbox') {
+        valid = input.checked;
+      } else if (input.tagName === 'SELECT') {
+        valid = !!String(input.value || '').trim();
+      } else {
+        valid = input.checkValidity() && !!String(input.value || '').trim();
+      }
+
+      if (!valid) {
+        input.classList.add('field-invalid');
+        const label = getLabelText(input);
+        if (!missing.includes(label)) {
+          missing.push(label);
+        }
+        if (!firstInvalid) {
+          firstInvalid = input;
+        }
+      }
+    });
+
+    if (missing.length) {
+      missingBox.style.display = 'block';
+      missingList.innerHTML = missing.map(item => '<li>' + item + '</li>').join('');
+      if (focusFirst && firstInvalid) {
+        firstInvalid.focus();
+      }
+      return false;
+    }
+
+    missingBox.style.display = 'none';
+    missingList.innerHTML = '';
+    return true;
+  }
+
+  function updateStepper() {
+    stepButtons.forEach(btn => {
+      const step = parseInt(btn.dataset.step, 10);
+      btn.classList.remove('active', 'done');
+
+      if (step === currentStep) {
+        btn.classList.add('active');
+      } else if (step < currentStep) {
+        btn.classList.add('done');
+      }
+    });
+
+    panels.forEach(panel => {
+      const step = parseInt(panel.dataset.stepPanel, 10);
+      panel.classList.toggle('active', step === currentStep);
+    });
+
+    currentStepTitle.textContent = stepMeta[currentStep] || 'الخطوة الحالية';
+
+    prevBtn.style.visibility = currentStep === 1 ? 'hidden' : 'visible';
+    nextBtn.style.display = currentStep === panels.length ? 'none' : 'inline-block';
+    submitBtn.style.display = currentStep === panels.length ? 'inline-block' : 'none';
+
+    if (currentStep !== panels.length) {
+      submitBtn.style.display = 'none';
+    }
+  }
+
+  function goToStep(step) {
+    if (step < 1 || step > panels.length) return;
+    currentStep = step;
+    updateStepper();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  prevBtn.addEventListener('click', function() {
+    if (currentStep > 1) {
+      missingBox.style.display = 'none';
+      goToStep(currentStep - 1);
+    }
+  });
+
+  nextBtn.addEventListener('click', function() {
+    if (validateStep(currentStep)) {
+      goToStep(currentStep + 1);
+    }
+  });
+
+  stepButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      const target = parseInt(btn.dataset.step, 10);
+
+      if (target < currentStep) {
+        missingBox.style.display = 'none';
+        goToStep(target);
+        return;
+      }
+
+      if (target === currentStep) return;
+
+      if (validateStep(currentStep)) {
+        goToStep(target);
+      }
+    });
+  });
+
+  form.addEventListener('submit', function(e) {
+    for (let step = 1; step <= panels.length; step++) {
+      const ok = validateStep(step, false);
+      if (!ok) {
+        e.preventDefault();
+        goToStep(step);
+        validateStep(step, true);
+        return;
+      }
+    }
+  });
+
+  bootstrapizeFields();
+  updateStepper();
+})();
+</script>
+{% endblock %}
+"""
+
+write_file(template_path, form_template)
+
+print("\n" + "=" * 60)
+print("✅ Patch 49c اكتمل")
+print("=" * 60)
+print("""
+اللي اتعمل:
+  ✅ تحويل فورم الموظف إلى Smart Wizard من 5 خطوات
+  ✅ إظهار الخطوة الحالية بوضوح
+  ✅ منع الانتقال للخطوة التالية قبل استكمال الحقول المطلوبة
+  ✅ عرض أسماء الحقول الناقصة بالاسم
+  ✅ تحسين فلترة direct_manager ليعرض المديرين/المشرفين فقط قدر الإمكان
+  ✅ إنشاء backups قبل التعديل
+
+الملفات المعدلة:
+  ✅ employees/views.py
+  ✅ templates/employees/form.html
+
+شغّل:
+  python manage.py check
+  python manage.py runserver 0.0.0.0:8000
+
+اختبر:
+  /employees/add/
+  /employees/<id>/edit/
+""")

@@ -1,0 +1,171 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}الملف الشخصي{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="row g-4">
+
+    <!-- بطاقة المعلومات الشخصية -->
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+
+          <!-- الصورة -->
+          <div class="position-relative d-inline-block mb-3">
+            {% if user.avatar %}
+              <img src="{{ user.avatar.url }}"
+                   class="rounded-circle shadow"
+                   style="width:100px;height:100px;object-fit:cover;">
+            {% else %}
+              <div class="rounded-circle d-flex align-items-center justify-content-center shadow mx-auto"
+                   style="width:100px;height:100px;
+                          background:linear-gradient(135deg,#06B6D4,#0891B2);
+                          font-size:2.5rem;font-weight:900;color:white;">
+                {{ user.get_full_name|first|default:user.username|first|upper }}
+              </div>
+            {% endif %}
+            <label for="avatarInput"
+                   class="position-absolute bottom-0 end-0
+                          btn btn-sm btn-light rounded-circle shadow-sm"
+                   style="width:32px;height:32px;padding:0;
+                          display:flex;align-items:center;justify-content:center;
+                          cursor:pointer;">
+              <i class="bi bi-camera-fill" style="color:#06B6D4;font-size:0.8rem;"></i>
+            </label>
+          </div>
+
+          <h5 class="fw-bold mb-1">
+            {{ user.get_full_name|default:user.username }}
+          </h5>
+          <div class="badge mb-2" style="background:#06B6D4;">
+            {{ user.get_role_display|default:"مستخدم" }}
+          </div>
+          <div class="text-muted small">
+            {{ user.company.name_ar|default:"—" }}
+          </div>
+
+          <hr>
+
+          <div class="text-start">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="bi bi-envelope text-muted"></i>
+              <span class="small">{{ user.email|default:"لم يحدد" }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="bi bi-phone text-muted"></i>
+              <span class="small">{{ user.phone|default:"لم يحدد" }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi bi-calendar text-muted"></i>
+              <span class="small">
+                عضو منذ {{ user.date_joined|date:"d/m/Y" }}
+              </span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- إحصائيات سريعة -->
+      <div class="card border-0 shadow-sm mt-3">
+        <div class="card-body p-4">
+          <h6 class="fw-bold mb-3">إحصائياتي</h6>
+          <div class="d-flex justify-content-between py-2 border-bottom">
+            <span class="text-muted small">آخر دخول</span>
+            <span class="small fw-semibold">
+              {{ user.last_login|date:"d/m/Y H:i"|default:"—" }}
+            </span>
+          </div>
+          <div class="d-flex justify-content-between py-2">
+            <span class="text-muted small">حالة الحساب</span>
+            <span class="badge {% if user.is_active %}bg-success{% else %}bg-danger{% endif %}">
+              {% if user.is_active %}نشط{% else %}موقوف{% endif %}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- تعديل البيانات -->
+    <div class="col-lg-8">
+
+      <!-- بيانات الحساب -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+          <h5 class="fw-bold mb-0">
+            <i class="bi bi-person me-2" style="color:#06B6D4;"></i>
+            بيانات الحساب
+          </h5>
+        </div>
+        <div class="card-body px-4 pb-4">
+          <form method="post" enctype="multipart/form-data"
+                action="{% url 'accounts:profile_update' %}">
+            {% csrf_token %}
+            <input type="file" id="avatarInput" name="avatar"
+                   class="d-none" accept="image/*"
+                   onchange="this.form.submit()">
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الاسم الأول</label>
+                <input type="text" name="first_name" class="form-control"
+                       value="{{ user.first_name }}">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">الاسم الأخير</label>
+                <input type="text" name="last_name" class="form-control"
+                       value="{{ user.last_name }}">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">البريد الإلكتروني</label>
+                <input type="email" name="email" class="form-control"
+                       value="{{ user.email }}" dir="ltr">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">رقم الموبايل</label>
+                <input type="text" name="phone" class="form-control"
+                       value="{{ user.phone|default:'' }}">
+              </div>
+            </div>
+
+            <div class="mt-3">
+              <button type="submit" class="btn text-white px-4"
+                      style="background:#06B6D4; border-radius:10px;">
+                <i class="bi bi-check-lg me-1"></i>
+                حفظ التغييرات
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- تغيير كلمة المرور -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+          <h5 class="fw-bold mb-0">
+            <i class="bi bi-key me-2" style="color:#06B6D4;"></i>
+            تغيير كلمة المرور
+          </h5>
+        </div>
+        <div class="card-body px-4 pb-4">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <p class="mb-1 fw-semibold">كلمة المرور الحالية</p>
+              <p class="text-muted small mb-0">
+                لحماية حسابك، يُنصح بتغيير كلمة المرور بانتظام
+              </p>
+            </div>
+            <a href="{% url 'password_change' %}"
+               class="btn btn-outline-primary">
+              <i class="bi bi-key me-1"></i>
+              تغيير
+            </a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

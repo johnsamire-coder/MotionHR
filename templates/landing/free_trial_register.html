@@ -1,0 +1,122 @@
+{% extends 'base/base.html' %}
+{% block title %}ابدأ تجربتك المجانية — MotionHR{% endblock %}
+
+{% block content %}
+<div class="container py-5" style="max-width: 850px;">
+  <div class="text-center mb-4">
+    <h1 class="fw-bold" style="color:#06B6D4;">ابدأ تجربتك المجانية</h1>
+    <p class="text-muted">جرّب MotionHR مجاناً لمدة {{ trial_days }} يوم — كل المميزات مفتوحة — بدون التزام</p>
+  </div>
+
+  {% if messages %}
+  <div class="mb-3">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }} border-0" style="border-radius:12px;">
+      {{ message }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card border-0 shadow-lg" style="border-radius:24px;">
+    <div class="card-body p-4 p-md-5">
+
+      <div class="alert border-0 mb-4" style="border-radius:16px; background:linear-gradient(135deg, #ecfdf5, #d1fae5);">
+        <div class="fw-bold mb-1" style="color:#065f46;"><i class="bi bi-gift-fill me-2"></i>ماذا ستحصل عليه مجاناً؟</div>
+        <div class="row small" style="color:#047857;">
+          <div class="col-md-6">
+            <div>✅ تجربة مجانية {{ trial_days }} يوم</div>
+            <div>✅ كل مميزات النظام متاحة</div>
+            <div>✅ بدون رسوم تنفيذ</div>
+          </div>
+          <div class="col-md-6">
+            <div>✅ بدون رسوم تدريب</div>
+            <div>✅ حسابك جاهز فورًا</div>
+            <div>✅ دعم مباشر من JS Solutions</div>
+          </div>
+        </div>
+      </div>
+
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">اسم الشركة <span class="text-danger">*</span></label>
+            <input type="text" name="company_name" class="form-control form-control-lg" required
+                   placeholder="مثال: شركة النجاح للمقاولات" style="border-radius:12px;">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">اسم المسؤول <span class="text-danger">*</span></label>
+            <input type="text" name="contact_name" class="form-control form-control-lg" required
+                   placeholder="الاسم الكامل" style="border-radius:12px;">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">رقم الموبايل <span class="text-danger">*</span></label>
+            <input type="tel" name="phone" class="form-control form-control-lg" required
+                   placeholder="01xxxxxxxxx" style="border-radius:12px;">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">رقم الواتساب <span class="text-danger">*</span></label>
+            <input type="tel" name="whatsapp" class="form-control form-control-lg" required
+                   placeholder="01xxxxxxxxx" style="border-radius:12px;">
+            <div class="form-text small">لو نفس رقم الموبايل، اكتبه تاني</div>
+          </div>
+
+          <div class="col-md-12">
+            <label class="form-label fw-semibold">البريد الإلكتروني <span class="text-danger">*</span></label>
+            <input type="email" name="email" class="form-control form-control-lg" required
+                   placeholder="name@company.com" style="border-radius:12px;">
+            <div class="form-text small">سيتم إرسال بيانات الدخول على هذا البريد</div>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">عدد الموظفين المتوقع</label>
+            <input type="number" name="employees_count" class="form-control form-control-lg"
+                   min="1" value="10" style="border-radius:12px;">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">المدينة</label>
+            <input type="text" name="city" class="form-control form-control-lg"
+                   placeholder="القاهرة / الجيزة / ..." style="border-radius:12px;">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">نوع النشاط</label>
+            <input type="text" name="industry" class="form-control form-control-lg"
+                   placeholder="مقاولات / توزيع / ..." style="border-radius:12px;">
+          </div>
+
+          <div class="col-md-12">
+            <label class="form-label fw-semibold">ملاحظات إضافية</label>
+            <textarea name="notes" class="form-control" rows="3" style="border-radius:12px;"
+                      placeholder="اكتب أي تفاصيل إضافية عن احتياج شركتك"></textarea>
+          </div>
+
+          <div class="col-12 text-center mt-4">
+            <button type="submit" class="btn btn-lg px-5 fw-bold text-white"
+                    style="background:linear-gradient(135deg, #06B6D4, #0891b2); border:none; border-radius:14px; padding:14px 40px;">
+              <i class="bi bi-rocket-takeoff-fill me-2"></i>ابدأ التجربة المجانية الآن
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <div class="text-center mt-4">
+        <div class="text-muted small mb-2">أو تواصل معنا مباشرة:</div>
+        <a href="https://wa.me/{{ sales_whatsapp }}" target="_blank" class="btn btn-success btn-sm me-2">
+          <i class="bi bi-whatsapp me-1"></i>واتساب
+        </a>
+        <a href="tel:{{ sales_phone }}" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-telephone me-1"></i>{{ sales_phone }}
+        </a>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

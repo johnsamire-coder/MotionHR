@@ -1,0 +1,185 @@
+{% extends 'base/dashboard_base.html' %}
+{% load custom_filters %}
+{% block title %}تفاصيل الطلب{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center mb-4">
+    <a href="{% url 'requests_app:list' %}" class="btn btn-outline-secondary btn-sm me-3">
+      <i class="bi bi-arrow-right"></i>
+    </a>
+    <h4 class="fw-bold mb-0">تفاصيل الطلب</h4>
+    <span class="badge bg-{{ req.status_color }} ms-3 fs-6 px-3">
+      <i class="bi bi-{{ req.status_icon }} me-1"></i>
+      {{ req.get_status_display }}
+    </span>
+    {% if req.priority == 'urgent' %}
+    <span class="badge bg-danger ms-2">عاجل</span>
+    {% endif %}
+  </div>
+
+  <div class="row g-4">
+
+    <div class="col-lg-8">
+
+      <!-- بيانات الطلب -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+          <h5 class="fw-bold mb-0">{{ req.subject }}</h5>
+          <small class="text-muted">
+            {{ req.request_type.category.name }} ← {{ req.request_type.name }}
+          </small>
+        </div>
+        <div class="card-body px-4 pb-4">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="text-muted small">الموظف</label>
+              <div class="fw-bold">{{ req.employee.full_name_ar }}</div>
+              <small class="text-muted">{{ req.employee.employee_code }}</small>
+            </div>
+            <div class="col-md-6">
+              <label class="text-muted small">تاريخ الطلب</label>
+              <div class="fw-bold">{{ req.created_at|date:"d/m/Y H:i" }}</div>
+            </div>
+            {% if req.start_date %}
+            <div class="col-md-6">
+              <label class="text-muted small">من تاريخ</label>
+              <div class="fw-bold">{{ req.start_date|date:"d/m/Y" }}</div>
+            </div>
+            <div class="col-md-6">
+              <label class="text-muted small">إلى تاريخ</label>
+              <div class="fw-bold">{{ req.end_date|date:"d/m/Y"|default:"—" }}</div>
+            </div>
+            {% endif %}
+            {% if req.amount %}
+            <div class="col-md-6">
+              <label class="text-muted small">المبلغ</label>
+              <div class="fw-bold fs-5" style="color:#06B6D4;">{{ req.amount }} ج.م</div>
+            </div>
+            {% endif %}
+            {% if req.substitute_employee %}
+            <div class="col-md-6">
+              <label class="text-muted small">البديل</label>
+              <div class="fw-bold">{{ req.substitute_employee.full_name_ar }}</div>
+            </div>
+            {% endif %}
+          </div>
+
+          <label class="text-muted small">التفاصيل</label>
+          <div class="p-3 rounded mb-3" style="background:#f8fafc;">{{ req.details }}</div>
+
+          {% if req.document %}
+          <a href="{{ req.document.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-file-earmark me-1"></i>عرض المرفق
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- مسار الموافقة -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+          <h5 class="fw-bold mb-0">مسار الموافقة</h5>
+        </div>
+        <div class="card-body p-4">
+          <div class="d-flex align-items-start gap-3 flex-wrap">
+
+            {% for step_num, step_status, step_by, step_at, step_label in steps_info %}
+            <div class="text-center" style="min-width:120px;">
+              <div class="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2"
+                   style="width:50px;height:50px;
+                          background:{% if step_status == 'approved' %}#e8f5e9
+                          {% elif step_status == 'rejected' %}#fde8e8
+                          {% elif step_status == 'pending' %}#fff7ed
+                          {% else %}#f3f4f6{% endif %};">
+                <i class="bi bi-{% if step_status == 'approved' %}check-circle-fill text-success
+                                 {% elif step_status == 'rejected' %}x-circle-fill text-danger
+                                 {% elif step_status == 'pending' %}hourglass-split text-warning
+                                 {% else %}dash-circle text-muted{% endif %}"
+                   style="font-size:1.3rem;"></i>
+              </div>
+              <div class="fw-semibold small">الخطوة {{ step_num }}</div>
+              <div class="text-muted" style="font-size:0.72rem;">{{ step_label }}</div>
+              {% if step_status == 'approved' or step_status == 'rejected' %}
+              <div class="text-muted" style="font-size:0.7rem;">
+                {{ step_by.get_full_name|default:step_by.username }}
+              </div>
+              {% endif %}
+            </div>
+
+            {% if not forloop.last %}
+            <div class="d-flex align-items-center mt-3">
+              <i class="bi bi-arrow-left text-muted"></i>
+            </div>
+            {% endif %}
+            {% endfor %}
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- الإجراءات -->
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <h6 class="fw-bold mb-3">الإجراءات</h6>
+
+          {% if req.status == 'pending' and can_approve %}
+
+          <form method="post" action="{% url 'requests_app:approve' req.pk %}" class="mb-2">
+            {% csrf_token %}
+            <textarea name="notes" class="form-control form-control-sm mb-2"
+                      placeholder="ملاحظات الموافقة" rows="2"></textarea>
+            <button type="submit" class="btn btn-success w-100 fw-bold"
+                    onclick="return confirm('الموافقة على الطلب؟')">
+              <i class="bi bi-check-lg me-1"></i>موافقة
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'requests_app:reject' req.pk %}" class="mb-2">
+            {% csrf_token %}
+            <textarea name="notes" class="form-control form-control-sm mb-2"
+                      placeholder="سبب الرفض" rows="2"></textarea>
+            <button type="submit" class="btn btn-danger w-100 fw-bold"
+                    onclick="return confirm('رفض الطلب؟')">
+              <i class="bi bi-x-lg me-1"></i>رفض
+            </button>
+          </form>
+
+          {% elif req.status == 'pending' and not can_approve %}
+          <div class="alert alert-warning border-0 small">
+            <i class="bi bi-hourglass-split me-2"></i>
+            الطلب في انتظار موافقة الخطوة {{ req.current_step }}
+          </div>
+
+          {% else %}
+          <div class="text-center text-muted py-3">
+            <i class="bi bi-check-all fs-3"></i>
+            <p class="mb-0 mt-1 small">تم اتخاذ الإجراء</p>
+          </div>
+          {% endif %}
+
+          {% if req.status == 'pending' %}
+          <form method="post" action="{% url 'requests_app:cancel' req.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-secondary w-100 mt-2"
+                    onclick="return confirm('إلغاء الطلب؟')">
+              <i class="bi bi-slash-circle me-1"></i>إلغاء الطلب
+            </button>
+          </form>
+          {% endif %}
+
+          <hr>
+          <a href="{% url 'requests_app:list' %}" class="btn btn-light w-100">
+            <i class="bi bi-arrow-right me-1"></i>رجوع للقائمة
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

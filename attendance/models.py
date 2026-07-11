@@ -509,3 +509,601 @@ class LocationCheckIn(TenantModel):
             duration = self.departure_time - self.arrival_time
             return int(duration.total_seconds() / 60)
         return None
+
+class AttendanceActionLog(TenantModel):
+    """سجل تعديلات الحضور والانصراف"""
+
+    ACTION_CHOICES = [
+        ("edit", "تعديل"),
+        ("cancel_checkin", "إلغاء حضور"),
+        ("cancel_checkout", "إلغاء انصراف"),
+        ("delete", "حذف سجل"),
+    ]
+
+    attendance = models.ForeignKey(
+        "Attendance",
+        on_delete=models.CASCADE,
+        related_name="action_logs",
+        verbose_name="سجل الحضور"
+    )
+    action_type = models.CharField(
+        max_length=20,
+        choices=ACTION_CHOICES,
+        verbose_name="نوع الإجراء"
+    )
+    performed_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_actions",
+        verbose_name="تم بواسطة"
+    )
+    reason = models.TextField(
+        verbose_name="سبب التعديل"
+    )
+    old_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="البيانات قبل التعديل"
+    )
+    new_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="البيانات بعد التعديل"
+    )
+    action_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="تاريخ الإجراء"
+    )
+
+    class Meta:
+        verbose_name = "سجل تعديل حضور"
+        verbose_name_plural = "سجلات تعديلات الحضور"
+        ordering = ["-action_at"]
+
+    def __str__(self):
+        return f"{self.attendance} - {self.get_action_type_display()}"
+
+
+# ════════════════════════════════════════════════════════════
+# نظام التأخيرات والإجراءات التأديبية
+# ════════════════════════════════════════════════════════════
+
+class LateIncident(TenantModel):
+    """حادثة تأخير"""
+
+    employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.CASCADE,
+        related_name="late_incidents",
+        verbose_name="الموظف"
+    )
+    attendance = models.ForeignKey(
+        "Attendance",
+        on_delete=models.CASCADE,
+        related_name="late_incidents",
+        verbose_name="سجل الحضور",
+        null=True,
+        blank=True
+    )
+    date = models.DateField(verbose_name="التاريخ")
+    late_minutes = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name="دقائق التأخير"
+    )
+    shift_start_time = models.TimeField(
+        null=True, blank=True,
+        verbose_name="بداية الشيفت"
+    )
+    actual_checkin_time = models.TimeField(
+        null=True, blank=True,
+        verbose_name="وقت الحضور الفعلي"
+    )
+    grace_period_used = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name="السماحية المستخدمة"
+    )
+    month = models.PositiveSmallIntegerField(verbose_name="الشهر")
+    year = models.PositiveSmallIntegerField(verbose_name="السنة")
+    incident_number_in_month = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name="رقم الحادثة في الشهر"
+    )
+    is_excused = models.BooleanField(
+        default=False,
+        verbose_name="معذور"
+    )
+    excuse_reason = models.TextField(
+        blank=True,
+        verbose_name="سبب العذر"
+    )
+
+    class Meta:
+        verbose_name = "حادثة تأخير"
+        verbose_name_plural = "حوادث التأخير"
+        ordering = ["-date"]
+        unique_together = [["employee", "date"]]
+
+    def __str__(self):
+        return f"{self.employee} - {self.date} - {self.late_minutes} دقيقة"
+
+
+class LateNotification(TenantModel):
+    """إشعار تأخير لـ HR"""
+
+    NOTIFICATION_TYPES = [
+        ("single_late", "تأخير عادي"),
+        ("threshold_reached", "وصل الحد"),
+    ]
+
+    employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.CASCADE,
+        related_name="late_notifications",
+        verbose_name="الموظف"
+    )
+    notification_type = models.CharField(
+        max_length=20,
+        choices=NOTIFICATION_TYPES,
+        default="single_late",
+        verbose_name="نوع الإشعار"
+    )
+    title = models.CharField(
+        max_length=200,
+        verbose_name="العنوان"
+    )
+    message = models.TextField(
+        verbose_name="الرسالة"
+    )
+    details = models.TextField(
+        blank=True,
+        verbose_name="التفاصيل"
+    )
+    suggested_action = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="الإجراء المقترح"
+    )
+    incident_count = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name="عدد مرات التأخير"
+    )
+    month = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name="الشهر"
+    )
+    year = models.PositiveSmallIntegerField(
+        default=2025,
+        verbose_name="السنة"
+    )
+
+    is_read = models.BooleanField(
+        default=False,
+        verbose_name="تم القراءة"
+    )
+    is_acted_upon = models.BooleanField(
+        default=False,
+        verbose_name="تم اتخاذ إجراء"
+    )
+    action_taken = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name="الإجراء المتخذ"
+    )
+    action_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="late_actions_taken",
+        verbose_name="تم بواسطة"
+    )
+    action_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name="وقت الإجراء"
+    )
+    action_notes = models.TextField(
+        blank=True,
+        verbose_name="ملاحظات الإجراء"
+    )
+
+    class Meta:
+        verbose_name = "إشعار تأخير"
+        verbose_name_plural = "إشعارات التأخير"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.employee} - {self.title}"
+
+
+class DisciplinaryAction(TenantModel):
+    """إجراء تأديبي"""
+
+    ACTION_TYPES = [
+        ("verbal_warning", "إنذار شفهي"),
+        ("written_warning", "إنذار كتابي"),
+        ("quarter_day_deduction", "خصم ربع يوم"),
+        ("half_day_deduction", "خصم نصف يوم"),
+        ("full_day_deduction", "خصم يوم كامل"),
+        ("suspension", "إيقاف عن العمل"),
+        ("termination_warning", "إنذار فصل"),
+        ("dismissed", "تم الإعفاء / التجاهل"),
+    ]
+
+    employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.CASCADE,
+        related_name="disciplinary_actions",
+        verbose_name="الموظف"
+    )
+    action_type = models.CharField(
+        max_length=30,
+        choices=ACTION_TYPES,
+        verbose_name="نوع الإجراء"
+    )
+    reason = models.TextField(
+        verbose_name="السبب"
+    )
+    related_notification = models.ForeignKey(
+        LateNotification,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="disciplinary_actions",
+        verbose_name="الإشعار المرتبط"
+    )
+    auto_generated = models.BooleanField(
+        default=False,
+        verbose_name="تم تلقائيًا"
+    )
+    deduction_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True, blank=True,
+        verbose_name="مبلغ الخصم"
+    )
+    deduction_created = models.BooleanField(
+        default=False,
+        verbose_name="تم إنشاء خصم فعلي"
+    )
+    performed_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="disciplinary_actions_performed",
+        verbose_name="تم بواسطة"
+    )
+    performed_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="تاريخ الإجراء"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="ملاحظات"
+    )
+
+    class Meta:
+        verbose_name = "إجراء تأديبي"
+        verbose_name_plural = "الإجراءات التأديبية"
+        ordering = ["-performed_at"]
+
+    def __str__(self):
+        return f"{self.employee} - {self.get_action_type_display()}"
+
+
+# ════════════════════════════════════════════════════════════
+# تكليف يومي / جدول العمل اليومي
+# ════════════════════════════════════════════════════════════
+class DailyAssignment(TenantModel):
+    """
+    تكليف يومي لكل موظف
+    ده اللي بيحدد نوع يوم العمل وطريقة تنفيذه
+    """
+
+    # ── نوع اليوم ────────────────────────────────────
+    DAY_TYPES = [
+        ("work_day", "يوم عمل"),
+        ("off_day", "راحة أسبوعية"),
+        ("leave_day", "إجازة"),
+        ("holiday", "إجازة رسمية"),
+        ("mission_day", "مأمورية / مهمة"),
+        ("standby_day", "استدعاء / on-call"),
+        ("training_day", "يوم تدريب"),
+    ]
+
+    # ── طريقة التنفيذ ────────────────────────────────
+    WORK_MODES = [
+        ("fixed", "ثابت"),
+        ("flexible", "مرن"),
+        ("split", "متقسم"),
+        ("field", "ميداني"),
+        ("remote", "عن بُعد"),
+        ("mixed", "مختلط"),
+    ]
+
+    # ── حالة التكليف ─────────────────────────────────
+    STATUS_CHOICES = [
+        ("scheduled", "مجدول"),
+        ("in_progress", "جاري"),
+        ("completed", "مكتمل"),
+        ("cancelled", "ملغي"),
+    ]
+
+    employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.CASCADE,
+        related_name="daily_assignments",
+        verbose_name="الموظف"
+    )
+    date = models.DateField(
+        verbose_name="التاريخ"
+    )
+
+    # ── نوع اليوم وطريقة العمل ─────────────────────
+    day_type = models.CharField(
+        max_length=20,
+        choices=DAY_TYPES,
+        default="work_day",
+        verbose_name="نوع اليوم"
+    )
+    work_mode = models.CharField(
+        max_length=20,
+        choices=WORK_MODES,
+        default="fixed",
+        verbose_name="طريقة التنفيذ"
+    )
+
+    # ── أوقات العمل ──────────────────────────────────
+    shift = models.ForeignKey(
+        "Shift",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="الشيفت"
+    )
+    start_time = models.TimeField(
+        null=True, blank=True,
+        verbose_name="بداية العمل"
+    )
+    end_time = models.TimeField(
+        null=True, blank=True,
+        verbose_name="نهاية العمل"
+    )
+    expected_hours = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        null=True, blank=True,
+        verbose_name="الساعات المتوقعة"
+    )
+
+    # ── Split Shift (جزئين) ──────────────────────────
+    segment_2_start = models.TimeField(
+        null=True, blank=True,
+        verbose_name="بداية الجزء الثاني"
+    )
+    segment_2_end = models.TimeField(
+        null=True, blank=True,
+        verbose_name="نهاية الجزء الثاني"
+    )
+
+    # ── Flags ────────────────────────────────────────
+    is_replacement = models.BooleanField(
+        default=False,
+        verbose_name="بديل لزميل"
+    )
+    replaces_employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="replaced_assignments",
+        verbose_name="بديل عن"
+    )
+    is_extra_shift = models.BooleanField(
+        default=False,
+        verbose_name="شيفت إضافي"
+    )
+    count_as_overtime = models.BooleanField(
+        default=False,
+        verbose_name="يحسب أوفر تايم"
+    )
+    count_as_compensatory = models.BooleanField(
+        default=False,
+        verbose_name="يوم تعويضي"
+    )
+
+    # ── متطلبات ──────────────────────────────────────
+    requires_tracking = models.BooleanField(
+        default=False,
+        verbose_name="يحتاج تتبع GPS"
+    )
+    requires_visits = models.BooleanField(
+        default=False,
+        verbose_name="يحتاج تسجيل زيارات"
+    )
+    requires_geofence = models.BooleanField(
+        default=True,
+        verbose_name="يحتاج نطاق الفرع"
+    )
+    requires_manager_approval = models.BooleanField(
+        default=False,
+        verbose_name="يحتاج موافقة المدير مسبقاً"
+    )
+
+    # ── المهمة ───────────────────────────────────────
+    task_title = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="عنوان المهمة"
+    )
+    location_name = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="اسم الموقع"
+    )
+
+    # ── الحالة والاعتماد ─────────────────────────────
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="scheduled",
+        verbose_name="الحالة"
+    )
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="approved_assignments",
+        verbose_name="اعتمد بواسطة"
+    )
+
+    # ── Exception ────────────────────────────────────
+    is_exception = models.BooleanField(
+        default=False,
+        verbose_name="حالة استثنائية"
+    )
+    exception_reason = models.TextField(
+        blank=True,
+        verbose_name="سبب الاستثناء"
+    )
+    exception_status = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=[
+            ("pending_review", "قيد المراجعة"),
+            ("approved", "معتمد"),
+            ("rejected", "مرفوض"),
+        ],
+        verbose_name="حالة الاستثناء"
+    )
+
+    # ── Auto Generated ───────────────────────────────
+    is_auto_generated = models.BooleanField(
+        default=False,
+        verbose_name="تم توليده تلقائياً"
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name="ملاحظات"
+    )
+
+    class Meta:
+        verbose_name = "تكليف يومي"
+        verbose_name_plural = "التكليفات اليومية"
+        ordering = ["-date"]
+        unique_together = [["employee", "date"]]
+
+    def __str__(self):
+        return (
+            f"{self.employee} - {self.date} - "
+            f"{self.get_day_type_display()} / {self.get_work_mode_display()}"
+        )
+
+    @property
+    def is_working_day(self):
+        return self.day_type in ["work_day", "mission_day", "training_day", "standby_day"]
+
+    @property
+    def is_off(self):
+        return self.day_type in ["off_day", "leave_day", "holiday"]
+
+    @property
+    def apply_late_policy(self):
+        if self.day_type != "work_day":
+            return False
+        return self.work_mode in ["fixed", "split"]
+
+    @property
+    def apply_geofence(self):
+        if not self.requires_geofence:
+            return False
+        return self.work_mode in ["fixed", "split", "mixed"]
+
+
+class TrackingAlert(TenantModel):
+    """تنبيه تتبع صامت عند الخروج من النطاق أثناء العمل"""
+
+    STATUS_CHOICES = [
+        ("open", "مفتوح"),
+        ("resolved", "تمت المعالجة"),
+        ("ignored", "تم التجاهل"),
+    ]
+
+    employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.CASCADE,
+        related_name="tracking_alerts",
+        verbose_name="الموظف"
+    )
+    date = models.DateField(
+        verbose_name="التاريخ"
+    )
+    started_at = models.DateTimeField(
+        verbose_name="وقت بداية الخروج من النطاق"
+    )
+    last_seen_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name="آخر وقت رصد"
+    )
+    minutes_outside = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name="عدد الدقائق خارج النطاق"
+    )
+
+    last_latitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        null=True, blank=True,
+        verbose_name="آخر خط عرض"
+    )
+    last_longitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        null=True, blank=True,
+        verbose_name="آخر خط طول"
+    )
+    last_address = models.TextField(
+        blank=True,
+        verbose_name="آخر عنوان"
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="open",
+        verbose_name="الحالة"
+    )
+
+    notified_manager = models.BooleanField(
+        default=False,
+        verbose_name="تم تنبيه المدير"
+    )
+    notified_hr = models.BooleanField(
+        default=False,
+        verbose_name="تم تنبيه HR"
+    )
+    notified_company_admin = models.BooleanField(
+        default=False,
+        verbose_name="تم تنبيه صاحب الشركة"
+    )
+
+    resolved_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="resolved_tracking_alerts",
+        verbose_name="تمت المعالجة بواسطة"
+    )
+    resolved_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name="وقت المعالجة"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="ملاحظات"
+    )
+
+    class Meta:
+        verbose_name = "تنبيه تتبع"
+        verbose_name_plural = "تنبيهات التتبع"
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"{self.employee} - {self.date} - {self.minutes_outside} دقيقة"

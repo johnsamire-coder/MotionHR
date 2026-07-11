@@ -1,0 +1,85 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}تقرير الإجازات{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  {% with report_title="تقرير الإجازات" %}
+  {% include 'reports/_report_header.html' %}
+  {% endwith %}
+
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small">الفترة</label>
+          <select name="period" class="form-select">
+            <option value="week" {% if period == 'week' %}selected{% endif %}>هذا الأسبوع</option>
+            <option value="month" {% if period == 'month' %}selected{% endif %}>هذا الشهر</option>
+            <option value="year" {% if period == 'year' %}selected{% endif %}>هذه السنة</option>
+            <option value="custom" {% if period == 'custom' %}selected{% endif %}>فترة مخصصة</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">من</label>
+          <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="form-control">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">إلى</label>
+          <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" class="form-control">
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+          <button class="btn btn-primary w-100">عرض</button>
+          <a href="?period={{ period }}&start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&export=excel" class="btn btn-success">Excel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3"><h6 class="mb-0 fw-bold">تفاصيل الإجازات</h6></div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>الموظف</th>
+              <th>الكود</th>
+              <th>نوع الإجازة</th>
+              <th>من</th>
+              <th>إلى</th>
+              <th>الحالة</th>
+              <th>الملف</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for lr in leave_requests %}
+            <tr>
+              <td>{{ lr.employee.full_name_ar|default:"—" }}</td>
+              <td>{{ lr.employee.employee_code|default:"—" }}</td>
+              <td>{{ lr.leave_type.name_ar|default:lr.leave_type.name|default:"—" }}</td>
+              <td>{{ lr.start_date|date:"Y/m/d" }}</td>
+              <td>{{ lr.end_date|date:"Y/m/d" }}</td>
+              <td>{{ lr.get_status_display|default:lr.status }}</td>
+              <td>
+                {% if lr.employee and lr.employee.pk %}
+                  <a href="{% url 'employees:comprehensive_profile' lr.employee.pk %}" class="btn btn-sm btn-outline-info" title="الملف الشامل">
+                    <i class="bi bi-person-lines-fill"></i>
+                  </a>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center py-4 text-muted">لا توجد طلبات إجازة</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {% include 'reports/_report_footer.html' %}
+</div>
+{% endblock %}

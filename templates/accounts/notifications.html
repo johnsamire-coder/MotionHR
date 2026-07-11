@@ -1,0 +1,91 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}الإشعارات{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="fw-bold mb-0">
+        <i class="bi bi-bell me-2" style="color:#06B6D4;"></i>
+        الإشعارات
+      </h4>
+      {% if db_unread_count %}
+      <small class="text-muted">غير المقروءة: {{ db_unread_count }}</small>
+      {% endif %}
+    </div>
+
+    <div class="d-flex gap-2">
+      {% if request.user.role in 'super_admin,company_admin,hr_manager' %}
+      <a href="{% url 'accounts:send_employee_notification' %}"
+         class="btn btn-sm text-white"
+         style="background:#06B6D4;">
+        <i class="bi bi-send me-1"></i>إرسال إشعار
+      </a>
+      {% endif %}
+
+      {% if db_unread_count %}
+      <form method="post" class="m-0">
+        {% csrf_token %}
+        <input type="hidden" name="mark_all_read" value="1">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">
+          تعليم الكل كمقروء
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if notifications %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      {% for notif in notifications %}
+      <div class="d-flex align-items-start gap-3 p-4 border-bottom {% if forloop.last %}border-0{% endif %}"
+           style="{% if notif.unread %}background:#f8fafc;{% endif %}">
+
+        <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+             style="width:44px;height:44px;
+                    background:
+                    {% if notif.type == 'warning' %}#fff3e0
+                    {% elif notif.type == 'danger' %}#fde8e8
+                    {% elif notif.type == 'success' %}#e8f5e9
+                    {% else %}#e0f7fa{% endif %};">
+          <i class="bi bi-{{ notif.icon }}"
+             style="font-size:1.1rem;
+                    color:{% if notif.type == 'warning' %}#f59e0b
+                    {% elif notif.type == 'danger' %}#ef4444
+                    {% elif notif.type == 'success' %}#10b981
+                    {% else %}#06B6D4{% endif %};"></i>
+        </div>
+
+        <div class="flex-grow-1">
+          <div class="fw-semibold text-dark">{{ notif.title }}</div>
+          {% if notif.message %}
+          <div class="text-muted small mt-1" style="white-space:pre-line;">{{ notif.message }}</div>
+          {% endif %}
+          {% if notif.time %}
+          <small class="text-muted d-block mt-1">{{ notif.time }}</small>
+          {% endif %}
+        </div>
+
+        {% if notif.unread %}
+        <div class="rounded-circle flex-shrink-0"
+             style="width:8px;height:8px;background:#06B6D4;margin-top:6px;"></div>
+        {% endif %}
+
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-bell-slash" style="font-size:4rem;color:#d1d5db;"></i>
+      <h5 class="mt-3 fw-bold text-muted">لا توجد إشعارات</h5>
+      <p class="text-muted">كل شيء هادئ الآن 👌</p>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

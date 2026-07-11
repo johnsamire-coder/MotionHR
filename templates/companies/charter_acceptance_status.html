@@ -1,0 +1,119 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <div>
+      <h4 class="mb-1 fw-bold"><i class="bi bi-clipboard-check text-primary me-2"></i>{{ page_title }}</h4>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 small">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">الرئيسية</a></li>
+          <li class="breadcrumb-item active">حالة التوقيع</li>
+        </ol>
+      </nav>
+    </div>
+    <div>
+      {% if unsigned_count > 0 %}
+      <form method="post" class="d-inline">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="send_reminder">
+        <button type="submit" class="btn btn-warning"
+                onclick="return confirm('إرسال تذكير لـ {{ unsigned_count }} موظف لم يوقعوا بعد؟');">
+          <i class="bi bi-bell me-1"></i>إرسال تذكير ({{ unsigned_count }})
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm text-center py-3" style="border-radius:16px;">
+        <div class="fs-2 fw-bold text-primary">{{ total_count }}</div>
+        <div class="text-muted small">إجمالي الموظفين النشطين</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm text-center py-3" style="border-radius:16px;">
+        <div class="fs-2 fw-bold text-success">{{ signed_count }}</div>
+        <div class="text-muted small">وقّعوا</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm text-center py-3" style="border-radius:16px;">
+        <div class="fs-2 fw-bold text-danger">{{ unsigned_count }}</div>
+        <div class="text-muted small">لم يوقعوا بعد</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- لم يوقعوا -->
+    <div class="col-lg-6">
+      <div class="card border-0 shadow-sm" style="border-radius:18px;">
+        <div class="card-header bg-white py-3" style="border-radius:18px 18px 0 0;">
+          <h6 class="mb-0 fw-bold text-danger"><i class="bi bi-x-circle me-2"></i>لم يوقعوا ({{ unsigned_count }})</h6>
+        </div>
+        <div class="card-body p-0">
+          {% if unsigned %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size:.88rem;">
+              <thead class="table-light"><tr><th>الموظف</th><th>الكود</th><th>الإدارة</th></tr></thead>
+              <tbody>
+                {% for emp in unsigned %}
+                <tr>
+                  <td class="fw-semibold">{{ emp.full_name_ar }}</td>
+                  <td class="text-muted">{{ emp.employee_code }}</td>
+                  <td>{{ emp.department.name_ar|default:"—" }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-center py-4 text-muted">🎉 كل الموظفين وقّعوا!</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- وقّعوا -->
+    <div class="col-lg-6">
+      <div class="card border-0 shadow-sm" style="border-radius:18px;">
+        <div class="card-header bg-white py-3" style="border-radius:18px 18px 0 0;">
+          <h6 class="mb-0 fw-bold text-success"><i class="bi bi-check-circle me-2"></i>وقّعوا ({{ signed_count }})</h6>
+        </div>
+        <div class="card-body p-0">
+          {% if signed %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size:.88rem;">
+              <thead class="table-light"><tr><th>الموظف</th><th>الكود</th><th>تاريخ التوقيع</th><th>طباعة</th></tr></thead>
+              <tbody>
+                {% for item in signed %}
+                <tr>
+                  <td class="fw-semibold">{{ item.employee.full_name_ar }}</td>
+                  <td class="text-muted">{{ item.employee.employee_code }}</td>
+                  <td>{{ item.signature.signed_at|date:"Y/m/d H:i" }}</td>
+                  <td>
+                    <a href="{% url 'companies:charter_print_signature' item.signature.id %}" class="btn btn-sm btn-outline-primary" target="_blank">
+                      <i class="bi bi-printer"></i>
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-center py-4 text-muted">لا يوجد توقيعات بعد</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

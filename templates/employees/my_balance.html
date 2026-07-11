@@ -1,0 +1,94 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}رصيد إجازاتي{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="mb-4">
+    <h4 class="fw-bold mb-1">
+      <i class="bi bi-wallet2 me-2" style="color:#06B6D4;"></i>
+      رصيد إجازاتي — {{ current_year }}
+    </h4>
+    {% if employee %}
+    <p class="text-muted mb-0">
+      {{ employee.full_name_ar }} | {{ employee.employee_code }}
+    </p>
+    {% endif %}
+  </div>
+
+  {% if balances %}
+  <div class="row g-3">
+    {% for bal in balances %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card border-0 shadow-sm h-100"
+           style="border-right: 4px solid {{ bal.leave_type.color }} !important;">
+        <div class="card-body p-4">
+
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h6 class="fw-bold mb-0">{{ bal.leave_type.name }}</h6>
+            <span class="badge rounded-pill"
+                  style="background:{{ bal.leave_type.color }};">
+              {% if bal.leave_type.is_paid %}بمرتب{% else %}بدون مرتب{% endif %}
+            </span>
+          </div>
+
+          <!-- الأرقام -->
+          <div class="row g-2 text-center mb-3">
+            <div class="col-4">
+              <div class="p-2 rounded" style="background:#e0f7fa;">
+                <div class="fw-black fs-4" style="color:#06B6D4;">{{ bal.total_days }}</div>
+                <small class="text-muted">الإجمالي</small>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="p-2 rounded" style="background:#fde8e8;">
+                <div class="fw-black fs-4 text-danger">{{ bal.used_days }}</div>
+                <small class="text-muted">المستخدم</small>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="p-2 rounded" style="background:#e8f5e9;">
+                <div class="fw-black fs-4 text-success">{{ bal.remaining_days_display }}</div>
+                <small class="text-muted">المتبقي</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Progress -->
+          <div class="progress" style="height:8px;">
+            {% widthratio bal.used_days bal.total_days 100 as used_pct %}
+            <div class="progress-bar
+              {% if bal.remaining_days <= 3 %}bg-danger
+              {% elif bal.remaining_days <= 7 %}bg-warning
+              {% else %}bg-success{% endif %}"
+                 style="width: {% widthratio bal.used_days bal.total_days 100 %}%">
+            </div>
+          </div>
+
+          {% if bal.pending_days > 0 %}
+          <div class="mt-2 text-end">
+            <small class="text-warning fw-semibold">
+              <i class="bi bi-hourglass-split me-1"></i>
+              {{ bal.pending_days }} يوم قيد الانتظار
+            </small>
+          </div>
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-wallet2" style="font-size:4rem; color:#d1d5db;"></i>
+      <h5 class="mt-3 fw-bold text-muted">لا يوجد أرصدة إجازات</h5>
+      <p class="text-muted">تواصل مع HR لتحديد رصيد إجازاتك</p>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

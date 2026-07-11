@@ -1,0 +1,335 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}إدارة الهيكل الوظيفي{% endblock %}
+
+{% block extra_css %}
+<style>
+  .info-box {
+    border: 1px solid #bae6fd;
+    background: #f0f9ff;
+    border-radius: 16px;
+    padding: 16px;
+  }
+  .soft-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+  }
+  .soft-card .card-header {
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+    border-radius: 18px 18px 0 0 !important;
+  }
+  .mini-note {
+    color: #64748b;
+    font-size: .82rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <div>
+      <h4 class="mb-1 fw-bold">
+        <i class="bi bi-diagram-3-fill text-primary me-2"></i>إدارة الهيكل الوظيفي
+      </h4>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 small">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">الرئيسية</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'employees:list' %}">الموظفون</a></li>
+          <li class="breadcrumb-item active">الهيكل الوظيفي</li>
+        </ol>
+      </nav>
+    </div>
+    <div>
+      <a href="{% url 'employees:add' %}" class="btn btn-primary">
+        <i class="bi bi-person-plus me-1"></i>إضافة موظف
+      </a>
+    </div>
+  </div>
+
+  <div class="info-box mb-4">
+    <div class="fw-bold mb-2">
+      <i class="bi bi-lightbulb-fill text-warning me-1"></i>كيف تستخدم الشاشة؟
+    </div>
+    <div class="small text-muted">
+      1) أضف المستويات الوظيفية أو عدّلها حسب هيكل الشركة.<br>
+      2) اربط كل <strong>إدارة</strong> مع <strong>مسمى وظيفي</strong> وحدد له <strong>مستوى</strong> و<strong>المسمى الأعلى المباشر</strong>.<br>
+      3) بعد ذلك عند إضافة موظف، النظام سيقترح المدير المباشر المناسب تلقائيًا حسب هذه القواعد.
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- Add Level -->
+    <div class="col-lg-4">
+      <div class="card soft-card border-0 shadow-sm">
+        <div class="card-header py-3">
+          <h6 class="mb-0 fw-bold"><i class="bi bi-layers me-2 text-primary"></i>إضافة مستوى وظيفي</h6>
+        </div>
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_level">
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">الاسم بالعربي <span class="text-danger">*</span></label>
+              <input type="text" name="name_ar" class="form-control" required placeholder="مثال: مدير">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">الاسم بالإنجليزي</label>
+              <input type="text" name="name_en" class="form-control" placeholder="Manager">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">الترتيب الهرمي <span class="text-danger">*</span></label>
+              <input type="number" name="sort_order" class="form-control" required min="1" placeholder="1 = أعلى">
+              <div class="mini-note mt-1">كلما كان الرقم أقل كان المستوى أعلى.</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">الوصف</label>
+              <textarea name="description" class="form-control" rows="2"></textarea>
+            </div>
+
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="checkbox" name="is_active" id="levelActive" checked>
+              <label class="form-check-label" for="levelActive">مستوى نشط</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="bi bi-plus-circle me-1"></i>إضافة المستوى
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div class="card soft-card border-0 shadow-sm mt-4">
+        <div class="card-header py-3">
+          <h6 class="mb-0 fw-bold"><i class="bi bi-list-ol me-2 text-primary"></i>المستويات الحالية</h6>
+        </div>
+        <div class="card-body p-0">
+          {% if levels %}
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>ترتيب</th>
+                  <th>الاسم</th>
+                  <th>حالة</th>
+                  <th>إجراء</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for level in levels %}
+                <tr>
+                  <td>{{ level.sort_order }}</td>
+                  <td>{{ level.name_ar }}</td>
+                  <td>
+                    {% if level.is_active %}
+                      <span class="badge bg-success-subtle text-success border border-success-subtle">نشط</span>
+                    {% else %}
+                      <span class="badge bg-secondary-subtle text-secondary">غير نشط</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <form method="post" onsubmit="return confirm('حذف المستوى؟');">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="delete_level">
+                      <input type="hidden" name="level_id" value="{{ level.id }}">
+                      <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="p-4 text-center text-muted">لا توجد مستويات بعد</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Rules -->
+    <div class="col-lg-8">
+      <div class="card soft-card border-0 shadow-sm">
+        <div class="card-header py-3">
+          <h6 class="mb-0 fw-bold"><i class="bi bi-bezier2 me-2 text-primary"></i>ربط الإدارة بالمستوى والمسمى الوظيفي</h6>
+        </div>
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_rule">
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">الإدارة <span class="text-danger">*</span></label>
+                <select name="department_id" class="form-select" required>
+                  <option value="">اختر الإدارة</option>
+                  {% for dept in departments %}
+                    <option value="{{ dept.id }}">{{ dept.name_ar|default:dept.name_en }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">المسمى الوظيفي <span class="text-danger">*</span></label>
+                <select name="job_title_id" class="form-select" required>
+                  <option value="">اختر المسمى الوظيفي</option>
+                  {% for jt in job_titles %}
+                    <option value="{{ jt.id }}">{{ jt.name_ar|default:jt.name_en }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">المستوى الوظيفي <span class="text-danger">*</span></label>
+                <select name="level_id" class="form-select" required>
+                  <option value="">اختر المستوى</option>
+                  {% for level in levels %}
+                    <option value="{{ level.id }}">{{ level.sort_order }} - {{ level.name_ar }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-8">
+                <label class="form-label fw-semibold">المسمى الأعلى المباشر</label>
+                <select name="parent_job_title_id" class="form-select">
+                  <option value="">بدون / يعتمد على بديل أعلى</option>
+                  {% for jt in job_titles %}
+                    <option value="{{ jt.id }}">{{ jt.name_ar|default:jt.name_en }}</option>
+                  {% endfor %}
+                </select>
+                <div class="mini-note mt-1">مثال: موظف → مشرف، مشرف → مدير، مدير → مدير عام</div>
+              </div>
+
+              <div class="col-md-4">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" name="same_department_only" id="sameDepartmentOnly" checked>
+                  <label class="form-check-label" for="sameDepartmentOnly">
+                    المدير من نفس الإدارة فقط
+                  </label>
+                </div>
+              </div>
+
+              <div class="col-md-4">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" name="allow_higher_parent_fallback" id="allowFallback" checked>
+                  <label class="form-check-label" for="allowFallback">
+                    السماح ببديل أعلى
+                  </label>
+                </div>
+              </div>
+
+              <div class="col-md-4">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" name="rule_is_active" id="ruleActive" checked>
+                  <label class="form-check-label" for="ruleActive">
+                    قاعدة نشطة
+                  </label>
+                </div>
+              </div>
+
+              <div class="col-md-12">
+                <label class="form-label fw-semibold">ملاحظات</label>
+                <textarea name="notes" class="form-control" rows="2"></textarea>
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-end mt-3">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save me-1"></i>حفظ قاعدة الربط
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card soft-card border-0 shadow-sm mt-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+          <h6 class="mb-0 fw-bold"><i class="bi bi-diagram-2 me-2 text-primary"></i>قواعد الربط الحالية</h6>
+          <span class="badge bg-secondary">{{ rules|length }} قاعدة</span>
+        </div>
+        <div class="card-body p-0">
+          {% if rules %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>الإدارة</th>
+                  <th>المسمى</th>
+                  <th>المستوى</th>
+                  <th>المسمى الأعلى المباشر</th>
+                  <th>نفس الإدارة</th>
+                  <th>بديل أعلى</th>
+                  <th>الحالة</th>
+                  <th>إجراء</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for rule in rules %}
+                <tr>
+                  <td>{{ rule.department.name_ar|default:rule.department.name_en }}</td>
+                  <td>{{ rule.job_title.name_ar|default:rule.job_title.name_en }}</td>
+                  <td>{{ rule.level.sort_order }} - {{ rule.level.name_ar }}</td>
+                  <td>{{ rule.parent_job_title.name_ar|default:rule.parent_job_title.name_en|default:"—" }}</td>
+                  <td>
+                    {% if rule.same_department_only %}
+                      <span class="badge bg-info-subtle text-info border border-info-subtle">نعم</span>
+                    {% else %}
+                      <span class="badge bg-secondary-subtle text-secondary">لا</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if rule.allow_higher_parent_fallback %}
+                      <span class="badge bg-success-subtle text-success border border-success-subtle">مسموح</span>
+                    {% else %}
+                      <span class="badge bg-secondary-subtle text-secondary">غير مسموح</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if rule.is_active %}
+                      <span class="badge bg-success-subtle text-success border border-success-subtle">نشطة</span>
+                    {% else %}
+                      <span class="badge bg-secondary-subtle text-secondary">معطلة</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <form method="post" onsubmit="return confirm('حذف قاعدة الربط؟');">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="delete_rule">
+                      <input type="hidden" name="rule_id" value="{{ rule.id }}">
+                      <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% if rule.notes %}
+                <tr class="table-light">
+                  <td colspan="8" class="small text-muted">
+                    <strong>ملاحظات:</strong> {{ rule.notes }}
+                  </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="p-4 text-center text-muted">
+            لا توجد قواعد ربط بعد — ابدأ بتعريف أول قاعدة
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

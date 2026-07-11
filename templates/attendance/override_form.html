@@ -1,0 +1,147 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}تعديل / إلغاء الحضور{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+
+      <div class="d-flex align-items-center mb-4">
+        <a href="{% url 'attendance:list' %}" class="btn btn-outline-secondary btn-sm me-3">
+          <i class="bi bi-arrow-right"></i>
+        </a>
+        <h4 class="fw-bold mb-0">تعديل / إلغاء الحضور</h4>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="text-muted small">الموظف</label>
+              <div class="fw-bold">{{ attendance_obj.employee.full_name_ar }}</div>
+              <small class="text-muted">{{ attendance_obj.employee.employee_code }}</small>
+            </div>
+            <div class="col-md-6">
+              <label class="text-muted small">التاريخ</label>
+              <div class="fw-bold">{{ attendance_obj.date|date:"d/m/Y" }}</div>
+            </div>
+            <div class="col-md-6">
+              <label class="text-muted small">الحضور الحالي</label>
+              <div class="fw-bold">{{ attendance_obj.check_in_time|default:"—" }}</div>
+            </div>
+            <div class="col-md-6">
+              <label class="text-muted small">الانصراف الحالي</label>
+              <div class="fw-bold">{{ attendance_obj.check_out_time|default:"—" }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- تعديل -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+          <h5 class="fw-bold mb-0">تعديل السجل</h5>
+        </div>
+        <div class="card-body p-4">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="edit">
+
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label small">وقت الحضور</label>
+                <input type="time" name="check_in_time" class="form-control"
+                       value="{{ attendance_obj.check_in_time|time:'H:i'|default:'' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small">وقت الانصراف</label>
+                <input type="time" name="check_out_time" class="form-control"
+                       value="{{ attendance_obj.check_out_time|time:'H:i'|default:'' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small">الحالة</label>
+                <select name="status" class="form-select">
+                  <option value="present" {% if attendance_obj.status == 'present' %}selected{% endif %}>حاضر</option>
+                  <option value="late" {% if attendance_obj.status == 'late' %}selected{% endif %}>متأخر</option>
+                  <option value="absent" {% if attendance_obj.status == 'absent' %}selected{% endif %}>غائب</option>
+                  <option value="on_leave" {% if attendance_obj.status == 'on_leave' %}selected{% endif %}>إجازة</option>
+                </select>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label small">سبب التعديل <span class="text-danger">*</span></label>
+                <textarea name="reason" class="form-control" rows="2" required
+                          placeholder="اكتب سبب التعديل..."></textarea>
+              </div>
+            </div>
+
+            <div class="mt-3">
+              <button type="submit" class="btn text-white" style="background:#06B6D4;">
+                <i class="bi bi-check-lg me-1"></i>حفظ التعديل
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- إجراءات سريعة -->
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4">
+              <h6 class="fw-bold text-warning">إلغاء الحضور</h6>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="cancel_checkin">
+                <textarea name="reason" class="form-control form-control-sm mb-3" rows="2" required
+                          placeholder="سبب إلغاء الحضور..."></textarea>
+                <button type="submit" class="btn btn-outline-warning w-100"
+                        onclick="return confirm('إلغاء تسجيل الحضور؟')">
+                  إلغاء الحضور
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4">
+              <h6 class="fw-bold text-danger">إلغاء الانصراف</h6>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="cancel_checkout">
+                <textarea name="reason" class="form-control form-control-sm mb-3" rows="2" required
+                          placeholder="سبب إلغاء الانصراف..."></textarea>
+                <button type="submit" class="btn btn-outline-danger w-100"
+                        onclick="return confirm('إلغاء تسجيل الانصراف؟')">
+                  إلغاء الانصراف
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4">
+              <h6 class="fw-bold text-dark">حذف السجل</h6>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <textarea name="reason" class="form-control form-control-sm mb-3" rows="2" required
+                          placeholder="سبب حذف السجل..."></textarea>
+                <button type="submit" class="btn btn-outline-dark w-100"
+                        onclick="return confirm('حذف سجل الحضور نهائيًا؟')">
+                  حذف السجل
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

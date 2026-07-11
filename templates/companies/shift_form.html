@@ -1,0 +1,150 @@
+{% extends 'base/dashboard_base.html' %}
+{% load custom_filters %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center mb-4">
+    <a href="{% url 'companies:shifts_list' %}"
+       class="btn btn-outline-secondary btn-sm me-3">
+      <i class="bi bi-arrow-right"></i>
+    </a>
+    <h4 class="fw-bold mb-0">{{ page_title }}</h4>
+  </div>
+
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <form method="post">
+            {% csrf_token %}
+            <div class="row g-3">
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">
+                  اسم الشيفت <span class="text-danger">*</span>
+                </label>
+                <input type="text" name="name" class="form-control"
+                       value="{{ shift.name|default:'' }}" required
+                       placeholder="مثال: صباحي، مسائي...">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">النوع</label>
+                <select name="shift_type" class="form-select">
+                  <option value="fixed"
+                    {% if shift.shift_type == 'fixed' %}selected
+                    {% elif not shift %}selected{% endif %}>ثابت</option>
+                  <option value="flexible"
+                    {% if shift.shift_type == 'flexible' %}selected{% endif %}>مرن</option>
+                  <option value="rotating"
+                    {% if shift.shift_type == 'rotating' %}selected{% endif %}>متناوب</option>
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">وقت البداية</label>
+                <input type="time" name="start_time" class="form-control"
+                       value="{% if shift %}{{ shift.start_time|time:'H:i' }}{% else %}08:00{% endif %}">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">وقت النهاية</label>
+                <input type="time" name="end_time" class="form-control"
+                       value="{% if shift %}{{ shift.end_time|time:'H:i' }}{% else %}17:00{% endif %}">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">فترة السماح (دقيقة)</label>
+                <input type="number" name="grace_period" class="form-control"
+                       value="{{ shift.grace_period|default:15 }}"
+                       min="0" max="60">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold small">وقت الاستراحة (دقيقة)</label>
+                <input type="number" name="break_duration" class="form-control"
+                       value="{{ shift.break_duration|default:60 }}"
+                       min="0" max="180">
+              </div>
+
+              <!-- أيام العمل -->
+              <div class="col-12">
+                <label class="form-label fw-semibold small">أيام العمل</label>
+                <div class="d-flex flex-wrap gap-3 mt-2">
+
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="work_sunday" id="work_sunday"
+                           {% if shift.work_sunday %}checked{% elif not shift %}checked{% endif %}>
+                    <label class="form-check-label" for="work_sunday">الأحد</label>
+                  </div>
+
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="work_monday" id="work_monday"
+                           {% if shift.work_monday %}checked{% elif not shift %}checked{% endif %}>
+                    <label class="form-check-label" for="work_monday">الاثنين</label>
+                  </div>
+
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="work_tuesday" id="work_tuesday"
+                           {% if shift.work_tuesday %}checked{% elif not shift %}checked{% endif %}>
+                    <label class="form-check-label" for="work_tuesday">الثلاثاء</label>
+                  </div>
+
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="work_wednesday" id="work_wednesday"
+                           {% if shift.work_wednesday %}checked{% elif not shift %}checked{% endif %}>
+                    <label class="form-check-label" for="work_wednesday">الأربعاء</label>
+                  </div>
+
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="work_thursday" id="work_thursday"
+                           {% if shift.work_thursday %}checked{% elif not shift %}checked{% endif %}>
+                    <label class="form-check-label" for="work_thursday">الخميس</label>
+                  </div>
+
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="work_friday" id="work_friday"
+                           {% if shift.work_friday %}checked{% endif %}>
+                    <label class="form-check-label" for="work_friday">الجمعة</label>
+                  </div>
+
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="work_saturday" id="work_saturday"
+                           {% if shift.work_saturday %}checked{% endif %}>
+                    <label class="form-check-label" for="work_saturday">السبت</label>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+
+            <div class="d-flex gap-2 mt-4 pt-3 border-top">
+              <button type="submit"
+                      class="btn text-white px-4"
+                      style="background:#06B6D4; border-radius:10px;">
+                <i class="bi bi-check-lg me-1"></i>
+                {% if action == 'add' %}إضافة الشيفت{% else %}حفظ التغييرات{% endif %}
+              </button>
+              <a href="{% url 'companies:shifts_list' %}"
+                 class="btn btn-outline-secondary px-4"
+                 style="border-radius:10px;">إلغاء</a>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

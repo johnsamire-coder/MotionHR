@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Employee, JobTitle, EmployeeDocument, EmployeeMovement
+from .models import JobHierarchyLevel, DepartmentJobTitleRule, Employee, JobTitle, EmployeeDocument, EmployeeMovement
 
 
 @admin.register(JobTitle)
@@ -111,3 +111,26 @@ class EmployeeMovementAdmin(admin.ModelAdmin):
     list_filter = ('movement_type', 'movement_date')
     search_fields = ('employee__first_name_ar', 'employee__last_name_ar')
     date_hierarchy = 'movement_date'
+from .models import Deduction
+
+@admin.register(Deduction)
+class DeductionAdmin(admin.ModelAdmin):
+    list_display = ["employee", "deduction_type", "amount", "date", "reason"]
+    list_filter = ["deduction_type", "month", "year"]
+    search_fields = ["employee__first_name_ar", "reason"]
+
+
+@admin.register(JobHierarchyLevel)
+class JobHierarchyLevelAdmin(admin.ModelAdmin):
+    list_display = ('name_ar', 'company', 'sort_order', 'is_active')
+    list_filter = ('company', 'is_active')
+    search_fields = ('name_ar', 'name_en')
+    ordering = ('company', 'sort_order', 'id')
+
+
+@admin.register(DepartmentJobTitleRule)
+class DepartmentJobTitleRuleAdmin(admin.ModelAdmin):
+    list_display = ('department', 'job_title', 'level', 'parent_job_title', 'same_department_only', 'is_active')
+    list_filter = ('company', 'department', 'level', 'same_department_only', 'is_active')
+    search_fields = ('department__name_ar', 'job_title__name_ar', 'parent_job_title__name_ar')
+

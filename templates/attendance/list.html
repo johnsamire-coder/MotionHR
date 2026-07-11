@@ -1,280 +1,223 @@
 {% extends 'base/dashboard_base.html' %}
+{% load custom_filters %}
 
 {% block title %}سجلات الحضور{% endblock %}
 
-{% block page_title %}سجلات الحضور{% endblock %}
-{% block page_subtitle %}متابعة حضور الموظفين{% endblock %}
+{% block content %}
+<div class="container-fluid">
 
-{% block dashboard_content %}
-
-<div class="mb-3">
-    <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-right"></i>
-        رجوع للرئيسية
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="mb-1 fw-bold">
+        <i class="bi bi-calendar-check text-primary me-2"></i>سجلات الحضور
+      </h4>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 small">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">الرئيسية</a></li>
+          <li class="breadcrumb-item active">سجلات الحضور</li>
+        </ol>
+      </nav>
+    </div>
+    {% if request.user.role == 'company_admin' or request.user.role == 'hr_manager' %}
+    <a href="{% url 'attendance:check_in' %}" class="btn btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>تسجيل حضور
     </a>
-</div>
+    {% endif %}
+  </div>
 
-<!-- Today Stats -->
-<div class="row g-3 mb-4">
-    <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1 small">إجمالي اليوم</p>
-                        <h3 class="fw-bold mb-0">{{ today_stats.total }}</h3>
-                    </div>
-                    <div class="rounded-3 p-3" style="background: rgba(6, 182, 212, 0.1);">
-                        <i class="bi bi-calendar-day text-primary fs-4"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+  <!-- إحصائيات اليوم -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-2 fw-bold text-primary">{{ today_stats.total }}</div>
+        <div class="text-muted small">إجمالي اليوم</div>
+      </div>
     </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1 small">الحاضرون</p>
-                        <h3 class="fw-bold mb-0 text-success">{{ today_stats.present }}</h3>
-                    </div>
-                    <div class="rounded-3 p-3" style="background: rgba(16, 185, 129, 0.1);">
-                        <i class="bi bi-check-circle-fill text-success fs-4"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-2 fw-bold text-success">{{ today_stats.present }}</div>
+        <div class="text-muted small">حاضر</div>
+      </div>
     </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1 small">متأخرون</p>
-                        <h3 class="fw-bold mb-0 text-warning">{{ today_stats.late }}</h3>
-                    </div>
-                    <div class="rounded-3 p-3" style="background: rgba(245, 158, 11, 0.1);">
-                        <i class="bi bi-clock-fill text-warning fs-4"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-2 fw-bold text-warning">{{ today_stats.late }}</div>
+        <div class="text-muted small">متأخر</div>
+      </div>
     </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1 small">غائبون</p>
-                        <h3 class="fw-bold mb-0 text-danger">{{ today_stats.absent }}</h3>
-                    </div>
-                    <div class="rounded-3 p-3" style="background: rgba(239, 68, 68, 0.1);">
-                        <i class="bi bi-x-circle-fill text-danger fs-4"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-2 fw-bold text-danger">{{ today_stats.absent }}</div>
+        <div class="text-muted small">غائب</div>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- Quick Actions -->
-<div class="card border-0 shadow-sm mb-4">
+  <!-- فلترة -->
+  <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div>
-                <h6 class="mb-0 fw-bold">إجراءات سريعة</h6>
-                <small class="text-muted">سجل حضور أو شوف الخريطة</small>
-            </div>
-            <div class="d-flex gap-2">
-                <a href="{% url 'attendance:check_in' %}" class="btn btn-success">
-                    <i class="bi bi-clock-fill"></i>
-                    تسجيل حضور
-                </a>
-                <a href="{% url 'attendance:live_map' %}" class="btn btn-info text-white">
-                    <i class="bi bi-geo-alt-fill"></i>
-                    الخريطة المباشرة
-                </a>
-                <a href="{% url 'attendance:visits' %}" class="btn btn-outline-primary">
-                    <i class="bi bi-pin-map-fill"></i>
-                    الزيارات
-                </a>
-            </div>
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small text-muted">من تاريخ</label>
+          <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
         </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted">إلى تاريخ</label>
+          <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted">الموظف</label>
+          <select name="employee" class="form-select form-select-sm">
+            <option value="">-- الكل --</option>
+            {% for emp in employees %}
+            <option value="{{ emp.id }}" {% if employee_id == emp.id|stringformat:'s' %}selected{% endif %}>
+              {{ emp.full_name_ar }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small text-muted">الحالة</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">-- الكل --</option>
+            {% for val, label in status_choices %}
+            <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-1">
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
+      </form>
     </div>
-</div>
+  </div>
 
-<!-- Filters -->
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label small fw-semibold">من تاريخ</label>
-                <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small fw-semibold">إلى تاريخ</label>
-                <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small fw-semibold">الموظف</label>
-                <select name="employee" class="form-select">
-                    <option value="">كل الموظفين</option>
-                    {% for emp in employees %}
-                    <option value="{{ emp.id }}" {% if employee_id == emp.id|stringformat:"s" %}selected{% endif %}>
-                        {{ emp.full_name_ar }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small fw-semibold">الحالة</label>
-                <select name="status" class="form-select">
-                    <option value="">كل الحالات</option>
-                    {% for value, label in status_choices %}
-                    <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-12">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-funnel"></i>
-                    تطبيق الفلاتر
-                </button>
-                <a href="{% url 'attendance:list' %}" class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-clockwise"></i>
-                    مسح
-                </a>
-            </div>
-        </form>
+  <!-- الجدول -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+      <span class="fw-semibold">
+        <i class="bi bi-list-ul me-2 text-primary"></i>
+        السجلات ({{ total_count }})
+      </span>
     </div>
-</div>
-
-<!-- Attendance Table -->
-<div class="card border-0 shadow-sm">
     <div class="card-body p-0">
-        {% if attendances %}
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th class="ps-4">التاريخ</th>
-                        <th>الموظف</th>
-                        <th>الحضور</th>
-                        <th>الانصراف</th>
-                        <th>ساعات العمل</th>
-                        <th>التأخير</th>
-                        <th>النطاق</th>
-                        <th class="pe-4">الحالة</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for att in attendances %}
-                    <tr>
-                        <td class="ps-4">{{ att.date }}</td>
-                        <td>
-                            <div class="fw-semibold">{{ att.employee.full_name_ar }}</div>
-                            <small class="text-muted">{{ att.employee.employee_code }}</small>
-                        </td>
-                        <td>
-                            {% if att.check_in_time %}
-                                <span class="text-success fw-semibold">
-                                    <i class="bi bi-check-circle-fill"></i>
-                                    {{ att.check_in_time|time:"H:i" }}
-                                </span>
-                            {% else %}
-                                <span class="text-muted">-</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if att.check_out_time %}
-                                <span class="text-danger fw-semibold">
-                                    <i class="bi bi-box-arrow-right"></i>
-                                    {{ att.check_out_time|time:"H:i" }}
-                                </span>
-                            {% else %}
-                                <span class="text-muted">-</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="badge bg-primary bg-opacity-10 text-primary">
-                                {{ att.work_hours }} ساعة
-                            </span>
-                        </td>
-                        <td>
-                            {% if att.late_minutes > 0 %}
-                                <span class="text-warning">{{ att.late_minutes }} دقيقة</span>
-                            {% else %}
-                                <span class="text-success">-</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if att.check_in_within_range %}
-                                <span class="badge bg-success">
-                                    <i class="bi bi-geo-alt-fill"></i>
-                                    داخل النطاق
-                                </span>
-                            {% else %}
-                                <span class="badge bg-warning">
-                                    <i class="bi bi-exclamation-triangle"></i>
-                                    خارج النطاق
-                                </span>
-                            {% endif %}
-                        </td>
-                        <td class="pe-4">
-                            {% if att.status == 'present' %}
-                                <span class="badge bg-success">حاضر</span>
-                            {% elif att.status == 'late' %}
-                                <span class="badge bg-warning">متأخر</span>
-                            {% elif att.status == 'absent' %}
-                                <span class="badge bg-danger">غائب</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ att.get_status_display }}</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        
-        {% if page_obj.has_other_pages %}
-        <div class="card-footer bg-white">
-            <nav>
-                <ul class="pagination pagination-sm justify-content-center mb-0">
-                    {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">السابق</a>
-                    </li>
-                    {% endif %}
-                    <li class="page-item active">
-                        <span class="page-link">{{ page_obj.number }} من {{ page_obj.paginator.num_pages }}</span>
-                    </li>
-                    {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">التالي</a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
-        </div>
-        {% endif %}
-        
-        {% else %}
-        <div class="text-center py-5">
-            <i class="bi bi-calendar-x text-muted" style="font-size: 4rem;"></i>
-            <h5 class="mt-3 fw-bold">لا توجد سجلات حضور</h5>
-            <p class="text-muted">لم يتم تسجيل أي حضور بعد</p>
-            <a href="{% url 'attendance:check_in' %}" class="btn btn-primary">
-                <i class="bi bi-clock-fill"></i>
-                تسجيل حضور
-            </a>
-        </div>
-        {% endif %}
-    </div>
-</div>
+      {% if attendances %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>الموظف</th>
+              <th>التاريخ</th>
+              <th>وقت الدخول</th>
+              <th>وقت الخروج</th>
+              <th>الحالة</th>
+              <th>التأخير</th>
+              <th>ملاحظات</th>
+              {% if request.user.role == 'company_admin' or request.user.role == 'hr_manager' %}
+              <th>إجراء</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for att in attendances %}
+            <tr>
+              <td>
+                <div class="fw-semibold small">{{ att.employee.full_name_ar }}</div>
+                <div class="text-muted" style="font-size:0.75rem">{{ att.employee.employee_code }}</div>
+              </td>
+              <td class="small">{{ att.date|date:"Y/m/d" }}</td>
+              <td class="small">
+                {% if att.check_in_time %}
+                  <span class="text-success fw-semibold">{{ att.check_in_time|time:"H:i" }}</span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="small">
+                {% if att.check_out_time %}
+                  <span class="text-primary fw-semibold">{{ att.check_out_time|time:"H:i" }}</span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if att.status == 'present' %}
+                  <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2">حاضر</span>
+                {% elif att.status == 'late' %}
+                  <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-2">متأخر</span>
+                {% elif att.status == 'absent' %}
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-2">غائب</span>
+                {% elif att.status == 'on_leave' %}
+                  <span class="badge bg-info-subtle text-info border border-info-subtle rounded-pill px-2">إجازة</span>
+                {% else %}
+                  <span class="badge bg-secondary-subtle text-secondary rounded-pill px-2">{{ att.status }}</span>
+                {% endif %}
+              </td>
+              <td class="small">
+                {% if att.late_minutes and att.late_minutes > 0 %}
+                  <span class="text-danger">{{ att.late_minutes }} د</span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="small text-muted">
+                {{ att.admin_notes|default:"—"|truncatechars:30 }}
+              </td>
+              {% if request.user.role == 'company_admin' or request.user.role == 'hr_manager' %}
+              <td>
+                {% if att.id %}
+                <a href="{% url 'attendance:override' att.id %}"
+                   class="btn btn-sm btn-outline-secondary"
+                   title="تعديل">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                {% endif %}
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
 
+      <!-- Pagination -->
+      {% if page_obj.has_other_pages %}
+      <div class="d-flex justify-content-center py-3">
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ page_obj.previous_page_number }}&date_from={{ date_from }}&date_to={{ date_to }}&employee={{ employee_id }}&status={{ status }}">
+                <i class="bi bi-chevron-right"></i>
+              </a>
+            </li>
+            {% endif %}
+            <li class="page-item active">
+              <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            </li>
+            {% if page_obj.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ page_obj.next_page_number }}&date_from={{ date_from }}&date_to={{ date_to }}&employee={{ employee_id }}&status={{ status }}">
+                <i class="bi bi-chevron-left"></i>
+              </a>
+            </li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
+
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-calendar-x fs-1 opacity-25"></i>
+        <p class="mt-3">لا توجد سجلات حضور للفترة المحددة</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
 {% endblock %}

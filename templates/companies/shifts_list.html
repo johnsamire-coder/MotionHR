@@ -1,0 +1,131 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}الشيفتات{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <i class="bi bi-clock me-2" style="color:#06B6D4;"></i>
+        الشيفتات
+      </h4>
+      <p class="text-muted mb-0">جداول العمل المتاحة</p>
+    </div>
+    <a href="{% url 'companies:shift_add' %}"
+       class="btn text-white"
+       style="background:#06B6D4; border-radius:10px;">
+      <i class="bi bi-plus-lg me-1"></i>
+      شيفت جديد
+    </a>
+  </div>
+
+  {% if shifts %}
+  <div class="row g-3">
+    {% for shift in shifts %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body p-4">
+
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="rounded-circle d-flex align-items-center justify-content-center"
+                 style="width:48px;height:48px;background:#e0f7fa;">
+              <i class="bi bi-clock-fill" style="color:#06B6D4; font-size:1.2rem;"></i>
+            </div>
+            <div>
+              <h6 class="fw-bold mb-0">{{ shift.name }}</h6>
+              <small class="text-muted">
+                {% if shift.shift_type == 'fixed' %}ثابت
+                {% elif shift.shift_type == 'flexible' %}مرن
+                {% else %}متناوب{% endif %}
+              </small>
+            </div>
+          </div>
+
+          <!-- أوقات العمل -->
+          <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded"
+               style="background:#f8fafc;">
+            <div class="text-center">
+              <div class="fw-bold" style="color:#06B6D4;">{{ shift.start_time|time:"H:i" }}</div>
+              <small class="text-muted">بداية</small>
+            </div>
+            <i class="bi bi-arrow-left text-muted"></i>
+            <div class="text-center">
+              <div class="fw-bold text-dark">{{ shift.work_hours }}س</div>
+              <small class="text-muted">ساعات</small>
+            </div>
+            <i class="bi bi-arrow-left text-muted"></i>
+            <div class="text-center">
+              <div class="fw-bold" style="color:#06B6D4;">{{ shift.end_time|time:"H:i" }}</div>
+              <small class="text-muted">نهاية</small>
+            </div>
+          </div>
+
+          <!-- أيام العمل -->
+          <div class="d-flex gap-1 flex-wrap mb-3">
+            {% if shift.work_sunday %}
+              <span class="badge bg-light text-dark border">أحد</span>
+            {% endif %}
+            {% if shift.work_monday %}
+              <span class="badge bg-light text-dark border">اثن</span>
+            {% endif %}
+            {% if shift.work_tuesday %}
+              <span class="badge bg-light text-dark border">ثلا</span>
+            {% endif %}
+            {% if shift.work_wednesday %}
+              <span class="badge bg-light text-dark border">أرب</span>
+            {% endif %}
+            {% if shift.work_thursday %}
+              <span class="badge bg-light text-dark border">خمي</span>
+            {% endif %}
+            {% if shift.work_friday %}
+              <span class="badge bg-warning text-dark border">جمع</span>
+            {% endif %}
+            {% if shift.work_saturday %}
+              <span class="badge bg-warning text-dark border">سبت</span>
+            {% endif %}
+          </div>
+
+          <div class="d-flex gap-1 text-muted small mb-3">
+            <span>سماح: {{ shift.grace_period }} دقيقة</span>
+            <span>|</span>
+            <span>استراحة: {{ shift.break_duration }} دقيقة</span>
+          </div>
+
+          <div class="d-flex gap-2 pt-3 border-top">
+            <a href="{% url 'companies:shift_edit' shift.pk %}"
+               class="btn btn-sm btn-outline-primary flex-fill">
+              <i class="bi bi-pencil me-1"></i>تعديل
+            </a>
+            <form method="post"
+                  action="{% url 'companies:shift_delete' shift.pk %}"
+                  onsubmit="return confirm('حذف الشيفت؟')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-clock" style="font-size:4rem;color:#d1d5db;"></i>
+      <h5 class="mt-3 fw-bold text-muted">لا يوجد شيفتات بعد</h5>
+      <a href="{% url 'companies:shift_add' %}"
+         class="btn mt-2 text-white"
+         style="background:#06B6D4;">
+        <i class="bi bi-plus me-1"></i>أضف أول شيفت
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

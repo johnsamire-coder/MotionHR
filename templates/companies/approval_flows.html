@@ -1,0 +1,109 @@
+{% extends 'base/dashboard_base.html' %}
+{% load custom_filters %}
+{% block title %}مسارات الموافقة{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="mb-4">
+    <h4 class="fw-bold mb-1">
+      <i class="bi bi-diagram-2 me-2" style="color:#06B6D4;"></i>
+      مسارات الموافقة
+    </h4>
+    <p class="text-muted mb-0">حدد من يوافق على كل نوع طلب وبأي ترتيب</p>
+  </div>
+
+  {% for rt in request_types %}
+  {% with flow=flows_map|get_item:rt.pk %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body p-4">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="request_type" value="{{ rt.pk }}">
+
+        <div class="row align-items-center g-3">
+
+          <div class="col-md-3">
+            <div class="d-flex align-items-center gap-2">
+              <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                   style="width:36px;height:36px;background:#e0f7fa;">
+                <i class="bi bi-file-text" style="color:#06B6D4;font-size:0.9rem;"></i>
+              </div>
+              <div>
+                <div class="fw-bold small">{{ rt.name }}</div>
+                <small class="text-muted">{{ rt.category.name }}</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">الخطوة 1</label>
+            <select name="step_1_role" class="form-select form-select-sm">
+              <option value="skip" {% if not flow or flow.step_1_role == 'skip' %}selected{% endif %}>تخطي</option>
+              <option value="direct_manager" {% if flow and flow.step_1_role == 'direct_manager' %}selected{% endif %}>المدير المباشر</option>
+              <option value="hr_manager" {% if flow and flow.step_1_role == 'hr_manager' %}selected{% endif %}>مدير HR</option>
+              <option value="company_admin" {% if flow and flow.step_1_role == 'company_admin' %}selected{% endif %}>صاحب الشركة</option>
+            </select>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">الخطوة 2</label>
+            <select name="step_2_role" class="form-select form-select-sm">
+              <option value="skip" {% if not flow or flow.step_2_role == 'skip' %}selected{% endif %}>تخطي</option>
+              <option value="direct_manager" {% if flow and flow.step_2_role == 'direct_manager' %}selected{% endif %}>المدير المباشر</option>
+              <option value="hr_manager" {% if flow and flow.step_2_role == 'hr_manager' %}selected{% endif %}>مدير HR</option>
+              <option value="company_admin" {% if flow and flow.step_2_role == 'company_admin' %}selected{% endif %}>صاحب الشركة</option>
+            </select>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">الخطوة 3</label>
+            <select name="step_3_role" class="form-select form-select-sm">
+              <option value="skip" {% if not flow or flow.step_3_role == 'skip' %}selected{% endif %}>تخطي</option>
+              <option value="direct_manager" {% if flow and flow.step_3_role == 'direct_manager' %}selected{% endif %}>المدير المباشر</option>
+              <option value="hr_manager" {% if flow and flow.step_3_role == 'hr_manager' %}selected{% endif %}>مدير HR</option>
+              <option value="company_admin" {% if flow and flow.step_3_role == 'company_admin' %}selected{% endif %}>صاحب الشركة</option>
+            </select>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">التصعيد لـ</label>
+            <select name="escalation_to" class="form-select form-select-sm">
+              <option value="hr_manager" {% if not flow or flow.escalation_to == 'hr_manager' %}selected{% endif %}>HR</option>
+              <option value="company_admin" {% if flow and flow.escalation_to == 'company_admin' %}selected{% endif %}>صاحب الشركة</option>
+            </select>
+          </div>
+
+          <div class="col-md-1 text-end">
+            <div class="d-flex gap-1 flex-column">
+              <div class="form-check form-check-inline m-0">
+                <input class="form-check-input" type="checkbox"
+                       name="escalation_enabled" id="esc_{{ rt.pk }}"
+                       {% if not flow or flow.escalation_enabled %}checked{% endif %}>
+                <label class="form-check-label" style="font-size:0.7rem;" for="esc_{{ rt.pk }}">تصعيد</label>
+              </div>
+              <div class="form-check form-check-inline m-0">
+                <input class="form-check-input" type="checkbox"
+                       name="notify_employee" id="notif_{{ rt.pk }}"
+                       {% if not flow or flow.notify_employee_on_each_step %}checked{% endif %}>
+                <label class="form-check-label" style="font-size:0.7rem;" for="notif_{{ rt.pk }}">إشعار</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-auto">
+            <button type="submit" class="btn btn-sm text-white"
+                    style="background:#06B6D4; border-radius:8px;">
+              حفظ
+            </button>
+          </div>
+
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endwith %}
+  {% endfor %}
+
+</div>
+{% endblock %}

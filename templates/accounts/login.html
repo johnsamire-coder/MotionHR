@@ -1,106 +1,178 @@
 {% extends 'base/base.html' %}
 
-{% block title %}تسجيل الدخول{% endblock %}
+{% block title %}تسجيل الدخول - MotionHR{% endblock %}
 
 {% block content %}
-<div class="min-vh-100 d-flex align-items-center justify-content-center py-5" 
-     style="background: linear-gradient(135deg, #06B6D4 0%, #3B82F6 100%);">
-    
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-6 col-lg-5 col-xl-4">
-                
-                <!-- Logo -->
-                <div class="text-center mb-4">
-                    <div class="d-inline-flex align-items-center justify-content-center bg-white rounded-circle mb-3" 
-                         style="width: 80px; height: 80px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
-                        <i class="bi bi-people-fill" style="font-size: 2.5rem; color: #06B6D4;"></i>
-                    </div>
-                    <h2 class="text-white fw-bold mb-1">MotionHR</h2>
-                    <p class="text-white-50">إدارة الموارد البشرية بسلاسة</p>
-                </div>
-                
-                <!-- Login Card -->
-                <div class="card shadow-lg border-0">
-                    <div class="card-body p-4 p-md-5">
-                        
-                        <h4 class="fw-bold mb-1">مرحباً بك 👋</h4>
-                        <p class="text-muted mb-4">سجل دخولك للمتابعة</p>
-                        
-                        <!-- Error Messages -->
-                        {% if form.errors %}
-                        <div class="alert alert-danger d-flex align-items-center" role="alert">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                            <div>
-                                اسم المستخدم أو كلمة المرور غير صحيحة
-                            </div>
-                        </div>
-                        {% endif %}
-                        
-                        <form method="post" action="{% url 'login' %}">
-                            {% csrf_token %}
-                            
-                            <!-- Username -->
-                            <div class="mb-3">
-                                <label for="username" class="form-label fw-semibold">
-                                    <i class="bi bi-person"></i> اسم المستخدم
-                                </label>
-                                <input type="text" 
-                                       class="form-control form-control-lg" 
-                                       id="username" 
-                                       name="username" 
-                                       placeholder="أدخل اسم المستخدم"
-                                       required 
-                                       autofocus>
-                            </div>
-                            
-                            <!-- Password -->
-                            <div class="mb-3">
-                                <label for="password" class="form-label fw-semibold">
-                                    <i class="bi bi-lock"></i> كلمة المرور
-                                </label>
-                                <input type="password" 
-                                       class="form-control form-control-lg" 
-                                       id="password" 
-                                       name="password" 
-                                       placeholder="أدخل كلمة المرور"
-                                       required>
-                            </div>
-                            
-                            <!-- Remember Me -->
-                            <div class="mb-4 d-flex justify-content-between align-items-center">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="remember">
-                                    <label class="form-check-label text-muted" for="remember">
-                                        تذكرني
-                                    </label>
-                                </div>
-                                <a href="{% url 'password_reset' %}" class="text-decoration-none small text-primary">
-                                    نسيت كلمة المرور؟
-                                </a>
-                            </div>
-                            
-                            <!-- Submit Button -->
-                            <button type="submit" class="btn btn-primary btn-lg w-100 fw-semibold">
-                                <i class="bi bi-box-arrow-in-right ms-1"></i>
-                                تسجيل الدخول
-                            </button>
-                            
-                            <input type="hidden" name="next" value="{{ next }}">
-                        </form>
-                        
-                    </div>
-                </div>
-                
-                <!-- Footer -->
-                <div class="text-center mt-4">
-                    <p class="text-white-50 small mb-0">
-                        © 2025 MotionHR - جميع الحقوق محفوظة
-                    </p>
-                </div>
-                
+<div class="min-vh-100 d-flex align-items-center justify-content-center"
+     style="background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0e7490 100%);">
+
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-sm-10 col-md-7 col-lg-5 col-xl-4">
+
+        <!-- Card -->
+        <div class="card border-0 shadow-lg"
+             style="border-radius:20px; overflow:hidden;">
+
+          <!-- Header -->
+          <div class="card-header border-0 text-center py-4"
+               style="background: linear-gradient(135deg, #06B6D4, #0891B2);">
+            <h2 class="text-white fw-black mb-1" style="font-size:2rem; letter-spacing:-1px;">
+              MotionHR
+            </h2>
+            <p class="text-white mb-0" style="opacity:0.85; font-size:0.9rem;">
+              HR in Motion – إدارة بسلاسة
+            </p>
+          </div>
+
+          <!-- Body -->
+          <div class="card-body p-4 p-md-5">
+
+            <h5 class="fw-bold text-center mb-4 text-dark">
+              مرحباً بك 👋
+            </h5>
+
+            <!-- رسالة الخطأ -->
+            {% if error %}
+            <div class="alert alert-danger border-0 rounded-3 py-2 px-3 mb-4"
+                 style="background:#fde8e8; color:#dc2626; font-size:0.9rem;">
+              <i class="bi bi-exclamation-circle me-2"></i>{{ error }}
             </div>
+            {% endif %}
+
+            <!-- Django Messages -->
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} border-0 rounded-3 py-2 px-3 mb-3">
+              {{ message }}
+            </div>
+            {% endfor %}
+
+            <!-- فورم الدخول -->
+            <form method="post" action="{% url 'login' %}" autocomplete="off">
+              {% csrf_token %}
+
+              <!-- اسم المستخدم -->
+              <div class="mb-3">
+                <label class="form-label fw-semibold text-dark small mb-1">
+                  <i class="bi bi-person me-1" style="color:#06B6D4;"></i>
+                  بيانات الدخول
+                </label>
+                <input type="text"
+                       name="username"
+                       class="form-control form-control-lg border-0"
+                       style="background:#f8fafc; border-radius:10px; font-size:0.95rem;"
+                       placeholder="{{ login_hint }}"
+                       value="{{ request.POST.username|default:'' }}"
+                       autofocus
+                       required>
+                <div class="form-text text-muted mt-1" style="font-size:0.78rem;">
+                  <i class="bi bi-info-circle me-1"></i>
+                  يمكنك الدخول بـ: اسم المستخدم أو الإيميل أو الرقم الوظيفي أو الموبايل
+                </div>
+              </div>
+
+              <!-- كلمة المرور -->
+              <div class="mb-4">
+                <label class="form-label fw-semibold text-dark small mb-1">
+                  <i class="bi bi-lock me-1" style="color:#06B6D4;"></i>
+                  كلمة المرور
+                </label>
+                <div class="input-group">
+                  <input type="password"
+                         name="password"
+                         id="passwordInput"
+                         class="form-control form-control-lg border-0 border-end-0"
+                         style="background:#f8fafc; border-radius:10px 0 0 10px; font-size:0.95rem;"
+                         placeholder="••••••••••"
+                         required>
+                  <button class="btn border-0"
+                          style="background:#f8fafc; border-radius:0 10px 10px 0;"
+                          type="button"
+                          onclick="togglePassword()">
+                    <i class="bi bi-eye" id="eyeIcon" style="color:#06B6D4;"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- تذكرني + نسيت كلمة المرور -->
+              <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox"
+                         name="remember_me" id="rememberMe"
+                         style="border-color:#06B6D4;">
+                  <label class="form-check-label small text-muted" for="rememberMe">
+                    تذكرني
+                  </label>
+                </div>
+                <a href="{% url 'password_reset' %}"
+                   class="small text-decoration-none fw-semibold"
+                   style="color:#06B6D4;">
+                  نسيت كلمة المرور؟
+                </a>
+              </div>
+
+              <!-- زرار الدخول -->
+              <button type="submit"
+                      class="btn btn-lg w-100 text-white fw-bold"
+                      style="background: linear-gradient(135deg, #06B6D4, #0891B2);
+                             border-radius:12px; padding:14px; font-size:1rem;
+                             box-shadow: 0 4px 15px rgba(6,182,212,0.4);">
+                <i class="bi bi-box-arrow-in-right me-2"></i>
+                تسجيل الدخول
+              </button>
+
+            </form>
+
+          </div>
+
+          <!-- Footer -->
+          <div class="card-footer border-0 text-center py-3"
+               style="background:#f8fafc;">
+            <small class="text-muted">
+              مشكلة في الدخول؟
+              <a href="{% url 'subscriptions:contact_sales' %}"
+                 class="text-decoration-none fw-semibold"
+                 style="color:#06B6D4;">
+                تواصل مع المدير
+              </a>
+            </small>
+          </div>
+
         </div>
+
+        <!-- نسخة النظام -->
+        <div class="text-center mt-3">
+          <small style="color:rgba(255,255,255,0.4); font-size:0.75rem;">
+            MotionHR v1.0 &copy; 2025
+          </small>
+        </div>
+
+      </div>
     </div>
+  </div>
+
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function togglePassword() {
+    const input = document.getElementById('passwordInput');
+    const icon  = document.getElementById('eyeIcon');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'bi bi-eye-slash';
+    } else {
+        input.type = 'password';
+        icon.className = 'bi bi-eye';
+    }
+}
+
+// Enter key submit
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.target.closest('form')?.submit();
+    }
+});
+</script>
 {% endblock %}

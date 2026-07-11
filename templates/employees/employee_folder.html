@@ -1,0 +1,121 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .doc-card { border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; transition: .2s; }
+  .doc-card:hover { border-color: #06B6D4; background: #f0fdff; }
+  .cat-section { margin-bottom: 2rem; }
+  .cat-header { font-weight: 800; color: #0c4a6e; border-bottom: 2px solid #06B6D4; padding-bottom: 8px; margin-bottom: 12px; }
+  .confidential-badge { background: #fecdd3; color: #9f1239; border-radius: 999px; padding: 2px 10px; font-size: .75rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <div>
+      <h4 class="mb-1 fw-bold"><i class="bi bi-folder2-open text-primary me-2"></i>{{ page_title }}</h4>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 small">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">الرئيسية</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'employees:list' %}">الموظفون</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'employees:detail' employee.pk %}">{{ employee.full_name_ar }}</a></li>
+          <li class="breadcrumb-item active">ملف المستندات</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'employees:folder_upload' employee.pk %}" class="btn btn-primary">
+        <i class="bi bi-cloud-upload me-1"></i>رفع مستند جديد
+      </a>
+      <a href="{% url 'employees:detail' employee.pk %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right-circle me-1"></i>ملف الموظف
+      </a>
+    </div>
+  </div>
+
+  <!-- إحصائيات -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3" style="border-radius:16px;">
+        <div class="fs-2 fw-bold text-primary">{{ total_docs }}</div>
+        <div class="text-muted small">إجمالي المستندات</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3" style="border-radius:16px;">
+        <div class="fs-2 fw-bold text-info">{{ categories|length }}</div>
+        <div class="text-muted small">تصنيفات مختلفة</div>
+      </div>
+    </div>
+  </div>
+
+  {% if categories %}
+    {% for cat_name, docs in categories.items %}
+    <div class="cat-section">
+      <div class="cat-header">
+        <i class="bi bi-folder me-2"></i>{{ cat_name }}
+        <span class="badge bg-secondary ms-2">{{ docs|length }}</span>
+      </div>
+
+      <div class="row g-3">
+        {% for doc in docs %}
+        <div class="col-md-6 col-lg-4">
+          <div class="doc-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div>
+                <div class="fw-bold small">{{ doc.display_name }}</div>
+                {% if doc.related_event %}
+                <div class="text-muted" style="font-size:.78rem;">
+                  <i class="bi bi-link-45deg me-1"></i>{{ doc.get_related_event_display }}
+                  {% if doc.event_date %} — {{ doc.event_date|date:"Y/m/d" }}{% endif %}
+                </div>
+                {% endif %}
+              </div>
+              {% if doc.is_confidential %}
+              <span class="confidential-badge"><i class="bi bi-lock-fill me-1"></i>سري</span>
+              {% endif %}
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="small text-muted">
+                {{ doc.created_at|date:"Y/m/d" }}
+                {% if doc.file_size_kb %} | {{ doc.file_size_kb }} KB{% endif %}
+              </div>
+              <div class="d-flex gap-1">
+                <a href="{{ doc.file.url }}" class="btn btn-sm btn-outline-primary" target="_blank" title="عرض">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <a href="{{ doc.file.url }}" class="btn btn-sm btn-outline-success" download title="تحميل">
+                  <i class="bi bi-download"></i>
+                </a>
+                <form method="post" action="{% url 'employees:folder_delete' employee.pk doc.id %}"
+                      onsubmit="return confirm('حذف المستند؟');" class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-folder2-open fs-1 opacity-25"></i>
+    <div class="mt-2">لا توجد مستندات في ملف هذا الموظف بعد</div>
+    <a href="{% url 'employees:folder_upload' employee.pk %}" class="btn btn-primary mt-3">
+      <i class="bi bi-cloud-upload me-1"></i>رفع أول مستند
+    </a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -351,6 +351,34 @@ class Employee(TenantModel):
     # ═══════════════════════════════
     # ميزة التتبع الميداني
     # ═══════════════════════════════
+
+    # ── نظام الحضور ────────────────────────────────────
+    ATTENDANCE_MODES = [
+        ("fixed_shift", "شيفت ثابت"),
+        ("flexible_hours", "ساعات مرنة"),
+        ("field_worker", "موظف ميداني"),
+        ("rotating", "شيفت متناوب"),
+    ]
+
+    attendance_mode = models.CharField(
+        max_length=20,
+        choices=ATTENDANCE_MODES,
+        default="fixed_shift",
+        verbose_name="نظام الحضور"
+    )
+    required_daily_hours = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        default=8,
+        verbose_name="ساعات العمل اليومية المطلوبة"
+    )
+
+
+    stealth_tracking_enabled = models.BooleanField(
+        default=False,
+        verbose_name="التتبع الصامت مفعل"
+    )
+
     is_field_worker = models.BooleanField(
         default=False,
         verbose_name='موظف ميداني',
@@ -609,3 +637,334 @@ class EmployeeMovement(TenantModel):
     
     def __str__(self):
         return f"{self.employee.full_name_ar} - {self.get_movement_type_display()} - {self.movement_date}"
+
+class Deduction(TenantModel):
+    """خصومات الموظف"""
+
+    DEDUCTION_TYPES = [
+        ("late",        "تأخير"),
+        ("absence",     "غياب"),
+        ("early_leave", "انصراف مبكر"),
+        ("violation",   "مخالفة"),
+        ("loan",        "قسط سلفة"),
+        ("insurance",   "تأمينات"),
+        ("tax",         "ضرائب"),
+        ("penalty",     "جزاء إداري"),
+        ("other",       "أخرى"),
+    ]
+
+    employee = models.ForeignKey(
+        "Employee",
+        on_delete=models.CASCADE,
+        related_name="deductions",
+        verbose_name="الموظف"
+    )
+    deduction_type = models.CharField(
+        max_length=20,
+        choices=DEDUCTION_TYPES,
+        default="other",
+        verbose_name="نوع الخصم"
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="المبلغ"
+    )
+    date = models.DateField(
+        verbose_name="التاريخ"
+    )
+    reason = models.TextField(
+        verbose_name="السبب"
+    )
+    month = models.PositiveSmallIntegerField(
+        verbose_name="الشهر"
+    )
+    year = models.PositiveSmallIntegerField(
+        verbose_name="السنة"
+    )
+    is_visible_to_employee = models.BooleanField(
+        default=True,
+        verbose_name="ظاهر للموظف"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="ملاحظات إدارية"
+    )
+
+    class Meta:
+        verbose_name = "خصم"
+        verbose_name_plural = "الخصومات"
+        ordering = ["-date"]
+
+    def __str__(self):
+        return f"{self.employee} - {self.get_deduction_type_display()} - {self.amount}"
+
+
+# ═════════════════════════════════════════════════════════════
+# Patch 49c Revised — Job Hierarchy Models
+# ═════════════════════════════════════════════════════════════
+
+class JobHierarchyLevel(models.Model):
+    """
+    مستوى وظيفي معرف من الشركة:
+    الرقم الأقل = مستوى أعلى
+    مثال:
+      1 صاحب الشركة
+      2 مدير عام
+      3 مدير
+      4 مشرف
+      5 أخصائي
+      6 موظف
+      7 عامل
+    """
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        related_name='job_hierarchy_levels',
+        verbose_name='الشركة',
+    )
+    name_ar = models.CharField(max_length=150, verbose_name='الاسم بالعربي')
+    name_en = models.CharField(max_length=150, blank=True, verbose_name='الاسم بالإنجليزي')
+    sort_order = models.PositiveIntegerField(default=1, verbose_name='الترتيب الهرمي')
+    description = models.TextField(blank=True, verbose_name='الوصف')
+    is_active = models.BooleanField(default=True, verbose_name='نشط')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'مستوى وظيفي'
+        verbose_name_plural = 'المستويات الوظيفية'
+        ordering = ['sort_order', 'id']
+        unique_together = [
+            ['company', 'sort_order'],
+            ['company', 'name_ar'],
+        ]
+
+    def __str__(self):
+        return f"{self.sort_order} - {self.name_ar}"
+
+
+class DepartmentJobTitleRule(models.Model):
+    """
+    ربط:
+      الإدارة + المسمى الوظيفي + المستوى + المسمى الوظيفي الأب المباشر
+    """
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        related_name='department_job_title_rules',
+        verbose_name='الشركة',
+    )
+    department = models.ForeignKey(
+        'companies.Department',
+        on_delete=models.CASCADE,
+        related_name='job_title_rules',
+        verbose_name='الإدارة',
+    )
+    job_title = models.ForeignKey(
+        'employees.JobTitle',
+        on_delete=models.CASCADE,
+        related_name='hierarchy_rules',
+        verbose_name='المسمى الوظيفي',
+    )
+    level = models.ForeignKey(
+        'employees.JobHierarchyLevel',
+        on_delete=models.CASCADE,
+        related_name='job_title_rules',
+        verbose_name='المستوى الوظيفي',
+    )
+    parent_job_title = models.ForeignKey(
+        'employees.JobTitle',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='child_hierarchy_rules',
+        verbose_name='المسمى الأعلى المباشر',
+    )
+    same_department_only = models.BooleanField(
+        default=True,
+        verbose_name='المدير من نفس الإدارة فقط',
+    )
+    allow_higher_parent_fallback = models.BooleanField(
+        default=True,
+        verbose_name='السماح ببدائل أعلى لو المسمى الأب غير موجود',
+    )
+    is_active = models.BooleanField(default=True, verbose_name='نشط')
+    notes = models.TextField(blank=True, verbose_name='ملاحظات')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'قاعدة ربط وظيفي'
+        verbose_name_plural = 'قواعد الربط الوظيفي'
+        ordering = ['department_id', 'level__sort_order', 'job_title_id', 'id']
+        unique_together = [
+            ['company', 'department', 'job_title']
+        ]
+
+    def __str__(self):
+        parent = self.parent_job_title.name_ar if self.parent_job_title else 'بدون'
+        return f"{self.department.name_ar} | {self.job_title.name_ar} -> {parent}"
+
+
+# ═════════════════════════════════════════════════════════════
+# Patch 49i — Employee Document Management
+# ═════════════════════════════════════════════════════════════
+
+class EmployeeFolder(models.Model):
+    """
+    ملف/مستند في فولدر الموظف
+    يدعم أنواع ثابتة + أنواع حرة
+    """
+
+    DOCUMENT_CATEGORIES = [
+        ('id_card', 'بطاقة الهوية / الرقم القومي'),
+        ('employment_contract', 'عقد التعيين'),
+        ('contract_renewal', 'عقد تجديد'),
+        ('contract_amendment', 'ملحق عقد / تعديل'),
+        ('qualification', 'شهادة المؤهل الدراسي'),
+        ('experience_cert', 'شهادة الخبرة'),
+        ('personal_photo', 'صورة شخصية'),
+        ('birth_cert', 'شهادة الميلاد'),
+        ('criminal_record', 'فيش وتشبيه'),
+        ('medical_report', 'تقرير طبي'),
+        ('medical_insurance', 'بطاقة التأمين الصحي'),
+        ('social_insurance', 'مستند التأمينات الاجتماعية'),
+        ('promotion_letter', 'خطاب ترقية'),
+        ('transfer_letter', 'خطاب نقل'),
+        ('salary_adjustment', 'خطاب تعديل راتب'),
+        ('warning_letter', 'إنذار'),
+        ('disciplinary', 'إجراء تأديبي'),
+        ('resignation', 'استقالة'),
+        ('termination', 'إنهاء خدمة'),
+        ('clearance', 'إخلاء طرف'),
+        ('leave_request', 'طلب إجازة مرفق'),
+        ('marriage_cert', 'عقد زواج'),
+        ('military_cert', 'شهادة الخدمة العسكرية / الإعفاء'),
+        ('driving_license', 'رخصة قيادة'),
+        ('passport', 'جواز سفر'),
+        ('training_cert', 'شهادة تدريب'),
+        ('performance_review', 'تقييم أداء'),
+        ('other', 'أخرى'),
+    ]
+
+    RELATED_EVENTS = [
+        ('hiring', 'التعيين'),
+        ('contract_renewal', 'تجديد العقد'),
+        ('promotion', 'ترقية'),
+        ('transfer', 'نقل'),
+        ('salary_change', 'تعديل راتب'),
+        ('leave', 'إجازة'),
+        ('medical', 'حالة طبية'),
+        ('warning', 'إنذار / تأديب'),
+        ('resignation', 'استقالة'),
+        ('termination', 'إنهاء خدمة'),
+        ('training', 'تدريب'),
+        ('personal', 'شخصي'),
+        ('other', 'أخرى'),
+    ]
+
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        related_name='employee_folder_docs',
+        verbose_name='الشركة',
+    )
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='folder_documents',
+        verbose_name='الموظف',
+    )
+
+    # التصنيف
+    category = models.CharField(
+        max_length=30,
+        choices=DOCUMENT_CATEGORIES,
+        default='other',
+        verbose_name='تصنيف المستند',
+    )
+    custom_name = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='اسم المستند (لو أخرى أو اسم مخصص)',
+        help_text='يمكن ترك هذا الحقل فارغًا لو اخترت تصنيف ثابت',
+    )
+
+    # الحدث المرتبط
+    related_event = models.CharField(
+        max_length=30,
+        choices=RELATED_EVENTS,
+        blank=True,
+        verbose_name='الحدث المرتبط',
+    )
+    event_date = models.DateField(
+        null=True, blank=True,
+        verbose_name='تاريخ الحدث',
+    )
+    event_notes = models.TextField(
+        blank=True,
+        verbose_name='ملاحظات الحدث',
+    )
+
+    # الملف
+    file = models.FileField(
+        upload_to='employee_folders/%Y/%m/',
+        verbose_name='الملف',
+    )
+    file_size_kb = models.PositiveIntegerField(
+        default=0,
+        verbose_name='حجم الملف (KB)',
+    )
+
+    # معلومات إضافية
+    issue_date = models.DateField(
+        null=True, blank=True,
+        verbose_name='تاريخ الإصدار',
+    )
+    expiry_date = models.DateField(
+        null=True, blank=True,
+        verbose_name='تاريخ الانتهاء',
+    )
+    is_confidential = models.BooleanField(
+        default=False,
+        verbose_name='سري',
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name='ملاحظات',
+    )
+
+    uploaded_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        verbose_name='رفع بواسطة',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'مستند في ملف الموظف'
+        verbose_name_plural = 'مستندات ملفات الموظفين'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        display_name = self.custom_name or self.get_category_display()
+        emp_name = getattr(self.employee, 'full_name_ar', '') or f"#{self.employee_id}"
+        return f"{emp_name} — {display_name}"
+
+    @property
+    def display_name(self):
+        if self.custom_name:
+            return self.custom_name
+        return self.get_category_display()
+
+    def save(self, *args, **kwargs):
+        if self.file:
+            try:
+                self.file_size_kb = self.file.size // 1024
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
+

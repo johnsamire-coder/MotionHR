@@ -1,0 +1,86 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}طباعة توقيع الميثاق{% endblock %}
+
+{% block extra_css %}
+<style>
+  .print-doc { max-width: 700px; margin: 0 auto; font-family: 'Cairo', sans-serif; }
+  .sig-block { border: 2px solid #0f172a; border-radius: 14px; padding: 20px; margin-top: 30px; }
+  .sig-line { border-bottom: 2px solid #334155; margin-top: 40px; padding-bottom: 6px; display: inline-block; min-width: 250px; }
+  @media print {
+    .sidebar, .navbar, .breadcrumb, .btn, .print-hide { display: none !important; }
+    .main-content { margin: 0 !important; padding: 0 !important; }
+    body { font-size: 14px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="print-doc p-4">
+
+  <div class="text-center mb-3 print-hide">
+    <button onclick="window.print()" class="btn btn-primary btn-lg">
+      <i class="bi bi-printer me-2"></i>طباعة المستند
+    </button>
+  </div>
+
+  <div class="text-center mb-4">
+    {% if company and company.logo %}
+    <img src="{{ company.logo.url }}" alt="Logo" style="max-height:60px; margin-bottom:10px;">
+    {% endif %}
+    <h4 class="fw-bold">{{ company.name_ar|default:"MotionHR" }}</h4>
+    <h5 class="text-muted">إقرار قبول ميثاق العمل</h5>
+    <hr>
+  </div>
+
+  <div class="mb-4" style="line-height:2;">
+    <p>
+      أقر أنا / <strong>{{ signature.full_name_typed }}</strong>
+      {% if signature.national_id_typed %} — الرقم القومي: <strong>{{ signature.national_id_typed }}</strong>{% endif %}
+      ، الموظف بالشركة بالرقم الوظيفي <strong>{{ signature.employee.employee_code }}</strong>
+      ، بأنني قد قرأت وفهمت جميع بنود ميثاق العمل بعنوان:
+    </p>
+    <p class="fw-bold text-primary fs-5 text-center">"{{ signature.charter.title }}"</p>
+    <p>
+      وأوافق على الالتزام الكامل بكل ما جاء فيه من أحكام وشروط وقواعد.
+    </p>
+  </div>
+
+  <div class="sig-block">
+    <div class="row">
+      <div class="col-6">
+        <div class="mb-2 fw-bold">التوقيع الرقمي:</div>
+        <div class="fs-5 fw-bold text-primary">{{ signature.full_name_typed }}</div>
+      </div>
+      <div class="col-6 text-end">
+        <div class="mb-2 fw-bold">التاريخ:</div>
+        <div>{{ signature.signed_at|date:"Y/m/d" }}</div>
+        <div class="small text-muted">{{ signature.signed_at|time:"H:i:s" }}</div>
+      </div>
+    </div>
+
+    <div class="row mt-3">
+      <div class="col-6">
+        <div class="small text-muted">IP: {{ signature.ip_address|default:"—" }}</div>
+      </div>
+      <div class="col-6 text-end">
+        <div class="small text-muted">
+          {% if signature.charter_version %}
+          إصدار الميثاق: {{ signature.charter_version.version_number }}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center mt-4">
+      <div class="sig-line"></div>
+      <div class="small text-muted mt-1">توقيع الموظف</div>
+    </div>
+  </div>
+
+  <div class="text-center mt-4" style="font-size:.8rem; color:#94a3b8; font-style:italic;">
+    MotionHR — HR in Motion | JS Solutions<br>
+    تم إنشاء هذا المستند إلكترونيًا ويعتبر وثيقة رسمية
+  </div>
+</div>
+{% endblock %}

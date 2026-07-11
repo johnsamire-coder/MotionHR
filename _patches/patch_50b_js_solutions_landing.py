@@ -1,0 +1,1385 @@
+"""
+Patch 50b — JS Solutions Corporate Landing Page
+
+الهدف:
+1) إنشاء صفحة رئيسية احترافية لـ JS Solutions
+2) تعرض:
+   - Hero section للشركة
+   - MotionHR كمنتج حالي
+   - منتجات قادمة (Accounting, POS, Inventory, Assets, Projects, Custom)
+   - قسم "نطوّر برامج مخصصة"
+   - قسم التواصل
+   - CTAs
+3) URL: /js-solutions/ أو / (حسب الاختيار)
+4) تصميم احترافي بـ Bootstrap 5 RTL
+"""
+
+import os
+import shutil
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def read_file(path):
+    full = os.path.join(BASE_DIR, path)
+    if not os.path.exists(full):
+        return None
+    with open(full, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def write_file(path, content):
+    full = os.path.join(BASE_DIR, path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"✅ كُتب: {path}")
+
+
+def backup(rel_path, backup_name):
+    full = os.path.join(BASE_DIR, rel_path)
+    if os.path.exists(full):
+        backup_dir = os.path.join(BASE_DIR, "_patches", "_backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        shutil.copy2(full, os.path.join(backup_dir, backup_name))
+        print(f"✅ Backup: _patches/_backups/{backup_name}")
+
+
+print("=" * 70)
+print("Patch 50b — JS Solutions Corporate Landing Page")
+print("=" * 70)
+
+# Backups
+backup("landing/views.py", "landing_views_before_50b.py.bak")
+backup("landing/urls.py", "landing_urls_before_50b.py.bak")
+
+# ════════════════════════════════════════════════════════════
+# Step 1: Add view
+# ════════════════════════════════════════════════════════════
+print("\n📌 Step 1: إضافة js_solutions_home view")
+
+views_path = "landing/views.py"
+views_content = read_file(views_path)
+if views_content is None:
+    raise SystemExit("❌ ملف landing/views.py غير موجود")
+
+js_view = '''
+
+# ═════════════════════════════════════════════════════════════
+# Patch 50b — JS Solutions Corporate Landing
+# ═════════════════════════════════════════════════════════════
+
+def js_solutions_home(request):
+    """الصفحة الرئيسية لـ JS Solutions — Corporate Landing"""
+    context = {
+        'page_title': 'JS Solutions — نطوّر حلول ذكية للشركات',
+    }
+    return render(request, 'landing/js_solutions.html', context)
+'''
+
+if "def js_solutions_home" not in views_content:
+    views_content = views_content.rstrip() + "\n" + js_view + "\n"
+    write_file(views_path, views_content)
+    print("   ✅ تمت إضافة js_solutions_home")
+else:
+    print("   ℹ️ js_solutions_home موجودة بالفعل")
+
+# ════════════════════════════════════════════════════════════
+# Step 2: Add URL
+# ════════════════════════════════════════════════════════════
+print("\n📌 Step 2: إضافة URL")
+
+urls_path = "landing/urls.py"
+urls_content = read_file(urls_path)
+
+if "js_solutions" not in urls_content:
+    if "urlpatterns = [" in urls_content:
+        urls_content = urls_content.replace(
+            "urlpatterns = [",
+            "urlpatterns = [\n    path('js-solutions/', views.js_solutions_home, name='js_solutions'),",
+            1
+        )
+        write_file(urls_path, urls_content)
+        print("   ✅ تمت إضافة route js_solutions")
+else:
+    print("   ℹ️ route موجود بالفعل")
+
+# ════════════════════════════════════════════════════════════
+# Step 3: Create the Landing Page Template
+# ════════════════════════════════════════════════════════════
+print("\n📌 Step 3: إنشاء templates/landing/js_solutions.html")
+
+js_solutions_html = """<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JS Solutions — نطوّر حلول ذكية للشركات</title>
+  <meta name="description" content="JS Solutions — شركة متخصصة في تطوير أنظمة ذكية وعملية للشركات في مصر والعالم العربي">
+
+  <!-- Bootstrap RTL -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary: #06B6D4;
+      --primary-dark: #0E7490;
+      --dark: #0F172A;
+      --dark-2: #1E293B;
+      --gray: #64748B;
+      --light: #F8FAFC;
+      --success: #10B981;
+      --warning: #F59E0B;
+      --purple: #8B5CF6;
+      --red: #EF4444;
+      --gold: #F59E0B;
+    }
+
+    * { font-family: 'Cairo', sans-serif; }
+
+    body { background: #fff; color: var(--dark); }
+
+    /* ── Navbar ── */
+    .js-navbar {
+      background: rgba(15, 23, 42, 0.97);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      padding: 14px 0;
+    }
+    .js-logo-text {
+      font-size: 1.5rem;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+    }
+    .js-logo-text span { color: var(--primary); }
+    .js-tagline {
+      font-size: .72rem;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .nav-link-custom {
+      color: rgba(255,255,255,0.7) !important;
+      font-weight: 600;
+      font-size: .9rem;
+      transition: color .2s;
+    }
+    .nav-link-custom:hover { color: var(--primary) !important; }
+    .btn-nav-cta {
+      background: var(--primary);
+      color: white !important;
+      border-radius: 10px;
+      padding: 8px 22px;
+      font-weight: 700;
+      font-size: .9rem;
+      transition: background .2s, transform .2s;
+    }
+    .btn-nav-cta:hover { background: var(--primary-dark); transform: scale(1.02); }
+
+    /* ── Hero ── */
+    .hero-section {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0F172A 0%, #0E7490 50%, #0F172A 100%);
+      display: flex;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      padding: 100px 0 60px;
+    }
+
+    .hero-section::before {
+      content: '';
+      position: absolute;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(6,182,212,0.15) 0%, transparent 70%);
+      top: -100px; right: -100px;
+      animation: float 8s ease-in-out infinite;
+    }
+    .hero-section::after {
+      content: '';
+      position: absolute;
+      width: 400px; height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%);
+      bottom: -50px; left: -50px;
+      animation: float 10s ease-in-out infinite reverse;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-30px); }
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(6,182,212,0.15);
+      border: 1px solid rgba(6,182,212,0.3);
+      color: var(--primary);
+      border-radius: 999px;
+      padding: 6px 18px;
+      font-size: .85rem;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+    .hero-title {
+      font-size: clamp(2.2rem, 5vw, 3.8rem);
+      font-weight: 900;
+      color: white;
+      line-height: 1.2;
+      margin-bottom: 20px;
+    }
+    .hero-title .highlight {
+      background: linear-gradient(90deg, var(--primary), #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-subtitle {
+      font-size: 1.15rem;
+      color: rgba(255,255,255,0.72);
+      line-height: 1.8;
+      margin-bottom: 36px;
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 32px;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+    .stat-item .stat-num {
+      font-size: 2rem;
+      font-weight: 900;
+      color: var(--primary);
+    }
+    .stat-item .stat-label {
+      font-size: .8rem;
+      color: rgba(255,255,255,0.5);
+    }
+
+    .btn-hero-primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      border: none;
+      border-radius: 14px;
+      padding: 14px 32px;
+      font-size: 1.05rem;
+      font-weight: 800;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: transform .2s, box-shadow .2s;
+      box-shadow: 0 8px 24px rgba(6,182,212,0.35);
+    }
+    .btn-hero-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 32px rgba(6,182,212,0.4);
+      color: white;
+    }
+    .btn-hero-secondary {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      border-radius: 14px;
+      padding: 14px 32px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: background .2s;
+    }
+    .btn-hero-secondary:hover {
+      background: rgba(255,255,255,0.15);
+      color: white;
+    }
+
+    .hero-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      padding: 28px;
+      backdrop-filter: blur(10px);
+      position: relative;
+      z-index: 1;
+    }
+    .product-live-badge {
+      background: var(--success);
+      color: white;
+      border-radius: 999px;
+      padding: 4px 14px;
+      font-size: .75rem;
+      font-weight: 700;
+    }
+    .feature-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(6,182,212,0.12);
+      border: 1px solid rgba(6,182,212,0.25);
+      color: var(--primary);
+      border-radius: 999px;
+      padding: 5px 14px;
+      font-size: .82rem;
+      font-weight: 600;
+      margin: 3px;
+    }
+
+    /* ── Section Shared ── */
+    .section-badge {
+      display: inline-block;
+      background: rgba(6,182,212,0.1);
+      color: var(--primary);
+      border: 1px solid rgba(6,182,212,0.25);
+      border-radius: 999px;
+      padding: 5px 18px;
+      font-size: .82rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+      letter-spacing: .5px;
+    }
+    .section-title {
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      font-weight: 900;
+      color: var(--dark);
+      margin-bottom: 12px;
+    }
+    .section-subtitle {
+      font-size: 1.05rem;
+      color: var(--gray);
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.8;
+    }
+
+    /* ── Products Section ── */
+    .products-section { padding: 100px 0; background: var(--light); }
+
+    .product-card {
+      background: white;
+      border: 1px solid #E2E8F0;
+      border-radius: 24px;
+      padding: 32px 28px;
+      height: 100%;
+      transition: transform .3s, box-shadow .3s, border-color .3s;
+      position: relative;
+      overflow: hidden;
+    }
+    .product-card::before {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 100%; height: 4px;
+      background: linear-gradient(90deg, var(--primary), var(--purple));
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .product-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+      border-color: var(--primary);
+    }
+    .product-card:hover::before { opacity: 1; }
+
+    .product-icon {
+      width: 64px; height: 64px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      margin-bottom: 20px;
+    }
+    .product-name { font-size: 1.25rem; font-weight: 800; color: var(--dark); margin-bottom: 8px; }
+    .product-desc { font-size: .92rem; color: var(--gray); line-height: 1.7; margin-bottom: 16px; }
+    .product-features li {
+      font-size: .85rem;
+      color: var(--gray);
+      padding: 4px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .product-features li i { color: var(--success); font-size: .9rem; }
+
+    .badge-live {
+      background: linear-gradient(135deg, var(--success), #059669);
+      color: white;
+      border-radius: 999px;
+      padding: 4px 14px;
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .5px;
+    }
+    .badge-soon {
+      background: linear-gradient(135deg, var(--warning), #D97706);
+      color: white;
+      border-radius: 999px;
+      padding: 4px 14px;
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .5px;
+    }
+    .badge-custom {
+      background: linear-gradient(135deg, var(--purple), #7C3AED);
+      color: white;
+      border-radius: 999px;
+      padding: 4px 14px;
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .5px;
+    }
+
+    /* ── Why Section ── */
+    .why-section { padding: 100px 0; background: white; }
+    .why-card {
+      text-align: center;
+      padding: 32px 20px;
+    }
+    .why-icon {
+      width: 72px; height: 72px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      margin: 0 auto 18px;
+    }
+    .why-title { font-size: 1.1rem; font-weight: 800; color: var(--dark); margin-bottom: 8px; }
+    .why-desc { font-size: .9rem; color: var(--gray); line-height: 1.7; }
+
+    /* ── Custom Software Section ── */
+    .custom-section {
+      padding: 100px 0;
+      background: linear-gradient(135deg, var(--dark) 0%, var(--dark-2) 100%);
+      color: white;
+    }
+    .custom-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 20px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .custom-item:last-child { border-bottom: none; }
+    .custom-item-icon {
+      width: 48px; height: 48px;
+      border-radius: 14px;
+      background: rgba(6,182,212,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      color: var(--primary);
+      flex-shrink: 0;
+    }
+    .custom-item-title { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+    .custom-item-desc { font-size: .88rem; color: rgba(255,255,255,0.6); line-height: 1.6; }
+
+    /* ── Industries ── */
+    .industries-section { padding: 80px 0; background: var(--light); }
+    .industry-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: white;
+      border: 1px solid #E2E8F0;
+      border-radius: 14px;
+      padding: 12px 20px;
+      font-size: .9rem;
+      font-weight: 700;
+      color: var(--dark);
+      margin: 6px;
+      transition: all .2s;
+      cursor: default;
+    }
+    .industry-chip:hover {
+      border-color: var(--primary);
+      background: rgba(6,182,212,0.06);
+      color: var(--primary-dark);
+      transform: translateY(-2px);
+    }
+    .industry-chip .chip-icon { font-size: 1.1rem; }
+
+    /* ── Process Section ── */
+    .process-section { padding: 100px 0; background: white; }
+    .process-step {
+      text-align: center;
+      padding: 20px;
+      position: relative;
+    }
+    .process-num {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      font-size: 1.3rem;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      box-shadow: 0 8px 20px rgba(6,182,212,0.3);
+    }
+    .process-title { font-size: 1rem; font-weight: 800; color: var(--dark); margin-bottom: 6px; }
+    .process-desc { font-size: .88rem; color: var(--gray); line-height: 1.6; }
+
+    /* ── Contact Section ── */
+    .contact-section {
+      padding: 100px 0;
+      background: linear-gradient(135deg, #0F172A 0%, #0E7490 100%);
+      color: white;
+    }
+    .contact-card-inner {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 24px;
+      padding: 36px;
+      backdrop-filter: blur(10px);
+    }
+    .contact-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .contact-item:last-child { border-bottom: none; }
+    .contact-icon-box {
+      width: 48px; height: 48px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      flex-shrink: 0;
+    }
+    .contact-label { font-size: .82rem; color: rgba(255,255,255,0.5); }
+    .contact-value { font-size: 1rem; font-weight: 700; color: white; }
+
+    .btn-wa {
+      background: #25D366;
+      color: white;
+      border: none;
+      border-radius: 14px;
+      padding: 16px 32px;
+      font-size: 1.05rem;
+      font-weight: 800;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: transform .2s, box-shadow .2s;
+      box-shadow: 0 8px 24px rgba(37,211,102,0.3);
+    }
+    .btn-wa:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 32px rgba(37,211,102,0.4);
+      color: white;
+    }
+    .btn-call {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      border-radius: 14px;
+      padding: 16px 32px;
+      font-size: 1.05rem;
+      font-weight: 800;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: background .2s;
+    }
+    .btn-call:hover { background: rgba(255,255,255,0.2); color: white; }
+
+    /* ── CTA Banner ── */
+    .cta-banner {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
+      padding: 70px 0;
+      text-align: center;
+      color: white;
+    }
+    .cta-banner h2 { font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 900; margin-bottom: 12px; }
+    .cta-banner p { font-size: 1.05rem; color: rgba(255,255,255,0.85); margin-bottom: 32px; }
+    .btn-cta-white {
+      background: white;
+      color: var(--primary-dark);
+      border-radius: 14px;
+      padding: 14px 36px;
+      font-size: 1.05rem;
+      font-weight: 800;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: transform .2s, box-shadow .2s;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .btn-cta-white:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 32px rgba(0,0,0,0.3);
+      color: var(--primary-dark);
+    }
+
+    /* ── Footer ── */
+    .js-footer {
+      background: var(--dark);
+      color: rgba(255,255,255,0.6);
+      padding: 40px 0 24px;
+      font-size: .88rem;
+    }
+    .footer-logo { font-size: 1.4rem; font-weight: 900; color: white; }
+    .footer-logo span { color: var(--primary); }
+
+    /* ── Utilities ── */
+    @media (max-width: 767.98px) {
+      .hero-stats { gap: 20px; }
+      .hero-title { font-size: 2rem; }
+    }
+
+    html { scroll-behavior: smooth; }
+
+    .fade-in {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity .6s ease, transform .6s ease;
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ══════════════════════════════════════
+     NAVBAR
+══════════════════════════════════════ -->
+<nav class="js-navbar">
+  <div class="container d-flex justify-content-between align-items-center">
+    <div>
+      <div class="js-logo-text text-white">JS <span>Solutions</span></div>
+      <div class="js-tagline">Smart Software for Smart Business</div>
+    </div>
+
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <a href="#products" class="nav-link-custom text-decoration-none">منتجاتنا</a>
+      <a href="#why" class="nav-link-custom text-decoration-none">لماذا نحن</a>
+      <a href="#custom" class="nav-link-custom text-decoration-none">حلول مخصصة</a>
+      <a href="#contact" class="nav-link-custom text-decoration-none">تواصل</a>
+      <a href="/free-trial/" class="btn-nav-cta text-decoration-none">
+        <i class="bi bi-rocket-takeoff-fill"></i>جرّب مجاناً
+      </a>
+    </div>
+  </div>
+</nav>
+
+
+<!-- ══════════════════════════════════════
+     HERO
+══════════════════════════════════════ -->
+<section class="hero-section">
+  <div class="container position-relative" style="z-index:2;">
+    <div class="row align-items-center g-5">
+      <div class="col-lg-7">
+        <div class="hero-badge">
+          <i class="bi bi-stars"></i>
+          شركة برمجيات مصرية — متخصصة في حلول الأعمال
+        </div>
+        <h1 class="hero-title">
+          نطوّر أنظمة ذكية<br>
+          <span class="highlight">تحل مشاكل شركتك</span><br>
+          بكفاءة أعلى
+        </h1>
+        <p class="hero-subtitle">
+          في JS Solutions نؤمن إن كل مشكلة تشغيلية لها حل برمجي ذكي.<br>
+          نبني أنظمة عملية في إدارة الموارد البشرية، المحاسبة، التشغيل، والمخازن.
+        </p>
+
+        <div class="hero-stats">
+          <div class="stat-item">
+            <div class="stat-num">14</div>
+            <div class="stat-label">يوم تجربة مجانية</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num">5+</div>
+            <div class="stat-label">أنظمة قادمة</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num">100%</div>
+            <div class="stat-label">عربي بالكامل</div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-3 flex-wrap">
+          <a href="/free-trial/" class="btn-hero-primary">
+            <i class="bi bi-rocket-takeoff-fill"></i>
+            ابدأ التجربة المجانية
+          </a>
+          <a href="#products" class="btn-hero-secondary">
+            <i class="bi bi-grid-3x3-gap-fill"></i>
+            استكشف منتجاتنا
+          </a>
+        </div>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="hero-card">
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+              <div style="font-size:1.2rem; font-weight:800; color:white;">MotionHR</div>
+              <div style="font-size:.82rem; color:rgba(255,255,255,0.55);">HR in Motion — إدارة بسلاسة</div>
+            </div>
+            <span class="product-live-badge"><i class="bi bi-circle-fill me-1" style="font-size:.6rem;"></i>متاح الآن</span>
+          </div>
+
+          <div class="row g-3 mb-4">
+            <div class="col-6">
+              <div style="background:rgba(16,185,129,0.15); border-radius:12px; padding:12px; text-align:center;">
+                <div style="font-size:1.6rem; font-weight:900; color:#10B981;">95%</div>
+                <div style="font-size:.72rem; color:rgba(255,255,255,0.55);">دقة التتبع</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div style="background:rgba(6,182,212,0.15); border-radius:12px; padding:12px; text-align:center;">
+                <div style="font-size:1.6rem; font-weight:900; color:var(--primary);">18</div>
+                <div style="font-size:.72rem; color:rgba(255,255,255,0.55);">نوع طلب</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <div class="feature-pill"><i class="bi bi-geo-alt-fill"></i>تتبع ميداني</div>
+            <div class="feature-pill"><i class="bi bi-calendar-check-fill"></i>حضور GPS</div>
+            <div class="feature-pill"><i class="bi bi-bar-chart-fill"></i>تقارير</div>
+            <div class="feature-pill"><i class="bi bi-people-fill"></i>إدارة موظفين</div>
+            <div class="feature-pill"><i class="bi bi-eye-slash-fill"></i>تتبع صامت</div>
+            <div class="feature-pill"><i class="bi bi-file-earmark-text-fill"></i>طلبات</div>
+          </div>
+
+          <a href="/free-trial/" style="display:block; background:linear-gradient(135deg, var(--primary), var(--primary-dark)); color:white; border-radius:12px; padding:12px; text-align:center; text-decoration:none; font-weight:800; transition:transform .2s;"
+             onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+            <i class="bi bi-rocket-takeoff-fill me-2"></i>جرّب مجاناً 14 يوم
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════
+     PRODUCTS
+══════════════════════════════════════ -->
+<section class="products-section" id="products">
+  <div class="container">
+    <div class="text-center mb-5 fade-in">
+      <span class="section-badge">منتجاتنا</span>
+      <h2 class="section-title">أنظمة صُممت لتحل مشاكل حقيقية</h2>
+      <p class="section-subtitle">نبني حلولًا تشغيلية عملية لكل احتياجات شركتك</p>
+    </div>
+
+    <div class="row g-4">
+
+      <!-- MotionHR — LIVE -->
+      <div class="col-lg-4 col-md-6 fade-in">
+        <div class="product-card" style="border-color:#E2E8F0;">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="product-icon" style="background:linear-gradient(135deg, rgba(6,182,212,0.15), rgba(14,116,144,0.1));">
+              <i class="bi bi-people-fill" style="color:var(--primary);"></i>
+            </div>
+            <span class="badge-live"><i class="bi bi-circle-fill me-1" style="font-size:.5rem;"></i>متاح الآن</span>
+          </div>
+          <div class="product-name">MotionHR</div>
+          <div style="font-size:.8rem; color:var(--primary); font-weight:700; margin-bottom:10px;">نظام إدارة الموارد البشرية</div>
+          <div class="product-desc">تتبع الموظفين الميدانيين لحظة بلحظة، حضور ذكي بالـ GPS، إجازات وطلبات إلكترونية، وتقارير احترافية.</div>
+          <ul class="product-features list-unstyled">
+            <li><i class="bi bi-check-circle-fill"></i>تتبع ميداني حي على الخريطة</li>
+            <li><i class="bi bi-check-circle-fill"></i>تتبع صامت (Stealth Tracking)</li>
+            <li><i class="bi bi-check-circle-fill"></i>حضور وانصراف بالـ GPS</li>
+            <li><i class="bi bi-check-circle-fill"></i>نظام طلبات (18 نوع)</li>
+            <li><i class="bi bi-check-circle-fill"></i>يعمل من أي جهاز بدون تنزيل</li>
+          </ul>
+          <div class="mt-3 d-flex gap-2">
+            <a href="/free-trial/" style="flex:1; background:var(--primary); color:white; border-radius:10px; padding:10px; text-align:center; text-decoration:none; font-weight:700; font-size:.9rem;">جرّب مجاناً</a>
+            <a href="/pricing/" style="flex:1; background:var(--light); color:var(--dark); border-radius:10px; padding:10px; text-align:center; text-decoration:none; font-weight:700; font-size:.9rem; border:1px solid #E2E8F0;">الأسعار</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- JS Accounting -->
+      <div class="col-lg-4 col-md-6 fade-in">
+        <div class="product-card">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="product-icon" style="background:linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1));">
+              <i class="bi bi-calculator-fill" style="color:#10B981;"></i>
+            </div>
+            <span class="badge-soon">قريبًا</span>
+          </div>
+          <div class="product-name">JS Accounting</div>
+          <div style="font-size:.8rem; color:#10B981; font-weight:700; margin-bottom:10px;">نظام محاسبة وفواتير</div>
+          <div class="product-desc">نظام محاسبة خفيف ومتكامل للشركات الصغيرة والمتوسطة. قيود، فواتير، عملاء، موردين، وتقارير مالية.</div>
+          <ul class="product-features list-unstyled">
+            <li><i class="bi bi-check-circle-fill"></i>قيود يومية وسندات</li>
+            <li><i class="bi bi-check-circle-fill"></i>فواتير بيع وشراء</li>
+            <li><i class="bi bi-check-circle-fill"></i>عملاء وموردون</li>
+            <li><i class="bi bi-check-circle-fill"></i>خزنة وبنك</li>
+            <li><i class="bi bi-check-circle-fill"></i>تقارير مالية شاملة</li>
+          </ul>
+          <div class="mt-3">
+            <a href="#contact" style="display:block; background:#F0FDF4; color:#059669; border:1px solid #A7F3D0; border-radius:10px; padding:10px; text-align:center; text-decoration:none; font-weight:700; font-size:.9rem;">
+              <i class="bi bi-bell-fill me-1"></i>أخبرني عند الإطلاق
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- JS POS -->
+      <div class="col-lg-4 col-md-6 fade-in">
+        <div class="product-card">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="product-icon" style="background:linear-gradient(135deg, rgba(245,158,11,0.15), rgba(217,119,6,0.1));">
+              <i class="bi bi-shop-window" style="color:#F59E0B;"></i>
+            </div>
+            <span class="badge-soon">قريبًا</span>
+          </div>
+          <div class="product-name">JS POS</div>
+          <div style="font-size:.8rem; color:#F59E0B; font-weight:700; margin-bottom:10px;">نظام كاشير ونقاط بيع</div>
+          <div class="product-desc">نظام كاشير سريع ومرن يناسب المطاعم والمحلات وسلاسل البيع بالتجزئة. باركود، مرتجعات، وتقارير مبيعات.</div>
+          <ul class="product-features list-unstyled">
+            <li><i class="bi bi-check-circle-fill"></i>فاتورة بيع سريعة</li>
+            <li><i class="bi bi-check-circle-fill"></i>باركود وأصناف</li>
+            <li><i class="bi bi-check-circle-fill"></i>مرتجعات واسترداد</li>
+            <li><i class="bi bi-check-circle-fill"></i>صلاحيات كاشير</li>
+            <li><i class="bi bi-check-circle-fill"></i>تقارير المبيعات اليومية</li>
+          </ul>
+          <div class="mt-3">
+            <a href="#contact" style="display:block; background:#FFFBEB; color:#D97706; border:1px solid #FCD34D; border-radius:10px; padding:10px; text-align:center; text-decoration:none; font-weight:700; font-size:.9rem;">
+              <i class="bi bi-bell-fill me-1"></i>أخبرني عند الإطلاق
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- JS Inventory -->
+      <div class="col-lg-4 col-md-6 fade-in">
+        <div class="product-card">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="product-icon" style="background:linear-gradient(135deg, rgba(139,92,246,0.15), rgba(109,40,217,0.1));">
+              <i class="bi bi-box-seam-fill" style="color:#8B5CF6;"></i>
+            </div>
+            <span class="badge-soon">قريبًا</span>
+          </div>
+          <div class="product-name">JS Inventory</div>
+          <div style="font-size:.8rem; color:#8B5CF6; font-weight:700; margin-bottom:10px;">نظام مخازن وأصناف</div>
+          <div class="product-desc">تابع حركة الأصناف، إذن صرف وإضافة، تحويل بين المخازن، جرد، وتنبيه عند نقص المخزون.</div>
+          <ul class="product-features list-unstyled">
+            <li><i class="bi bi-check-circle-fill"></i>أذون صرف وإضافة</li>
+            <li><i class="bi bi-check-circle-fill"></i>تحويل بين مخازن</li>
+            <li><i class="bi bi-check-circle-fill"></i>جرد دوري</li>
+            <li><i class="bi bi-check-circle-fill"></i>تنبيه نقص المخزون</li>
+            <li><i class="bi bi-check-circle-fill"></i>تقارير حركة الأصناف</li>
+          </ul>
+          <div class="mt-3">
+            <a href="#contact" style="display:block; background:#F5F3FF; color:#7C3AED; border:1px solid #DDD6FE; border-radius:10px; padding:10px; text-align:center; text-decoration:none; font-weight:700; font-size:.9rem;">
+              <i class="bi bi-bell-fill me-1"></i>أخبرني عند الإطلاق
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- JS Assets -->
+      <div class="col-lg-4 col-md-6 fade-in">
+        <div class="product-card">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="product-icon" style="background:linear-gradient(135deg, rgba(239,68,68,0.15), rgba(220,38,38,0.1));">
+              <i class="bi bi-laptop-fill" style="color:#EF4444;"></i>
+            </div>
+            <span class="badge-soon">قريبًا</span>
+          </div>
+          <div class="product-name">JS Assets</div>
+          <div style="font-size:.8rem; color:#EF4444; font-weight:700; margin-bottom:10px;">نظام عهد وأصول الشركة</div>
+          <div class="product-desc">تابع أصول شركتك من لابتوبات وعربيات وأدوات. تسليم واستلام إلكتروني وإخلاء طرف تلقائي.</div>
+          <ul class="product-features list-unstyled">
+            <li><i class="bi bi-check-circle-fill"></i>سجل أصول الشركة</li>
+            <li><i class="bi bi-check-circle-fill"></i>تسليم واستلام إلكتروني</li>
+            <li><i class="bi bi-check-circle-fill"></i>إخلاء طرف تلقائي</li>
+            <li><i class="bi bi-check-circle-fill"></i>جدولة صيانة</li>
+            <li><i class="bi bi-check-circle-fill"></i>تنبيه انتهاء الضمان</li>
+          </ul>
+          <div class="mt-3">
+            <a href="#contact" style="display:block; background:#FEF2F2; color:#DC2626; border:1px solid #FCA5A5; border-radius:10px; padding:10px; text-align:center; text-decoration:none; font-weight:700; font-size:.9rem;">
+              <i class="bi bi-bell-fill me-1"></i>أخبرني عند الإطلاق
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- JS Projects -->
+      <div class="col-lg-4 col-md-6 fade-in">
+        <div class="product-card">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="product-icon" style="background:linear-gradient(135deg, rgba(6,182,212,0.15), rgba(14,116,144,0.1));">
+              <i class="bi bi-kanban-fill" style="color:var(--primary);"></i>
+            </div>
+            <span class="badge-soon">قريبًا</span>
+          </div>
+          <div class="product-name">JS Projects</div>
+          <div style="font-size:.8rem; color:var(--primary); font-weight:700; margin-bottom:10px;">نظام متابعة مشاريع وتكاليف</div>
+          <div class="product-desc">متابعة المشاريع، البنود، التكاليف، العمالة، والمعدات. مستخلصات ومقارنة بالموازنة. مناسب لشركات المقاولات.</div>
+          <ul class="product-features list-unstyled">
+            <li><i class="bi bi-check-circle-fill"></i>بنود وتكاليف</li>
+            <li><i class="bi bi-check-circle-fill"></i>عمالة ومعدات</li>
+            <li><i class="bi bi-check-circle-fill"></i>مستخلصات</li>
+            <li><i class="bi bi-check-circle-fill"></i>موازنة ومتابعة</li>
+            <li><i class="bi bi-check-circle-fill"></i>ربط مع الحسابات</li>
+          </ul>
+          <div class="mt-3">
+            <a href="#contact" style="display:block; background:#F0FDFF; color:#0E7490; border:1px solid #A5F3FC; border-radius:10px; padding:10px; text-align:center; text-decoration:none; font-weight:700; font-size:.9rem;">
+              <i class="bi bi-bell-fill me-1"></i>أخبرني عند الإطلاق
+            </a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════
+     WHY JS SOLUTIONS
+══════════════════════════════════════ -->
+<section class="why-section" id="why">
+  <div class="container">
+    <div class="text-center mb-5 fade-in">
+      <span class="section-badge">لماذا نحن</span>
+      <h2 class="section-title">نبني بطريقة مختلفة</h2>
+      <p class="section-subtitle">أنظمة مش مجرد برامج — هي حلول حقيقية لمشاكل حقيقية</p>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-md-4 fade-in">
+        <div class="why-card">
+          <div class="why-icon" style="background:#F0FDFF; color:var(--primary);">
+            <i class="bi bi-bullseye"></i>
+          </div>
+          <div class="why-title">نبدأ بالمشكلة</div>
+          <div class="why-desc">مش بنبني برنامج من أجل البرنامج — بنفهم مشكلتك الحقيقية وبنبني الحل اللي يحلها.</div>
+        </div>
+      </div>
+      <div class="col-md-4 fade-in">
+        <div class="why-card">
+          <div class="why-icon" style="background:#ECFDF5; color:#10B981;">
+            <i class="bi bi-translate"></i>
+          </div>
+          <div class="why-title">عربي 100%</div>
+          <div class="why-desc">واجهة، لغة، تقارير، ودعم فني — كلها بالعربي. مصمم خصيصًا للسوق المصري والعربي.</div>
+        </div>
+      </div>
+      <div class="col-md-4 fade-in">
+        <div class="why-card">
+          <div class="why-icon" style="background:#FEF3C7; color:#F59E0B;">
+            <i class="bi bi-lightning-charge-fill"></i>
+          </div>
+          <div class="why-title">سريع وعملي</div>
+          <div class="why-desc">بدون تعقيد بدون تدريب طويل. الموظف يدخل ويشتغل في نفس اليوم.</div>
+        </div>
+      </div>
+      <div class="col-md-4 fade-in">
+        <div class="why-card">
+          <div class="why-icon" style="background:#F5F3FF; color:#8B5CF6;">
+            <i class="bi bi-cloud-check-fill"></i>
+          </div>
+          <div class="why-title">Cloud — بدون تنزيل</div>
+          <div class="why-desc">يعمل من أي جهاز — كمبيوتر، موبايل، تابلت — بدون تنزيل أي برنامج.</div>
+        </div>
+      </div>
+      <div class="col-md-4 fade-in">
+        <div class="why-card">
+          <div class="why-icon" style="background:#FFF1F2; color:#EF4444;">
+            <i class="bi bi-shield-fill-check"></i>
+          </div>
+          <div class="why-title">بيانات آمنة</div>
+          <div class="why-desc">بيانات شركتك مشفرة وآمنة على سيرفرات محمية. كل شركة معزولة تمامًا.</div>
+        </div>
+      </div>
+      <div class="col-md-4 fade-in">
+        <div class="why-card">
+          <div class="why-icon" style="background:#F0FDFF; color:var(--primary);">
+            <i class="bi bi-headset"></i>
+          </div>
+          <div class="why-title">دعم فني حقيقي</div>
+          <div class="why-desc">مش bot ولا email بس. ناس حقيقيين على واتساب بيردوا ويحلوا.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════
+     INDUSTRIES
+══════════════════════════════════════ -->
+<section class="industries-section">
+  <div class="container">
+    <div class="text-center mb-4 fade-in">
+      <span class="section-badge">قطاعات نخدمها</span>
+      <h2 class="section-title">حلول لكل قطاع</h2>
+    </div>
+    <div class="text-center fade-in">
+      <div class="industry-chip"><span class="chip-icon">🏗️</span>مقاولات وبناء</div>
+      <div class="industry-chip"><span class="chip-icon">🚚</span>توزيع ونقل</div>
+      <div class="industry-chip"><span class="chip-icon">🔧</span>صيانة وخدمات</div>
+      <div class="industry-chip"><span class="chip-icon">🏬</span>سلاسل محلات</div>
+      <div class="industry-chip"><span class="chip-icon">🏥</span>مستشفيات وعيادات</div>
+      <div class="industry-chip"><span class="chip-icon">🏭</span>مصانع وإنتاج</div>
+      <div class="industry-chip"><span class="chip-icon">🏢</span>شركات متوسطة</div>
+      <div class="industry-chip"><span class="chip-icon">🍕</span>مطاعم وفود</div>
+      <div class="industry-chip"><span class="chip-icon">📦</span>تجارة وتجزئة</div>
+      <div class="industry-chip"><span class="chip-icon">🎓</span>تعليم وتدريب</div>
+      <div class="industry-chip"><span class="chip-icon">🏦</span>خدمات مالية</div>
+      <div class="industry-chip"><span class="chip-icon">⚡</span>أي شركة تحتاج نظام</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════
+     CUSTOM SOFTWARE
+══════════════════════════════════════ -->
+<section class="custom-section" id="custom">
+  <div class="container">
+    <div class="row g-5 align-items-center">
+      <div class="col-lg-5 fade-in">
+        <span class="section-badge">حلول مخصصة</span>
+        <h2 style="font-size:clamp(1.8rem, 4vw, 2.4rem); font-weight:900; color:white; margin-bottom:16px; line-height:1.3;">
+          عندك مشكلة تشغيلية خاصة؟<br>
+          <span style="color:var(--primary);">نبني لك الحل</span>
+        </h2>
+        <p style="color:rgba(255,255,255,0.7); font-size:1rem; line-height:1.8; margin-bottom:28px;">
+          لو عندك عملية تشغيلية معقدة أو مشكلة متكررة مش لاقيها في أي برنامج جاهز،
+          نقدر نبني لك نظامًا مخصصًا بالضبط لاحتياجك.
+        </p>
+        <a href="#contact" class="btn-hero-primary text-decoration-none">
+          <i class="bi bi-chat-dots-fill"></i>تحدث معنا عن احتياجك
+        </a>
+      </div>
+
+      <div class="col-lg-7 fade-in">
+        <div class="custom-item">
+          <div class="custom-item-icon"><i class="bi bi-diagram-3-fill"></i></div>
+          <div>
+            <div class="custom-item-title">أنظمة إدارة متكاملة (ERP خفيف)</div>
+            <div class="custom-item-desc">محاسبة + مخازن + مبيعات + موارد بشرية في نظام واحد مخصص لشركتك.</div>
+          </div>
+        </div>
+        <div class="custom-item">
+          <div class="custom-item-icon"><i class="bi bi-phone-fill"></i></div>
+          <div>
+            <div class="custom-item-title">تطبيقات موبايل مخصصة</div>
+            <div class="custom-item-desc">تطبيق لموظفيك أو عملائك بتصميم يعكس هوية شركتك تمامًا.</div>
+          </div>
+        </div>
+        <div class="custom-item">
+          <div class="custom-item-icon"><i class="bi bi-plug-fill"></i></div>
+          <div>
+            <div class="custom-item-title">ربط أنظمة موجودة (Integration)</div>
+            <div class="custom-item-desc">ربط برامجك الحالية مع بعضها أو مع أجهزة البصمة والكاميرات.</div>
+          </div>
+        </div>
+        <div class="custom-item">
+          <div class="custom-item-icon"><i class="bi bi-graph-up-arrow"></i></div>
+          <div>
+            <div class="custom-item-title">لوحات تحكم وتحليل بيانات</div>
+            <div class="custom-item-desc">Dashboard مخصص لإدارتك العليا يعرض KPIs وتقارير لحظية.</div>
+          </div>
+        </div>
+        <div class="custom-item">
+          <div class="custom-item-icon"><i class="bi bi-robot"></i></div>
+          <div>
+            <div class="custom-item-title">أتمتة العمليات</div>
+            <div class="custom-item-desc">أتمتة المهام المتكررة لتوفير وقت فريقك وتقليل الأخطاء البشرية.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════
+     PROCESS
+══════════════════════════════════════ -->
+<section class="process-section">
+  <div class="container">
+    <div class="text-center mb-5 fade-in">
+      <span class="section-badge">كيف نعمل</span>
+      <h2 class="section-title">من فكرتك لمنتج جاهز</h2>
+      <p class="section-subtitle">عملية واضحة وشفافة من أول يوم</p>
+    </div>
+
+    <div class="row g-4 fade-in">
+      <div class="col-md-3">
+        <div class="process-step">
+          <div class="process-num">1</div>
+          <div class="process-title">الاستشارة الأولى</div>
+          <div class="process-desc">نتكلم ونفهم احتياجك ومشكلتك بالتفصيل. مجانًا وبدون التزام.</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="process-step">
+          <div class="process-num">2</div>
+          <div class="process-title">عرض الحل</div>
+          <div class="process-desc">نقدملك عرضًا واضحًا بالمميزات والسعر والجدول الزمني.</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="process-step">
+          <div class="process-num">3</div>
+          <div class="process-title">التطوير والاختبار</div>
+          <div class="process-desc">نطور النظام ونختبره معاك خطوة بخطوة مع تحديثات مستمرة.</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="process-step">
+          <div class="process-num">4</div>
+          <div class="process-title">الإطلاق والدعم</div>
+          <div class="process-desc">نطلق النظام مع تدريب فريقك ودعم فني مستمر بعد الإطلاق.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════
+     CTA BANNER
+══════════════════════════════════════ -->
+<section class="cta-banner">
+  <div class="container fade-in">
+    <div class="mb-3" style="font-size:2.5rem;">🚀</div>
+    <h2>جاهز تبدأ مع JS Solutions؟</h2>
+    <p>جرّب MotionHR مجانًا 14 يوم — أو تحدث معنا عن احتياجك</p>
+    <div class="d-flex justify-content-center gap-3 flex-wrap">
+      <a href="/free-trial/" class="btn-cta-white">
+        <i class="bi bi-rocket-takeoff-fill"></i>ابدأ التجربة المجانية
+      </a>
+      <a href="#contact" style="background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3); color:white; border-radius:14px; padding:14px 36px; font-size:1.05rem; font-weight:800; text-decoration:none; display:inline-flex; align-items:center; gap:10px;">
+        <i class="bi bi-chat-dots-fill"></i>تواصل معنا
+      </a>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════
+     CONTACT
+══════════════════════════════════════ -->
+<section class="contact-section" id="contact">
+  <div class="container">
+    <div class="row g-5 align-items-center justify-content-center">
+      <div class="col-lg-5 fade-in text-center text-lg-start">
+        <span class="section-badge">تواصل معنا</span>
+        <h2 style="font-size:clamp(1.8rem, 4vw, 2.4rem); font-weight:900; color:white; margin-bottom:14px;">
+          نحن هنا لمساعدتك
+        </h2>
+        <p style="color:rgba(255,255,255,0.7); font-size:1rem; line-height:1.8; margin-bottom:28px;">
+          سواء عندك سؤال عن النظام، أو عايز عرض سعر، أو محتاج حل مخصص — تواصل معنا وهنرد عليك فورًا.
+        </p>
+        <div class="d-flex flex-column gap-3">
+          <a href="https://wa.me/2001501551593?text=السلام عليكم، أنا مهتم بحلول JS Solutions وأود معرفة المزيد."
+             target="_blank" class="btn-wa text-decoration-none">
+            <i class="bi bi-whatsapp" style="font-size:1.3rem;"></i>
+            تواصل على واتساب الآن
+          </a>
+          <a href="tel:+201501551593" class="btn-call text-decoration-none">
+            <i class="bi bi-telephone-fill" style="font-size:1.1rem;"></i>
+            اتصل مباشرة
+          </a>
+        </div>
+      </div>
+
+      <div class="col-lg-5 fade-in">
+        <div class="contact-card-inner">
+          <div style="font-size:1.1rem; font-weight:800; color:white; margin-bottom:16px;">
+            <i class="bi bi-building me-2" style="color:var(--primary);"></i>JS Solutions
+          </div>
+
+          <div class="contact-item">
+            <div class="contact-icon-box" style="background:rgba(37,211,102,0.15);">
+              <i class="bi bi-whatsapp" style="color:#25D366;"></i>
+            </div>
+            <div>
+              <div class="contact-label">واتساب</div>
+              <div class="contact-value">(+20) 015 0155 1593</div>
+            </div>
+          </div>
+
+          <div class="contact-item">
+            <div class="contact-icon-box" style="background:rgba(6,182,212,0.15);">
+              <i class="bi bi-telephone-fill" style="color:var(--primary);"></i>
+            </div>
+            <div>
+              <div class="contact-label">هاتف</div>
+              <div class="contact-value">(+20) 015 0155 1593</div>
+            </div>
+          </div>
+
+          <div class="contact-item">
+            <div class="contact-icon-box" style="background:rgba(245,158,11,0.15);">
+              <i class="bi bi-envelope-fill" style="color:#F59E0B;"></i>
+            </div>
+            <div>
+              <div class="contact-label">البريد الإلكتروني</div>
+              <div class="contact-value">info@jssolutions.com</div>
+            </div>
+          </div>
+
+          <div class="contact-item">
+            <div class="contact-icon-box" style="background:rgba(139,92,246,0.15);">
+              <i class="bi bi-clock-fill" style="color:#8B5CF6;"></i>
+            </div>
+            <div>
+              <div class="contact-label">ساعات العمل</div>
+              <div class="contact-value">الأحد — الخميس | 9 ص — 6 م</div>
+            </div>
+          </div>
+
+          <div class="contact-item">
+            <div class="contact-icon-box" style="background:rgba(239,68,68,0.15);">
+              <i class="bi bi-geo-alt-fill" style="color:#EF4444;"></i>
+            </div>
+            <div>
+              <div class="contact-label">الدولة</div>
+              <div class="contact-value">جمهورية مصر العربية 🇪🇬</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════
+     FOOTER
+══════════════════════════════════════ -->
+<footer class="js-footer">
+  <div class="container">
+    <div class="row g-4 mb-4">
+      <div class="col-md-4">
+        <div class="footer-logo mb-2">JS <span>Solutions</span></div>
+        <div style="color:rgba(255,255,255,0.45); font-size:.85rem; line-height:1.7;">
+          نطوّر أنظمة ذكية وعملية تساعد الشركات على إدارة أعمالها بكفاءة أعلى.
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div style="font-weight:700; color:white; margin-bottom:12px;">منتجاتنا</div>
+        <ul class="list-unstyled" style="font-size:.88rem;">
+          <li class="mb-2"><a href="/free-trial/" style="color:rgba(255,255,255,0.55); text-decoration:none;">MotionHR <span class="badge-live" style="font-size:.6rem;">متاح</span></a></li>
+          <li class="mb-2"><span style="color:rgba(255,255,255,0.3);">JS Accounting — قريبًا</span></li>
+          <li class="mb-2"><span style="color:rgba(255,255,255,0.3);">JS POS — قريبًا</span></li>
+          <li class="mb-2"><span style="color:rgba(255,255,255,0.3);">JS Inventory — قريبًا</span></li>
+        </ul>
+      </div>
+      <div class="col-md-4">
+        <div style="font-weight:700; color:white; margin-bottom:12px;">روابط سريعة</div>
+        <ul class="list-unstyled" style="font-size:.88rem;">
+          <li class="mb-2"><a href="/free-trial/" style="color:rgba(255,255,255,0.55); text-decoration:none;">التجربة المجانية</a></li>
+          <li class="mb-2"><a href="/pricing/" style="color:rgba(255,255,255,0.55); text-decoration:none;">الأسعار</a></li>
+          <li class="mb-2"><a href="/subscriptions/contact-sales/" style="color:rgba(255,255,255,0.55); text-decoration:none;">تواصل معنا</a></li>
+          <li class="mb-2"><a href="/accounts/login/" style="color:rgba(255,255,255,0.55); text-decoration:none;">تسجيل الدخول</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <hr style="border-color:rgba(255,255,255,0.08);">
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 py-2">
+      <div style="color:rgba(255,255,255,0.35); font-size:.82rem;">
+        © 2025 JS Solutions. جميع الحقوق محفوظة.
+      </div>
+      <div style="color:rgba(255,255,255,0.35); font-size:.82rem;">
+        MotionHR — HR in Motion
+      </div>
+    </div>
+  </div>
+</footer>
+
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+// Fade in animation
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+// Smooth navbar color change
+window.addEventListener('scroll', () => {
+  const navbar = document.querySelector('.js-navbar');
+  if (window.scrollY > 50) {
+    navbar.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+  } else {
+    navbar.style.boxShadow = 'none';
+  }
+});
+</script>
+
+</body>
+</html>
+"""
+write_file("templates/landing/js_solutions.html", js_solutions_html)
+
+print("\n" + "=" * 70)
+print("✅ Patch 50b — JS Solutions Corporate Landing Page اكتمل")
+print("=" * 70)
+print("""
+اللي اتعمل:
+  ✅ صفحة JS Solutions Corporate Landing Page كاملة
+  ✅ URL: /js-solutions/
+  ✅ الصفحة تحتوي على:
+     - Hero Section مع بطاقة MotionHR
+     - 6 منتجات (1 حالي + 5 قادمين)
+     - قسم لماذا نحن (6 نقاط)
+     - قسم القطاعات التي نخدمها (12 قطاع)
+     - قسم الحلول المخصصة
+     - قسم كيف نعمل (4 خطوات)
+     - CTA Banner
+     - قسم التواصل + بيانات JS Solutions
+     - Footer كامل
+  ✅ تصميم احترافي جداً:
+     - تأثيرات Gradient
+     - Animations (Float + Fade-in)
+     - Responsive كامل
+     - ألوان متناسقة لكل منتج
+     - Sticky Navbar
+
+افتح الصفحة على:
+  http://127.0.0.1:8000/js-solutions/
+
+شغّل:
+  python manage.py check
+  python manage.py runserver 0.0.0.0:8000
+""")

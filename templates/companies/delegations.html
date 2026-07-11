@@ -1,0 +1,97 @@
+{% extends 'base/dashboard_base.html' %}
+{% block title %}التفويضات{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <i class="bi bi-person-check me-2" style="color:#06B6D4;"></i>
+        التفويضات
+      </h4>
+      <p class="text-muted mb-0">إدارة تفويضات الصلاحيات</p>
+    </div>
+    <a href="{% url 'companies:delegation_add' %}"
+       class="btn text-white"
+       style="background:#06B6D4; border-radius:10px;">
+      <i class="bi bi-plus-lg me-1"></i>تفويض جديد
+    </a>
+  </div>
+
+  {% if delegations %}
+  <div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead style="background:#f8fafc;">
+          <tr>
+            <th class="px-4 py-3">المُفوِّض</th>
+            <th>المُفوَّض إليه</th>
+            <th>من</th>
+            <th>إلى</th>
+            <th>النطاق</th>
+            <th>الحالة</th>
+            <th>السبب</th>
+            <th class="text-center">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in delegations %}
+          <tr>
+            <td class="px-4">
+              <div class="fw-semibold small">{{ d.delegator.get_full_name|default:d.delegator.username }}</div>
+              <small class="text-muted">{{ d.delegator_role }}</small>
+            </td>
+            <td class="fw-semibold small">
+              {{ d.delegate.get_full_name|default:d.delegate.username }}
+            </td>
+            <td class="text-muted small">{{ d.start_date|date:"d/m/Y" }}</td>
+            <td class="text-muted small">{{ d.end_date|date:"d/m/Y" }}</td>
+            <td>
+              <span class="badge bg-light text-dark border">
+                {% if d.scope == 'all_approvals' %}كل الموافقات
+                {% else %}فريقه فقط{% endif %}
+              </span>
+            </td>
+            <td>
+              {% if d.is_currently_active %}
+                <span class="badge bg-success">نشط</span>
+              {% elif d.is_active %}
+                <span class="badge bg-secondary">منتهي</span>
+              {% else %}
+                <span class="badge bg-danger">ملغي</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">{{ d.reason|default:"—"|truncatechars:30 }}</td>
+            <td class="text-center">
+              {% if d.is_active %}
+              <form method="post"
+                    action="{% url 'companies:delegation_deactivate' d.pk %}"
+                    onsubmit="return confirm('إلغاء التفويض؟')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger">إلغاء</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-person-check" style="font-size:4rem; color:#d1d5db;"></i>
+      <h5 class="mt-3 fw-bold text-muted">لا توجد تفويضات</h5>
+      <a href="{% url 'companies:delegation_add' %}"
+         class="btn mt-2 text-white"
+         style="background:#06B6D4;">
+        <i class="bi bi-plus me-1"></i>أضف تفويض
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
