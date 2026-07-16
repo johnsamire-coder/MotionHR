@@ -26,3 +26,6 @@ local_settings.py
 # ملفات النظام
 .DS_Store
 Thumbs.db
+
+# Static files — مش محتاجة على GitHub
+staticfiles/
