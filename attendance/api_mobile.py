@@ -1,4 +1,4 @@
-from .fcm_logic import notify_managers
+from .fcm_logic import notify_managers, notify_employee_checkin, notify_employee_checkout, notify_manager_checkin, notify_manager_checkout
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -38,6 +38,112 @@ def format_time_value(dt):
         return timezone.localtime(dt).strftime('%I:%M %p')
     except Exception:
         return dt.strftime('%I:%M %p')
+
+
+
+def bilingual_message(employee, message_ar, message_en):
+    language = getattr(employee, "language", "ar") or "ar"
+    return {
+        "message": message_en if language == "en" else message_ar,
+        "message_ar": message_ar,
+        "message_en": message_en,
+    }
+
+
+def get_approved_permission(employee, permission_kind, day):
+    from requests_app.models import EmployeeRequest
+
+    return EmployeeRequest._base_manager.select_related(
+        "request_type"
+    ).filter(
+        company=employee.company,
+        employee=employee,
+        request_type__permission_kind=permission_kind,
+        status="approved",
+        start_date__lte=day,
+        end_date__gte=day,
+        duration_hours__gt=0,
+        permission_used_at__isnull=True,
+    ).order_by("start_date", "id").first()
+
+
+def consume_permission(permission_request, actual_hours, used_at):
+    from decimal import Decimal, ROUND_UP
+    from django.db import transaction
+    from requests_app.models import EmployeeRequest, PermissionUsage
+
+    hours = Decimal(str(actual_hours))
+    requested_hours = permission_request.duration_hours or hours
+    hours = min(hours, requested_hours)
+    hours = hours.quantize(Decimal("0.1"), rounding=ROUND_UP)
+
+    if hours <= 0:
+        return None
+
+    with transaction.atomic():
+        locked_request = EmployeeRequest._base_manager.select_for_update().get(
+            id=permission_request.id
+        )
+
+        if locked_request.permission_used_at:
+            return None
+
+        month = timezone.localtime(used_at).strftime("%Y-%m")
+
+        usage, created = PermissionUsage._base_manager.select_for_update().get_or_create(
+            company=locked_request.company,
+            employee=locked_request.employee,
+            month=month,
+        )
+
+        usage.used_hours += hours
+        usage.used_times += 1
+        usage.save(update_fields=["used_hours", "used_times"])
+
+        locked_request.permission_used_at = used_at
+        locked_request.actual_used_hours = hours
+        locked_request.save(update_fields=[
+            "permission_used_at",
+            "actual_used_hours",
+        ])
+
+    return hours
+
+
+
+def get_active_shift(employee, day):
+    from django.db.models import Q
+    from attendance.models import EmployeeShift
+
+    assignment = EmployeeShift._base_manager.filter(
+        company=employee.company,
+        employee=employee,
+        is_active=True,
+        start_date__lte=day,
+    ).filter(
+        Q(end_date__isnull=True) | Q(end_date__gte=day)
+    ).select_related("shift").order_by("-start_date").first()
+
+    return assignment.shift if assignment else None
+
+
+def get_shift_bounds(shift, day):
+    from datetime import datetime, timedelta
+
+    if not shift or not shift.start_time or not shift.end_time:
+        return None, None
+
+    start_dt = datetime.combine(day, shift.start_time)
+    end_dt = datetime.combine(day, shift.end_time)
+
+    if end_dt <= start_dt:
+        end_dt += timedelta(days=1)
+
+    current_timezone = timezone.get_current_timezone()
+    start_dt = timezone.make_aware(start_dt, current_timezone)
+    end_dt = timezone.make_aware(end_dt, current_timezone)
+
+    return start_dt, end_dt
 
 
 def attendance_to_dict(attendance):
@@ -241,6 +347,49 @@ def mobile_attendance_action(request):
 
     attendance = Attendance._base_manager.filter(employee=employee, date=today).first()
 
+    active_shift = get_active_shift(employee, today)
+    shift_start, shift_end = get_shift_bounds(active_shift, today)
+
+    late_minutes = 0
+    late_permission = None
+
+    if (
+        action == "check_in"
+        and shift_start
+        and getattr(employee, "attendance_mode", "fixed_shift") != "flexible_hours"
+    ):
+        from datetime import timedelta
+
+        grace_minutes = int(getattr(active_shift, "grace_period", 0) or 0)
+        allowed_start = shift_start + timedelta(minutes=grace_minutes)
+
+        if now > allowed_start:
+            late_minutes = int((now - allowed_start).total_seconds() // 60)
+
+            if late_minutes > 0:
+                late_permission = get_approved_permission(
+                    employee,
+                    "late_arrival",
+                    today,
+                )
+
+    late_permission_covers = bool(
+        late_permission
+        and float(late_permission.duration_hours or 0) * 60 >= late_minutes
+    )
+
+    check_in_status = (
+        "present"
+        if late_minutes == 0 or late_permission_covers
+        else "late"
+    )
+
+    check_in_note = ""
+    if late_permission_covers:
+        check_in_note = "تم استخدام إذن تأخير معتمد"
+    elif late_permission and late_minutes > 0:
+        check_in_note = "مدة التأخير أكبر من مدة الإذن المعتمد"
+
     if action == 'check_in':
         try:
             company = employee.company
@@ -283,7 +432,10 @@ def mobile_attendance_action(request):
                 check_in_longitude=longitude,
                 check_in_address=reverse_geocode(latitude, longitude),
                 check_in_within_range=True,
-                status='present'
+                shift=active_shift,
+                late_minutes=late_minutes,
+                check_in_notes=check_in_note,
+                status=check_in_status,
             )
         else:
             attendance.company = employee.company
@@ -292,7 +444,10 @@ def mobile_attendance_action(request):
             attendance.check_in_longitude = longitude
             attendance.check_in_address = reverse_geocode(latitude, longitude)
             attendance.check_in_within_range = True
-            attendance.status = 'present'
+            attendance.shift = active_shift
+            attendance.late_minutes = late_minutes
+            attendance.check_in_notes = check_in_note
+            attendance.status = check_in_status
             attendance.save()
 
         address = reverse_geocode(latitude, longitude)
@@ -306,15 +461,59 @@ def mobile_attendance_action(request):
             timestamp=now
         )
 
-        return Response({
-            'success': True,
-            'message': 'تم تسجيل الحضور بنجاح',
-            'action': 'check_in',
-            'time': format_time_value(now),
-            'today': attendance_to_dict(attendance)
-        })
+        used_permission_hours = None
+
+        if late_permission and late_minutes > 0:
+            used_permission_hours = consume_permission(
+                late_permission,
+                late_minutes / 60,
+                now,
+            )
+
+        if late_minutes == 0:
+            message_ar = "تم تسجيل الحضور بنجاح"
+            message_en = "Check-in recorded successfully"
+        elif late_permission_covers:
+            message_ar = "تم تسجيل الحضور وتطبيق إذن التأخير المعتمد"
+            message_en = "Check-in recorded and the approved late-arrival permission was applied"
+        elif late_permission:
+            message_ar = "تم تسجيل الحضور، لكن مدة التأخير أكبر من مدة الإذن المعتمد"
+            message_en = "Check-in recorded, but the delay exceeds the approved permission duration"
+        else:
+            message_ar = "تم تسجيل الحضور مع احتساب التأخير"
+            message_en = "Check-in recorded and the delay was counted"
+
+        response_data = {
+            "success": True,
+            **bilingual_message(employee, message_ar, message_en),
+            "action": "check_in",
+            "time": format_time_value(now),
+            "late_minutes": late_minutes,
+            "permission_applied": bool(used_permission_hours),
+            "permission_used_hours": (
+                float(used_permission_hours)
+                if used_permission_hours
+                else 0
+            ),
+            "today": attendance_to_dict(attendance),
+        }
+
+        # Push + Notification center
+        try:
+            emp_name = request.user.get_full_name() or request.user.username
+            notify_employee_checkin(request.user, format_time_value(now), address)
+            notify_manager_checkin(employee.company, emp_name, format_time_value(now))
+        except Exception as e:
+            print(f"Check-in notification error: {e}")
+
+        return Response(response_data)
 
     from datetime import datetime, timedelta
+
+    early_permission = None
+    early_permission_covers = False
+    early_leave_minutes = 0
+
     try:
         from attendance.models import EmployeeShift
         emp_shift = EmployeeShift._base_manager.filter(
@@ -339,33 +538,57 @@ def mobile_attendance_action(request):
 
             now = timezone.now()
             if now < end_time_aware:
-                has_early_leave = False
-                try:
-                    from requests_app.models import EmployeeRequest, RequestType
-                    early_leave_types = RequestType._base_manager.filter(
-                        company=employee.company,
-                        name__icontains='خروج مبكر'
-                    ).values_list('id', flat=True)
-                    if early_leave_types:
-                        has_early_leave = EmployeeRequest._base_manager.filter(
-                            employee=employee,
-                            request_type__id__in=list(early_leave_types),
-                            created_at__date=today,
-                            status='approved'
-                        ).exists()
-                except Exception:
-                    pass
+                remaining = int((end_time_aware - now).total_seconds())
 
-                if not has_early_leave:
-                    remaining = int((end_time_aware - now).total_seconds())
+                early_permission = get_approved_permission(
+                    employee,
+                    "early_leave",
+                    today,
+                )
+
+                approved_seconds = (
+                    float(early_permission.duration_hours or 0) * 3600
+                    if early_permission
+                    else 0
+                )
+
+                early_permission_covers = bool(
+                    early_permission
+                    and approved_seconds >= remaining
+                )
+
+                if not early_permission_covers:
                     hours = remaining // 3600
                     minutes = (remaining % 3600) // 60
+
+                    if early_permission:
+                        message_ar = (
+                            f"مدة الإذن المعتمد لا تغطي الانصراف الحالي. "
+                            f"المتبقي {hours} ساعة و{minutes} دقيقة."
+                        )
+                        message_en = (
+                            "The approved permission does not cover "
+                            f"the remaining {hours} hours and {minutes} minutes."
+                        )
+                    else:
+                        message_ar = (
+                            f"لسه بدري على الانصراف، فاضل "
+                            f"{hours} ساعة و{minutes} دقيقة. "
+                            "قدم طلب إذن خروج مبكر."
+                        )
+                        message_en = (
+                            f"The shift has not ended. "
+                            f"{hours} hours and {minutes} minutes remain. "
+                            "Submit an early-leave permission request."
+                        )
+
                     return Response({
-                        'success': False,
-                        'message': f'لسه بدري ع الانصراف يا نجم، فاضل {hours} ساعة و {minutes} دقيقة.\nلو محتاج تخرج بدري، قدم طلب إذن خروج مبكر.',
-                        'shift_not_ended': True,
-                        'remaining_seconds': remaining,
+                        "success": False,
+                        **bilingual_message(employee, message_ar, message_en),
+                        "shift_not_ended": True,
+                        "remaining_seconds": remaining,
                     }, status=400)
+
     except Exception as e:
         pass
 
@@ -384,6 +607,16 @@ def mobile_attendance_action(request):
     attendance.check_out_longitude = longitude
     attendance.check_out_address = reverse_geocode(latitude, longitude)
     attendance.check_out_within_range = True
+
+    if shift_end and now < shift_end:
+        early_leave_minutes = int((shift_end - now).total_seconds() // 60)
+
+    attendance.early_leave_minutes = early_leave_minutes
+
+    if early_permission_covers:
+        attendance.check_out_notes = "تم استخدام إذن خروج مبكر معتمد"
+
+    attendance.calculate_work_hours()
     attendance.save()
 
     LocationLog._base_manager.create(
@@ -395,13 +628,46 @@ def mobile_attendance_action(request):
         timestamp=now
     )
 
-    return Response({
-        'success': True,
-        'message': 'تم تسجيل الانصراف بنجاح',
-        'action': 'check_out',
-        'time': format_time_value(now),
-        'today': attendance_to_dict(attendance)
-    })
+    used_early_hours = None
+
+    if early_permission and early_leave_minutes > 0:
+        used_early_hours = consume_permission(
+            early_permission,
+            early_leave_minutes / 60,
+            now,
+        )
+
+    if used_early_hours:
+        message_ar = "تم تسجيل الانصراف وتطبيق إذن الخروج المبكر"
+        message_en = "Check-out recorded and the approved early-leave permission was applied"
+    else:
+        message_ar = "تم تسجيل الانصراف بنجاح"
+        message_en = "Check-out recorded successfully"
+
+    response_data = {
+        "success": True,
+        **bilingual_message(employee, message_ar, message_en),
+        "action": "check_out",
+        "time": format_time_value(now),
+        "early_leave_minutes": early_leave_minutes,
+        "permission_applied": bool(used_early_hours),
+        "permission_used_hours": (
+            float(used_early_hours)
+            if used_early_hours
+            else 0
+        ),
+        "today": attendance_to_dict(attendance),
+    }
+
+    # Push + Notification center
+    try:
+        emp_name = request.user.get_full_name() or request.user.username
+        notify_employee_checkout(request.user, format_time_value(now))
+        notify_manager_checkout(employee.company, emp_name, format_time_value(now))
+    except Exception as e:
+        print(f"Check-out notification error: {e}")
+
+    return Response(response_data)
 
 
 @api_view(['GET'])
@@ -794,3 +1060,239 @@ def mobile_notifications_mark_read(request):
         'message': 'تم تعليم كل الإشعارات كمقروءة',
         'updated': updated
     })
+
+
+# ============================================================
+#                    Charter / اللائحة
+# ============================================================
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_charter_get(request):
+    """جلب اللائحة مع حالة الموافقة"""
+    from companies.models import WorkCharter, CharterAcceptance
+    from employees.models import Employee
+
+    user = request.user
+    company = getattr(user, 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None)
+
+    if not company:
+        return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
+
+    charter = WorkCharter.objects.filter(company=company, is_active=True).first()
+
+    if not charter:
+        return Response({'success': True, 'has_charter': False, 'charter': None})
+
+    employee = Employee._base_manager.filter(user=user).first()
+
+    accepted = False
+    accepted_at = None
+    if employee:
+        acc = CharterAcceptance.objects.filter(employee=employee, charter=charter).first()
+        if acc:
+            accepted = True
+            accepted_at = acc.accepted_at.isoformat() if acc.accepted_at else None
+
+    return Response({
+        'success': True,
+        'has_charter': True,
+        'needs_acceptance': charter.is_mandatory and not accepted,
+        'charter': {
+            'id': charter.id,
+            'title': charter.title,
+            'introduction': charter.introduction or '',
+            'content': charter.content or '',
+            'version': charter.version,
+            'is_mandatory': charter.is_mandatory,
+        },
+        'accepted': accepted,
+        'accepted_at': accepted_at,
+    })
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_charter_accept(request):
+    """الموظف يوافق على اللائحة"""
+    from companies.models import WorkCharter, CharterAcceptance
+    from employees.models import Employee
+
+    user = request.user
+    company = getattr(user, 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None)
+
+    if not company:
+        return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
+
+    charter = WorkCharter.objects.filter(company=company, is_active=True).first()
+
+    if not charter:
+        return Response({'success': False, 'error': 'لا توجد لائحة فعالة'}, status=404)
+
+    employee = Employee._base_manager.filter(user=user).first()
+
+    if not employee:
+        return Response({'success': False, 'error': 'لم يتم العثور على الموظف'}, status=404)
+
+    acceptance, created = CharterAcceptance.objects.get_or_create(
+        employee=employee,
+        charter=charter,
+        defaults={
+            'ip_address': request.META.get('REMOTE_ADDR', ''),
+            'user_agent': request.META.get('HTTP_USER_AGENT', '')[:500],
+        }
+    )
+
+    try:
+        from accounts.fcm_models import NotificationLog
+        emp_name = user.get_full_name() or user.username
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        managers = User.objects.filter(is_staff=True, is_active=True)
+        for mgr in managers:
+            NotificationLog.objects.create(
+                user=mgr,
+                title='✅ موافقة على اللائحة',
+                body=f'الموظف {emp_name} وافق على: {charter.title}',
+                notification_type='general',
+            )
+    except Exception:
+        pass
+
+    return Response({
+        'success': True,
+        'message': 'تم تسجيل موافقتك بنجاح',
+        'already_accepted': not created,
+        'accepted_at': acceptance.accepted_at.isoformat() if acceptance.accepted_at else None,
+    })
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_charter_acceptances(request):
+    """المدير يشوف مين وافق ومين لسه - للطباعة"""
+    from companies.models import WorkCharter, CharterAcceptance
+    from employees.models import Employee
+
+    user = request.user
+    if not (user.is_staff or user.is_superuser):
+        return Response({'success': False, 'error': 'غير مصرح'}, status=403)
+
+    company = getattr(user, 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None)
+    if not company:
+        return Response({'success': False, 'error': 'لا توجد شركة'}, status=400)
+
+    charter = WorkCharter.objects.filter(company=company, is_active=True).first()
+    if not charter:
+        return Response({'success': False, 'error': 'لا توجد لائحة'}, status=404)
+
+    all_employees = Employee._base_manager.filter(
+        company=company, is_active=True
+    ).select_related('user').order_by('user__first_name')
+
+    acceptances = {
+        a.employee_id: a
+        for a in CharterAcceptance.objects.filter(charter=charter)
+    }
+
+    accepted_list = []
+    pending_list = []
+
+    for emp in all_employees:
+        emp_data = {
+            'id': emp.id,
+            'name': emp.user.get_full_name() or emp.user.username,
+            'username': emp.user.username,
+        }
+        acc = acceptances.get(emp.id)
+        if acc:
+            emp_data['accepted_at'] = acc.accepted_at.isoformat() if acc.accepted_at else ''
+            emp_data['ip_address'] = str(acc.ip_address) if acc.ip_address else ''
+            accepted_list.append(emp_data)
+        else:
+            pending_list.append(emp_data)
+
+    return Response({
+        'success': True,
+        'charter_title': charter.title,
+        'charter_version': charter.version,
+        'charter_content': charter.content or '',
+        'print_date': timezone.now().isoformat(),
+        'accepted': {'count': len(accepted_list), 'employees': accepted_list},
+        'pending': {'count': len(pending_list), 'employees': pending_list},
+    })
+
+
+# ============================================================
+#              Manager Charter Management
+# ============================================================
+
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_charter_update(request):
+    """المدير يعدل اللائحة"""
+    from companies.models import WorkCharter, CharterAcceptance
+    from employees.models import Employee
+
+    user = request.user
+    if not (user.is_staff or user.is_superuser):
+        return Response({"success": False, "error": "غير مصرح"}, status=403)
+
+    company = getattr(user, "company", None) or getattr(Employee._base_manager.filter(user=user).first(), "company", None)
+    if not company:
+        return Response({"success": False, "error": "لا توجد شركة"}, status=400)
+
+    charter = WorkCharter.objects.filter(company=company).first()
+
+    if not charter:
+        charter = WorkCharter.objects.create(
+            company=company,
+            title=request.data.get("title", "لائحة الشركة"),
+            content=request.data.get("content", ""),
+            introduction=request.data.get("introduction", ""),
+            is_active=True,
+            is_mandatory=True,
+        )
+        return Response({"success": True, "message": "تم إنشاء اللائحة", "version": charter.version})
+
+    changed = False
+    new_title = request.data.get("title", "").strip()
+    new_intro = request.data.get("introduction", "").strip()
+    new_content = request.data.get("content", "").strip()
+
+    if new_title and new_title != charter.title:
+        charter.title = new_title
+        changed = True
+    if new_intro != charter.introduction:
+        charter.introduction = new_intro
+        changed = True
+    if new_content and new_content != charter.content:
+        charter.content = new_content
+        changed = True
+
+    if "is_active" in request.data:
+        val = request.data["is_active"]
+        charter.is_active = val if isinstance(val, bool) else str(val).lower() == "true"
+
+    if "is_mandatory" in request.data:
+        val = request.data["is_mandatory"]
+        charter.is_mandatory = val if isinstance(val, bool) else str(val).lower() == "true"
+
+    charter.save()
+
+    if changed:
+        charter.version += 1
+        charter.save()
+        deleted = CharterAcceptance.objects.filter(charter=charter).delete()
+        return Response({
+            "success": True,
+            "message": f"تم تحديث اللائحة (الإصدار {charter.version}) وتم إعادة طلب الموافقة من جميع الموظفين",
+            "version": charter.version,
+            "acceptances_reset": deleted[0],
+        })
+
+    return Response({"success": True, "message": "تم حفظ اللائحة", "version": charter.version})

@@ -43,6 +43,11 @@ class Employee(TenantModel):
         ('male', 'ذكر'),
         ('female', 'أنثى'),
     ]
+
+    LANGUAGE_CHOICES = [
+        ('ar', 'العربية'),
+        ('en', 'English'),
+    ]
     
     MARITAL_STATUS_CHOICES = [
         ('single', 'أعزب'),
@@ -136,6 +141,20 @@ class Employee(TenantModel):
         max_length=10,
         choices=GENDER_CHOICES,
         verbose_name='النوع'
+    )
+
+    language = models.CharField(
+        max_length=2,
+        choices=LANGUAGE_CHOICES,
+        default='ar',
+        verbose_name='اللغة المفضلة'
+    )
+
+    language = models.CharField(
+        max_length=2,
+        choices=LANGUAGE_CHOICES,
+        default='ar',
+        verbose_name='اللغة المفضلة'
     )
     
     marital_status = models.CharField(

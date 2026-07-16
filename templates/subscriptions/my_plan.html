@@ -139,6 +139,148 @@
     </div>
   </div>
 
+  <!-- ═══════════════════════════════════════ -->
+  <!-- 🎁 الباقات المتاحة للترقية              -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="card border-0 shadow-lg mb-4" style="background: linear-gradient(135deg, #0F172A 0%, #0E7490 100%);">
+    <div class="card-body p-4 text-white">
+      <div class="text-center mb-4">
+        <span class="badge bg-warning text-dark px-3 py-2 mb-2" style="font-size:.85rem;">
+          🚀 عرض إطلاق خاص
+        </span>
+        <h4 class="fw-bold mb-2">اختر الباقة الأنسب لشركتك</h4>
+        <p class="text-white-50 mb-0">
+          {% if subscription.is_trial %}
+            📅 تجربتك المجانية سارية — اشترك الآن قبل انتهائها لتضمن الاستمرارية
+          {% else %}
+            💎 قم بترقية اشتراكك للحصول على مميزات أكثر
+          {% endif %}
+        </p>
+      </div>
+
+      <div class="row g-3">
+
+        <!-- Starter -->
+        <div class="col-md-4">
+          <div class="card h-100 border-0" style="border-radius:16px;">
+            <div class="card-body p-4 text-center">
+              <div class="mb-2" style="font-size:2rem;">🌱</div>
+              <h5 class="fw-bold mb-1" style="color:#0E7490;">المبتدئ</h5>
+              <p class="small text-muted mb-3">للشركات الصغيرة</p>
+              <div class="mb-3">
+                <span class="fw-bold" style="font-size:2rem; color:#06B6D4;">490</span>
+                <span class="text-muted">ج.م/شهر</span>
+              </div>
+              <div class="small text-muted mb-3">
+                لـ 10 موظفين<br>
+                <strong>49 ج.م</strong> لكل موظف إضافي
+              </div>
+              <ul class="list-unstyled text-start small mb-4">
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> إدارة الموظفين</li>
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> الحضور GPS</li>
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> الإجازات</li>
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> تقارير أساسية</li>
+              </ul>
+              <a href="{% url 'subscriptions:contact_sales' %}?plan=starter"
+                 class="btn btn-outline-primary w-100 fw-bold">
+                <i class="bi bi-arrow-up-circle me-1"></i>اطلب الترقية
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Professional (الأكثر شيوعاً) -->
+        <div class="col-md-4">
+          <div class="card h-100 border-0 position-relative" style="border-radius:16px; box-shadow: 0 10px 30px rgba(6,182,212,0.3);">
+            <div class="position-absolute top-0 start-50 translate-middle">
+              <span class="badge bg-warning text-dark px-3 py-2" style="font-size:.75rem;">⭐ الأكثر شيوعاً</span>
+            </div>
+            <div class="card-body p-4 text-center" style="background:linear-gradient(135deg, #ECFEFF 0%, #ffffff 100%); border-radius:16px;">
+              <div class="mb-2" style="font-size:2rem;">💼</div>
+              <h5 class="fw-bold mb-1" style="color:#0E7490;">الأعمال</h5>
+              <p class="small text-muted mb-3">للشركات المتوسطة</p>
+              <div class="mb-3">
+                <span class="fw-bold" style="font-size:2rem; color:#06B6D4;">690</span>
+                <span class="text-muted">ج.م/شهر</span>
+              </div>
+              <div class="small text-muted mb-3">
+                لـ 10 موظفين<br>
+                <strong>69 ج.م</strong> لكل موظف إضافي
+              </div>
+              <ul class="list-unstyled text-start small mb-4">
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> كل مميزات Starter</li>
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> التتبع الميداني الحي</li>
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> Workflow متقدم</li>
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> تقارير كاملة</li>
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> 18 نوع طلب</li>
+              </ul>
+              <a href="{% url 'subscriptions:contact_sales' %}?plan=professional"
+                 class="btn text-white w-100 fw-bold"
+                 style="background:#06B6D4;">
+                <i class="bi bi-star-fill me-1"></i>اطلب الآن
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Enterprise -->
+        <div class="col-md-4">
+          <div class="card h-100 border-0" style="border-radius:16px;">
+            <div class="card-body p-4 text-center">
+              <div class="mb-2" style="font-size:2rem;">🏢</div>
+              <h5 class="fw-bold mb-1" style="color:#7C3AED;">المؤسسات</h5>
+              <p class="small text-muted mb-3">للشركات الكبيرة</p>
+              <div class="mb-3">
+                <span class="fw-bold" style="font-size:2rem; color:#8B5CF6;">890</span>
+                <span class="text-muted">ج.م/شهر</span>
+              </div>
+              <div class="small text-muted mb-3">
+                لـ 10 موظفين<br>
+                <strong>89 ج.م</strong> لكل موظف إضافي
+              </div>
+              <ul class="list-unstyled text-start small mb-4">
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> كل مميزات Professional</li>
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> التتبع الصامت</li>
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> عدد موظفين غير محدود</li>
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> API متكامل</li>
+                <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i> دعم مباشر</li>
+              </ul>
+              <a href="{% url 'subscriptions:contact_sales' %}?plan=enterprise"
+                 class="btn btn-outline-light w-100 fw-bold" style="border-color:#8B5CF6; color:#8B5CF6;">
+                <i class="bi bi-diamond-fill me-1"></i>اطلب الترقية
+              </a>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- مميزات مجانية -->
+      <div class="mt-4 pt-3 border-top border-white border-opacity-25">
+        <div class="row text-center text-white g-3">
+          <div class="col-md-4">
+            <div class="small"><i class="bi bi-gift-fill text-warning me-1"></i> <strong>إعداد وتدريب مجاناً</strong></div>
+          </div>
+          <div class="col-md-4">
+            <div class="small"><i class="bi bi-shield-check text-success me-1"></i> <strong>بدون رسوم مخفية</strong></div>
+          </div>
+          <div class="col-md-4">
+            <div class="small"><i class="bi bi-headset text-info me-1"></i> <strong>دعم عربي 24/7</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- زرار تواصل -->
+      <div class="text-center mt-4">
+        <a href="{% url 'subscriptions:contact_sales' %}"
+           class="btn btn-warning fw-bold px-4">
+          <i class="bi bi-chat-dots-fill me-1"></i>
+          تحدث مع مندوب المبيعات
+        </a>
+      </div>
+    </div>
+  </div>
+
   {% else %}
   <!-- مفيش اشتراك -->
   <div class="card border-0 shadow-sm">

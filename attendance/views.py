@@ -428,7 +428,7 @@ def api_live_locations(request):
                 'latitude': float(last_location.latitude),
                 'longitude': float(last_location.longitude),
                 'timestamp': last_location.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                'address': last_location.address or 'جاري التحديد...',
+                'address': last_location.address or '',
                 'battery': last_location.battery_level,
                 'source': 'live',
                 'photo': emp.photo.url if emp.photo else None,
@@ -444,10 +444,52 @@ def api_live_locations(request):
     })
 
 
+@csrf_exempt
+
+
 @login_required
-@require_http_methods(["POST"])
+def api_employee_route(request, employee_id):
+    """API لخط سير موظف اليوم"""
+    from datetime import date as _date
+    from django.http import JsonResponse
+    from attendance.models import LocationLog
+    from employees.models import Employee
+
+    try:
+        emp = Employee._base_manager.get(id=employee_id)
+    except Employee.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'الموظف غير موجود'}, status=404)
+
+    today = timezone.localdate()
+    start = timezone.make_aware(datetime.combine(today, datetime.min.time()))
+    end = timezone.make_aware(datetime.combine(today, datetime.max.time()))
+
+    logs = LocationLog._base_manager.filter(
+        employee=emp,
+        timestamp__gte=start,
+        timestamp__lte=end,
+    ).order_by('timestamp')
+
+    points = [{
+        'lat': float(l.latitude),
+        'lng': float(l.longitude),
+        'address': l.address or '',
+        'timestamp': timezone.localtime(l.timestamp).strftime('%H:%M'),
+    } for l in logs]
+
+    return JsonResponse({
+        'success': True,
+        'employee_name': emp.first_name_ar + ' ' + emp.last_name_ar,
+        'count': len(points),
+        'points': points,
+    })
+
+
+@csrf_exempt
 def api_track_location(request):
     """API لاستقبال المواقع من التطبيق"""
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "POST required"})
     
     try:
         data = json.loads(request.body)

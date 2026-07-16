@@ -5,7 +5,7 @@ app_name = 'landing'
 
 urlpatterns = [
     path('js-solutions/', views.js_solutions_home, name='js_solutions'),
-    path('', views.landing_home, name='home'),
+    path('', views.smart_home, name='home'),
     path('about/', views.landing_about, name='about'),
     path('contact/', views.landing_contact, name='contact'),
     path('pricing/', views.landing_pricing, name='pricing'),

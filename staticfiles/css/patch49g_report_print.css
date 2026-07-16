@@ -1,0 +1,46 @@
+
+/* Patch 49g — Report Print & Branding CSS */
+.report-branded-header {
+  page-break-after: avoid;
+}
+
+.report-branded-footer {
+  page-break-before: avoid;
+}
+
+@media print {
+  .sidebar, .navbar, .breadcrumb, .btn,
+  [class*="print-hide"], .wizard-actions {
+    display: none !important;
+  }
+
+  .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .report-branded-header {
+    margin-bottom: 20px !important;
+  }
+
+  .report-branded-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+  }
+
+  .card {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  table {
+    font-size: 10px !important;
+  }
+
+  body {
+    font-size: 12px !important;
+  }
+}

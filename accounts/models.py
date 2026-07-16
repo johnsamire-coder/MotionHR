@@ -169,3 +169,12 @@ class PushSubscription(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.endpoint[:50]}..."
+
+# System Announcements
+from .announcements import SystemAnnouncement, UserAnnouncementRead
+
+# Company Announcements
+from .company_announcements import CompanyAnnouncement, CompanyAnnouncementRead
+
+# FCM Device Tokens (Mobile Push Notifications)
+from .fcm_models import FCMDeviceToken

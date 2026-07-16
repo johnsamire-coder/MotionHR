@@ -249,3 +249,41 @@ def notify_manager_out_of_geofence(company, employee_name, distance):
         body=f'الموظف {employee_name} حاول تسجيل حضور من مسافة {distance}م',
         data={'type': 'geofence_violation'}
     )
+def notify_employee_checkin(user, time_str, location=''):
+    """إشعار للموظف عند تسجيل الحضور"""
+    body = f'تم تسجيل حضورك الساعة {time_str}'
+    if location:
+        body += f' — {location}'
+    send_notification_to_user(user, 'تسجيل الحضور ✅', body, data={
+        'type': 'attendance',
+        'action': 'checkin'
+    })
+
+def notify_employee_checkout(user, time_str, hours_worked=''):
+    """إشعار للموظف عند تسجيل الانصراف"""
+    body = f'تم تسجيل انصرافك الساعة {time_str}'
+    if hours_worked:
+        body += f' — عدد الساعات: {hours_worked}'
+    send_notification_to_user(user, 'تسجيل الانصراف 👋', body, data={
+        'type': 'attendance',
+        'action': 'checkout'
+    })
+
+def notify_manager_checkin(company, employee_name, time_str):
+    """إشعار للمدير عند تسجيل حضور موظف"""
+    send_notification_to_managers(company, 
+        'حضور موظف 📋',
+        f'{employee_name} سجّل حضوره الساعة {time_str}',
+        data={'type': 'manager_attendance', 'action': 'checkin'}
+    )
+
+def notify_manager_checkout(company, employee_name, time_str, hours_worked=''):
+    """إشعار للمدير عند تسجيل انصراف موظف"""
+    body = f'{employee_name} سجّل انصرافه الساعة {time_str}'
+    if hours_worked:
+        body += f' — {hours_worked} ساعة'
+    send_notification_to_managers(company,
+        'انصراف موظف 🏁',
+        body,
+        data={'type': 'manager_attendance', 'action': 'checkout'}
+    )

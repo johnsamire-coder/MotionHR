@@ -18,6 +18,7 @@ from accounts.views import (
 
 
 urlpatterns = [
+    path('announcements/', include('accounts.announcement_urls')),
 
     # Landing Page
     path('', include('landing.urls', namespace='landing')),

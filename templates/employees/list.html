@@ -75,6 +75,23 @@
     font-size: 2rem;
     opacity: .35;
   }
+
+  /* سطور قابلة للضغط */
+  tr.clickable-row {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+  tr.clickable-row:hover {
+    background-color: #e8f4fd !important;
+  }
+  .employee-name a {
+    color: #0f172a;
+    text-decoration: none;
+  }
+  .employee-name a:hover {
+    color: #1565C0;
+    text-decoration: underline;
+  }
 </style>
 {% endblock %}
 
@@ -246,9 +263,11 @@
             </thead>
             <tbody>
               {% for emp in page_obj %}
-              <tr>
+              <tr class="clickable-row" onclick="window.location='/employees/{{ emp.pk }}/'">
                 <td>
-                  <div class="employee-name">{{ emp.full_name_ar }}</div>
+                  <div class="employee-name">
+                    <a href="/employees/{{ emp.pk }}/">{{ emp.full_name_ar }}</a>
+                  </div>
                   <div class="employee-sub">
                     {{ emp.national_id|default:"—" }}
                   </div>

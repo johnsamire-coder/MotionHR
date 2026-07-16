@@ -251,6 +251,8 @@ def mobile_submit_request(request):
     start_date = request.data.get('start_date')
     end_date = request.data.get('end_date')
     amount = request.data.get('amount')
+    permission_date = request.data.get('permission_date')
+    permission_time_raw = request.data.get('permission_time')
 
     if not all([request_type_id, subject, details]):
         return Response({
@@ -265,6 +267,25 @@ def mobile_submit_request(request):
     except RequestType.DoesNotExist:
         return Response({'success': False, 'message': 'نوع الطلب غير موجود'}, status=404)
 
+    is_permission_request = request_type.permission_kind in ['late_arrival', 'early_leave']
+
+    if is_permission_request:
+        permission_date = permission_date or start_date
+
+        if not permission_date or not permission_time_raw:
+            language = getattr(employee, 'language', 'ar') or 'ar'
+            message_ar = 'تاريخ ووقت الإذن مطلوبان'
+            message_en = 'Permission date and time are required'
+            return Response({
+                'success': False,
+                'message': message_en if language == 'en' else message_ar,
+                'message_ar': message_ar,
+                'message_en': message_en,
+            }, status=400)
+
+        start_date = permission_date
+        end_date = permission_date
+
     if request_type.requires_amount and not amount:
         return Response({
             'success': False,
@@ -276,6 +297,62 @@ def mobile_submit_request(request):
             'success': False,
             'message': 'تاريخ البداية والنهاية مطلوبين لهذا النوع'
         }, status=400)
+
+    # ── فحص سياسة الأذونات (لأنواع الأذون: تأخير / استئذان) ──
+    permission_checked = False
+    permission_hours = None
+    permission_policy = None
+
+    # لو فيه duration_hours في الطلب → معناه إنه إذن
+    duration_hours_raw = request.data.get('duration_hours')
+    if duration_hours_raw:
+        try:
+            permission_hours = float(duration_hours_raw)
+        except (ValueError, TypeError):
+            permission_hours = None
+
+    if permission_hours and permission_hours > 0:
+        # نجيب سياسة الأذونات الخاصة بالشركة
+        from requests_app.models import PermissionPolicy, PermissionUsage
+        try:
+            permission_policy = PermissionPolicy._base_manager.get(
+                company=employee.company,
+                is_active=True
+            )
+        except PermissionPolicy.DoesNotExist:
+            # مفيش سياسة → ممنوع تقديم إذن
+            return Response({
+                'success': False,
+                'message': 'سياسة الأذونات غير مفعلة للشركة. رجاء التواصل مع المدير.'
+            }, status=400)
+
+        # نجيب استهلاك الموظف للشهر الحالي
+        today = timezone.localdate()
+        current_month = today.strftime('%Y-%m')
+        usage, _created = PermissionUsage._base_manager.get_or_create(
+            company=employee.company,
+            employee=employee,
+            month=current_month,
+        )
+
+        # فحص عدد المرات
+        if usage.used_times >= permission_policy.max_times_per_month:
+            return Response({
+                'success': False,
+                'message': f'وصلت للحد الأقصى من عدد مرات الأذونات ({permission_policy.max_times_per_month} مرات/شهر)'
+            }, status=400)
+
+        # فحص عدد الساعات (المستهلك + الجديد)
+        from decimal import Decimal
+        new_total = usage.used_hours + Decimal(str(permission_hours))
+        if new_total > permission_policy.max_hours_per_month:
+            remaining = permission_policy.max_hours_per_month - usage.used_hours
+            return Response({
+                'success': False,
+                'message': f'الساعات المتبقية ({float(remaining)} ساعة) لا تكفي. الحد الأقصى {float(permission_policy.max_hours_per_month)} ساعة/شهر'
+            }, status=400)
+
+        permission_checked = True
 
     parsed_start = None
     parsed_end = None
@@ -291,6 +368,24 @@ def mobile_submit_request(request):
             parsed_end = datetime.strptime(end_date, '%Y-%m-%d').date()
         except ValueError:
             pass
+
+    parsed_permission_time = None
+    if permission_time_raw:
+        from datetime import datetime
+        for time_format in ('%H:%M', '%H:%M:%S'):
+            try:
+                parsed_permission_time = datetime.strptime(permission_time_raw, time_format).time()
+                break
+            except ValueError:
+                continue
+
+        if parsed_permission_time is None:
+            return Response({
+                'success': False,
+                'message': 'صيغة الوقت غير صحيحة',
+                'message_ar': 'صيغة الوقت غير صحيحة',
+                'message_en': 'Invalid time format'
+            }, status=400)
 
     parsed_amount = None
     if amount:
@@ -312,9 +407,13 @@ def mobile_submit_request(request):
         start_date=parsed_start,
         end_date=parsed_end,
         amount=parsed_amount,
+        duration_hours=Decimal(str(permission_hours)) if permission_hours else None,
+        permission_time=parsed_permission_time,
         status='pending',
         step_1_status='pending',
     )
+
+    # Permission usage is recorded at actual check-in/check-out after approval.
 
     # إشعار للمدير - طلب جديد
     try:
@@ -515,6 +614,27 @@ def mobile_manager_action(request):
                     except Exception as e:
                         print(f"FCM notification error: {e}")
 
+            # إشعار داخل التطبيق
+            try:
+                from accounts.fcm_models import NotificationLog
+                if employee_user:
+                    if action == 'approve':
+                        NotificationLog.objects.create(
+                            user=employee_user,
+                            title='✅ تمت الموافقة على إجازتك',
+                            body=f'تمت الموافقة على طلب {leave_type_name}',
+                            notification_type='leave_approved',
+                        )
+                    else:
+                        NotificationLog.objects.create(
+                            user=employee_user,
+                            title='❌ تم رفض طلب إجازتك',
+                            body=f'تم رفض طلب {leave_type_name}' + (f' - السبب: {notes}' if notes else ''),
+                            notification_type='leave_rejected',
+                        )
+            except Exception:
+                pass
+
             return Response({
                 'success': True,
                 'message': f'تم {"الموافقة على" if action == "approve" else "رفض"} طلب الإجازة',
@@ -565,6 +685,27 @@ def mobile_manager_action(request):
                         )
                 except Exception as e:
                     print(f"FCM notification error: {e}")
+
+            # إشعار داخل التطبيق
+            try:
+                from accounts.fcm_models import NotificationLog
+                if employee_user:
+                    if action == 'approve':
+                        NotificationLog.objects.create(
+                            user=employee_user,
+                            title='✅ تمت الموافقة على طلبك',
+                            body=f'تمت الموافقة على {request_type_name}: {request_title}',
+                            notification_type='request_approved',
+                        )
+                    else:
+                        NotificationLog.objects.create(
+                            user=employee_user,
+                            title='❌ تم رفض طلبك',
+                            body=f'تم رفض {request_type_name}: {request_title}' + (f' - السبب: {notes}' if notes else ''),
+                            notification_type='request_rejected',
+                        )
+            except Exception:
+                pass
 
             return Response({
                 'success': True,

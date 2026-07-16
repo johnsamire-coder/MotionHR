@@ -149,9 +149,9 @@ function loadLocations() {
       var cardsHtml = '';
 
       locations.forEach(function(loc) {
-        var color = loc.is_online ? '#22c55e' : '#94a3b8';
-        var lat = parseFloat(loc.lat);
-        var lng = parseFloat(loc.lng);
+        var color = '#2563eb';
+        var lat = parseFloat(loc.latitude);
+        var lng = parseFloat(loc.longitude);
 
         if (!isNaN(lat) && !isNaN(lng)) {
           if (markers[loc.id]) {
@@ -162,8 +162,8 @@ function loadLocations() {
               .bindPopup(
                 '<div style="text-align:right;min-width:180px">' +
                 '<strong>' + loc.name + '</strong><br>' +
-                '<small class="text-muted">' + (loc.address || loc.lat + ', ' + loc.lng) + '</small><br>' +
-                '<small>' + (loc.last_seen || '') + '</small>' +
+                '<small class="text-muted">' + (loc.address || loc.latitude + ', ' + loc.longitude) + '</small><br>' +
+                '<small>' + (loc.timestamp || '') + '</small>' +
                 '</div>'
               );
           }
@@ -173,7 +173,7 @@ function loadLocations() {
           '<span class="status-dot" style="background:' + color + '"></span>' +
           '<div class="flex-grow-1">' +
           '<div class="fw-semibold small">' + loc.name + '</div>' +
-          '<div class="location-address">' + (loc.address || '📍 ' + (loc.lat || '') + ', ' + (loc.lng || '')) + '</div>' +
+          '<div class="location-address">' + (loc.address || '📍 ' + (loc.latitude || '') + ', ' + (loc.longitude || '')) + '</div>' +
           '</div>' +
           '</span>' +
           '</div>';
@@ -190,11 +190,67 @@ function loadLocations() {
     });
 }
 
+var currentRoute = null;
+var routeMarkers = [];
+
 function focusEmployee(id, lat, lng) {
   if (!isNaN(lat) && !isNaN(lng)) {
     map.setView([lat, lng], 15);
     if (markers[id]) markers[id].openPopup();
+    loadRoute(id);
   }
+}
+
+function loadRoute(employeeId) {
+  // امسح الخط القديم
+  if (currentRoute) { map.removeLayer(currentRoute); currentRoute = null; }
+  routeMarkers.forEach(function(m){ map.removeLayer(m); });
+  routeMarkers = [];
+
+  fetch('/attendance/api/employee-route/' + employeeId + '/')
+    .then(r => r.json())
+    .then(data => {
+      var pts = data.points || [];
+      if (pts.length < 1) return;
+
+      // خط السير
+      var latlngs = pts.map(function(p){ return [p.lat, p.lng]; });
+      currentRoute = L.polyline(latlngs, {
+        color: '#2563eb',
+        weight: 4,
+        opacity: 0.7,
+        dashArray: '8, 6'
+      }).addTo(map);
+
+      // نقاط صغيرة على المسار
+      pts.forEach(function(p, i) {
+        var isFirst = i === 0;
+        var isLast = i === pts.length - 1;
+        var color = isFirst ? '#22c55e' : (isLast ? '#ef4444' : '#94a3b8');
+        var label = isFirst ? 'البداية' : (isLast ? 'الآن' : '');
+
+        var m = L.circleMarker([p.lat, p.lng], {
+          radius: isFirst || isLast ? 8 : 4,
+          fillColor: color,
+          color: 'white',
+          weight: 2,
+          fillOpacity: 1
+        }).addTo(map).bindPopup(
+          '<div style="text-align:right;min-width:180px">' +
+          (label ? '<strong>' + label + '</strong><br>' : '') +
+          '<small>الوقت: ' + p.timestamp + '</small><br>' +
+          '<small class="text-muted">' + (p.address || p.lat + ', ' + p.lng) + '</small>' +
+          '</div>'
+        );
+        routeMarkers.push(m);
+      });
+
+      // Zoom على المسار
+      if (latlngs.length > 1) {
+        map.fitBounds(currentRoute.getBounds(), {padding: [40, 40]});
+      }
+    })
+    .catch(function(err){ console.log('route error:', err); });
 }
 
 function refreshMap() {

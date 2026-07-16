@@ -53,6 +53,46 @@ class Company(models.Model):
         null=True,
         verbose_name='الموقع الإلكتروني'
     )
+    # ==== Geofencing Fields ====
+    office_latitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True,
+        verbose_name='خط العرض للشركة'
+    )
+    office_longitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True,
+        verbose_name='خط الطول للشركة'
+    )
+    geofence_radius = models.IntegerField(
+        default=100, verbose_name='نطاق الشركة بالمتر'
+    )
+    geofence_enabled = models.BooleanField(
+        default=False, verbose_name='تفعيل التحقق من موقع الحضور'
+    )
+    office_address = models.CharField(
+        max_length=500, blank=True, default='',
+        verbose_name='عنوان الشركة النصي'
+    )
+
+    # ==== Geofencing Fields ====
+    office_latitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True,
+        verbose_name='خط العرض للشركة'
+    )
+    office_longitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True,
+        verbose_name='خط الطول للشركة'
+    )
+    geofence_radius = models.IntegerField(
+        default=100, verbose_name='نطاق الشركة بالمتر'
+    )
+    geofence_enabled = models.BooleanField(
+        default=False, verbose_name='تفعيل التحقق من موقع الحضور'
+    )
+    office_address = models.CharField(
+        max_length=500, blank=True, default='',
+        verbose_name='عنوان الشركة النصي'
+    )
+
     is_active = models.BooleanField(
         default=True,
         verbose_name='نشط'
@@ -321,6 +361,12 @@ class WorkCharter(models.Model):
     is_mandatory = models.BooleanField(
         default=True,
         verbose_name="إجباري للموظفين الجدد"
+    )
+    attachment = models.FileField(
+        upload_to='charter_files/',
+        blank=True,
+        null=True,
+        verbose_name="ملف مرفق (PDF/Word/صورة)"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

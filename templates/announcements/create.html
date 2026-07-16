@@ -1,0 +1,221 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}إشعار جديد{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-4">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <i class="bi bi-megaphone-fill me-2" style="color:#06B6D4;"></i>
+        إنشاء إشعار جديد
+      </h4>
+      <p class="text-muted mb-0 small">أرسل إشعار للموظفين مع استهداف ذكي</p>
+    </div>
+    <a href="{% url 'announcements:list' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-right"></i> رجوع
+    </a>
+  </div>
+
+  <form method="POST">
+    {% csrf_token %}
+
+    <div class="row g-4">
+
+      <!-- المحتوى -->
+      <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+            <h6 class="fw-bold mb-0">
+              <i class="bi bi-pencil-square me-1" style="color:#06B6D4;"></i>
+              محتوى الإشعار
+            </h6>
+          </div>
+          <div class="card-body p-4">
+
+            <div class="mb-3">
+              <label class="form-label fw-bold">عنوان الإشعار *</label>
+              <input type="text" name="title" class="form-control form-control-lg" required
+                     placeholder="مثال: إجازة رسمية غداً بمناسبة عيد الفطر">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-bold">تفاصيل الإشعار *</label>
+              <textarea name="message" class="form-control" rows="5" required
+                        placeholder="اكتب تفاصيل الإشعار هنا..."></textarea>
+            </div>
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-bold">نوع الإشعار</label>
+                <select name="announcement_type" class="form-select">
+                  {% for value, label in type_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold">الأولوية</label>
+                <select name="priority" class="form-select">
+                  {% for value, label in priority_choices %}
+                  <option value="{{ value }}" {% if value == 'medium' %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- الاستهداف -->
+        <div class="card border-0 shadow-sm mt-4">
+          <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+            <h6 class="fw-bold mb-0">
+              <i class="bi bi-bullseye me-1" style="color:#06B6D4;"></i>
+              🎯 من الذي سيصله الإشعار؟
+            </h6>
+          </div>
+          <div class="card-body p-4">
+
+            <div class="mb-3">
+              <label class="form-label fw-bold">نوع الاستهداف</label>
+              <select name="target_type" class="form-select" id="targetTypeSelect" onchange="toggleTargets()">
+                {% for value, label in target_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- موظفين محددين -->
+            <div class="mb-3 target-block" id="target_specific" style="display:none;">
+              <label class="form-label fw-bold">اختر الموظفين</label>
+              <select name="target_employees" class="form-select" multiple size="6">
+                {% for emp in employees %}
+                <option value="{{ emp.id }}">{{ emp.full_name|default:emp.user.get_full_name }}</option>
+                {% endfor %}
+              </select>
+              <small class="text-muted">اضغط Ctrl لاختيار أكثر من موظف</small>
+            </div>
+
+            <!-- المسميات -->
+            <div class="mb-3 target-block" id="target_by_job_title" style="display:none;">
+              <label class="form-label fw-bold">المسميات الوظيفية</label>
+              <input type="text" name="target_job_titles" class="form-control"
+                     placeholder="مثال: مندوب مبيعات, محاسب, مدير">
+              <small class="text-muted">افصل بين المسميات بفاصلة (,)</small>
+            </div>
+
+            <!-- الإدارات -->
+            <div class="mb-3 target-block" id="target_by_department" style="display:none;">
+              <label class="form-label fw-bold">الإدارات</label>
+              <select name="target_departments" class="form-select" multiple size="4">
+                {% for dept in departments %}
+                <option value="{{ dept.id }}">{{ dept.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- الفروع -->
+            <div class="mb-3 target-block" id="target_by_branch" style="display:none;">
+              <label class="form-label fw-bold">الفروع</label>
+              <select name="target_branches" class="form-select" multiple size="4">
+                {% for branch in branches %}
+                <option value="{{ branch.id }}">{{ branch.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- الاستثناءات -->
+        <div class="card border-0 shadow-sm mt-4">
+          <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+            <h6 class="fw-bold mb-0 text-danger">
+              <i class="bi bi-slash-circle me-1"></i>
+              🚫 استثناءات (اختياري)
+            </h6>
+          </div>
+          <div class="card-body p-4">
+            <p class="text-muted small mb-3">استثنِ أشخاص أو مسميات أو إدارات من هذا الإشعار</p>
+
+            <div class="mb-3">
+              <label class="form-label">موظفون مستثنون</label>
+              <select name="excluded_employees" class="form-select" multiple size="4">
+                {% for emp in employees %}
+                <option value="{{ emp.id }}">{{ emp.full_name|default:emp.user.get_full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">مسميات مستثناة</label>
+              <input type="text" name="excluded_job_titles" class="form-control"
+                     placeholder="مثال: سائق, حارس أمن">
+              <small class="text-muted">افصل بين المسميات بفاصلة</small>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">إدارات مستثناة</label>
+              <select name="excluded_departments" class="form-select" multiple size="3">
+                {% for dept in departments %}
+                <option value="{{ dept.id }}">{{ dept.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- الإعدادات -->
+      <div class="col-lg-4">
+        <div class="card border-0 shadow-sm sticky-top" style="top:20px;">
+          <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+            <h6 class="fw-bold mb-0">
+              <i class="bi bi-gear me-1" style="color:#06B6D4;"></i>
+              الإعدادات
+            </h6>
+          </div>
+          <div class="card-body p-4">
+
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" name="send_push" id="sendPush" checked>
+              <label class="form-check-label fw-bold" for="sendPush">
+                📱 إرسال Push Notification للموبايل
+              </label>
+              <small class="d-block text-muted mt-1">
+                يوصل إشعار على موبايل الموظفين اللي فعّلوا الإشعارات
+              </small>
+            </div>
+
+            <hr>
+
+            <button type="submit" class="btn text-white w-100 fw-bold" style="background:#06B6D4;">
+              <i class="bi bi-send-fill me-1"></i>
+              إرسال الإشعار
+            </button>
+
+            <a href="{% url 'announcements:list' %}" class="btn btn-outline-secondary w-100 mt-2">
+              إلغاء
+            </a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </form>
+
+</div>
+
+<script>
+function toggleTargets() {
+  const value = document.getElementById('targetTypeSelect').value;
+  document.querySelectorAll('.target-block').forEach(el => el.style.display = 'none');
+  const block = document.getElementById('target_' + value);
+  if (block) block.style.display = 'block';
+}
+document.addEventListener('DOMContentLoaded', toggleTargets);
+</script>
+{% endblock %}

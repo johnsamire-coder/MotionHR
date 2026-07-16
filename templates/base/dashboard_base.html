@@ -237,6 +237,24 @@
       {% endif %}
     </div>
 
+    
+    <!-- ═══ إشعارات الشركة ═══ -->
+    <button class="sidebar-section-btn {% if '/announcements/' not in request.path %}collapsed{% endif %}"
+            onclick="toggleSection('secAnnouncements', this)">
+      إشعارات الشركة <i class="bi bi-chevron-down"></i>
+    </button>
+    <div class="sidebar-section-items" id="secAnnouncements"
+         style="{% if '/announcements/' not in request.path %}max-height:0;{% else %}max-height:120px;{% endif %}">
+      <a href="{% url 'announcements:list' %}"
+         class="nav-link {% if request.path == '/announcements/' %}active{% endif %}">
+        <i class="bi bi-megaphone"></i><span>كل الإشعارات</span>
+      </a>
+      <a href="{% url 'announcements:create' %}"
+         class="nav-link {% if '/announcements/create/' in request.path %}active{% endif %}">
+        <i class="bi bi-plus-circle"></i><span>إشعار جديد</span>
+      </a>
+    </div>
+
     <!-- ═══ التقارير ═══ -->
     {% if request.user.role != 'employee' %}
     <button class="sidebar-section-btn {% if '/reports/' not in request.path %}collapsed{% endif %}"
@@ -599,6 +617,48 @@
   {% endif %}
 
   <div class="content-area">
+    {# ═══════════════════════════════════════════ #}
+    {# 🎁 بانر الـ Trial — عداد الأيام + زر الاشتراك #}
+    {# ═══════════════════════════════════════════ #}
+    {% if user.is_authenticated and user.company %}
+      {% with sub=user.company.subscription %}
+        {% if sub and sub.is_trial and sub.trial_end_date %}
+          {% now "Y-m-d" as today_str %}
+          <div class="container-fluid px-4 pt-3">
+            <div class="alert border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-3 mb-0"
+                 style="background: linear-gradient(135deg, #F59E0B 0%, #EF4444 100%); color:white; border-radius:14px;">
+              <div class="d-flex align-items-center gap-3">
+                <div style="font-size:2rem;">🎁</div>
+                <div>
+                  <div class="fw-bold" style="font-size:1.05rem;">
+                    أنت في الفترة التجريبية المجانية
+                  </div>
+                  <div class="small opacity-90">
+                    {% with days_left=sub.trial_end_date|timeuntil %}
+                      باقي على انتهاء التجربة: <strong>{{ days_left }}</strong>
+                    {% endwith %}
+                    — تنتهي في {{ sub.trial_end_date|date:"Y-m-d" }}
+                  </div>
+                </div>
+              </div>
+              <div class="d-flex gap-2 flex-wrap">
+                <a href="{% url 'subscriptions:my_plan' %}"
+                   class="btn btn-light fw-bold px-4">
+                  <i class="bi bi-rocket-takeoff-fill me-1"></i>
+                  اشترك الآن
+                </a>
+                <a href="{% url 'subscriptions:contact_sales' %}"
+                   class="btn btn-outline-light fw-bold">
+                  <i class="bi bi-chat-dots-fill me-1"></i>
+                  تحدث معنا
+                </a>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      {% endwith %}
+    {% endif %}
+
     {% block content %}{% endblock %}
     {% block dashboard_content %}{% endblock %}
   </div>

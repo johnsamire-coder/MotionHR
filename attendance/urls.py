@@ -90,4 +90,8 @@ urlpatterns = [
     path('api/mobile/fcm-token/delete/', mobile_fcm_token_delete, name='mobile_fcm_token_delete'),
     path('api/mobile/notifications/', api_mobile.mobile_notifications_list, name='mobile_notifications_list'),
     path('api/mobile/notifications/mark-read/', api_mobile.mobile_notifications_mark_read, name='mobile_notifications_mark_read'),
+    path('api/mobile/charter/', api_mobile.mobile_charter_get, name='mobile_charter_get'),
+    path('api/mobile/charter/accept/', api_mobile.mobile_charter_accept, name='mobile_charter_accept'),
+    path('api/mobile/manager/charter/acceptances/', api_mobile.mobile_charter_acceptances, name='mobile_charter_acceptances'),
+    path('api/mobile/manager/charter/update/', api_mobile.mobile_charter_update, name='mobile_charter_update'),
 ]

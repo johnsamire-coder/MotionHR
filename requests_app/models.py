@@ -4,7 +4,13 @@ from core.models import TenantModel
 
 class RequestCategory(TenantModel):
     """فئات الطلبات"""
-    name = models.CharField(max_length=100, verbose_name="الاسم")
+    name = models.CharField(max_length=100, verbose_name="الاسم بالعربية")
+    name_en = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="الاسم بالإنجليزية"
+    )
     icon = models.CharField(max_length=50, default="bi-inbox", verbose_name="الأيقونة")
     color = models.CharField(max_length=7, default="#06B6D4", verbose_name="اللون")
     order = models.PositiveSmallIntegerField(default=0, verbose_name="الترتيب")
@@ -27,8 +33,32 @@ class RequestType(TenantModel):
         related_name="types",
         verbose_name="الفئة"
     )
-    name = models.CharField(max_length=100, verbose_name="الاسم")
-    description = models.TextField(blank=True, verbose_name="الوصف")
+    PERMISSION_KIND_CHOICES = [
+        ("none", "ليس إذن حضور"),
+        ("late_arrival", "إذن تأخير"),
+        ("early_leave", "إذن خروج مبكر"),
+    ]
+
+    name = models.CharField(max_length=100, verbose_name="الاسم بالعربية")
+    name_en = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="الاسم بالإنجليزية"
+    )
+    description = models.TextField(blank=True, verbose_name="الوصف بالعربية")
+    description_en = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="الوصف بالإنجليزية"
+    )
+    permission_kind = models.CharField(
+        max_length=20,
+        choices=PERMISSION_KIND_CHOICES,
+        default="none",
+        db_index=True,
+        verbose_name="نوع إذن الحضور"
+    )
     requires_date_range = models.BooleanField(
         default=False, verbose_name="يحتاج تاريخ من/إلى"
     )
@@ -107,6 +137,29 @@ class EmployeeRequest(TenantModel):
     amount = models.DecimalField(
         max_digits=10, decimal_places=2,
         null=True, blank=True, verbose_name="المبلغ"
+    )
+
+    # عدد ساعات الإذن (لإذن التأخير والاستئذان)
+    duration_hours = models.DecimalField(
+        max_digits=5, decimal_places=1,
+        null=True, blank=True, verbose_name="عدد الساعات"
+    )
+    permission_used_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="وقت استخدام الإذن فعليًا"
+    )
+    actual_used_hours = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        verbose_name="الساعات المستخدمة فعليًا"
+    )
+    permission_time = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name="وقت الإذن"
     )
 
     # مرفق
@@ -409,3 +462,69 @@ class ApprovalDelegation(TenantModel):
         from django.utils import timezone
         today = timezone.now().date()
         return self.is_active and self.start_date <= today <= self.end_date
+
+
+# ════════════════════════════════════════════════════════════
+# سياسة الأذونات
+# ════════════════════════════════════════════════════════════
+
+class PermissionPolicy(TenantModel):
+    """سياسة الأذونات لكل شركة"""
+
+    max_hours_per_month = models.DecimalField(
+        max_digits=5, decimal_places=1,
+        default=4.0,
+        verbose_name="الحد الأقصى للساعات شهريًا"
+    )
+
+    max_times_per_month = models.PositiveSmallIntegerField(
+        default=2,
+        verbose_name="الحد الأقصى للمرات شهريًا"
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="نشط"
+    )
+
+    class Meta:
+        verbose_name = "سياسة الأذونات"
+        verbose_name_plural = "سياسات الأذونات"
+
+    def __str__(self):
+        return f"سياسة {self.company.name_ar if self.company else ''} — {self.max_hours_per_month} ساعة / {self.max_times_per_month} مرة"
+
+
+class PermissionUsage(TenantModel):
+    """تتبع استهلاك الأذونات لكل موظف شهريًا"""
+
+    employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.CASCADE,
+        related_name="permission_usages",
+        verbose_name="الموظف"
+    )
+
+    month = models.CharField(
+        max_length=7,
+        verbose_name="الشهر (YYYY-MM)"
+    )
+
+    used_hours = models.DecimalField(
+        max_digits=5, decimal_places=1,
+        default=0.0,
+        verbose_name="الساعات المستهلكة"
+    )
+
+    used_times = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name="عدد المرات المستهلكة"
+    )
+
+    class Meta:
+        verbose_name = "استهلاك الأذونات"
+        verbose_name_plural = "سجل استهلاك الأذونات"
+        unique_together = [["employee", "month"]]
+
+    def __str__(self):
+        return f"{self.employee} — {self.month}: {self.used_hours} ساعة / {self.used_times} مرة"

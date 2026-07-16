@@ -1,0 +1,78 @@
+{% extends 'base/dashboard_base.html' %}
+
+{% block title %}{{ announcement.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-4">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{% url 'announcements:list' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-right"></i> رجوع للقائمة
+    </a>
+    {% if can_manage %}
+    <a href="{% url 'announcements:delete' announcement.pk %}" class="btn btn-outline-danger"
+       onclick="return confirm('هل أنت متأكد؟')">
+      <i class="bi bi-trash"></i> حذف
+    </a>
+    {% endif %}
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-5">
+      <div class="d-flex gap-2 mb-3 flex-wrap">
+        <span class="badge {% if announcement.priority == 'urgent' %}bg-danger{% elif announcement.priority == 'high' %}bg-warning text-dark{% elif announcement.priority == 'medium' %}bg-info{% else %}bg-secondary{% endif %} px-3 py-2">
+          {{ announcement.get_priority_display }}
+        </span>
+        <span class="badge bg-light text-dark border px-3 py-2">
+          {{ announcement.get_announcement_type_display }}
+        </span>
+      </div>
+
+      <h2 class="fw-bold mb-3">{{ announcement.title }}</h2>
+
+      <div class="text-muted small mb-4">
+        <i class="bi bi-calendar3 me-1"></i> {{ announcement.publish_at|date:"Y-m-d H:i" }}
+        {% if announcement.created_by %}
+        &nbsp;•&nbsp; <i class="bi bi-person me-1"></i> {{ announcement.created_by.get_full_name|default:announcement.created_by.username }}
+        {% endif %}
+      </div>
+
+      <hr>
+
+      <div class="mt-4" style="font-size:1.1rem; line-height:1.9;">
+        {{ announcement.message|linebreaks }}
+      </div>
+
+      {% if can_manage and targets %}
+      <hr class="mt-5">
+      <h6 class="fw-bold mb-3">
+        <i class="bi bi-people-fill me-1" style="color:#06B6D4;"></i>
+        الموظفون المستهدفون ({{ targets.count }})
+      </h6>
+      <div class="row g-2">
+        {% for emp in targets %}
+        <div class="col-md-4 col-lg-3">
+          <div class="p-2 rounded bg-light small">
+            <i class="bi bi-person-circle me-1"></i>
+            {{ emp.full_name|default:emp.user.get_full_name }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="mt-4 d-flex gap-4">
+        <div class="text-center">
+          <div class="fw-bold" style="font-size:1.5rem; color:#06B6D4;">{{ announcement.total_sent }}</div>
+          <small class="text-muted">أُرسل إلى</small>
+        </div>
+        <div class="text-center">
+          <div class="fw-bold" style="font-size:1.5rem; color:#10B981;">{{ announcement.total_read }}</div>
+          <small class="text-muted">قرأوا الإشعار</small>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}

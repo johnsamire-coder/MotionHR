@@ -94,8 +94,8 @@ def _get_plans():
         {
             "name":        "Starter",
             "name_ar":     "المبتدئ",
-            "price":       299,
-            "price_year":  2999,
+            "price":       490,
+            "price_year":  4900,
             "employees":   "حتى 15",
             "color":       "#6b7280",
             "popular":     False,
@@ -115,8 +115,8 @@ def _get_plans():
         {
             "name":        "Business",
             "name_ar":     "الأعمال",
-            "price":       599,
-            "price_year":  5999,
+            "price":       690,
+            "price_year":  6900,
             "employees":   "حتى 50",
             "color":       "#06B6D4",
             "popular":     True,
@@ -137,8 +137,8 @@ def _get_plans():
         {
             "name":        "Professional",
             "name_ar":     "الاحترافي",
-            "price":       999,
-            "price_year":  9999,
+            "price":       890,
+            "price_year":  8900,
             "employees":   "حتى 100",
             "color":       "#7c3aed",
             "popular":     False,
@@ -338,10 +338,11 @@ def free_trial_register(request):
             plan = SubscriptionPlan.objects.first()
             if not plan:
                 plan = SubscriptionPlan.objects.create(
-                    name='Trial',
-                    slug='trial',
-                    price=0,
-                    duration_days=TRIAL_DAYS,
+                    name_ar='تجربة مجانية',
+                    name_en='Trial',
+                    tier='trial',
+                    price_monthly=0,
+                    price_yearly=0,
                     max_employees=50,
                     is_active=True,
                 )
@@ -352,18 +353,14 @@ def free_trial_register(request):
                     plan=plan,
                     start_date=today,
                     end_date=trial_end,
-                    is_active=True,
+                    status='trial',
+                    billing_cycle='trial',
+                    is_trial=True,
+                    trial_end_date=trial_end,
                 )
-            except Exception:
-                # لو الموديل مختلف شوية
-                try:
-                    CompanySubscription.objects.create(
-                        company=company,
-                        plan=plan,
-                        status='active',
-                    )
-                except Exception:
-                    pass
+            except Exception as e:
+                print(f'Subscription error: {e}')
+                pass
 
             # ── 4) حفظ بيانات الطلب ──
             lead = TrialSignupLead.objects.create(
@@ -443,3 +440,11 @@ def js_solutions_home(request):
     }
     return render(request, 'landing/js_solutions.html', context)
 
+
+
+def smart_home(request):
+    """يفتح صفحة مختلفة حسب الدومين"""
+    host = request.get_host().lower()
+    if host.startswith('motion.'):
+        return landing_home(request)
+    return js_solutions_home(request)

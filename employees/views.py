@@ -809,8 +809,17 @@ def employee_add(request):
                 pass
 
             _try_sync_employee_account(employee)
+            # فرض كلمة المرور الثابتة وتفعيل must_change_password
+            employee.refresh_from_db()
+            if getattr(employee, 'user', None):
+                try:
+                    employee.user.set_password('12345678')
+                    employee.user.must_change_password = True
+                    employee.user.save()
+                except Exception:
+                    pass
             messages.success(request, f'تم إضافة الموظف {_employee_name(employee)} بنجاح')
-            return redirect('employees:list')
+            return redirect(f'/employees/{employee.pk}/credentials/')
         else:
             messages.error(request, 'يرجى مراجعة الحقول المطلوبة')
     else:
@@ -958,14 +967,20 @@ def employee_print_detail(request, pk):
 def print_credentials(request, pk):
     employee = _get_employee_or_404_for_user(request.user, pk)
     username = '—'
+    must_change = False
     if getattr(employee, 'user', None):
         username = getattr(employee.user, 'username', '—') or '—'
+        must_change = getattr(employee.user, 'must_change_password', False)
+
+    is_reset = request.GET.get('reset') == '1'
 
     return render(request, 'employees/print_credentials.html', {
         'employee': employee,
         'company': _get_current_company(request.user),
         'printed_at': timezone.now(),
         'username': username,
+        'password': '12345678' if must_change else '(كلمة المرور الحالية للموظف)',
+        'is_reset': is_reset,
         'page_title': f'بيانات الدخول - {_employee_name(employee)}',
     })
 
@@ -990,6 +1005,13 @@ def create_account_view(request, pk):
 
         if after_user:
             username = getattr(after_user, 'username', None) or '—'
+            # فرض كلمة المرور الافتراضية الثابتة عند إنشاء الحساب
+            try:
+                after_user.set_password('12345678')
+                after_user.must_change_password = True
+                after_user.save()
+            except Exception:
+                pass
             if before_user:
                 messages.success(request, f'تمت مزامنة حساب الموظف {_employee_name(employee)} (اسم المستخدم: {username})')
             else:
@@ -1054,16 +1076,8 @@ def reset_password_view(request, pk):
         return _redirect_employee_detail_or_list(employee)
 
     try:
-        base_code = (employee.employee_code or 'EMP').replace(' ', '')
-        temp_password = f"{base_code}@{get_random_string(4)}"
-
-        user.set_password(temp_password)
-
-        if hasattr(user, 'must_change_password'):
-            try:
-                user.must_change_password = True
-            except Exception:
-                pass
+        user.set_password('12345678')
+        user.must_change_password = True
 
         if hasattr(user, 'is_active') and not user.is_active:
             user.is_active = True
@@ -1074,12 +1088,12 @@ def reset_password_view(request, pk):
             request,
             f'تم إعادة تعيين كلمة المرور للموظف {_employee_name(employee)} | '
             f'اسم المستخدم: {getattr(user, "username", "—")} | '
-            f'كلمة المرور المؤقتة: {temp_password}'
+            f'كلمة المرور الافتراضية: 12345678'
         )
     except Exception as e:
         messages.error(request, f'حدث خطأ أثناء إعادة تعيين كلمة المرور: {e}')
 
-    return _redirect_employee_detail_or_list(employee)
+    return redirect(f'/employees/{employee.pk}/credentials/?reset=1')
 
 
 # ═════════════════════════════════════════════════════════════
