@@ -2,6 +2,7 @@
 APIs للطلبات والإجازات من تطبيق الموبايل
 """
 from django.utils import timezone
+from django.db.models import Q
 from accounts.fcm_service import (
     notify_request_approved,
     notify_request_rejected,
@@ -168,9 +169,23 @@ def mobile_my_leaves(request):
     if not employee:
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
+    search = request.query_params.get('search', '').strip()
+    status_filter = request.query_params.get('status', '').strip().lower()
+
     leaves = LeaveRequest._base_manager.filter(
         employee=employee
-    ).select_related('leave_type').order_by('-created_at')[:30]
+    ).select_related('leave_type')
+
+    if status_filter:
+        leaves = leaves.filter(status=status_filter)
+
+    if search:
+        leaves = leaves.filter(
+            Q(reason__icontains=search) |
+            Q(leave_type__name__icontains=search)
+        )
+
+    leaves = leaves.order_by('-created_at')[:30]
 
     items = []
     for lr in leaves:
@@ -187,7 +202,7 @@ def mobile_my_leaves(request):
             'review_notes': lr.review_notes or '',
         })
 
-    return Response({'success': True, 'items': items})
+    return Response({'success': True, 'items': items, 'leaves': items})
 
 
 # ═══════════════════════════════════════════════════
@@ -444,9 +459,25 @@ def mobile_my_requests(request):
     if not employee:
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
+    search = request.query_params.get('search', '').strip()
+    status_filter = request.query_params.get('status', '').strip().lower()
+
     requests_list = EmployeeRequest._base_manager.filter(
         employee=employee
-    ).select_related('request_type', 'request_type__category').order_by('-created_at')[:30]
+    ).select_related('request_type', 'request_type__category')
+
+    if status_filter:
+        requests_list = requests_list.filter(status=status_filter)
+
+    if search:
+        requests_list = requests_list.filter(
+            Q(subject__icontains=search) |
+            Q(details__icontains=search) |
+            Q(request_type__name__icontains=search) |
+            Q(request_type__category__name__icontains=search)
+        )
+
+    requests_list = requests_list.order_by('-created_at')[:30]
 
     items = []
     for req in requests_list:
@@ -466,7 +497,7 @@ def mobile_my_requests(request):
             'review_notes': req.review_notes or '',
         })
 
-    return Response({'success': True, 'items': items})
+    return Response({'success': True, 'items': items, 'requests': items})
 
 
 # ═══════════════════════════════════════════════════
@@ -492,6 +523,14 @@ def mobile_manager_pending(request):
 
     if company:
         pending_leaves = pending_leaves.filter(company=company)
+
+    if search:
+        pending_leaves = pending_leaves.filter(
+            Q(employee__first_name_ar__icontains=search) |
+            Q(employee__last_name_ar__icontains=search) |
+            Q(reason__icontains=search) |
+            Q(leave_type__name__icontains=search)
+        )
 
     leave_items = []
     for lr in pending_leaves[:50]:
@@ -570,6 +609,12 @@ def mobile_manager_action(request):
         return Response({
             'success': False,
             'message': 'الإجراء لازم يكون approve أو reject'
+        }, status=400)
+
+    if action == 'reject' and not notes:
+        return Response({
+            'success': False,
+            'message': 'سبب الرفض مطلوب'
         }, status=400)
 
     try:
