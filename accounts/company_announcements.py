@@ -3,6 +3,7 @@ Company Announcements - إشعارات الشركة الداخلية
 كل شركة تقدر تبعت إشعارات لموظفيها مع استهداف ذكي
 """
 from django.db import models
+from django.contrib.contenttypes.fields import GenericRelation
 from django.utils import timezone
 
 
@@ -115,6 +116,20 @@ class CompanyAnnouncement(models.Model):
         verbose_name="🚫 إدارات مستثناة"
     )
 
+    # تأكيد القراءة
+    requires_confirmation = models.BooleanField(
+        default=False,
+        verbose_name="يتطلب تأكيد القراءة"
+    )
+
+    # المرفقات
+    attachments = GenericRelation(
+        'core.Attachment',
+        content_type_field='content_type',
+        object_id_field='object_id',
+        related_query_name='announcement'
+    )
+
     # التوقيت
     publish_at = models.DateTimeField(
         default=timezone.now,
@@ -163,7 +178,7 @@ class CompanyAnnouncement(models.Model):
         from employees.models import Employee
         
         # ابدأ بكل موظفي الشركة النشطين
-        qs = Employee.objects.filter(company=self.company)
+        qs = Employee._base_manager.filter(company=self.company)
 
         # حدد المستهدفين
         if self.target_type == 'specific':

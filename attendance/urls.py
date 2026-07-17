@@ -1,5 +1,6 @@
 from attendance import api_reminders
 from attendance import api_employee_profile
+from attendance import api_announcements
 from attendance import api_attachments
 from attendance.api_mobile import mobile_geofence_get, mobile_geofence_set, mobile_fcm_token_register, mobile_fcm_token_delete
 from django.urls import path
@@ -97,6 +98,13 @@ urlpatterns = [
     path('api/mobile/charter/accept/', api_mobile.mobile_charter_accept, name='mobile_charter_accept'),
     path('api/mobile/manager/charter/acceptances/', api_mobile.mobile_charter_acceptances, name='mobile_charter_acceptances'),
     path('api/mobile/manager/charter/update/', api_mobile.mobile_charter_update, name='mobile_charter_update'),
+    # ─── المرحلة 4.2: الإعلانات ───
+    path('api/mobile/announcements/list/', api_announcements.announcements_list),
+    path('api/mobile/announcements/mark-read/', api_announcements.announcements_mark_read),
+    path('api/mobile/manager/announcements/create/', api_announcements.manager_create_announcement),
+    path('api/mobile/manager/announcements/<int:pk>/delete/', api_announcements.manager_delete_announcement),
+    path('api/mobile/manager/announcements/<int:pk>/stats/', api_announcements.manager_announcement_stats),
+
 ]
 
 # ═══════════════════════════════════════
