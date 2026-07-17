@@ -148,4 +148,11 @@ urlpatterns += [
     path("api/mobile/employee/profile/", api_employee_profile.my_profile),
     path("api/mobile/employee/documents/", api_employee_profile.my_documents),
     path("api/mobile/employee/movements/", api_employee_profile.my_movements),
+    path('api/mobile/employee/summary/', api_employee_profile.my_summary),
+    path('api/mobile/manager/employees/', api_employee_profile.manager_employees_list),
+    path('api/mobile/manager/employees/<int:emp_id>/profile/', api_employee_profile.manager_employee_profile),
+    path('api/mobile/manager/employees/<int:emp_id>/documents/', api_employee_profile.manager_employee_documents),
+    path('api/mobile/manager/employees/<int:emp_id>/movements/', api_employee_profile.manager_employee_movements),
+    path('api/mobile/manager/employees/<int:emp_id>/summary/', api_employee_profile.manager_employee_summary),
+
 ]
