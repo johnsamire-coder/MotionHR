@@ -1,3 +1,5 @@
+from attendance import api_reminders
+from attendance import api_employee_profile
 from attendance.api_mobile import mobile_geofence_get, mobile_geofence_set, mobile_fcm_token_register, mobile_fcm_token_delete
 from django.urls import path
 from . import views
@@ -94,4 +96,56 @@ urlpatterns = [
     path('api/mobile/charter/accept/', api_mobile.mobile_charter_accept, name='mobile_charter_accept'),
     path('api/mobile/manager/charter/acceptances/', api_mobile.mobile_charter_acceptances, name='mobile_charter_acceptances'),
     path('api/mobile/manager/charter/update/', api_mobile.mobile_charter_update, name='mobile_charter_update'),
+]
+
+# ═══════════════════════════════════════
+# Reports APIs - Batch 1
+# ═══════════════════════════════════════
+from .api_reports import (
+    attendance_monthly_report,
+    late_report,
+    absence_report,
+)
+
+urlpatterns += [
+    path('api/mobile/manager/reports/attendance/', attendance_monthly_report, name='report-attendance'),
+    path('api/mobile/manager/reports/late/', late_report, name='report-late'),
+    path('api/mobile/manager/reports/absence/', absence_report, name='report-absence'),
+]
+
+# ═══════════════════════════════════════
+# Reports Export APIs - Batch 3
+# ═══════════════════════════════════════
+from .api_reports import (
+    export_report_pdf,
+    export_report_excel,
+)
+
+urlpatterns += [
+    path('api/mobile/manager/reports/export/pdf/', export_report_pdf, name='report-export-pdf'),
+    path('api/mobile/manager/reports/export/excel/', export_report_excel, name='report-export-excel'),
+]
+
+# ═══════════════════════════════════════
+
+# ═══════════════════════════════════════
+# Payroll APIs - Phase 3 (v2)
+# ═══════════════════════════════════════
+from .api_payroll import (
+    payroll_summary,
+    payroll_employee_detail,
+    payroll_settings,
+)
+
+urlpatterns += [
+    path('api/mobile/manager/payroll/summary/', payroll_summary, name='payroll-summary'),
+    path('api/mobile/manager/payroll/employee/', payroll_employee_detail, name='payroll-employee'),
+    path('api/mobile/manager/payroll/settings/', payroll_settings, name='payroll-settings'),
+
+    # ─── المرحلة 7: التذكيرات ───
+    path("api/mobile/manager/reminders/trigger/", api_reminders.trigger_reminder),
+    path("api/mobile/manager/reminders/settings/", api_reminders.reminder_settings),
+    path("api/mobile/employee/profile/", api_employee_profile.my_profile),
+    path("api/mobile/employee/documents/", api_employee_profile.my_documents),
+    path("api/mobile/employee/movements/", api_employee_profile.my_movements),
 ]
