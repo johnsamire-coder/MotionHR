@@ -1,9 +1,10 @@
 from .fcm_logic import notify_managers, notify_employee_checkin, notify_employee_checkout, notify_manager_checkin, notify_manager_checkout
 from django.utils import timezone
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, parser_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.authtoken.models import Token
 
 from django.contrib.auth import authenticate
@@ -1070,12 +1071,13 @@ def mobile_notifications_mark_read(request):
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_charter_get(request):
-    """جلب اللائحة مع حالة الموافقة"""
+    """جلب اللائحة الحالية للموظف أو المدير"""
     from companies.models import WorkCharter, CharterAcceptance
     from employees.models import Employee
 
     user = request.user
-    company = getattr(user, 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None)
+    employee = Employee._base_manager.filter(user=user).first()
+    company = getattr(user, 'company', None) or getattr(employee, 'company', None)
 
     if not company:
         return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
@@ -1083,17 +1085,26 @@ def mobile_charter_get(request):
     charter = WorkCharter.objects.filter(company=company, is_active=True).first()
 
     if not charter:
-        return Response({'success': True, 'has_charter': False, 'charter': None})
-
-    employee = Employee._base_manager.filter(user=user).first()
+        return Response({
+            'success': True,
+            'has_charter': False,
+            'needs_acceptance': False,
+            'charter': None,
+            'accepted': False,
+            'accepted_at': None,
+        })
 
     accepted = False
     accepted_at = None
+
     if employee:
-        acc = CharterAcceptance.objects.filter(employee=employee, charter=charter).first()
-        if acc:
+        acceptance = CharterAcceptance.objects.filter(employee=employee, charter=charter).first()
+        if acceptance:
             accepted = True
-            accepted_at = acc.accepted_at.isoformat() if acc.accepted_at else None
+            accepted_at = acceptance.accepted_at.isoformat() if acceptance.accepted_at else None
+
+    attachment_url = request.build_absolute_uri(charter.attachment.url) if getattr(charter, 'attachment', None) else ''
+    attachment_name = charter.attachment.name.split('/')[-1] if getattr(charter, 'attachment', None) else ''
 
     return Response({
         'success': True,
@@ -1106,11 +1117,12 @@ def mobile_charter_get(request):
             'content': charter.content or '',
             'version': charter.version,
             'is_mandatory': charter.is_mandatory,
+            'attachment_url': attachment_url,
+            'attachment_name': attachment_name,
         },
         'accepted': accepted,
         'accepted_at': accepted_at,
     })
-
 
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication])
@@ -1178,10 +1190,13 @@ def mobile_charter_acceptances(request):
     from employees.models import Employee
 
     user = request.user
-    if not (user.is_staff or user.is_superuser):
+    role = getattr(user, 'role', '')
+    if not (user.is_staff or user.is_superuser or role in ['super_admin', 'admin', 'company_admin', 'hr_manager', 'manager']):
         return Response({'success': False, 'error': 'غير مصرح'}, status=403)
 
-    company = getattr(user, 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None)
+    employee = Employee._base_manager.filter(user=user).first()
+    company = getattr(user, 'company', None) or getattr(employee, 'company', None)
+
     if not company:
         return Response({'success': False, 'error': 'لا توجد شركة'}, status=400)
 
@@ -1215,38 +1230,61 @@ def mobile_charter_acceptances(request):
         else:
             pending_list.append(emp_data)
 
+    attachment_url = request.build_absolute_uri(charter.attachment.url) if getattr(charter, 'attachment', None) else ''
+    attachment_name = charter.attachment.name.split('/')[-1] if getattr(charter, 'attachment', None) else ''
+
     return Response({
         'success': True,
         'charter_title': charter.title,
         'charter_version': charter.version,
         'charter_content': charter.content or '',
+        'attachment_url': attachment_url,
+        'attachment_name': attachment_name,
         'print_date': timezone.now().isoformat(),
         'accepted': {'count': len(accepted_list), 'employees': accepted_list},
         'pending': {'count': len(pending_list), 'employees': pending_list},
     })
 
-
-# ============================================================
-#              Manager Charter Management
-# ============================================================
-
 @api_view(["POST"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def mobile_charter_update(request):
-    """المدير يعدل اللائحة"""
+    """المدير يعدل اللائحة + يرفع ملف مرفق"""
+    import os
     from companies.models import WorkCharter, CharterAcceptance
     from employees.models import Employee
 
     user = request.user
-    if not (user.is_staff or user.is_superuser):
+    role = getattr(user, 'role', '')
+    if not (user.is_staff or user.is_superuser or role in ['super_admin', 'admin', 'company_admin', 'hr_manager', 'manager']):
         return Response({"success": False, "error": "غير مصرح"}, status=403)
 
-    company = getattr(user, "company", None) or getattr(Employee._base_manager.filter(user=user).first(), "company", None)
+    employee = Employee._base_manager.filter(user=user).first()
+    company = getattr(user, "company", None) or getattr(employee, "company", None)
     if not company:
         return Response({"success": False, "error": "لا توجد شركة"}, status=400)
 
     charter = WorkCharter.objects.filter(company=company).first()
+
+    attachment_file = request.FILES.get('attachment')
+    remove_attachment = str(request.data.get('remove_attachment', '')).strip().lower() in ['1', 'true', 'yes', 'on']
+
+    if attachment_file:
+        ext = os.path.splitext(attachment_file.name.lower())[1]
+        allowed = {'.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg'}
+        if ext not in allowed:
+            return Response({
+                "success": False,
+                "error": "نوع الملف غير مدعوم. المسموح: PDF / Word / PNG / JPG"
+            }, status=400)
+
+        max_size = 10 * 1024 * 1024
+        if attachment_file.size > max_size:
+            return Response({
+                "success": False,
+                "error": "حجم الملف كبير. الحد الأقصى 10 MB"
+            }, status=400)
 
     if not charter:
         charter = WorkCharter.objects.create(
@@ -1256,43 +1294,97 @@ def mobile_charter_update(request):
             introduction=request.data.get("introduction", ""),
             is_active=True,
             is_mandatory=True,
+            attachment=attachment_file if attachment_file else None,
         )
-        return Response({"success": True, "message": "تم إنشاء اللائحة", "version": charter.version})
 
-    changed = False
+        attachment_url = request.build_absolute_uri(charter.attachment.url) if getattr(charter, 'attachment', None) else ''
+        attachment_name = charter.attachment.name.split('/')[-1] if getattr(charter, 'attachment', None) else ''
+
+        return Response({
+            "success": True,
+            "message": "تم إنشاء اللائحة",
+            "version": charter.version,
+            "attachment_url": attachment_url,
+            "attachment_name": attachment_name,
+        })
+
+    content_changed = False
+    settings_changed = False
+
     new_title = request.data.get("title", "").strip()
     new_intro = request.data.get("introduction", "").strip()
     new_content = request.data.get("content", "").strip()
 
     if new_title and new_title != charter.title:
         charter.title = new_title
-        changed = True
-    if new_intro != charter.introduction:
+        content_changed = True
+
+    if new_intro != (charter.introduction or ''):
         charter.introduction = new_intro
-        changed = True
-    if new_content and new_content != charter.content:
+        content_changed = True
+
+    if new_content and new_content != (charter.content or ''):
         charter.content = new_content
-        changed = True
+        content_changed = True
+
+    if attachment_file:
+        charter.attachment = attachment_file
+        content_changed = True
+    elif remove_attachment and getattr(charter, 'attachment', None):
+        try:
+            charter.attachment.delete(save=False)
+        except Exception:
+            pass
+        charter.attachment = None
+        content_changed = True
 
     if "is_active" in request.data:
         val = request.data["is_active"]
-        charter.is_active = val if isinstance(val, bool) else str(val).lower() == "true"
+        new_val = val if isinstance(val, bool) else str(val).lower() == "true"
+        if charter.is_active != new_val:
+            charter.is_active = new_val
+            settings_changed = True
 
     if "is_mandatory" in request.data:
         val = request.data["is_mandatory"]
-        charter.is_mandatory = val if isinstance(val, bool) else str(val).lower() == "true"
+        new_val = val if isinstance(val, bool) else str(val).lower() == "true"
+        if charter.is_mandatory != new_val:
+            charter.is_mandatory = new_val
+            settings_changed = True
 
     charter.save()
 
-    if changed:
+    attachment_url = request.build_absolute_uri(charter.attachment.url) if getattr(charter, 'attachment', None) else ''
+    attachment_name = charter.attachment.name.split('/')[-1] if getattr(charter, 'attachment', None) else ''
+
+    if content_changed:
         charter.version += 1
         charter.save()
         deleted = CharterAcceptance.objects.filter(charter=charter).delete()
+
         return Response({
             "success": True,
             "message": f"تم تحديث اللائحة (الإصدار {charter.version}) وتم إعادة طلب الموافقة من جميع الموظفين",
             "version": charter.version,
             "acceptances_reset": deleted[0],
+            "attachment_url": attachment_url,
+            "attachment_name": attachment_name,
         })
 
-    return Response({"success": True, "message": "تم حفظ اللائحة", "version": charter.version})
+    if settings_changed:
+        return Response({
+            "success": True,
+            "message": "تم حفظ إعدادات اللائحة",
+            "version": charter.version,
+            "attachment_url": attachment_url,
+            "attachment_name": attachment_name,
+        })
+
+    return Response({
+        "success": True,
+        "message": "لم يتم إجراء أي تغيير",
+        "version": charter.version,
+        "attachment_url": attachment_url,
+        "attachment_name": attachment_name,
+    })
+

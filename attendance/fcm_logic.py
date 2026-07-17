@@ -38,7 +38,7 @@ def send_fcm_notification(user, title, body, data=None):
     ]
 
     try:
-        messaging.send_all(messages)
+        messaging.send_each(messages)
         return True
     except Exception as e:
         print(f"FCM Error: {e}")

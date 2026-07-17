@@ -197,3 +197,8 @@ class TrialSignupLead(models.Model):
         delta = self.trial_end_date - date.today()
         return max(0, delta.days)
 
+
+# ═════════════════════════════════════════════════════════════
+# Attachment Model - Universal File Attachments (Phase 4)
+# ═════════════════════════════════════════════════════════════
+from .models_attachment import Attachment

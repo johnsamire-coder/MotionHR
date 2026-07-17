@@ -1,5 +1,6 @@
 from attendance import api_reminders
 from attendance import api_employee_profile
+from attendance import api_attachments
 from attendance.api_mobile import mobile_geofence_get, mobile_geofence_set, mobile_fcm_token_register, mobile_fcm_token_delete
 from django.urls import path
 from . import views
@@ -153,6 +154,10 @@ urlpatterns += [
     path('api/mobile/manager/employees/<int:emp_id>/profile/', api_employee_profile.manager_employee_profile),
     path('api/mobile/manager/employees/<int:emp_id>/documents/', api_employee_profile.manager_employee_documents),
     path('api/mobile/manager/employees/<int:emp_id>/movements/', api_employee_profile.manager_employee_movements),
+    path("api/mobile/attachments/upload/", api_attachments.upload_attachment),
+    path("api/mobile/attachments/list/", api_attachments.list_attachments),
+    path("api/mobile/attachments/<int:attachment_id>/delete/", api_attachments.delete_attachment),
+    path("api/mobile/attachments/<int:attachment_id>/download/", api_attachments.download_attachment),
     path('api/mobile/manager/employees/<int:emp_id>/summary/', api_employee_profile.manager_employee_summary),
 
 ]
