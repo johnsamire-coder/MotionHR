@@ -1107,3 +1107,28 @@ class TrackingAlert(TenantModel):
 
     def __str__(self):
         return f"{self.employee} - {self.date} - {self.minutes_outside} دقيقة"
+
+class LocationHistory(TenantModel):
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='location_history',
+        verbose_name='الموظف'
+    )
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, verbose_name='خط العرض')
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, verbose_name='خط الطول')
+    accuracy = models.FloatField(null=True, blank=True, verbose_name='الدقة')
+    recorded_at = models.DateTimeField(verbose_name='وقت التسجيل')
+    shift_date = models.DateField(verbose_name='تاريخ الشيفت')
+    point_index = models.IntegerField(default=0, verbose_name='رقم النقطة')
+    address = models.CharField(max_length=500, blank=True, verbose_name='العنوان')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['shift_date', 'recorded_at']
+        verbose_name = 'سجل موقع'
+        verbose_name_plural = 'سجلات المواقع'
+
+    def __str__(self):
+        return f"{self.employee} - {self.shift_date} - نقطة {self.point_index}"
+

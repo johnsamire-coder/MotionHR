@@ -2,8 +2,10 @@ from attendance import api_reminders
 from attendance import api_employee_profile
 from attendance import api_announcements
 from attendance import api_attachments
+from attendance import api_employee_management
 from attendance.api_mobile import mobile_geofence_get, mobile_geofence_set, mobile_fcm_token_register, mobile_fcm_token_delete
 from django.urls import path
+from .api_employee_management import manager_reset_employee_password, employee_save_location, manager_get_location_report, manager_update_employee, manager_company_info, manager_transfer_employee, manager_organization_tree
 from . import views
 from . import api_mobile
 from . import api_mobile_requests
@@ -105,6 +107,8 @@ urlpatterns = [
     path('api/mobile/manager/announcements/<int:pk>/delete/', api_announcements.manager_delete_announcement),
     path('api/mobile/manager/announcements/<int:pk>/stats/', api_announcements.manager_announcement_stats),
 
+    path('api/mobile/employee/save-location/', employee_save_location),
+    path('api/mobile/manager/location-report/', manager_get_location_report),
 ]
 
 # ═══════════════════════════════════════
@@ -168,4 +172,15 @@ urlpatterns += [
     path("api/mobile/attachments/<int:attachment_id>/download/", api_attachments.download_attachment),
     path('api/mobile/manager/employees/<int:emp_id>/summary/', api_employee_profile.manager_employee_summary),
 
+    # Phase 8
+    path('api/mobile/manager/branches/', api_employee_management.manager_branches),
+    path('api/mobile/manager/departments/', api_employee_management.manager_departments),
+    path('api/mobile/manager/job-titles/', api_employee_management.manager_job_titles),
+    path('api/mobile/manager/employees/simple/', api_employee_management.manager_employees_simple),
+    path('api/mobile/manager/employees/create/', api_employee_management.manager_create_employee),
+
+    path('api/mobile/manager/employees/<int:employee_id>/reset-password/', manager_reset_employee_password),
+    path('api/mobile/manager/company-info/', manager_company_info),
+    path('api/mobile/manager/employees/<int:employee_id>/transfer/', manager_transfer_employee),
+    path('api/mobile/manager/organization-tree/', manager_organization_tree),
 ]

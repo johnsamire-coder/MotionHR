@@ -33,6 +33,11 @@ class FCMDeviceToken(models.Model):
         default='',
         verbose_name='معلومات الجهاز'
     )
+    preferred_language = models.CharField(
+        max_length=10,
+        default='ar',
+        verbose_name='اللغة المفضلة'
+    )
     is_active = models.BooleanField(
         default=True,
         verbose_name='نشط'

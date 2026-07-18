@@ -847,7 +847,7 @@ def mobile_manager_live_locations(request):
 
     company = getattr(user, 'company', None)
 
-    employees = Employee._base_manager.filter(is_field_worker=True)
+    employees = Employee._base_manager.filter(status='active')
     if company:
         employees = employees.filter(company=company)
 

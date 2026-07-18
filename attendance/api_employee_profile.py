@@ -268,7 +268,7 @@ def _get_employee_scoped(request, emp_id):
     """يجيب الموظف بس لو في نفس شركة المدير"""
     from employees.models import Employee
     company = getattr(request.user, "company", None)
-    qs = Employee.objects.all()
+    qs = Employee._base_manager.all()
     if company:
         qs = qs.filter(company=company)
     return qs.filter(id=emp_id).first()
@@ -284,7 +284,7 @@ def manager_employees_list(request):
     try:
         from employees.models import Employee
         company = getattr(request.user, "company", None)
-        qs = Employee.objects.all().select_related("branch", "department", "job_title")
+        qs = Employee._base_manager.all().select_related("branch", "department", "job_title")
         if company:
             qs = qs.filter(company=company)
         # فلترة اختيارية

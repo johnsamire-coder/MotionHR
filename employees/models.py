@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from core.models import TenantModel, TimeStampedModel
+from django_countries.fields import CountryField
 
 
 class JobTitle(TenantModel):
@@ -193,6 +194,7 @@ class Employee(TenantModel):
         null=True,
         verbose_name='البريد الإلكتروني'
     )
+    country = CountryField(blank_label='اختر الدولة', default='EG', verbose_name='الدولة')
     phone = models.CharField(
         max_length=20,
         verbose_name='رقم الموبايل'
@@ -274,6 +276,12 @@ class Employee(TenantModel):
         decimal_places=2,
         default=0,
         verbose_name='الراتب الأساسي'
+    )
+
+    currency = models.CharField(
+        max_length=10,
+        default='EGP',
+        verbose_name='العملة'
     )
     
     # ═══════════════════════════════

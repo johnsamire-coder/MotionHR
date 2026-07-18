@@ -74,10 +74,18 @@ def send_notification_to_user(user, title, body, data=None):
             if data:
                 data_dict = {str(k): str(v) for k, v in data.items()}
 
+            localized_title = title
+            localized_body = body
+            if getattr(token_obj, 'preferred_language', 'ar') == 'en':
+                if title_en:
+                    localized_title = title_en
+                if body_en:
+                    localized_body = body_en
+
             message = messaging.Message(
                 notification=messaging.Notification(
-                    title=title,
-                    body=body,
+                    title=localized_title,
+                    body=localized_body,
                 ),
                 data=data_dict,
                 token=token_obj.fcm_token,

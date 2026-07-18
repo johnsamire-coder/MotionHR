@@ -951,6 +951,7 @@ def mobile_fcm_token_register(request):
         fcm_token = request.data.get('fcm_token', '').strip()
         platform = request.data.get('platform', 'android')
         device_info = request.data.get('device_info', '')
+        preferred_language = request.data.get('preferred_language', 'ar')
 
         if not fcm_token:
             return Response({
@@ -968,6 +969,7 @@ def mobile_fcm_token_register(request):
                 'user': user,
                 'platform': platform,
                 'device_info': device_info,
+                'preferred_language': preferred_language,
                 'is_active': True,
             }
         )
