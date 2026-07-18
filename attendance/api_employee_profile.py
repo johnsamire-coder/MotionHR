@@ -1,3 +1,4 @@
+from employees.visibility import get_visible_employees_qs, can_view_employee
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
@@ -267,10 +268,7 @@ def _check_manager(request):
 def _get_employee_scoped(request, emp_id):
     """يجيب الموظف بس لو في نفس شركة المدير"""
     from employees.models import Employee
-    company = getattr(request.user, "company", None)
-    qs = Employee._base_manager.all()
-    if company:
-        qs = qs.filter(company=company)
+    qs = get_visible_employees_qs(request.user)
     return qs.filter(id=emp_id).first()
 
 
@@ -283,10 +281,7 @@ def manager_employees_list(request):
         return err
     try:
         from employees.models import Employee
-        company = getattr(request.user, "company", None)
-        qs = Employee._base_manager.all().select_related("branch", "department", "job_title")
-        if company:
-            qs = qs.filter(company=company)
+        qs = get_visible_employees_qs(request.user).exclude(user=request.user).select_related("branch", "department", "job_title")
         # فلترة اختيارية
         search = request.GET.get("search", "").strip()
         if search:

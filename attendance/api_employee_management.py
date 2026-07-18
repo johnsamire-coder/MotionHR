@@ -14,6 +14,7 @@ from django.utils import timezone
 import logging
 import re
 from datetime import datetime, date
+from employees.visibility import get_visible_employees_qs
 from .models import LocationHistory
 import random
 import string
@@ -156,7 +157,7 @@ def manager_employees_simple(request):
         if not company:
             return Response({"success": False, "error": "لا توجد شركة مرتبطة"}, status=400)
         from employees.models import Employee
-        emps = Employee._base_manager.filter(company=company, status="active").select_related("job_title").order_by("first_name_ar")[:200]
+        emps = get_visible_employees_qs(request.user).exclude(user=request.user).filter(status="active").select_related("job_title").order_by("first_name_ar")[:200]
         data = []
         for e in emps:
             data.append({
