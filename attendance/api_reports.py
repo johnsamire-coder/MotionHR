@@ -647,3 +647,222 @@ def export_report_excel(request):
     )
     response['Content-Disposition'] = f'attachment; filename="report_{report_type}_{year}_{month}.xlsx"'
     return response
+
+
+# ═══════════════════════════════════════
+# Phase 13 Quick Filters Overrides
+# requests/leaves/work-hours support filters
+# ═══════════════════════════════════════
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def requests_report(request):
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    from requests_app.models import EmployeeRequest
+
+    year, month = _parse_month(request)
+    status_filter = request.GET.get('status')
+    employee_id = request.GET.get('employee_id')
+
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    employees = _get_company_employees(user)
+    emp_ids = list(employees.values_list('id', flat=True))
+
+    reqs = EmployeeRequest._base_manager.filter(
+        employee_id__in=emp_ids,
+        created_at__date__gte=first_day,
+        created_at__date__lte=last_day,
+    ).select_related('employee', 'request_type')
+
+    if employee_id:
+        reqs = reqs.filter(employee_id=employee_id)
+
+    if status_filter:
+        reqs = reqs.filter(status=status_filter)
+
+    total = reqs.count()
+    approved = reqs.filter(status='approved').count()
+    rejected = reqs.filter(status='rejected').count()
+    pending = reqs.filter(status='pending').count()
+
+    details = []
+    for r in reqs.order_by('-created_at')[:100]:
+        emp = r.employee
+        details.append({
+            'id': r.id,
+            'employee_id': emp.id if emp else None,
+            'employee_name': _employee_name(emp) if emp else '-',
+            'request_type': str(r.request_type) if r.request_type else '-',
+            'subject': getattr(r, 'subject', '') or '',
+            'status': r.status,
+            'created_at': r.created_at.isoformat() if r.created_at else None,
+        })
+
+    return Response({
+        'year': year,
+        'month': month,
+        'employee_id': employee_id,
+        'status': status_filter,
+        'total_requests': total,
+        'approved': approved,
+        'rejected': rejected,
+        'pending': pending,
+        'details': details,
+    })
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def leaves_report(request):
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    from leaves.models import LeaveRequest
+
+    year, month = _parse_month(request)
+    status_filter = request.GET.get('status')
+    employee_id = request.GET.get('employee_id')
+
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    employees = _get_company_employees(user)
+    emp_ids = list(employees.values_list('id', flat=True))
+
+    leaves = LeaveRequest._base_manager.filter(
+        employee_id__in=emp_ids,
+        start_date__gte=first_day,
+        start_date__lte=last_day,
+    ).select_related('employee', 'leave_type')
+
+    if employee_id:
+        leaves = leaves.filter(employee_id=employee_id)
+
+    if status_filter:
+        leaves = leaves.filter(status=status_filter)
+
+    total = leaves.count()
+    approved = leaves.filter(status='approved').count()
+    rejected = leaves.filter(status='rejected').count()
+    pending = leaves.filter(status='pending').count()
+
+    per_employee = {}
+    for lv in leaves.order_by('-start_date'):
+        emp = lv.employee
+        emp_name = _employee_name(emp) if emp else '-'
+        emp_id = emp.id if emp else None
+
+        if emp_id not in per_employee:
+            per_employee[emp_id] = {
+                'employee_id': emp_id,
+                'name': emp_name,
+                'total_days': 0,
+                'approved_days': 0,
+                'leaves': [],
+            }
+
+        days = int(getattr(lv, 'days_count', 0) or 0)
+        if days == 0:
+            try:
+                days = (lv.end_date - lv.start_date).days + 1
+            except Exception:
+                days = 1
+
+        per_employee[emp_id]['total_days'] += days
+        if lv.status == 'approved':
+            per_employee[emp_id]['approved_days'] += days
+
+        per_employee[emp_id]['leaves'].append({
+            'id': lv.id,
+            'type': str(lv.leave_type) if lv.leave_type else '-',
+            'from': lv.start_date.isoformat() if lv.start_date else None,
+            'to': lv.end_date.isoformat() if lv.end_date else None,
+            'days': days,
+            'status': lv.status,
+        })
+
+    employees_list = list(per_employee.values())
+
+    return Response({
+        'year': year,
+        'month': month,
+        'employee_id': employee_id,
+        'status': status_filter,
+        'total_leaves': total,
+        'approved': approved,
+        'rejected': rejected,
+        'pending': pending,
+        'employees': employees_list,
+    })
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def work_hours_report(request):
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    year, month = _parse_month(request)
+    employee_id = request.GET.get('employee_id')
+
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    employees = _get_company_employees(user)
+    if employee_id:
+        employees = employees.filter(id=employee_id)
+
+    results = []
+
+    for emp in employees:
+        records = Attendance._base_manager.filter(
+            employee=emp,
+            date__gte=first_day,
+            date__lte=last_day,
+            check_in_time__isnull=False,
+        ).order_by('date')
+
+        total_hours = 0.0
+        daily_breakdown = []
+
+        for rec in records:
+            hours = float(rec.work_hours or 0)
+            if hours > 0:
+                total_hours += hours
+                daily_breakdown.append({
+                    'date': rec.date.isoformat() if rec.date else None,
+                    'hours': round(hours, 2),
+                    'check_in': _format_time(rec.check_in_time),
+                    'check_out': _format_time(rec.check_out_time),
+                })
+
+        days_worked = len(daily_breakdown)
+
+        results.append({
+            'employee_id': emp.id,
+            'employee_name': _employee_name(emp),
+            'username': _employee_username(emp),
+            'employee_code': getattr(emp, 'employee_code', None),
+            'total_hours': round(total_hours, 2),
+            'total_days_worked': days_worked,
+            'average_hours_per_day': round(total_hours / days_worked, 2) if days_worked else 0,
+            'daily_breakdown': daily_breakdown,
+        })
+
+    return Response({
+        'year': year,
+        'month': month,
+        'employee_id': employee_id,
+        'total_employees': len(results),
+        'employees': results,
+    })

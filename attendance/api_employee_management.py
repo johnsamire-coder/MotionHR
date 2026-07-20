@@ -157,14 +157,19 @@ def manager_employees_simple(request):
         if not company:
             return Response({"success": False, "error": "لا توجد شركة مرتبطة"}, status=400)
         from employees.models import Employee
-        emps = get_visible_employees_qs(request.user).exclude(user=request.user).filter(status="active").select_related("job_title").order_by("first_name_ar")[:200]
+        # جلب كل الموظفين النشطين
+        all_emps = get_visible_employees_qs(request.user).exclude(user=request.user).filter(status="active").select_related("job_title", "user").order_by("first_name_ar")[:200]
         data = []
-        for e in emps:
+        for e in all_emps:
+            user_role = getattr(e.user, "role", "employee") if e.user else "employee"
+            is_manager = user_role in ("manager", "hr_manager", "company_admin", "super_admin")
             data.append({
                 "id": e.id,
                 "employee_code": e.employee_code,
                 "full_name": getattr(e, "full_name_ar", f"{e.first_name_ar} {e.last_name_ar}"),
                 "job_title": getattr(e.job_title, "name_ar", "") if e.job_title else "",
+                "role": user_role,
+                "is_manager": is_manager,
             })
         return Response({"success": True, "employees": data, "count": len(data)})
     except Exception as e:
@@ -332,11 +337,11 @@ def manager_create_employee(request):
                 return Response({"success": False, "error": "المدير المباشر غير موجود"}, status=400)
 
         # Check duplicate national_id in company
-        if Employee.objects.filter(company=company, national_id=national_id).exists():
+        if Employee._base_manager.filter(company=company, national_id=national_id).exists():
             return Response({"success": False, "error": "الرقم القومي مسجل لموظف آخر في نفس الشركة"}, status=400)
 
         # Check duplicate employee_code if provided
-        if employee_code_input and Employee.objects.filter(company=company, employee_code=employee_code_input).exists():
+        if employee_code_input and Employee._base_manager.filter(company=company, employee_code=employee_code_input).exists():
             return Response({"success": False, "error": "الرقم الوظيفي موجود مسبقاً"}, status=400)
 
         # Username handling
@@ -1143,6 +1148,88 @@ def manager_get_location_report(request):
             'shift_date': shift_date_str,
             'total_points': len(points),
             'points': points,
+        })
+
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)
+
+
+# ── UPDATE COMPANY INFO ──
+@api_view(['PATCH', 'PUT'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_update_company_info(request):
+    """تعديل بيانات الشركة (company_admin / super_admin فقط)"""
+    try:
+        role = getattr(request.user, 'role', '')
+        if role not in ['super_admin', 'company_admin']:
+            return Response({'success': False, 'error': 'غير مصرح لك بتعديل بيانات الشركة'}, status=403)
+
+        company = getattr(request.user, 'company', None)
+        if not company:
+            return Response({'success': False, 'error': 'المستخدم غير مرتبط بشركة'}, status=400)
+
+        fields = ['name_ar', 'name_en', 'phone', 'email', 'address', 'website',
+                  'commercial_register', 'tax_number', 'office_address']
+
+        updated = []
+        for field in fields:
+            value = request.data.get(field)
+            if value is not None:
+                setattr(company, field, value)
+                updated.append(field)
+
+        if updated:
+            company.save()
+
+        return Response({
+            'success': True,
+            'message': f'تم تحديث {len(updated)} حقل بنجاح',
+            'updated_fields': updated,
+        })
+
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_upload_company_logo(request):
+    """رفع لوجو الشركة"""
+    try:
+        role = getattr(request.user, 'role', '')
+        if role not in ['super_admin', 'company_admin']:
+            return Response({'success': False, 'error': 'غير مصرح لك'}, status=403)
+
+        company = getattr(request.user, 'company', None)
+        if not company:
+            return Response({'success': False, 'error': 'المستخدم غير مرتبط بشركة'}, status=400)
+
+        logo_file = request.FILES.get('logo')
+        if not logo_file:
+            return Response({'success': False, 'error': 'لم يتم إرسال ملف اللوجو'}, status=400)
+
+        allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        if logo_file.content_type not in allowed:
+            return Response({'success': False, 'error': 'نوع الملف غير مدعوم (JPEG/PNG/GIF/WEBP فقط)'}, status=400)
+
+        if logo_file.size > 5 * 1024 * 1024:
+            return Response({'success': False, 'error': 'حجم الملف أكبر من 5MB'}, status=400)
+
+        company.logo = logo_file
+        company.save()
+
+        logo_url = ''
+        try:
+            logo_url = request.build_absolute_uri(company.logo.url)
+        except Exception:
+            pass
+
+        return Response({
+            'success': True,
+            'message': 'تم رفع اللوجو بنجاح',
+            'logo_url': logo_url,
         })
 
     except Exception as e:

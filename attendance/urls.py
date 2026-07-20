@@ -5,7 +5,7 @@ from attendance import api_attachments
 from attendance import api_employee_management
 from attendance.api_mobile import mobile_geofence_get, mobile_geofence_set, mobile_fcm_token_register, mobile_fcm_token_delete
 from django.urls import path
-from .api_employee_management import manager_reset_employee_password, employee_save_location, manager_get_location_report, manager_update_employee, manager_company_info, manager_transfer_employee, manager_organization_tree
+from .api_employee_management import manager_reset_employee_password, employee_save_location, manager_get_location_report, manager_update_company_info, manager_upload_company_logo, manager_update_employee, manager_company_info, manager_transfer_employee, manager_organization_tree
 from . import views
 from . import api_mobile
 from . import api_mobile_requests
@@ -183,4 +183,123 @@ urlpatterns += [
     path('api/mobile/manager/company-info/', manager_company_info),
     path('api/mobile/manager/employees/<int:employee_id>/transfer/', manager_transfer_employee),
     path('api/mobile/manager/organization-tree/', manager_organization_tree),
+    path('api/mobile/manager/company-info/update/', manager_update_company_info),
+    path('api/mobile/manager/company-info/upload-logo/', manager_upload_company_logo),
+]
+
+# ─────────────────────────────────────────────────────────────
+# MISSIONS URLs - V1
+# ─────────────────────────────────────────────────────────────
+from attendance.api_missions import (
+    manager_missions_list, manager_create_mission, manager_mission_detail,
+    manager_update_mission, manager_cancel_mission, manager_pending_requests,
+    manager_approve_request, manager_feedback_dashboard,
+    employee_my_missions, employee_respond_mission,
+    employee_start_mission, employee_end_mission,
+    employee_update_location, employee_upload_attachment,
+    employee_request_mission, employee_submit_feedback,
+    employee_add_feedback_note, mission_feedback_detail,
+    mission_locations_timeline,
+)
+
+urlpatterns += [
+    # Manager
+    path('api/mobile/manager/missions/', manager_missions_list, name='manager_missions_list'),
+    path('api/mobile/manager/missions/create/', manager_create_mission, name='manager_create_mission'),
+    path('api/mobile/manager/missions/<int:mission_id>/', manager_mission_detail, name='manager_mission_detail'),
+    path('api/mobile/manager/missions/<int:mission_id>/update/', manager_update_mission, name='manager_update_mission'),
+    path('api/mobile/manager/missions/<int:mission_id>/cancel/', manager_cancel_mission, name='manager_cancel_mission'),
+    path('api/mobile/manager/missions/pending-requests/', manager_pending_requests, name='manager_pending_requests'),
+    path('api/mobile/manager/missions/requests/<int:request_id>/respond/', manager_approve_request, name='manager_approve_request'),
+    path('api/mobile/manager/missions/feedback-dashboard/', manager_feedback_dashboard, name='manager_feedback_dashboard'),
+
+    # Employee
+    path('api/mobile/employee/missions/', employee_my_missions, name='employee_my_missions'),
+    path('api/mobile/employee/missions/request/', employee_request_mission, name='employee_request_mission'),
+    path('api/mobile/employee/missions/assignments/<int:assignment_id>/respond/', employee_respond_mission, name='employee_respond_mission'),
+    path('api/mobile/employee/missions/assignments/<int:assignment_id>/start/', employee_start_mission, name='employee_start_mission'),
+    path('api/mobile/employee/missions/assignments/<int:assignment_id>/end/', employee_end_mission, name='employee_end_mission'),
+    path('api/mobile/employee/missions/assignments/<int:assignment_id>/update-location/', employee_update_location, name='employee_update_location'),
+    path('api/mobile/employee/missions/assignments/<int:assignment_id>/upload/', employee_upload_attachment, name='employee_upload_attachment'),
+    path('api/mobile/employee/missions/assignments/<int:assignment_id>/locations/', mission_locations_timeline, name='mission_locations_timeline'),
+
+    # Feedback
+    path('api/mobile/missions/<int:mission_id>/feedback/', mission_feedback_detail, name='mission_feedback_detail'),
+    path('api/mobile/missions/<int:mission_id>/feedback/submit/', employee_submit_feedback, name='employee_submit_feedback'),
+    path('api/mobile/missions/<int:mission_id>/feedback/add-note/', employee_add_feedback_note, name='employee_add_feedback_note'),
+]
+
+# ─────────────────────────────────────────────────────────────
+# MISSIONS Extra URLs - Reassign + Withdraw + Force Cancel
+# ─────────────────────────────────────────────────────────────
+from attendance.api_missions import (
+    manager_reassign_employee, employee_withdraw_request,
+    manager_withdraw_requests, manager_respond_withdraw,
+    manager_force_cancel_mission,
+)
+
+urlpatterns += [
+    path('api/mobile/manager/missions/<int:mission_id>/reassign/', manager_reassign_employee, name='manager_reassign_employee'),
+    path('api/mobile/manager/missions/<int:mission_id>/force-cancel/', manager_force_cancel_mission, name='manager_force_cancel_mission'),
+    path('api/mobile/manager/missions/withdraw-requests/', manager_withdraw_requests, name='manager_withdraw_requests'),
+    path('api/mobile/manager/missions/withdraw-requests/<int:assignment_id>/respond/', manager_respond_withdraw, name='manager_respond_withdraw'),
+    path('api/mobile/employee/missions/assignments/<int:assignment_id>/withdraw/', employee_withdraw_request, name='employee_withdraw_request'),
+]
+
+# ─────────────────────────────────────────────────────────────
+# Edit & Cancel Requests/Leaves URLs
+# ─────────────────────────────────────────────────────────────
+from attendance.api_mobile_requests import (
+    mobile_edit_request, mobile_cancel_request,
+    mobile_edit_leave, mobile_cancel_leave,
+)
+
+urlpatterns += [
+    path('api/mobile/my-requests/<int:request_id>/edit/', mobile_edit_request, name='mobile_edit_request'),
+    path('api/mobile/my-requests/<int:request_id>/cancel/', mobile_cancel_request, name='mobile_cancel_request'),
+    path('api/mobile/my-leaves/<int:leave_id>/edit/', mobile_edit_leave, name='mobile_edit_leave'),
+    path('api/mobile/my-leaves/<int:leave_id>/cancel/', mobile_cancel_leave, name='mobile_cancel_leave'),
+]
+
+# ─────────────────────────────────────────────────────────────
+# Manager/HR: Edit & Cancel Requests/Leaves URLs
+# ─────────────────────────────────────────────────────────────
+from attendance.api_mobile_requests import (
+    manager_edit_request, manager_cancel_request,
+    manager_reopen_request, manager_edit_leave,
+    manager_cancel_leave,
+)
+
+urlpatterns += [
+    # Manager/HR - Requests
+    path('api/mobile/manager/requests/<int:request_id>/edit/', manager_edit_request, name='manager_edit_request'),
+    path('api/mobile/manager/requests/<int:request_id>/cancel/', manager_cancel_request, name='manager_cancel_request'),
+    path('api/mobile/manager/requests/<int:request_id>/reopen/', manager_reopen_request, name='manager_reopen_request'),
+    # Manager/HR - Leaves
+    path('api/mobile/manager/leaves/<int:leave_id>/edit/', manager_edit_leave, name='manager_edit_leave'),
+    path('api/mobile/manager/leaves/<int:leave_id>/cancel/', manager_cancel_leave, name='manager_cancel_leave'),
+]
+
+# ═══════════════════════════════════════
+# Reports APIs - Phase 13 Missing endpoints
+# ═══════════════════════════════════════
+from .api_reports import (
+    requests_report,
+    leaves_report,
+    work_hours_report,
+)
+
+urlpatterns += [
+    path('api/mobile/manager/reports/requests/', requests_report, name='report-requests'),
+    path('api/mobile/manager/reports/leaves/', leaves_report, name='report-leaves'),
+    path('api/mobile/manager/reports/work-hours/', work_hours_report, name='report-work-hours'),
+]
+
+# ═══════════════════════════════════════
+# Employee Payslip - Self Service
+# ═══════════════════════════════════════
+from .api_payroll import employee_payslip
+
+urlpatterns += [
+    path('api/mobile/employee/payslip/', employee_payslip, name='employee-payslip'),
 ]

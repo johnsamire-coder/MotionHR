@@ -230,3 +230,21 @@ def payroll_settings(request):
         'overtime_rate_per_hour': DEFAULT_OVERTIME_RATE_PER_HOUR,
         'note': 'الحسابات تعتمد على بيانات الحضور المسجلة (work_hours, late_minutes, overtime_hours)',
     })
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def employee_payslip(request):
+    """كشف راتب الموظف لنفسه"""
+    user = request.user
+    year, month = _parse_month(request)
+
+    try:
+        from employees.models import Employee
+        emp = Employee.objects.get(user=user)
+    except Exception:
+        return Response({'error': 'Employee not found'}, status=404)
+
+    payroll = _calculate_employee_payroll(emp, year, month)
+    return Response({'year': year, 'month': month, **payroll})

@@ -663,7 +663,7 @@ def mobile_attendance_action(request):
     # Push + Notification center
     try:
         emp_name = request.user.get_full_name() or request.user.username
-        notify_employee_checkout(request.user, format_time_value(now))
+        notify_employee_checkout(request.user, format_time_value(now), hours_worked='')
         notify_manager_checkout(employee.company, emp_name, format_time_value(now))
     except Exception as e:
         print(f"Check-out notification error: {e}")

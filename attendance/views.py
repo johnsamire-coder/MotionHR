@@ -837,7 +837,7 @@ def smart_check_in_page(request):
     show_map = request.user.role != 'employee'
 
     # جلب الموظف
-    emp = Employee.objects.filter(user=request.user).first()
+    emp = Employee._base_manager.filter(user=request.user).first()
     if emp:
         employee = emp
         # جلب حضور اليوم
@@ -877,7 +877,7 @@ def field_visit_add_page(request):
 
     # الموظف العادي
     if getattr(request.user, "role", "") == "employee":
-        employee = Employee.objects.filter(user=request.user).first()
+        employee = Employee._base_manager.filter(user=request.user).first()
 
         if not employee:
             messages.error(request, "لم يتم ربط حسابك بأي موظف")
@@ -926,7 +926,7 @@ def smart_api_check_in(request):
     lng = float(lng)
 
     # جلب الموظف
-    employee = Employee.objects.filter(user=request.user).first()
+    employee = Employee._base_manager.filter(user=request.user).first()
     if not employee:
         return JsonResponse({"success": False, "message": "لم يتم ربط حسابك بملف موظف"})
 
@@ -1066,7 +1066,7 @@ def smart_api_check_out(request):
     lat = float(lat)
     lng = float(lng)
 
-    employee = Employee.objects.filter(user=request.user).first()
+    employee = Employee._base_manager.filter(user=request.user).first()
     if not employee:
         return JsonResponse({"success": False, "message": "لم يتم ربط حسابك بملف موظف"})
 

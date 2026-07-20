@@ -1132,3 +1132,6 @@ class LocationHistory(TenantModel):
     def __str__(self):
         return f"{self.employee} - {self.shift_date} - نقطة {self.point_index}"
 
+
+# Import Missions Models
+from .missions_models import *
