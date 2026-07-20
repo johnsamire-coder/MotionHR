@@ -25,6 +25,33 @@ def get_employee_for_user(user):
     return Employee._base_manager.filter(user=user).select_related('company').first()
 
 
+def _get_user_lang(user):
+    """جلب لغة المستخدم من FCMDeviceToken"""
+    try:
+        from accounts.fcm_models import FCMDeviceToken
+        token = FCMDeviceToken.objects.filter(user=user).first()
+        return getattr(token, 'preferred_language', 'ar') or 'ar'
+    except Exception:
+        return 'ar'
+
+
+def _log_notification(user, title_ar, body_ar, title_en, body_en, notification_type):
+    """حفظ الإشعار في NotificationLog حسب لغة المستخدم"""
+    try:
+        from accounts.fcm_models import NotificationLog
+        lang = _get_user_lang(user)
+        title = title_en if lang == 'en' else title_ar
+        body = body_en if lang == 'en' else body_ar
+        NotificationLog.objects.create(
+            user=user,
+            title=title,
+            body=body,
+            notification_type=notification_type,
+        )
+    except Exception as e:
+        print(f"NotificationLog error: {e}")
+
+
 # ═══════════════════════════════════════════════════
 # الإجازات
 # ═══════════════════════════════════════════════════
@@ -205,6 +232,32 @@ def mobile_my_leaves(request):
     return Response({'success': True, 'items': items, 'leaves': items})
 
 
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_cancel_leave(request, leave_id):
+    """إلغاء طلب إجازة"""
+    employee = get_employee_for_user(request.user)
+    if not employee:
+        return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
+
+    try:
+        leave = LeaveRequest._base_manager.get(id=leave_id, employee=employee)
+    except LeaveRequest.DoesNotExist:
+        return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
+
+    if leave.status not in ['pending']:
+        return Response({
+            'success': False,
+            'message': 'لا يمكن إلغاء هذا الطلب'
+        }, status=400)
+
+    leave.status = 'cancelled'
+    leave.save()
+
+    return Response({'success': True, 'message': 'تم إلغاء الطلب'})
+
+
 # ═══════════════════════════════════════════════════
 # الطلبات (إذن خروج / سلفة / إداري)
 # ═══════════════════════════════════════════════════
@@ -220,28 +273,33 @@ def mobile_request_types(request):
 
     categories = RequestCategory._base_manager.filter(
         company=employee.company, is_active=True
-    ).order_by('order')
+    ).order_by('order', 'id')
 
     result = []
     for cat in categories:
         types = RequestType._base_manager.filter(
             company=employee.company, category=cat, is_active=True
-        ).order_by('order')
+        ).order_by('order', 'id')
 
         type_list = []
         for rt in types:
             type_list.append({
                 'id': rt.id,
                 'name': rt.name,
+                'name_en': rt.name_en or '',
                 'description': rt.description or '',
+                'description_en': rt.description_en or '',
+                'permission_kind': rt.permission_kind or 'none',
                 'requires_date_range': rt.requires_date_range,
                 'requires_amount': rt.requires_amount,
                 'requires_document': rt.requires_document,
+                'requires_approval': rt.requires_approval,
             })
 
         result.append({
             'id': cat.id,
             'name': cat.name,
+            'name_en': cat.name_en or '',
             'icon': cat.icon,
             'color': cat.color,
             'types': type_list,
@@ -286,18 +344,13 @@ def mobile_submit_request(request):
 
     if is_permission_request:
         permission_date = permission_date or start_date
-
         if not permission_date or not permission_time_raw:
-            language = getattr(employee, 'language', 'ar') or 'ar'
-            message_ar = 'تاريخ ووقت الإذن مطلوبان'
-            message_en = 'Permission date and time are required'
             return Response({
                 'success': False,
-                'message': message_en if language == 'en' else message_ar,
-                'message_ar': message_ar,
-                'message_en': message_en,
+                'message': 'تاريخ ووقت الإذن مطلوبان',
+                'message_ar': 'تاريخ ووقت الإذن مطلوبان',
+                'message_en': 'Permission date and time are required',
             }, status=400)
-
         start_date = permission_date
         end_date = permission_date
 
@@ -313,12 +366,7 @@ def mobile_submit_request(request):
             'message': 'تاريخ البداية والنهاية مطلوبين لهذا النوع'
         }, status=400)
 
-    # ── فحص سياسة الأذونات (لأنواع الأذون: تأخير / استئذان) ──
-    permission_checked = False
     permission_hours = None
-    permission_policy = None
-
-    # لو فيه duration_hours في الطلب → معناه إنه إذن
     duration_hours_raw = request.data.get('duration_hours')
     if duration_hours_raw:
         try:
@@ -327,7 +375,6 @@ def mobile_submit_request(request):
             permission_hours = None
 
     if permission_hours and permission_hours > 0:
-        # نجيب سياسة الأذونات الخاصة بالشركة
         from requests_app.models import PermissionPolicy, PermissionUsage
         try:
             permission_policy = PermissionPolicy._base_manager.get(
@@ -335,13 +382,11 @@ def mobile_submit_request(request):
                 is_active=True
             )
         except PermissionPolicy.DoesNotExist:
-            # مفيش سياسة → ممنوع تقديم إذن
             return Response({
                 'success': False,
                 'message': 'سياسة الأذونات غير مفعلة للشركة. رجاء التواصل مع المدير.'
             }, status=400)
 
-        # نجيب استهلاك الموظف للشهر الحالي
         today = timezone.localdate()
         current_month = today.strftime('%Y-%m')
         usage, _created = PermissionUsage._base_manager.get_or_create(
@@ -350,14 +395,12 @@ def mobile_submit_request(request):
             month=current_month,
         )
 
-        # فحص عدد المرات
         if usage.used_times >= permission_policy.max_times_per_month:
             return Response({
                 'success': False,
                 'message': f'وصلت للحد الأقصى من عدد مرات الأذونات ({permission_policy.max_times_per_month} مرات/شهر)'
             }, status=400)
 
-        # فحص عدد الساعات (المستهلك + الجديد)
         from decimal import Decimal
         new_total = usage.used_hours + Decimal(str(permission_hours))
         if new_total > permission_policy.max_hours_per_month:
@@ -366,8 +409,6 @@ def mobile_submit_request(request):
                 'success': False,
                 'message': f'الساعات المتبقية ({float(remaining)} ساعة) لا تكفي. الحد الأقصى {float(permission_policy.max_hours_per_month)} ساعة/شهر'
             }, status=400)
-
-        permission_checked = True
 
     parsed_start = None
     parsed_end = None
@@ -412,6 +453,7 @@ def mobile_submit_request(request):
                 'message': 'المبلغ غير صحيح'
             }, status=400)
 
+    from decimal import Decimal
     emp_request = EmployeeRequest._base_manager.create(
         company=employee.company,
         employee=employee,
@@ -427,8 +469,6 @@ def mobile_submit_request(request):
         status='pending',
         step_1_status='pending',
     )
-
-    # Permission usage is recorded at actual check-in/check-out after approval.
 
     # إشعار للمدير - طلب جديد
     try:
@@ -500,6 +540,32 @@ def mobile_my_requests(request):
     return Response({'success': True, 'items': items, 'requests': items})
 
 
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_cancel_request(request, request_id):
+    """إلغاء طلب"""
+    employee = get_employee_for_user(request.user)
+    if not employee:
+        return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
+
+    try:
+        req = EmployeeRequest._base_manager.get(id=request_id, employee=employee)
+    except EmployeeRequest.DoesNotExist:
+        return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
+
+    if req.status not in ['pending']:
+        return Response({
+            'success': False,
+            'message': 'لا يمكن إلغاء هذا الطلب'
+        }, status=400)
+
+    req.status = 'cancelled'
+    req.save()
+
+    return Response({'success': True, 'message': 'تم إلغاء الطلب'})
+
+
 # ═══════════════════════════════════════════════════
 # APIs للمدير
 # ═══════════════════════════════════════════════════
@@ -516,6 +582,7 @@ def mobile_manager_pending(request):
         return Response({'success': False, 'message': 'ليس لديك صلاحية'}, status=403)
 
     company = getattr(user, 'company', None)
+    search = request.query_params.get('search', '').strip()
 
     pending_leaves = LeaveRequest._base_manager.filter(
         status='pending'
@@ -556,6 +623,14 @@ def mobile_manager_pending(request):
 
     if company:
         pending_requests = pending_requests.filter(company=company)
+
+    if search:
+        pending_requests = pending_requests.filter(
+            Q(employee__first_name_ar__icontains=search) |
+            Q(employee__last_name_ar__icontains=search) |
+            Q(subject__icontains=search) |
+            Q(request_type__name__icontains=search)
+        )
 
     request_items = []
     for req in pending_requests[:50]:
@@ -628,8 +703,10 @@ def mobile_manager_action(request):
                 pass
 
             leave_type_name = ''
+            leave_type_name_en = 'Leave'
             try:
-                leave_type_name = item.leave_type.name if hasattr(item, 'leave_type') and item.leave_type else 'إجازة'
+                leave_type_name = item.leave_type.name if item.leave_type else 'إجازة'
+                leave_type_name_en = getattr(item.leave_type, 'name_en', None) or 'Leave'
             except Exception:
                 leave_type_name = 'إجازة'
 
@@ -640,12 +717,21 @@ def mobile_manager_action(request):
                         notify_leave_approved(
                             user=employee_user,
                             leave_type=leave_type_name,
-                            start_date=str(item.start_date) if hasattr(item, 'start_date') else '',
-                            end_date=str(item.end_date) if hasattr(item, 'end_date') else '',
+                            start_date=str(item.start_date) if item.start_date else '',
+                            end_date=str(item.end_date) if item.end_date else '',
                             leave_id=item.id,
                         )
                     except Exception as e:
                         print(f"FCM notification error: {e}")
+
+                    _log_notification(
+                        user=employee_user,
+                        title_ar='✅ تمت الموافقة على إجازتك',
+                        body_ar=f'تمت الموافقة على طلب {leave_type_name}',
+                        title_en='✅ Your leave request has been approved',
+                        body_en=f'Your {leave_type_name_en} request has been approved',
+                        notification_type='leave_approved',
+                    )
             else:
                 item.reject(user, notes)
                 if employee_user:
@@ -659,26 +745,14 @@ def mobile_manager_action(request):
                     except Exception as e:
                         print(f"FCM notification error: {e}")
 
-            # إشعار داخل التطبيق
-            try:
-                from accounts.fcm_models import NotificationLog
-                if employee_user:
-                    if action == 'approve':
-                        NotificationLog.objects.create(
-                            user=employee_user,
-                            title='✅ تمت الموافقة على إجازتك',
-                            body=f'تمت الموافقة على طلب {leave_type_name}',
-                            notification_type='leave_approved',
-                        )
-                    else:
-                        NotificationLog.objects.create(
-                            user=employee_user,
-                            title='❌ تم رفض طلب إجازتك',
-                            body=f'تم رفض طلب {leave_type_name}' + (f' - السبب: {notes}' if notes else ''),
-                            notification_type='leave_rejected',
-                        )
-            except Exception:
-                pass
+                    _log_notification(
+                        user=employee_user,
+                        title_ar='❌ تم رفض طلب إجازتك',
+                        body_ar=f'تم رفض طلب {leave_type_name}' + (f' - السبب: {notes}' if notes else ''),
+                        title_en='❌ Your leave request has been rejected',
+                        body_en=f'Your {leave_type_name_en} request was rejected' + (f' - Reason: {notes}' if notes else ''),
+                        notification_type='leave_rejected',
+                    )
 
             return Response({
                 'success': True,
@@ -694,13 +768,15 @@ def mobile_manager_action(request):
             except Exception:
                 pass
 
-            request_type_name = ''
+            request_type_name = 'طلب'
+            request_type_name_en = 'Request'
             request_title = ''
             try:
-                request_type_name = item.request_type.name if hasattr(item, 'request_type') and item.request_type else 'طلب'
-                request_title = item.subject if hasattr(item, 'subject') else ''
+                request_type_name = item.request_type.name if item.request_type else 'طلب'
+                request_type_name_en = getattr(item.request_type, 'name_en', None) or 'Request'
+                request_title = item.subject or ''
             except Exception:
-                request_type_name = 'طلب'
+                pass
 
             if action == 'approve':
                 item.status = 'approved'
@@ -731,26 +807,24 @@ def mobile_manager_action(request):
                 except Exception as e:
                     print(f"FCM notification error: {e}")
 
-            # إشعار داخل التطبيق
-            try:
-                from accounts.fcm_models import NotificationLog
-                if employee_user:
-                    if action == 'approve':
-                        NotificationLog.objects.create(
-                            user=employee_user,
-                            title='✅ تمت الموافقة على طلبك',
-                            body=f'تمت الموافقة على {request_type_name}: {request_title}',
-                            notification_type='request_approved',
-                        )
-                    else:
-                        NotificationLog.objects.create(
-                            user=employee_user,
-                            title='❌ تم رفض طلبك',
-                            body=f'تم رفض {request_type_name}: {request_title}' + (f' - السبب: {notes}' if notes else ''),
-                            notification_type='request_rejected',
-                        )
-            except Exception:
-                pass
+                if action == 'approve':
+                    _log_notification(
+                        user=employee_user,
+                        title_ar='✅ تمت الموافقة على طلبك',
+                        body_ar=f'تمت الموافقة على {request_type_name}: {request_title}',
+                        title_en='✅ Your request has been approved',
+                        body_en=f'Your {request_type_name_en} request has been approved: {request_title}',
+                        notification_type='request_approved',
+                    )
+                else:
+                    _log_notification(
+                        user=employee_user,
+                        title_ar='❌ تم رفض طلبك',
+                        body_ar=f'تم رفض {request_type_name}: {request_title}' + (f' - السبب: {notes}' if notes else ''),
+                        title_en='❌ Your request has been rejected',
+                        body_en=f'Your {request_type_name_en} request was rejected: {request_title}' + (f' - Reason: {notes}' if notes else ''),
+                        notification_type='request_rejected',
+                    )
 
             return Response({
                 'success': True,
@@ -793,159 +867,30 @@ def mobile_manager_employees_attendance(request):
     else:
         target_date = timezone.localdate()
 
-    records = Attendance._base_manager.filter(
+    att_qs = Attendance._base_manager.filter(
         date=target_date
-    ).select_related('employee').order_by('employee__first_name_ar')
+    ).select_related('employee', 'employee__user')
 
     if company:
-        records = records.filter(company=company)
+        att_qs = att_qs.filter(employee__company=company)
 
     items = []
-    for att in records:
+    for att in att_qs:
+        emp = att.employee
         emp_name = ''
-        if att.employee:
-            emp_name = f"{getattr(att.employee, 'first_name_ar', '')} {getattr(att.employee, 'last_name_ar', '')}".strip()
-
-        def fmt(dt):
-            if not dt:
-                return ''
-            try:
-                return timezone.localtime(dt).strftime('%I:%M %p')
-            except Exception:
-                return str(dt)
-
+        if emp:
+            emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip()
         items.append({
             'employee_name': emp_name,
-            'employee_code': getattr(att.employee, 'employee_code', '') if att.employee else '',
-            'date': att.date.strftime('%Y-%m-%d') if att.date else '',
-            'check_in_time': fmt(getattr(att, 'check_in_time', None)),
-            'check_out_time': fmt(getattr(att, 'check_out_time', None)),
-            'status': getattr(att, 'status', '') or '',
+            'check_in': att.check_in_time.strftime('%H:%M') if att.check_in_time else '',
+            'check_out': att.check_out_time.strftime('%H:%M') if att.check_out_time else '',
+            'status': att.status or '',
+            'hours_worked': str(att.hours_worked) if att.hours_worked else '',
         })
 
     return Response({
         'success': True,
-        'date': target_date.strftime('%Y-%m-%d'),
-        'items': items,
+        'date': str(target_date),
+        'attendance': items,
         'total': len(items),
-    })
-
-
-@api_view(['GET'])
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def mobile_manager_live_locations(request):
-    """مواقع الموظفين اللحظية للخريطة"""
-    user = request.user
-    role = getattr(user, 'role', 'employee')
-
-    if role not in ['super_admin', 'company_admin', 'hr_manager', 'manager']:
-        return Response({'success': False, 'message': 'ليس لديك صلاحية'}, status=403)
-
-    from attendance.models import LocationLog
-    from django.db.models import Max
-
-    company = getattr(user, 'company', None)
-
-    employees = Employee._base_manager.filter(status='active')
-    if company:
-        employees = employees.filter(company=company)
-
-    items = []
-    for emp in employees:
-        last_log = LocationLog._base_manager.filter(
-            employee=emp
-        ).order_by('-timestamp').first()
-
-        if last_log:
-            emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip()
-            items.append({
-                'employee_id': emp.id,
-                'employee_name': emp_name,
-                'employee_code': emp.employee_code or '',
-                'latitude': float(last_log.latitude),
-                'longitude': float(last_log.longitude),
-                'accuracy': float(last_log.accuracy) if last_log.accuracy else 0,
-                'address': getattr(last_log, 'address', '') or '',
-                'timestamp': last_log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if last_log.timestamp else '',
-            })
-
-    return Response({
-        'success': True,
-        'items': items,
-        'total': len(items),
-    })
-
-
-@api_view(['GET'])
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def mobile_manager_employee_route(request):
-    """خط سير موظف معين في يوم معين"""
-    user = request.user
-    role = getattr(user, 'role', 'employee')
-
-    if role not in ['super_admin', 'company_admin', 'hr_manager', 'manager']:
-        return Response({'success': False, 'message': 'ليس لديك صلاحية'}, status=403)
-
-    employee_id = request.query_params.get('employee_id')
-    if not employee_id:
-        return Response({'success': False, 'message': 'employee_id مطلوب'}, status=400)
-
-    try:
-        employee_id = int(employee_id)
-    except Exception:
-        return Response({'success': False, 'message': 'employee_id غير صحيح'}, status=400)
-
-    company = getattr(user, 'company', None)
-
-    from datetime import datetime
-    target_date_str = request.query_params.get('date', '').strip()
-    if target_date_str:
-        try:
-            target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
-        except ValueError:
-            return Response({'success': False, 'message': 'صيغة التاريخ لازم تكون YYYY-MM-DD'}, status=400)
-    else:
-        target_date = timezone.localdate()
-
-    emp_qs = Employee._base_manager.filter(id=employee_id)
-    if company:
-        emp_qs = emp_qs.filter(company=company)
-
-    employee = emp_qs.first()
-    if not employee:
-        return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
-
-    from attendance.models import LocationLog
-
-    logs = LocationLog._base_manager.filter(
-        employee=employee,
-        timestamp__date=target_date
-    ).order_by('timestamp')[:500]
-
-    emp_name = f"{getattr(employee, 'first_name_ar', '')} {getattr(employee, 'last_name_ar', '')}".strip()
-    if not emp_name:
-        emp_name = employee.employee_code or f"Employee #{employee.id}"
-
-    points = []
-    for log in logs:
-        points.append({
-            'latitude': float(log.latitude),
-            'longitude': float(log.longitude),
-            'accuracy': float(log.accuracy) if log.accuracy else 0,
-            'address': getattr(log, 'address', '') or '',
-            'timestamp': log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else '',
-        })
-
-    return Response({
-        'success': True,
-        'employee': {
-            'id': employee.id,
-            'name': emp_name,
-            'employee_code': employee.employee_code or '',
-        },
-        'date': target_date.strftime('%Y-%m-%d'),
-        'points': points,
-        'total_points': len(points),
     })

@@ -6,7 +6,6 @@ import firebase_admin
 from firebase_admin import credentials, messaging
 from django.conf import settings
 
-
 # تهيئة Firebase Admin (مرة واحدة بس)
 FIREBASE_KEY_PATH = os.path.join(settings.BASE_DIR, 'firebase-key.json')
 
@@ -45,11 +44,20 @@ def _log_notification(user, title, body, data=None):
         return False
 
 
-def send_notification_to_user(user, title, body, data=None):
+def _get_user_lang(user):
+    """جلب لغة المستخدم من FCM token"""
+    try:
+        from accounts.fcm_models import FCMDeviceToken
+        token = FCMDeviceToken.objects.filter(user=user, is_active=True).first()
+        return getattr(token, 'preferred_language', 'ar') or 'ar'
+    except Exception:
+        return 'ar'
+
+
+def send_notification_to_user(user, title, body, data=None, title_en=None, body_en=None):
     """إرسال إشعار لمستخدم واحد على كل الأجهزة المسجلة"""
     from accounts.fcm_models import FCMDeviceToken
 
-    # سجّل الإشعار في قاعدة البيانات حتى لو مفيش token
     _log_notification(user, title, body, data)
 
     if not init_firebase():
@@ -76,10 +84,11 @@ def send_notification_to_user(user, title, body, data=None):
 
             localized_title = title
             localized_body = body
+
             if getattr(token_obj, 'preferred_language', 'ar') == 'en':
-                if title_en:
+                if title_en is not None:
                     localized_title = title_en
-                if body_en:
+                if body_en is not None:
                     localized_body = body_en
 
             message = messaging.Message(
@@ -124,7 +133,7 @@ def send_notification_to_user(user, title, body, data=None):
     }
 
 
-def send_notification_to_managers(company, title, body, data=None):
+def send_notification_to_managers(company, title, body, data=None, title_en=None, body_en=None):
     """إرسال إشعار لكل المديرين في شركة معينة"""
     from accounts.models import User
 
@@ -135,7 +144,10 @@ def send_notification_to_managers(company, title, body, data=None):
 
     total_sent = 0
     for manager in managers:
-        result = send_notification_to_user(manager, title, body, data)
+        result = send_notification_to_user(
+            manager, title, body, data,
+            title_en=title_en, body_en=body_en
+        )
         total_sent += result['sent']
 
     return {"success": total_sent > 0, "sent": total_sent}
@@ -146,7 +158,6 @@ def send_notification_to_managers(company, title, body, data=None):
 # =========================================
 
 def notify_request_approved(user, request_type, request_title='', request_id=None):
-    """إشعار موافقة على طلب"""
     data = {
         'type': 'request_approved',
         'request_type': request_type,
@@ -154,19 +165,24 @@ def notify_request_approved(user, request_type, request_title='', request_id=Non
     }
     if request_id:
         data['request_id'] = request_id
+
     return send_notification_to_user(
         user=user,
         title='✅ تم قبول طلبك',
-        body=f'تم الموافقة على {request_type}: {request_title}',
+        body=f'تمت الموافقة على {request_type}: {request_title}',
         data=data,
+        title_en='✅ Your request was approved',
+        body_en=f'Your {request_type} request was approved: {request_title}',
     )
 
 
 def notify_request_rejected(user, request_type, request_title='', reason='', request_id=None):
-    """إشعار رفض طلب"""
-    body = f'تم رفض {request_type}: {request_title}'
+    body_ar = f'تم رفض {request_type}: {request_title}'
+    body_en = f'Your {request_type} request was rejected: {request_title}'
     if reason:
-        body += f'\nالسبب: {reason}'
+        body_ar += f'\nالسبب: {reason}'
+        body_en += f'\nReason: {reason}'
+
     data = {
         'type': 'request_rejected',
         'request_type': request_type,
@@ -174,124 +190,163 @@ def notify_request_rejected(user, request_type, request_title='', reason='', req
     }
     if request_id:
         data['request_id'] = request_id
+
     return send_notification_to_user(
         user=user,
         title='❌ تم رفض طلبك',
-        body=body,
+        body=body_ar,
         data=data,
+        title_en='❌ Your request was rejected',
+        body_en=body_en,
     )
 
 
 def notify_leave_approved(user, leave_type, start_date, end_date, leave_id=None):
-    """إشعار موافقة على إجازة"""
     data = {
         'type': 'leave_approved',
         'screen': 'my_leaves',
     }
     if leave_id:
         data['leave_id'] = leave_id
+
     return send_notification_to_user(
         user=user,
         title='✅ تم قبول إجازتك',
-        body=f'تم الموافقة على {leave_type} من {start_date} إلى {end_date}',
+        body=f'تمت الموافقة على {leave_type} من {start_date} إلى {end_date}',
         data=data,
+        title_en='✅ Your leave was approved',
+        body_en=f'Your {leave_type} leave from {start_date} to {end_date} was approved',
     )
 
 
 def notify_leave_rejected(user, leave_type, reason='', leave_id=None):
-    """إشعار رفض إجازة"""
-    body = f'تم رفض إجازة {leave_type}'
+    body_ar = f'تم رفض إجازة {leave_type}'
+    body_en = f'Your {leave_type} leave request was rejected'
     if reason:
-        body += f'\nالسبب: {reason}'
+        body_ar += f'\nالسبب: {reason}'
+        body_en += f'\nReason: {reason}'
+
     data = {
         'type': 'leave_rejected',
         'screen': 'my_leaves',
     }
     if leave_id:
         data['leave_id'] = leave_id
+
     return send_notification_to_user(
         user=user,
         title='❌ تم رفض إجازتك',
-        body=body,
+        body=body_ar,
         data=data,
+        title_en='❌ Your leave was rejected',
+        body_en=body_en,
     )
 
 
 def notify_manager_new_request(company, employee_name, request_type, request_id=None):
-    """إشعار للمدير - طلب جديد"""
     data = {
         'type': 'new_request',
         'screen': 'manager_pending',
     }
     if request_id:
         data['request_id'] = request_id
+
     return send_notification_to_managers(
         company=company,
         title='📩 طلب جديد',
         body=f'الموظف {employee_name} قدم طلب: {request_type}',
         data=data,
+        title_en='📩 New Request',
+        body_en=f'Employee {employee_name} submitted a request: {request_type}',
     )
 
 
 def notify_manager_new_leave(company, employee_name, leave_type, leave_id=None):
-    """إشعار للمدير - طلب إجازة جديد"""
     data = {
         'type': 'new_leave',
         'screen': 'manager_pending',
     }
     if leave_id:
         data['leave_id'] = leave_id
+
     return send_notification_to_managers(
         company=company,
         title='📩 طلب إجازة جديد',
         body=f'الموظف {employee_name} قدم طلب إجازة: {leave_type}',
         data=data,
+        title_en='📩 New Leave Request',
+        body_en=f'Employee {employee_name} submitted a leave request: {leave_type}',
     )
 
 
 def notify_manager_out_of_geofence(company, employee_name, distance):
-    """إشعار للمدير - موظف حاول حضور خارج النطاق"""
     return send_notification_to_managers(
         company=company,
         title='⚠️ محاولة حضور خارج النطاق',
         body=f'الموظف {employee_name} حاول تسجيل حضور من مسافة {distance}م',
-        data={'type': 'geofence_violation'}
+        data={'type': 'geofence_violation'},
+        title_en='⚠️ Out of Geofence Attempt',
+        body_en=f'Employee {employee_name} tried to check in from {distance}m away',
     )
+
+
 def notify_employee_checkin(user, time_str, location=''):
-    """إشعار للموظف عند تسجيل الحضور"""
-    body = f'تم تسجيل حضورك الساعة {time_str}'
+    body_ar = f'تم تسجيل حضورك الساعة {time_str}'
+    body_en = f'Check-in recorded at {time_str}'
     if location:
-        body += f' — {location}'
-    send_notification_to_user(user, 'تسجيل الحضور ✅', body, data={
-        'type': 'attendance',
-        'action': 'checkin'
-    })
+        body_ar += f' — {location}'
+        body_en += f' — {location}'
+
+    send_notification_to_user(
+        user=user,
+        title='تسجيل الحضور ✅',
+        body=body_ar,
+        data={'type': 'attendance', 'action': 'checkin'},
+        title_en='Check-in ✅',
+        body_en=body_en,
+    )
+
 
 def notify_employee_checkout(user, time_str, hours_worked=''):
-    """إشعار للموظف عند تسجيل الانصراف"""
-    body = f'تم تسجيل انصرافك الساعة {time_str}'
+    body_ar = f'تم تسجيل انصرافك الساعة {time_str}'
+    body_en = f'Check-out recorded at {time_str}'
     if hours_worked:
-        body += f' — عدد الساعات: {hours_worked}'
-    send_notification_to_user(user, 'تسجيل الانصراف 👋', body, data={
-        'type': 'attendance',
-        'action': 'checkout'
-    })
+        body_ar += f' — عدد الساعات: {hours_worked}'
+        body_en += f' — Hours worked: {hours_worked}'
 
-def notify_manager_checkin(company, employee_name, time_str):
-    """إشعار للمدير عند تسجيل حضور موظف"""
-    send_notification_to_managers(company, 
-        'حضور موظف 📋',
-        f'{employee_name} سجّل حضوره الساعة {time_str}',
-        data={'type': 'manager_attendance', 'action': 'checkin'}
+    send_notification_to_user(
+        user=user,
+        title='تسجيل الانصراف 👋',
+        body=body_ar,
+        data={'type': 'attendance', 'action': 'checkout'},
+        title_en='Check-out 👋',
+        body_en=body_en,
     )
 
+
+def notify_manager_checkin(company, employee_name, time_str):
+    send_notification_to_managers(
+        company=company,
+        title='حضور موظف 📋',
+        body=f'{employee_name} سجّل حضوره الساعة {time_str}',
+        data={'type': 'manager_attendance', 'action': 'checkin'},
+        title_en='Employee Check-in 📋',
+        body_en=f'{employee_name} checked in at {time_str}',
+    )
+
+
 def notify_manager_checkout(company, employee_name, time_str, hours_worked=''):
-    """إشعار للمدير عند تسجيل انصراف موظف"""
-    body = f'{employee_name} سجّل انصرافه الساعة {time_str}'
+    body_ar = f'{employee_name} سجّل انصرافه الساعة {time_str}'
+    body_en = f'{employee_name} checked out at {time_str}'
     if hours_worked:
-        body += f' — {hours_worked} ساعة'
-    send_notification_to_managers(company,
-        'انصراف موظف 🏁',
-        body,
-        data={'type': 'manager_attendance', 'action': 'checkout'}
+        body_ar += f' — {hours_worked} ساعة'
+        body_en += f' — {hours_worked} hours'
+
+    send_notification_to_managers(
+        company=company,
+        title='انصراف موظف 🏁',
+        body=body_ar,
+        data={'type': 'manager_attendance', 'action': 'checkout'},
+        title_en='Employee Check-out 🏁',
+        body_en=body_en,
     )

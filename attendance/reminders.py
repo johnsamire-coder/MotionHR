@@ -1,7 +1,6 @@
 import logging
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 from django.utils import timezone
-from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 
@@ -9,32 +8,26 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════
 # Helper — إرسال إشعار لمجموعة يوزرز
 # ═══════════════════════════════════════════════════════
-def _send_to_users(user_qs, title, body, data=None):
-    """إرسال إشعار لقائمة يوزرز"""
+def _send_to_users(user_qs, title, body, data=None, title_en=None, body_en=None):
+    """إرسال إشعار لقائمة يوزرز مع دعم عربي/إنجليزي حسب لغة التطبيق."""
     try:
         from accounts.fcm_service import send_fcm_notification
-        from accounts.fcm_models import FCMDeviceToken, NotificationLog
 
         sent = 0
         for user in user_qs:
-            tokens = FCMDeviceToken.objects.filter(user=user, is_active=True)
-            for token_obj in tokens:
-                try:
-                    send_fcm_notification(
-                        token=token_obj.token,
-                        title=title,
-                        body=body,
-                        data=data or {},
-                    )
-                    NotificationLog.objects.create(
-                        user=user,
-                        title=title,
-                        body=body,
-                        notification_type=data.get("type", "reminder") if data else "reminder",
-                    )
+            try:
+                ok = send_fcm_notification(
+                    user,
+                    title,
+                    body,
+                    data=data or {},
+                    title_en=title_en,
+                    body_en=body_en,
+                )
+                if ok is not False:
                     sent += 1
-                except Exception as e:
-                    logger.error(f"FCM error for {user.username}: {e}")
+            except Exception as e:
+                logger.error(f"FCM error for {getattr(user, 'username', user)}: {e}")
         return sent
     except Exception as e:
         logger.error(f"_send_to_users error: {e}")
@@ -52,48 +45,45 @@ def remind_missing_checkin():
     """
     try:
         from django.contrib.auth import get_user_model
-        from attendance.models import Attendance, EmployeeShift
+        from attendance.models import Attendance
 
         User = get_user_model()
         today = timezone.localdate()
 
-        # مش في الويكند (5=السبت, 6=الأحد)
-        if today.weekday() in (4, 5):  # الجمعة والسبت عطلة
+        # الجمعة والسبت عطلة
+        if today.weekday() in (4, 5):
             logger.info("remind_missing_checkin: weekend — skipped")
             return
 
         logger.info(f"remind_missing_checkin: checking for {today}")
 
-        # كل الموظفين النشطين (role=employee)
         employees = User.objects.filter(
             role__in=["employee", "manager", "hr_manager"],
             is_active=True,
         ).select_related("company")
 
-        missing_by_company = {}  # company_id -> list of employees
+        missing_by_company = {}
 
         for emp in employees:
-            # هل سجل حضور النهارده؟
             has_attendance = Attendance.objects.filter(
                 employee__user=emp,
                 date=today,
             ).exists()
 
             if not has_attendance:
-                # بعت إشعار للموظف
                 _send_to_users(
                     User.objects.filter(pk=emp.pk),
                     title="⏰ تذكير — تسجيل الحضور",
                     body="لم تسجل حضورك اليوم بعد. سجّل الآن من التطبيق.",
+                    title_en="⏰ Reminder — Check-in",
+                    body_en="You have not checked in today yet. Please check in now from the app.",
                     data={"type": "reminder_checkin", "date": str(today)},
                 )
 
-                # تجميع للمدير
-                cid = emp.company_id if hasattr(emp, "company_id") else None
+                cid = getattr(emp, "company_id", None)
                 if cid:
                     missing_by_company.setdefault(cid, []).append(emp.get_full_name() or emp.username)
 
-        # إشعار تجميعي للمديرين
         for cid, names in missing_by_company.items():
             managers = User.objects.filter(
                 company_id=cid,
@@ -101,12 +91,19 @@ def remind_missing_checkin():
                 is_active=True,
             )
             count = len(names)
-            sample = "، ".join(names[:3])
-            suffix = f" وآخرون..." if count > 3 else ""
+
+            sample_ar = "، ".join(names[:3])
+            suffix_ar = " وآخرون..." if count > 3 else ""
+
+            sample_en = ", ".join(names[:3])
+            suffix_en = " and others..." if count > 3 else ""
+
             _send_to_users(
                 managers,
                 title=f"⚠️ {count} موظف لم يسجلوا الحضور",
-                body=f"{sample}{suffix}",
+                body=f"{sample_ar}{suffix_ar}",
+                title_en=f"⚠️ {count} employees have not checked in",
+                body_en=f"{sample_en}{suffix_en}",
                 data={"type": "reminder_checkin_manager", "date": str(today), "count": str(count)},
             )
 
@@ -137,7 +134,6 @@ def remind_missing_checkout():
 
         logger.info(f"remind_missing_checkout: checking for {today}")
 
-        # سجلوا حضور بس مسجلوش انصراف
         pending = Attendance.objects.filter(
             date=today,
             check_in_time__isnull=False,
@@ -152,15 +148,16 @@ def remind_missing_checkout():
                 User.objects.filter(pk=emp_user.pk),
                 title="⏰ تذكير — تسجيل الانصراف",
                 body="لم تسجل انصرافك بعد. سجّل الانصراف من التطبيق الآن.",
+                title_en="⏰ Reminder — Check-out",
+                body_en="You have not checked out yet. Please check out now from the app.",
                 data={"type": "reminder_checkout", "date": str(today)},
             )
 
-            cid = emp_user.company_id if hasattr(emp_user, "company_id") else None
+            cid = getattr(emp_user, "company_id", None)
             if cid:
                 name = emp_user.get_full_name() or emp_user.username
                 missing_by_company.setdefault(cid, []).append(name)
 
-        # إشعار تجميعي للمديرين
         for cid, names in missing_by_company.items():
             managers = User.objects.filter(
                 company_id=cid,
@@ -168,12 +165,19 @@ def remind_missing_checkout():
                 is_active=True,
             )
             count = len(names)
-            sample = "، ".join(names[:3])
-            suffix = " وآخرون..." if count > 3 else ""
+
+            sample_ar = "، ".join(names[:3])
+            suffix_ar = " وآخرون..." if count > 3 else ""
+
+            sample_en = ", ".join(names[:3])
+            suffix_en = " and others..." if count > 3 else ""
+
             _send_to_users(
                 managers,
                 title=f"⚠️ {count} موظف لم يسجلوا الانصراف",
-                body=f"{sample}{suffix}",
+                body=f"{sample_ar}{suffix_ar}",
+                title_en=f"⚠️ {count} employees have not checked out",
+                body_en=f"{sample_en}{suffix_en}",
                 data={"type": "reminder_checkout_manager", "date": str(today), "count": str(count)},
             )
 
@@ -191,7 +195,6 @@ def remind_pending_requests():
     يتشغل كل يوم الساعة 11:00 صباحاً.
     بيشوف الطلبات اللي status=pending وعمرها > 24 ساعة.
     بيبعت إشعار للمدير المسؤول.
-    الموديل الحقيقي: EmployeeRequest (requests_app)
     """
     try:
         from django.contrib.auth import get_user_model
@@ -204,7 +207,6 @@ def remind_pending_requests():
 
         pending_by_company = {}
 
-        # جلب كل الطلبات المعلقة منذ أكثر من 24 ساعة
         pending_requests = EmployeeRequest.objects.filter(
             status="pending",
             created_at__lt=threshold,
@@ -223,9 +225,10 @@ def remind_pending_requests():
             except Exception as e:
                 logger.warning(f"Error processing request {req.id}: {e}")
 
-        logger.info(f"remind_pending_requests: found {sum(v['count'] for v in pending_by_company.values())} pending requests")
+        logger.info(
+            f"remind_pending_requests: found {sum(v['count'] for v in pending_by_company.values())} pending requests"
+        )
 
-        # إرسال للمديرين
         for cid, info in pending_by_company.items():
             managers = User.objects.filter(
                 company_id=cid,
@@ -233,12 +236,19 @@ def remind_pending_requests():
                 is_active=True,
             )
             count = info["count"]
-            sample = "، ".join(info["names"][:3])
-            suffix = " وآخرون..." if count > 3 else ""
+
+            sample_ar = "، ".join(info["names"][:3])
+            suffix_ar = " وآخرون..." if count > 3 else ""
+
+            sample_en = ", ".join(info["names"][:3])
+            suffix_en = " and others..." if count > 3 else ""
+
             _send_to_users(
                 managers,
                 title=f"📋 {count} طلب معلق ينتظر موافقتك",
-                body=f"{sample}{suffix} — لم تتم مراجعتها منذ أكثر من 24 ساعة.",
+                body=f"{sample_ar}{suffix_ar} — لم تتم مراجعتها منذ أكثر من 24 ساعة.",
+                title_en=f"📋 {count} pending requests awaiting your approval",
+                body_en=f"{sample_en}{suffix_en} — not reviewed for more than 24 hours.",
                 data={"type": "reminder_pending_requests", "count": str(count)},
             )
 
@@ -264,18 +274,14 @@ def remind_charter_acceptance():
 
         logger.info("remind_charter_acceptance: checking...")
 
-        # جلب كل اللوائح الشغالة
         charters = WorkCharter.objects.filter(is_active=True)
-
         total_notified = 0
 
         for charter in charters:
-            # مين وافق فعلاً
             accepted_user_ids = CharterAcceptance.objects.filter(
                 charter=charter,
             ).values_list("employee__user_id", flat=True)
 
-            # الموظفين في نفس الشركة اللي ماوافقوش
             pending_users = User.objects.filter(
                 company=charter.company,
                 role__in=["employee", "manager", "hr_manager"],
@@ -287,17 +293,17 @@ def remind_charter_acceptance():
 
             count = pending_users.count()
 
-            # إشعار لكل موظف لم يوافق
             for user in pending_users:
                 _send_to_users(
                     User.objects.filter(pk=user.pk),
                     title="📄 تذكير — الموافقة على اللائحة",
-                    body=f"لم توافق على اللائحة التنظيمية بعد. يرجى مراجعتها والموافقة من التطبيق.",
+                    body="لم توافق على اللائحة التنظيمية بعد. يرجى مراجعتها والموافقة من التطبيق.",
+                    title_en="📄 Reminder — Charter Acceptance",
+                    body_en="You have not accepted the work charter yet. Please review and accept it from the app.",
                     data={"type": "reminder_charter", "charter_id": str(charter.id)},
                 )
                 total_notified += 1
 
-            # إشعار للمدير
             managers = User.objects.filter(
                 company=charter.company,
                 role__in=["company_admin", "super_admin"],
@@ -307,6 +313,8 @@ def remind_charter_acceptance():
                 managers,
                 title=f"📄 {count} موظف لم يوافقوا على اللائحة",
                 body="تذكير: يوجد موظفون لم يوافقوا على اللائحة التنظيمية بعد.",
+                title_en=f"📄 {count} employees have not accepted the charter",
+                body_en="Reminder: there are employees who have not accepted the work charter yet.",
                 data={"type": "reminder_charter_manager", "count": str(count)},
             )
 
@@ -321,10 +329,9 @@ def remind_charter_acceptance():
 # ═══════════════════════════════════════════════════════
 def remind_expiring_documents():
     """
-    Placeholder — هيتفعل لما نضيف موديل المستندات في المرحلة 6.
-    يتشغل كل يوم الساعة 8:00 صباحاً.
+    Placeholder — هيتفعل لما نضيف موديل المستندات لاحقاً.
     """
-    logger.info("remind_expiring_documents: placeholder — skipped (Phase 6 not done yet)")
+    logger.info("remind_expiring_documents: placeholder — skipped")
     pass
 
 
@@ -339,10 +346,10 @@ def run_all_reminders(reminder_type="all"):
     logger.info(f"=== MotionHR Reminders — type={reminder_type} ===")
 
     dispatch = {
-        "checkin":   remind_missing_checkin,
-        "checkout":  remind_missing_checkout,
-        "pending":   remind_pending_requests,
-        "charter":   remind_charter_acceptance,
+        "checkin": remind_missing_checkin,
+        "checkout": remind_missing_checkout,
+        "pending": remind_pending_requests,
+        "charter": remind_charter_acceptance,
         "documents": remind_expiring_documents,
     }
 
