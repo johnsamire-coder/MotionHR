@@ -303,3 +303,40 @@ from .api_payroll import employee_payslip
 urlpatterns += [
     path('api/mobile/employee/payslip/', employee_payslip, name='employee-payslip'),
 ]
+
+# ═══════════════════════════════════════
+# Auto Check-in / Check-out - Phase 14
+# ═══════════════════════════════════════
+from .api_auto_checkin import auto_check_in, auto_check_out, auto_checkin_status
+
+urlpatterns += [
+    path('api/mobile/employee/auto-check-in/', auto_check_in, name='auto-check-in'),
+    path('api/mobile/employee/auto-check-out/', auto_check_out, name='auto-check-out'),
+    path('api/mobile/employee/auto-checkin-status/', auto_checkin_status, name='auto-checkin-status'),
+]
+
+# ═══════════════════════════════════════
+# Company Work Policy - Phase 14
+# ═══════════════════════════════════════
+from .api_company_policy import get_work_policy, save_work_policy
+
+urlpatterns += [
+    path('api/mobile/manager/work-policy/', get_work_policy, name='work-policy-get'),
+    path('api/mobile/manager/work-policy/save/', save_work_policy, name='work-policy-save'),
+]
+
+# ── Shifts Management (Phase 16) ──
+from attendance.api_shifts import (
+    manager_shifts_list, manager_shift_create, manager_shift_update,
+    manager_shift_delete, manager_shift_assign, manager_employee_shifts,
+    manager_shift_employees,
+)
+urlpatterns += [
+    path('api/mobile/manager/shifts/', manager_shifts_list),
+    path('api/mobile/manager/shifts/create/', manager_shift_create),
+    path('api/mobile/manager/shifts/<int:shift_id>/update/', manager_shift_update),
+    path('api/mobile/manager/shifts/<int:shift_id>/delete/', manager_shift_delete),
+    path('api/mobile/manager/shifts/<int:shift_id>/employees/', manager_shift_employees),
+    path('api/mobile/manager/shifts/assign/', manager_shift_assign),
+    path('api/mobile/manager/employees/<int:employee_id>/shifts/', manager_employee_shifts),
+]

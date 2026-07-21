@@ -29,3 +29,16 @@ Thumbs.db
 
 # Static files — مش محتاجة على GitHub
 staticfiles/
+
+# Patches قديمة (شغل مؤقت مش جزء من المشروع)
+fix_employee_payment_block.py
+patch_create_emp_final.py
+patch_create_employee.py
+patch_employee_payment_fields.py
+
+# ملفات Seed للـ Demo Data
+seed_demo_data.py
+seed_fix.py
+
+# Backup files من Announcements Fix
+*.broken_backup_*

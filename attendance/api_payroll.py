@@ -1,23 +1,25 @@
 """
-MotionHR - Payroll API (v2 - matches real Attendance model)
+MotionHR - Payroll API (v4 - Phase 15 Payroll Pro)
 """
-from datetime import datetime, date
-from calendar import monthrange
-from decimal import Decimal
-from django.db.models import Sum, Count, Q
+from datetime import datetime
 from django.contrib.auth import get_user_model
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Attendance
+from .payroll_rules import calculate_effective_payroll
 
 User = get_user_model()
 
-DEFAULT_LATE_DEDUCTION_PER_MIN = 1.0
-DEFAULT_ABSENCE_DEDUCTION_PER_DAY = 200.0
-DEFAULT_OVERTIME_RATE_PER_HOUR = 50.0
+DEFAULT_SETTINGS = {
+    'late_deduction_per_minute': 1.0,
+    'absence_deduction_per_day': 200.0,
+    'overtime_rate_per_hour': 50.0,
+    'insurance_mode': 'none',
+    'insurance_fixed_amount': 0.0,
+    'insurance_percent': 0.0,
+}
 
 
 def _check_manager(user):
@@ -30,12 +32,10 @@ def _check_manager(user):
 
 
 def _get_company_employees(user):
-    """جلب موظفي الشركة من موديل Employee"""
     try:
         from employees.models import Employee
     except ImportError:
         return []
-
     company = getattr(user, 'company', None)
     if company:
         return Employee.objects.filter(company=company)
@@ -43,103 +43,84 @@ def _get_company_employees(user):
 
 
 def _parse_month(request):
+    source = request.GET if request.method == 'GET' else request.data
     try:
-        year = int(request.GET.get('year', datetime.now().year))
-        month = int(request.GET.get('month', datetime.now().month))
+        year = int(source.get('year', datetime.now().year))
+        month = int(source.get('month', datetime.now().month))
     except (ValueError, TypeError):
         year = datetime.now().year
         month = datetime.now().month
     return year, month
 
 
-def _calculate_employee_payroll(emp, year, month):
-    """حساب راتب موظف واحد من موديل Attendance المحسوب مسبقاً"""
-    first_day = date(year, month, 1)
-    last_day = date(year, month, monthrange(year, month)[1])
+def _get_lang(request):
+    lang = request.GET.get('lang')
+    if not lang and hasattr(request, 'data'):
+        lang = request.data.get('lang')
+    if lang not in ['ar', 'en']:
+        lang = 'ar'
+    return lang
 
-    attendances = Attendance.objects.filter(
-        employee=emp,
-        date__gte=first_day,
-        date__lte=last_day,
-    ).order_by('date')
 
-    # الملخصات
-    total_work_hours = float(attendances.aggregate(s=Sum('work_hours'))['s'] or 0)
-    total_late_minutes = int(attendances.aggregate(s=Sum('late_minutes'))['s'] or 0)
-    total_overtime_hours = float(attendances.aggregate(s=Sum('overtime_hours'))['s'] or 0)
+def _get_payroll_settings(user):
+    """
+    جيب إعدادات الرواتب من DB أو الافتراضية
+    """
+    try:
+        from .payroll_settings_model import PayrollSettings
+        company = getattr(user, 'company', None)
+        if company:
+            s = PayrollSettings.objects.filter(company=company).first()
+            if s:
+                return {
+                    'late_deduction_per_minute': float(s.late_deduction_per_minute),
+                    'absence_deduction_per_day': float(s.absence_deduction_per_day),
+                    'overtime_rate_per_hour': float(s.overtime_rate_per_hour),
+                    'insurance_mode': getattr(s, 'insurance_mode', 'none'),
+                    'insurance_fixed_amount': float(getattr(s, 'insurance_fixed_amount', 0) or 0),
+                    'insurance_percent': float(getattr(s, 'insurance_percent', 0) or 0),
+                }
+    except Exception:
+        pass
+    return DEFAULT_SETTINGS.copy()
 
-    # عدد الأيام حسب الحالة
-    present_days = attendances.filter(status='present').count()
-    late_days = attendances.filter(status='late').count()
-    absent_days = attendances.filter(status='absent').count()
-    on_leave_days = attendances.filter(status='on_leave').count()
 
-    attended_days = present_days + late_days  # الحضور الفعلي = present + late
-
-    # الحسابات المالية
-    late_deduction = round(total_late_minutes * DEFAULT_LATE_DEDUCTION_PER_MIN, 2)
-    absence_deduction = round(absent_days * DEFAULT_ABSENCE_DEDUCTION_PER_DAY, 2)
-    total_deductions = round(late_deduction + absence_deduction, 2)
-    overtime_bonus = round(total_overtime_hours * DEFAULT_OVERTIME_RATE_PER_HOUR, 2)
-
-    # الراتب الأساسي من موديل الموظف
-    basic_salary = 0
-    for field in ['basic_salary', 'salary', 'monthly_salary']:
-        val = getattr(emp, field, None)
-        if val is not None:
-            try:
-                basic_salary = float(val)
-                break
-            except (ValueError, TypeError):
-                pass
-
-    net_salary = round(basic_salary - total_deductions + overtime_bonus, 2)
-
-    # اسم الموظف
-    emp_name = ''
-    for field in ['full_name', 'name', 'first_name']:
-        val = getattr(emp, field, None)
-        if val:
-            emp_name = str(val)
-            break
-    if not emp_name:
-        user_obj = getattr(emp, 'user', None)
-        if user_obj:
-            emp_name = user_obj.get_full_name() or user_obj.username
-        else:
-            emp_name = f"Employee #{emp.id}"
-
-    # تفاصيل يومية
-    daily_details = []
-    for att in attendances:
-        daily_details.append({
-            'date': att.date.isoformat() if att.date else None,
-            'status': att.status,
-            'check_in': att.check_in_time.strftime('%H:%M') if att.check_in_time else None,
-            'check_out': att.check_out_time.strftime('%H:%M') if att.check_out_time else None,
-            'work_hours': float(att.work_hours or 0),
-            'late_minutes': int(att.late_minutes or 0),
-            'overtime_hours': float(att.overtime_hours or 0),
-        })
-
+def _serialize_summary_row(payroll):
     return {
-        'employee_id': emp.id,
-        'employee_name': emp_name,
-        'basic_salary': basic_salary,
-        'attended_days': attended_days,
-        'present_days': present_days,
-        'late_days': late_days,
-        'absent_days': absent_days,
-        'on_leave_days': on_leave_days,
-        'total_work_hours': round(total_work_hours, 2),
-        'total_late_minutes': total_late_minutes,
-        'overtime_hours': round(total_overtime_hours, 2),
-        'late_deduction': late_deduction,
-        'absence_deduction': absence_deduction,
-        'total_deductions': total_deductions,
-        'overtime_bonus': overtime_bonus,
-        'net_salary': net_salary,
-        'daily_details': daily_details,
+        'employee_id': payroll['employee_id'],
+        'employee_code': payroll.get('employee_code', ''),
+        'employee_name': payroll['employee_name'],
+        'branch_name': payroll.get('branch_name', ''),
+        'department_name': payroll.get('department_name', ''),
+        'job_title_name': payroll.get('job_title_name', ''),
+        'currency': payroll.get('currency', 'EGP'),
+
+        'basic_salary': payroll['basic_salary'],
+        'allowances_total': payroll.get('allowances_total', 0),
+        'overtime_bonus': payroll.get('overtime_bonus', 0),
+        'bonuses_total': payroll.get('bonuses_total', 0),
+        'gross_salary': payroll.get('gross_salary', 0),
+
+        'late_deduction': payroll.get('late_deduction', 0),
+        'absence_deduction': payroll.get('absence_deduction', 0),
+        'insurance_deduction': payroll.get('insurance_deduction', 0),
+        'installments_total': payroll.get('installments_total', 0),
+        'penalties_total': payroll.get('penalties_total', 0),
+        'extra_deductions_total': payroll.get('extra_deductions_total', 0),
+        'total_deductions': payroll['total_deductions'],
+
+        'net_salary': payroll['net_salary'],
+
+        'total_working_days': payroll['total_working_days'],
+        'attended_days': payroll['attended_days'],
+        'present_days': payroll.get('present_days', 0),
+        'absent_days': payroll['absent_days'],
+        'late_days': payroll['late_days'],
+        'mission_days': payroll['mission_days'],
+        'on_leave_days': payroll['on_leave_days'],
+        'total_work_hours': payroll['total_work_hours'],
+        'overtime_hours': payroll['overtime_hours'],
+        'total_late_minutes': payroll.get('total_late_minutes', 0),
     }
 
 
@@ -152,42 +133,43 @@ def payroll_summary(request):
         return Response({'error': 'صلاحية غير كافية'}, status=403)
 
     year, month = _parse_month(request)
+    lang = _get_lang(request)
     employees = _get_company_employees(user)
+    settings = _get_payroll_settings(user)
 
     results = []
     grand_total_salary = 0
-    grand_total_deductions = 0
+    grand_total_allowances = 0
     grand_total_overtime = 0
+    grand_total_bonuses = 0
+    grand_total_deductions = 0
     grand_total_net = 0
 
     for emp in employees:
-        payroll = _calculate_employee_payroll(emp, year, month)
-        results.append({
-            'employee_id': payroll['employee_id'],
-            'employee_name': payroll['employee_name'],
-            'basic_salary': payroll['basic_salary'],
-            'attended_days': payroll['attended_days'],
-            'absent_days': payroll['absent_days'],
-            'late_days': payroll['late_days'],
-            'total_work_hours': payroll['total_work_hours'],
-            'overtime_hours': payroll['overtime_hours'],
-            'total_deductions': payroll['total_deductions'],
-            'overtime_bonus': payroll['overtime_bonus'],
-            'net_salary': payroll['net_salary'],
-        })
+        payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+        results.append(_serialize_summary_row(payroll))
+
         grand_total_salary += payroll['basic_salary']
+        grand_total_allowances += payroll.get('allowances_total', 0)
+        grand_total_overtime += payroll.get('overtime_bonus', 0)
+        grand_total_bonuses += payroll.get('bonuses_total', 0)
         grand_total_deductions += payroll['total_deductions']
-        grand_total_overtime += payroll['overtime_bonus']
         grand_total_net += payroll['net_salary']
 
     return Response({
         'year': year,
         'month': month,
+        'lang': lang,
         'total_employees': len(results),
+
         'grand_total_salary': round(grand_total_salary, 2),
-        'grand_total_deductions': round(grand_total_deductions, 2),
+        'grand_total_allowances': round(grand_total_allowances, 2),
         'grand_total_overtime': round(grand_total_overtime, 2),
+        'grand_total_bonuses': round(grand_total_bonuses, 2),
+        'grand_total_deductions': round(grand_total_deductions, 2),
         'grand_total_net': round(grand_total_net, 2),
+
+        'payroll_settings': settings,
         'employees': results,
     })
 
@@ -201,6 +183,7 @@ def payroll_employee_detail(request):
         return Response({'error': 'صلاحية غير كافية'}, status=403)
 
     year, month = _parse_month(request)
+    lang = _get_lang(request)
     employee_id = request.GET.get('employee_id')
 
     if not employee_id:
@@ -212,11 +195,12 @@ def payroll_employee_detail(request):
     except Exception:
         return Response({'error': 'Employee not found'}, status=404)
 
-    payroll = _calculate_employee_payroll(emp, year, month)
-    return Response({'year': year, 'month': month, **payroll})
+    settings = _get_payroll_settings(user)
+    payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+    return Response({'year': year, 'month': month, 'lang': lang, **payroll})
 
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def payroll_settings(request):
@@ -224,21 +208,68 @@ def payroll_settings(request):
     if not _check_manager(user):
         return Response({'error': 'صلاحية غير كافية'}, status=403)
 
-    return Response({
-        'late_deduction_per_minute': DEFAULT_LATE_DEDUCTION_PER_MIN,
-        'absence_deduction_per_day': DEFAULT_ABSENCE_DEDUCTION_PER_DAY,
-        'overtime_rate_per_hour': DEFAULT_OVERTIME_RATE_PER_HOUR,
-        'note': 'الحسابات تعتمد على بيانات الحضور المسجلة (work_hours, late_minutes, overtime_hours)',
-    })
+    if request.method == 'GET':
+        settings = _get_payroll_settings(user)
+        return Response(settings)
+
+    try:
+        from .payroll_settings_model import PayrollSettings
+        company = getattr(user, 'company', None)
+        data = request.data
+
+        obj, created = PayrollSettings.objects.get_or_create(
+            company=company,
+            defaults={
+                'late_deduction_per_minute': data.get('late_deduction_per_minute', 1.0),
+                'absence_deduction_per_day': data.get('absence_deduction_per_day', 200.0),
+                'overtime_rate_per_hour': data.get('overtime_rate_per_hour', 50.0),
+                'insurance_mode': data.get('insurance_mode', 'none'),
+                'insurance_fixed_amount': data.get('insurance_fixed_amount', 0),
+                'insurance_percent': data.get('insurance_percent', 0),
+            }
+        )
+        if not created:
+            if 'late_deduction_per_minute' in data:
+                obj.late_deduction_per_minute = data['late_deduction_per_minute']
+            if 'absence_deduction_per_day' in data:
+                obj.absence_deduction_per_day = data['absence_deduction_per_day']
+            if 'overtime_rate_per_hour' in data:
+                obj.overtime_rate_per_hour = data['overtime_rate_per_hour']
+            if 'insurance_mode' in data:
+                obj.insurance_mode = data['insurance_mode']
+            if 'insurance_fixed_amount' in data:
+                obj.insurance_fixed_amount = data['insurance_fixed_amount']
+            if 'insurance_percent' in data:
+                obj.insurance_percent = data['insurance_percent']
+            obj.save()
+
+        return Response({
+            'status': 'saved',
+            'late_deduction_per_minute': float(obj.late_deduction_per_minute),
+            'absence_deduction_per_day': float(obj.absence_deduction_per_day),
+            'overtime_rate_per_hour': float(obj.overtime_rate_per_hour),
+            'insurance_mode': getattr(obj, 'insurance_mode', 'none'),
+            'insurance_fixed_amount': float(getattr(obj, 'insurance_fixed_amount', 0) or 0),
+            'insurance_percent': float(getattr(obj, 'insurance_percent', 0) or 0),
+        })
+    except Exception as e:
+        return Response({
+            'status': 'saved_default',
+            **DEFAULT_SETTINGS,
+            'note': str(e),
+        })
 
 
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_payslip(request):
-    """كشف راتب الموظف لنفسه"""
+    """
+    كشف راتب الموظف لنفسه
+    """
     user = request.user
     year, month = _parse_month(request)
+    lang = _get_lang(request)
 
     try:
         from employees.models import Employee
@@ -246,5 +277,6 @@ def employee_payslip(request):
     except Exception:
         return Response({'error': 'Employee not found'}, status=404)
 
-    payroll = _calculate_employee_payroll(emp, year, month)
-    return Response({'year': year, 'month': month, **payroll})
+    settings = _get_payroll_settings(user)
+    payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+    return Response({'year': year, 'month': month, 'lang': lang, **payroll})

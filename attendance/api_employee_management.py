@@ -277,6 +277,34 @@ def manager_create_employee(request):
         password_input = str(data.get("password", "")).strip()
         employee_code_input = str(data.get("employee_code", "")).strip()
 
+        # Optional extra fields
+        first_name_en       = str(data.get("first_name_en", "")).strip()
+        last_name_en        = str(data.get("last_name_en", "")).strip()
+        nationality         = str(data.get("nationality", "")).strip()
+        marital_status      = str(data.get("marital_status", "single")).strip()
+        religion            = str(data.get("religion", "")).strip()
+        contract_type       = str(data.get("contract_type", "permanent")).strip()
+        contract_end_date_str = str(data.get("contract_end_date", "")).strip()
+        address             = str(data.get("address", "")).strip()
+        city                = str(data.get("city", "")).strip()
+        country             = str(data.get("country", "EG")).strip()
+        bank_name           = str(data.get("bank_name", "")).strip()
+        bank_account        = str(data.get("bank_account", "")).strip()
+        iban                = str(data.get("iban", "")).strip()
+        has_insurance       = bool(data.get("has_insurance", False))
+        insurance_number    = str(data.get("insurance_number", "")).strip()
+        emergency_contact_name     = str(data.get("emergency_contact_name", "")).strip()
+        emergency_contact_relation = str(data.get("emergency_contact_relation", "")).strip()
+        emergency_contact_phone    = str(data.get("emergency_contact_phone", "")).strip()
+        currency            = str(data.get("currency", "EGP")).strip()
+        language            = str(data.get("language", "ar")).strip()
+
+        # Payment method fields
+        salary_payment_method      = str(data.get("salary_payment_method", "none")).strip()
+        instapay_phone             = str(data.get("instapay_phone", "")).strip()
+        wallet_phone               = str(data.get("wallet_phone", "")).strip()
+        wallet_provider            = str(data.get("wallet_provider", "")).strip()
+
         # Validation details
         if len(first_name_ar) < 2:
             return Response({"success": False, "error": "الاسم الأول قصير جداً"}, status=400)
@@ -309,6 +337,13 @@ def manager_create_employee(request):
             hire_date = datetime.strptime(hire_date_str, "%Y-%m-%d").date()
         except Exception:
             return Response({"success": False, "error": "تاريخ التعيين غير صحيح، استخدم YYYY-MM-DD"}, status=400)
+
+        contract_end_date = None
+        if contract_end_date_str:
+            try:
+                contract_end_date = datetime.strptime(contract_end_date_str, "%Y-%m-%d").date()
+            except Exception:
+                pass
 
         # Branch / Department / JobTitle belong to company
         from companies.models import Branch, Department
@@ -403,6 +438,30 @@ def manager_create_employee(request):
                 job_title=job_title,
                 direct_manager=direct_manager,
                 basic_salary=basic_salary_val,
+                currency=currency if currency else "EGP",
+                language=language if language in ("ar", "en") else "ar",
+                nationality=nationality if nationality else "مصري",
+                marital_status=marital_status if marital_status in ("single","married","divorced","widowed") else "single",
+                religion=religion if religion in ("muslim","christian","other") else None,
+                contract_type=contract_type if contract_type in ("permanent","temporary","training","freelance","part_time") else "permanent",
+                contract_end_date=contract_end_date,
+                address=address if address else None,
+                city=city if city else None,
+                bank_name=bank_name if bank_name else None,
+                bank_account=bank_account if bank_account else None,
+                iban=iban if iban else None,
+                has_insurance=has_insurance,
+                insurance_number=insurance_number if insurance_number else None,
+                emergency_contact_name=emergency_contact_name if emergency_contact_name else None,
+                emergency_contact_relation=emergency_contact_relation if emergency_contact_relation else None,
+                emergency_contact_phone=emergency_contact_phone if emergency_contact_phone else None,
+                first_name_en=first_name_en if first_name_en else None,
+                last_name_en=last_name_en if last_name_en else None,
+                country=country if country else "EG",
+                salary_payment_method=salary_payment_method if salary_payment_method in ("none","bank","instapay","wallet") else "none",
+                instapay_phone=instapay_phone if instapay_phone else None,
+                wallet_phone=wallet_phone if wallet_phone else None,
+                wallet_provider=wallet_provider if wallet_provider else None,
                 status="active",
             )
 
@@ -434,6 +493,25 @@ def manager_create_employee(request):
                 "direct_manager": direct_manager.full_name_ar if direct_manager else None,
                 "basic_salary": float(employee.basic_salary or 0),
                 "currency": employee.currency,
+                "country": getattr(employee, "country", "EG"),
+                "salary_payment_method": getattr(employee, "salary_payment_method", "none"),
+                "instapay_phone": getattr(employee, "instapay_phone", ""),
+                "wallet_phone": getattr(employee, "wallet_phone", ""),
+                "wallet_provider": getattr(employee, "wallet_provider", ""),
+                "bank_name": getattr(employee, "bank_name", ""),
+                "bank_account": getattr(employee, "bank_account", ""),
+                "iban": getattr(employee, "iban", ""),
+                "has_insurance": getattr(employee, "has_insurance", False),
+                "insurance_number": getattr(employee, "insurance_number", ""),
+                "emergency_contact_name": getattr(employee, "emergency_contact_name", ""),
+                "emergency_contact_phone": getattr(employee, "emergency_contact_phone", ""),
+                "emergency_contact_relation": getattr(employee, "emergency_contact_relation", ""),
+                "address": getattr(employee, "address", ""),
+                "city": getattr(employee, "city", ""),
+                "nationality": getattr(employee, "nationality", ""),
+                "marital_status": getattr(employee, "marital_status", "single"),
+                "first_name_en": getattr(employee, "first_name_en", ""),
+                "last_name_en": getattr(employee, "last_name_en", ""),
                 "company": company.name_ar,
             },
             "credentials": {

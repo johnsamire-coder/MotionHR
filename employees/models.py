@@ -305,8 +305,24 @@ class Employee(TenantModel):
         null=True,
         verbose_name='IBAN'
     )
-    
-    # ═══════════════════════════════
+
+    # Payment method
+    PAYMENT_METHOD_CHOICES = [
+        ('none', 'Without method'),
+        ('bank', 'Bank account'),
+        ('instapay', 'InstaPay'),
+        ('wallet', 'E-wallet'),
+    ]
+    salary_payment_method = models.CharField(
+        max_length=20,
+        choices=PAYMENT_METHOD_CHOICES,
+        default='none',
+        blank=True,
+    )
+    instapay_phone = models.CharField(max_length=20, blank=True, null=True)
+    wallet_phone = models.CharField(max_length=20, blank=True, null=True)
+    wallet_provider = models.CharField(max_length=50, blank=True, null=True)
+
     # بيانات التأمينات
     # ═══════════════════════════════
     insurance_number = models.CharField(
