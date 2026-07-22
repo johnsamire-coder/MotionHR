@@ -178,7 +178,7 @@ class Branch(models.Model):
         on_delete=models.SET_NULL,
         blank=True,
         null=True,
-        related_name='departments',
+        related_name='branch_default_roles',
         verbose_name='الدور الافتراضي'
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -239,7 +239,7 @@ class Department(models.Model):
         on_delete=models.SET_NULL,
         blank=True,
         null=True,
-        related_name='departments',
+        related_name='department_default_roles',
         verbose_name='الدور الافتراضي'
     )
 
