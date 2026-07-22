@@ -349,6 +349,7 @@ from attendance.api_permissions import (
     list_roles, create_role, update_role, delete_role,
     assign_role_to_user, remove_role_from_user,
     user_permissions, set_user_override, remove_user_override,
+    api_export_permissions,
     company_users_list,
 )
 
@@ -364,6 +365,7 @@ urlpatterns += [
     path('api/mobile/manager/permissions/users/<int:user_id>/', user_permissions),
     path('api/mobile/manager/permissions/override/set/', set_user_override),
     path('api/mobile/manager/permissions/override/remove/', remove_user_override),
+    path('api/mobile/manager/permissions/export/', api_export_permissions, name='permissions-export'),
 ]
 
 # ══════════════════════════════════════

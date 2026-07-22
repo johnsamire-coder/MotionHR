@@ -330,3 +330,51 @@ def company_users_list(request):
         })
 
     return Response({'users': data})
+
+def api_export_permissions(request):
+    """تصدير الصلاحيات للموبايل"""
+    from rest_framework.authtoken.models import Token
+    from django.http import JsonResponse
+
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if not auth_header.startswith('Token '):
+        return JsonResponse({'error': 'غير مصرح'}, status=401)
+
+    token_key = auth_header.split(' ')[1]
+    try:
+        token = Token.objects.select_related('user').get(key=token_key)
+        user = token.user
+    except Token.DoesNotExist:
+        return JsonResponse({'error': 'token غير صالح'}, status=401)
+
+    if not is_company_admin(user):
+        return JsonResponse({'error': 'غير مصرح'}, status=403)
+    from accounts.permissions_export import (
+        export_role_pdf, export_role_excel,
+        export_user_pdf, export_user_excel,
+        export_company_pdf, export_company_excel
+    )
+    from accounts.permissions_models import CustomRole
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    target_type = request.GET.get('type') # role, user, company
+    target_id = request.GET.get('id')
+    format_type = request.GET.get('format', 'pdf') # pdf, excel
+
+    company = user.company
+
+    if target_type == 'role':
+        role = CustomRole.objects.filter(id=target_id, company=company).first()
+        if not role: return Response({'error': 'role not found'}, status=404)
+        return export_role_pdf(role) if format_type == 'pdf' else export_role_excel(role)
+
+    elif target_type == 'user':
+        target_user = User.objects.filter(id=target_id, company=company).first()
+        if not target_user: return Response({'error': 'user not found'}, status=404)
+        return export_user_pdf(target_user) if format_type == 'pdf' else export_user_excel(target_user)
+
+    elif target_type == 'company':
+        return export_company_pdf(company) if format_type == 'pdf' else export_company_excel(company)
+
+    return Response({'error': 'invalid params'}, status=400)
