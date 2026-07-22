@@ -403,6 +403,14 @@ def manager_create_employee(request):
 
         # ── Transaction: Create User + Employee ──
         with transaction.atomic():
+            # تحديد الدور بناءً على الدور الافتراضي للقسم
+            user_role = "employee"
+            if hasattr(department, 'default_role') and department.default_role:
+                from accounts.permissions_models import UserRole
+                _dept_role = department.default_role
+            else:
+                _dept_role = None
+
             # Create User
             user = User.objects.create(
                 username=username,
@@ -410,13 +418,18 @@ def manager_create_employee(request):
                 last_name=last_name_ar,
                 email=email if email else "",
                 phone=phone,
-                role="employee",
+                role=user_role,
                 company=company,
                 must_change_password=True,
                 is_active=True,
             )
             user.set_password(password_plain)
             user.save()
+
+            # تعيين الدور الافتراضي للقسم تلقائياً
+            if _dept_role:
+                from accounts.permissions_models import UserRole
+                UserRole.objects.get_or_create(user=user, role=_dept_role)
 
             # Create Employee
             employee = Employee.objects.create(
