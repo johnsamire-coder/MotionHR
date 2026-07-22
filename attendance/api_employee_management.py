@@ -950,6 +950,28 @@ def manager_transfer_employee(request, employee_id):
                     target_employee.department = new_dept
                     update_fields.append("department")
                     changes.append(f"الإدارة: {old_name} → {new_dept.name_ar}")
+
+                    # تغيير الدور تلقائي لما القسم يتغيّر
+                    try:
+                        from accounts.permissions_models import UserRole, CustomRole
+                        user = target_employee.user
+                        if new_dept.default_role:
+                            # امسح الأدوار القديمة المرتبطة بأقسام تانية
+                            old_dept_roles = CustomRole.objects.filter(
+                                company=target_employee.company
+                            ).values_list('id', flat=True)
+                            UserRole.objects.filter(
+                                user=user,
+                                role_id__in=old_dept_roles
+                            ).delete()
+                            # ضيف الدور الجديد
+                            UserRole.objects.get_or_create(
+                                user=user,
+                                role=new_dept.default_role
+                            )
+                            changes.append(f"الدور: تغيّر تلقائياً لـ {new_dept.default_role.name}")
+                    except Exception:
+                        pass
             except Exception as e:
                 pass
 
