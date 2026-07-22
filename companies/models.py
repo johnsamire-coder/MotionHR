@@ -173,6 +173,14 @@ class Branch(models.Model):
         default=True,
         verbose_name='نشط'
     )
+    default_role = models.ForeignKey(
+        'accounts.CustomRole',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='departments',
+        verbose_name='الدور الافتراضي'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
