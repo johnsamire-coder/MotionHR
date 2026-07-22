@@ -340,3 +340,29 @@ urlpatterns += [
     path('api/mobile/manager/shifts/assign/', manager_shift_assign),
     path('api/mobile/manager/employees/<int:employee_id>/shifts/', manager_employee_shifts),
 ]
+
+# ══════════════════════════════════════
+# Permissions APIs - Sprint 5
+# ══════════════════════════════════════
+from attendance.api_permissions import (
+    list_available_permissions,
+    list_roles, create_role, update_role, delete_role,
+    assign_role_to_user, remove_role_from_user,
+    user_permissions, set_user_override, remove_user_override,
+    company_users_list,
+)
+
+urlpatterns += [
+    path('api/mobile/manager/permissions/available/', list_available_permissions),
+    path('api/mobile/manager/permissions/roles/', list_roles),
+    path('api/mobile/manager/permissions/roles/create/', create_role),
+    path('api/mobile/manager/permissions/roles/<int:role_id>/update/', update_role),
+    path('api/mobile/manager/permissions/roles/<int:role_id>/delete/', delete_role),
+    path('api/mobile/manager/permissions/assign-role/', assign_role_to_user),
+    path('api/mobile/manager/permissions/remove-role/', remove_role_from_user),
+    path('api/mobile/manager/permissions/users/', company_users_list),
+    path('api/mobile/manager/permissions/users/<int:user_id>/', user_permissions),
+    path('api/mobile/manager/permissions/override/set/', set_user_override),
+    path('api/mobile/manager/permissions/override/remove/', remove_user_override),
+]
+
