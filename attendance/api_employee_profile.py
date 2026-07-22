@@ -72,6 +72,7 @@ def _serialize_employee_list(emp):
         "department": _name_of(emp.department),
         "branch": _name_of(emp.branch),
         "phone": emp.phone,
+        "national_id": emp.national_id,
         "status": emp.get_status_display() if hasattr(emp, "get_status_display") else None,
         "status_code": emp.status if hasattr(emp, "status") else None,
     }

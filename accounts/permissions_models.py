@@ -32,6 +32,14 @@ PERMISSION_CHOICES = [
     # ── إعدادات الشركة ──
     ('company.view',       'عرض إعدادات الشركة'),
     ('company.edit',       'تعديل إعدادات الشركة'),
+    # ── الأقسام ──
+    ('departments.view',             'عرض الأقسام'),
+    ('departments.add',              'إضافة قسم'),
+    ('departments.edit',             'تعديل قسم'),
+    ('departments.delete',           'حذف قسم'),
+    ('departments.transfer_employees', 'نقل موظفين بين الأقسام'),
+    # ── إنهاء الخدمة ──
+    ('offboarding.execute',          'إنهاء خدمة موظف أو مدير'),
 ]
 
 # مستويات الوصول
