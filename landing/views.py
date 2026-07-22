@@ -245,7 +245,7 @@ def free_trial_register(request):
     from datetime import date, timedelta
     from django.contrib import messages
 
-    TRIAL_DAYS = 14
+    TRIAL_DAYS = 7
 
     if request.method == 'POST':
         company_name = (request.POST.get('company_name') or '').strip()

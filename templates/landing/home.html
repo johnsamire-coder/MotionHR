@@ -1,349 +1,224 @@
 {% load static %}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MotionHR - نظام إدارة الموارد البشرية الأذكى</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Cairo', sans-serif; }
+    :root { --primary: #06B6D4; --primary-dark: #0891B2; --success: #10B981; --dark: #0D2E4D; --darker: #0F172A; --light: #F8FAFC; --gray: #64748B; }
+    html { scroll-behavior: smooth; }
+    body { background: #FFFFFF; color: var(--darker); overflow-x: hidden; }
+    .hero { min-height: calc(100vh - 70px); background: linear-gradient(135deg, #0D2E4D 0%, #0F172A 60%, #0E7490 100%); display: flex; align-items: center; position: relative; overflow: hidden; padding: 60px 24px; }
+    .hero::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle at 70% 50%, rgba(6,182,212,0.15) 0%, transparent 50%); animation: pulse-bg 6s ease-in-out infinite; }
+    @keyframes pulse-bg { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.8; } }
+    .hero-container { max-width: 1200px; margin: 0 auto; position: relative; z-index: 2; text-align: center; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 50px; color: #06B6D4; font-size: 0.9rem; font-weight: 700; margin-bottom: 24px; }
+    .hero-title { font-size: clamp(2rem, 6vw, 4rem); font-weight: 900; color: white; line-height: 1.15; margin-bottom: 20px; }
+    .hero-title-highlight { background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero-subtitle { font-size: clamp(1rem, 2vw, 1.35rem); color: rgba(255, 255, 255, 0.85); line-height: 1.7; margin-bottom: 40px; max-width: 700px; margin-left: auto; margin-right: auto; }
+    .hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
+    .btn-primary-hero, .btn-secondary-hero { display: inline-flex; align-items: center; gap: 10px; padding: 16px 32px; border-radius: 12px; font-size: 1.05rem; font-weight: 700; text-decoration: none; transition: all 0.3s ease; cursor: pointer; border: none; }
+    .btn-primary-hero { background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%); color: white; box-shadow: 0 8px 24px rgba(6, 182, 212, 0.4); }
+    .btn-primary-hero:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(6, 182, 212, 0.5); color: white; }
+    .btn-secondary-hero { background: rgba(255, 255, 255, 0.1); color: white; border: 2px solid rgba(255, 255, 255, 0.3); backdrop-filter: blur(10px); }
+    .btn-secondary-hero:hover { background: rgba(255, 255, 255, 0.2); border-color: white; transform: translateY(-3px); color: white; }
+    .hero-trust { display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; color: rgba(255, 255, 255, 0.8); font-size: 0.9rem; }
+    .hero-trust-item { display: flex; align-items: center; gap: 8px; }
+    .hero-trust-item svg { color: #10B981; }
+    .stats { background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%); padding: 60px 24px; }
+    .stats-container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 30px; text-align: center; }
+    .stat-item { padding: 20px; }
+    .stat-number { font-size: clamp(2.5rem, 5vw, 3.5rem); font-weight: 900; background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; margin-bottom: 10px; }
+    .stat-label { font-size: 1rem; color: var(--darker); font-weight: 600; }
+    .section { padding: 100px 24px; }
+    .section-container { max-width: 1200px; margin: 0 auto; }
+    .section-header { text-align: center; margin-bottom: 60px; }
+    .section-badge { display: inline-block; padding: 6px 16px; background: rgba(6, 182, 212, 0.1); color: var(--primary); border-radius: 50px; font-size: 0.85rem; font-weight: 700; margin-bottom: 16px; }
+    .section-title { font-size: clamp(1.75rem, 4vw, 2.75rem); font-weight: 900; color: var(--darker); margin-bottom: 16px; }
+    .section-subtitle { font-size: 1.1rem; color: var(--gray); max-width: 700px; margin: 0 auto; line-height: 1.7; }
+    .why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+    .why-card { background: white; padding: 32px 24px; border-radius: 20px; text-align: center; transition: all 0.3s ease; border: 1px solid #E2E8F0; }
+    .why-card:hover { transform: translateY(-8px); box-shadow: 0 20px 40px rgba(6, 182, 212, 0.15); border-color: var(--primary); }
+    .why-icon { width: 70px; height: 70px; margin: 0 auto 20px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 2rem; background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%); color: white; }
+    .why-title { font-size: 1.2rem; font-weight: 800; color: var(--darker); margin-bottom: 10px; }
+    .why-description { font-size: 0.95rem; color: var(--gray); line-height: 1.6; }
+    .features { background: linear-gradient(135deg, #F8FAFC 0%, #F0F9FF 100%); }
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+    .feature-card { background: white; padding: 32px; border-radius: 20px; transition: all 0.3s ease; display: flex; gap: 20px; align-items: flex-start; }
+    .feature-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(6, 182, 212, 0.15); }
+    .feature-icon { flex-shrink: 0; width: 56px; height: 56px; border-radius: 14px; background: rgba(6, 182, 212, 0.1); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+    .feature-content h3 { font-size: 1.15rem; font-weight: 800; color: var(--darker); margin-bottom: 8px; }
+    .feature-content p { font-size: 0.95rem; color: var(--gray); line-height: 1.6; }
+    .steps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 30px; }
+    .step-card { text-align: center; padding: 30px 20px; }
+    .step-number { width: 60px; height: 60px; margin: 0 auto 20px; background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 900; box-shadow: 0 8px 20px rgba(6, 182, 212, 0.3); }
+    .step-title { font-size: 1.2rem; font-weight: 800; color: var(--darker); margin-bottom: 10px; }
+    .step-description { font-size: 0.95rem; color: var(--gray); line-height: 1.6; }
+    .testimonials { background: linear-gradient(135deg, #F8FAFC 0%, #F0F9FF 100%); }
+    .testimonials-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+    .testimonial-card { background: white; padding: 30px; border-radius: 20px; border: 1px solid #E2E8F0; }
+    .testimonial-quote { font-size: 1rem; color: var(--darker); line-height: 1.7; margin-bottom: 20px; font-style: italic; }
+    .testimonial-author { display: flex; align-items: center; gap: 12px; }
+    .testimonial-avatar { width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 1.2rem; }
+    .testimonial-info h4 { font-size: 1rem; font-weight: 700; color: var(--darker); margin-bottom: 2px; }
+    .testimonial-info p { font-size: 0.85rem; color: var(--gray); }
+    .testimonial-rating { color: #FBBF24; margin-bottom: 10px; }
+    .faq-list { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+    .faq-item { background: white; border: 1px solid #E2E8F0; border-radius: 12px; overflow: hidden; transition: all 0.3s ease; }
+    .faq-item.active { border-color: var(--primary); box-shadow: 0 4px 12px rgba(6, 182, 212, 0.1); }
+    .faq-question { width: 100%; padding: 20px 24px; background: none; border: none; text-align: right; font-family: 'Cairo', sans-serif; font-size: 1rem; font-weight: 700; color: var(--darker); cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .faq-icon { transition: transform 0.3s ease; color: var(--primary); flex-shrink: 0; }
+    .faq-item.active .faq-icon { transform: rotate(180deg); }
+    .faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+    .faq-answer-inner { padding: 0 24px 20px; color: var(--gray); line-height: 1.7; }
+    .faq-item.active .faq-answer { max-height: 300px; }
+    .cta-final { background: linear-gradient(135deg, #0D2E4D 0%, #0F172A 100%); padding: 80px 24px; text-align: center; position: relative; overflow: hidden; }
+    .cta-final::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 50% 50%, rgba(6,182,212,0.15) 0%, transparent 70%); }
+    .cta-final-container { max-width: 800px; margin: 0 auto; position: relative; z-index: 2; }
+    .cta-final-title { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 900; color: white; margin-bottom: 20px; }
+    .cta-final-subtitle { font-size: 1.1rem; color: rgba(255, 255, 255, 0.85); margin-bottom: 40px; }
+    .cta-final-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  {% include 'landing/_navbar.html' %}
 
-<!-- ═══════════════════════════════════════════ -->
-<!-- MotionHR Navbar - Modern & Bilingual        -->
-<!-- Powered by JS Solutions                     -->
-<!-- ═══════════════════════════════════════════ -->
-
-<nav class="motionhr-navbar" id="motionhrNavbar">
-  <div class="nav-container">
-
-    <!-- Logo -->
-    <a href="{% url 'landing:home' %}" class="nav-logo">
-      <div class="logo-icon">M</div>
-      <div class="logo-text">
-        <span class="logo-name">MotionHR</span>
-        <span class="logo-tagline" data-ar="من JS Solutions" data-en="by JS Solutions">من JS Solutions</span>
+  <section class="hero" id="home">
+    <div class="hero-container">
+      <div class="hero-badge"><span>🎉</span><span data-ar="نظام مصري 100%" data-en="100% Egyptian Solution">نظام مصري 100%</span></div>
+      <h1 class="hero-title"><span data-ar="أدر شركتك من" data-en="Manage Your Business from">أدر شركتك من</span> <span class="hero-title-highlight" data-ar="موبايلك" data-en="Your Phone">موبايلك</span></h1>
+      <p class="hero-subtitle" data-ar="نظام إدارة موارد بشرية متكامل مع تتبع ميداني حي وتقارير احترافية وإدارة مرتبات تلقائية - كل ده في مكان واحد" data-en="Complete HR management system with live field tracking, professional reports, and automated payroll - all in one place">نظام إدارة موارد بشرية متكامل مع تتبع ميداني حي وتقارير احترافية وإدارة مرتبات تلقائية - كل ده في مكان واحد</p>
+      <div class="hero-actions">
+        <a href="{% url 'landing:free_trial' %}" class="btn-primary-hero"><span>🚀</span><span data-ar="احصل على عرض سعر" data-en="Get Free Quote">احصل على عرض سعر</span></a>
+        <a href="{% url 'landing:coming_soon' %}" class="btn-secondary-hero"><span>📱</span><span data-ar="حمّل التطبيق" data-en="Download App">حمّل التطبيق</span></a>
       </div>
-    </a>
-
-    <!-- Desktop Menu -->
-    <div class="nav-menu" id="navMenu">
-      <a href="#home" class="nav-link" data-ar="الرئيسية" data-en="Home">الرئيسية</a>
-      <a href="#features" class="nav-link" data-ar="المميزات" data-en="Features">المميزات</a>
-      <a href="#how-it-works" class="nav-link" data-ar="كيف يعمل" data-en="How It Works">كيف يعمل</a>
-      <a href="#faq" class="nav-link" data-ar="الأسئلة الشائعة" data-en="FAQ">الأسئلة الشائعة</a>
-      <a href="{% url 'landing:contact' %}" class="nav-link" data-ar="تواصل معنا" data-en="Contact">تواصل معنا</a>
+      <div class="hero-trust">
+        <div class="hero-trust-item"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><span data-ar="14 يوم تجربة مجانية" data-en="14 Days Free Trial">14 يوم تجربة مجانية</span></div>
+        <div class="hero-trust-item"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><span data-ar="بدون بطاقة ائتمان" data-en="No Credit Card">بدون بطاقة ائتمان</span></div>
+        <div class="hero-trust-item"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><span data-ar="إعداد في 30 دقيقة" data-en="Setup in 30 Minutes">إعداد في 30 دقيقة</span></div>
+      </div>
     </div>
+  </section>
 
-    <!-- Actions -->
-    <div class="nav-actions">
-
-      <!-- Language Toggle -->
-      <button class="lang-toggle" onclick="toggleLanguage()" title="Change Language">
-        <span id="langLabel">EN</span>
-      </button>
-
-      {% if request.user.is_authenticated %}
-        <a href="{% url 'dashboard' %}" class="btn-dashboard" data-ar="لوحة التحكم" data-en="Dashboard">لوحة التحكم</a>
-      {% else %}
-        <a href="{% url 'login' %}" class="btn-login" data-ar="تسجيل الدخول" data-en="Login">تسجيل الدخول</a>
-        <a href="{% url 'landing:free_trial' %}" class="btn-quote" data-ar="احصل على عرض سعر" data-en="Get Quote">احصل على عرض سعر</a>
-      {% endif %}
-
-      <!-- Mobile Menu Toggle -->
-      <button class="mobile-toggle" onclick="toggleMobileMenu()" aria-label="Menu">
-        <span></span>
-        <span></span>
-        <span></span>
-      </button>
-
+  <section class="stats">
+    <div class="stats-container">
+      <div class="stat-item"><div class="stat-number">14+</div><div class="stat-label" data-ar="يوم تجربة مجانية" data-en="Days Free Trial">يوم تجربة مجانية</div></div>
+      <div class="stat-item"><div class="stat-number">100%</div><div class="stat-label" data-ar="مصري وعربي" data-en="Egyptian & Arabic">مصري وعربي</div></div>
+      <div class="stat-item"><div class="stat-number">24/7</div><div class="stat-label" data-ar="دعم فني" data-en="Support Available">دعم فني</div></div>
+      <div class="stat-item"><div class="stat-number">99%</div><div class="stat-label" data-ar="رضا العملاء" data-en="Client Satisfaction">رضا العملاء</div></div>
     </div>
-  </div>
-</nav>
+  </section>
 
-<style>
-/* ═══════════════════════════════════════════ */
-/* Navbar Styles                                */
-/* ═══════════════════════════════════════════ */
+  <section class="section">
+    <div class="section-container">
+      <div class="section-header">
+        <div class="section-badge" data-ar="⭐ لماذا MotionHR؟" data-en="⭐ Why MotionHR?">⭐ لماذا MotionHR؟</div>
+        <h2 class="section-title" data-ar="4 أسباب تخليك تختارنا" data-en="4 Reasons to Choose Us">4 أسباب تخليك تختارنا</h2>
+        <p class="section-subtitle" data-ar="MotionHR مصمم مخصوص للشركات العربية بأحدث التقنيات" data-en="MotionHR is designed specifically for Arab businesses">MotionHR مصمم مخصوص للشركات العربية بأحدث التقنيات</p>
+      </div>
+      <div class="why-grid">
+        <div class="why-card"><div class="why-icon">⏰</div><h3 class="why-title" data-ar="توفير الوقت" data-en="Save Time">توفير الوقت</h3><p class="why-description" data-ar="وفر ساعات يومياً في إدارة الحضور والمرتبات والتقارير" data-en="Save hours daily on attendance, payroll, and reports">وفر ساعات يومياً في إدارة الحضور والمرتبات والتقارير</p></div>
+        <div class="why-card"><div class="why-icon">💰</div><h3 class="why-title" data-ar="توفير التكاليف" data-en="Save Costs">توفير التكاليف</h3><p class="why-description" data-ar="قلل تكاليف الـ HR بنسبة تصل لـ 60% مقارنة بالطرق التقليدية" data-en="Reduce HR costs by up to 60%">قلل تكاليف الـ HR بنسبة تصل لـ 60% مقارنة بالطرق التقليدية</p></div>
+        <div class="why-card"><div class="why-icon">🎨</div><h3 class="why-title" data-ar="واجهة سهلة" data-en="Easy Interface">واجهة سهلة</h3><p class="why-description" data-ar="واجهة بسيطة يقدر يستخدمها أي موظف بدون تدريب معقد" data-en="Simple interface any employee can use">واجهة بسيطة يقدر يستخدمها أي موظف بدون تدريب معقد</p></div>
+        <div class="why-card"><div class="why-icon">🔒</div><h3 class="why-title" data-ar="آمن 100%" data-en="100% Secure">آمن 100%</h3><p class="why-description" data-ar="بياناتك محمية بأعلى معايير الأمان والتشفير العالمية" data-en="Your data is protected with the highest security standards">بياناتك محمية بأعلى معايير الأمان والتشفير العالمية</p></div>
+      </div>
+    </div>
+  </section>
 
-.motionhr-navbar {
-  background: rgba(13, 46, 77, 0.98);
-  backdrop-filter: blur(20px);
-  padding: 12px 0;
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  border-bottom: 1px solid rgba(6, 182, 212, 0.15);
-  transition: all 0.3s ease;
-}
+  <section class="section features" id="features">
+    <div class="section-container">
+      <div class="section-header">
+        <div class="section-badge" data-ar="🎁 المميزات" data-en="🎁 Features">🎁 المميزات</div>
+        <h2 class="section-title" data-ar="كل اللي تحتاجه في مكان واحد" data-en="Everything You Need in One Place">كل اللي تحتاجه في مكان واحد</h2>
+        <p class="section-subtitle" data-ar="مميزات احترافية تخلي إدارة شركتك أسهل من أي وقت" data-en="Professional features that make managing your business easier">مميزات احترافية تخلي إدارة شركتك أسهل من أي وقت</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card"><div class="feature-icon">🗺️</div><div class="feature-content"><h3 data-ar="تتبع ميداني GPS" data-en="GPS Field Tracking">تتبع ميداني GPS</h3><p data-ar="تابع موظفيك الميدانيين على الخريطة في الوقت الفعلي مع تسجيل كامل للحركة" data-en="Track field employees on the map in real-time">تابع موظفيك الميدانيين على الخريطة في الوقت الفعلي مع تسجيل كامل للحركة</p></div></div>
+        <div class="feature-card"><div class="feature-icon">📱</div><div class="feature-content"><h3 data-ar="موبايل + ويب" data-en="Mobile + Web">موبايل + ويب</h3><p data-ar="تطبيق موبايل احترافي (Android + iOS) مع نسخة ويب من أي كمبيوتر" data-en="Professional mobile app plus web version">تطبيق موبايل احترافي (Android + iOS) مع نسخة ويب من أي كمبيوتر</p></div></div>
+        <div class="feature-card"><div class="feature-icon">📊</div><div class="feature-content"><h3 data-ar="تقارير احترافية" data-en="Professional Reports">تقارير احترافية</h3><p data-ar="تقارير PDF و Excel جاهزة بضغطة زر - حضور، إجازات، مرتبات، وأكتر" data-en="Ready PDF and Excel reports at one click">تقارير PDF و Excel جاهزة بضغطة زر - حضور، إجازات، مرتبات، وأكتر</p></div></div>
+        <div class="feature-card"><div class="feature-icon">💰</div><div class="feature-content"><h3 data-ar="مرتبات تلقائية" data-en="Automated Payroll">مرتبات تلقائية</h3><p data-ar="حساب المرتبات تلقائياً من بيانات الحضور مع البدلات والخصومات" data-en="Automatic salary calculation from attendance data">حساب المرتبات تلقائياً من بيانات الحضور مع البدلات والخصومات</p></div></div>
+        <div class="feature-card"><div class="feature-icon">📥</div><div class="feature-content"><h3 data-ar="استيراد من Excel" data-en="Excel Import">استيراد من Excel</h3><p data-ar="ارفع موظفيك كلهم مرة واحدة من ملف Excel بضغطة زر - بدون إدخال يدوي" data-en="Upload all employees at once from Excel file">ارفع موظفيك كلهم مرة واحدة من ملف Excel بضغطة زر - بدون إدخال يدوي</p></div></div>
+        <div class="feature-card"><div class="feature-icon">🌐</div><div class="feature-content"><h3 data-ar="عربي + إنجليزي" data-en="Arabic + English">عربي + إنجليزي</h3><p data-ar="النظام يدعم اللغتين بالكامل مع RTL - كل موظف يختار لغته" data-en="Full support for both languages with RTL">النظام يدعم اللغتين بالكامل مع RTL - كل موظف يختار لغته</p></div></div>
+      </div>
+    </div>
+  </section>
 
-.nav-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
+  <section class="section" id="how-it-works">
+    <div class="section-container">
+      <div class="section-header">
+        <div class="section-badge" data-ar="💡 كيف يعمل" data-en="💡 How It Works">💡 كيف يعمل</div>
+        <h2 class="section-title" data-ar="ابدأ في 4 خطوات بس" data-en="Start in Just 4 Steps">ابدأ في 4 خطوات بس</h2>
+        <p class="section-subtitle" data-ar="عملية سهلة وسريعة تخليك جاهز للاستخدام في نفس اليوم" data-en="Simple and fast process">عملية سهلة وسريعة تخليك جاهز للاستخدام في نفس اليوم</p>
+      </div>
+      <div class="steps-grid">
+        <div class="step-card"><div class="step-number">1</div><h3 class="step-title" data-ar="طلب عرض سعر" data-en="Request Quote">طلب عرض سعر</h3><p class="step-description" data-ar="املأ نموذج بسيط وفريقنا هيتواصل معاك خلال 24 ساعة" data-en="Fill a simple form">املأ نموذج بسيط وفريقنا هيتواصل معاك خلال 24 ساعة</p></div>
+        <div class="step-card"><div class="step-number">2</div><h3 class="step-title" data-ar="احصل على حسابك" data-en="Get Your Account">احصل على حسابك</h3><p class="step-description" data-ar="نجهزلك حساب الشركة + التطبيق فوراً" data-en="We prepare your account instantly">نجهزلك حساب الشركة + التطبيق فوراً</p></div>
+        <div class="step-card"><div class="step-number">3</div><h3 class="step-title" data-ar="ارفع موظفيك" data-en="Upload Employees">ارفع موظفيك</h3><p class="step-description" data-ar="ارفع موظفيك من Excel بضغطة زر بدون إدخال يدوي" data-en="Upload employees from Excel">ارفع موظفيك من Excel بضغطة زر بدون إدخال يدوي</p></div>
+        <div class="step-card"><div class="step-number">4</div><h3 class="step-title" data-ar="ابدأ الاستخدام" data-en="Start Using">ابدأ الاستخدام</h3><p class="step-description" data-ar="نظام جاهز للاستخدام في دقايق - ابدأ إدارة شركتك فوراً" data-en="System ready in minutes">نظام جاهز للاستخدام في دقايق - ابدأ إدارة شركتك فوراً</p></div>
+      </div>
+    </div>
+  </section>
 
-/* Logo */
-.nav-logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-decoration: none;
-  color: white;
-}
+  <section class="section testimonials">
+    <div class="section-container">
+      <div class="section-header">
+        <div class="section-badge" data-ar="💬 آراء عملائنا" data-en="💬 Client Testimonials">💬 آراء عملائنا</div>
+        <h2 class="section-title" data-ar="شركات بتثق في MotionHR" data-en="Companies Trust MotionHR">شركات بتثق في MotionHR</h2>
+      </div>
+      <div class="testimonials-grid">
+        <div class="testimonial-card"><div class="testimonial-rating">⭐⭐⭐⭐⭐</div><p class="testimonial-quote" data-ar="MotionHR غيرلي طريقة إدارة الشركة تماماً. التتبع الميداني وفرلي ساعات يومياً" data-en="MotionHR completely changed how I manage my company">MotionHR غيرلي طريقة إدارة الشركة تماماً. التتبع الميداني وفرلي ساعات يومياً</p><div class="testimonial-author"><div class="testimonial-avatar">أ</div><div class="testimonial-info"><h4 data-ar="أحمد محمد" data-en="Ahmed Mohamed">أحمد محمد</h4><p data-ar="مدير عام - شركة النجاح للمقاولات" data-en="CEO - Al-Nagah Contracting">مدير عام - شركة النجاح للمقاولات</p></div></div></div>
+        <div class="testimonial-card"><div class="testimonial-rating">⭐⭐⭐⭐⭐</div><p class="testimonial-quote" data-ar="أفضل نظام HR جربته! التقارير احترافية والمرتبات بتحسب لوحدها" data-en="Best HR system I have tried">أفضل نظام HR جربته! التقارير احترافية والمرتبات بتحسب لوحدها</p><div class="testimonial-author"><div class="testimonial-avatar">م</div><div class="testimonial-info"><h4 data-ar="منى خالد" data-en="Mona Khaled">منى خالد</h4><p data-ar="مديرة موارد بشرية - مجموعة النيل" data-en="HR Manager - Nile Group">مديرة موارد بشرية - مجموعة النيل</p></div></div></div>
+        <div class="testimonial-card"><div class="testimonial-rating">⭐⭐⭐⭐⭐</div><p class="testimonial-quote" data-ar="الاستيراد من Excel وفر علينا أسبوع كامل! رفعنا 150 موظف في 5 دقايق بس" data-en="Excel import saved us a full week">الاستيراد من Excel وفر علينا أسبوع كامل! رفعنا 150 موظف في 5 دقايق بس</p><div class="testimonial-author"><div class="testimonial-avatar">ك</div><div class="testimonial-info"><h4 data-ar="كريم عادل" data-en="Karim Adel">كريم عادل</h4><p data-ar="مدير عمليات - شركة الأمل التجارية" data-en="Operations Manager - Al-Amal Trading">مدير عمليات - شركة الأمل التجارية</p></div></div></div>
+      </div>
+    </div>
+  </section>
 
-.logo-icon {
-  width: 44px;
-  height: 44px;
-  background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Cairo', sans-serif;
-  font-weight: 900;
-  font-size: 1.5rem;
-  color: white;
-  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
-}
+  <section class="section" id="faq">
+    <div class="section-container">
+      <div class="section-header">
+        <div class="section-badge" data-ar="❓ الأسئلة الشائعة" data-en="❓ FAQ">❓ الأسئلة الشائعة</div>
+        <h2 class="section-title" data-ar="إجابات على أسئلتك" data-en="Answers to Your Questions">إجابات على أسئلتك</h2>
+      </div>
+      <div class="faq-list">
+        <div class="faq-item" onclick="toggleFAQ(this)"><button class="faq-question"><span data-ar="هل يمكنني تجربة النظام مجاناً قبل الشراء؟" data-en="Can I try the system for free?">هل يمكنني تجربة النظام مجاناً قبل الشراء؟</span><svg class="faq-icon" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 10l5 5 5-5z"/></svg></button><div class="faq-answer"><div class="faq-answer-inner" data-ar="نعم، 14 يوم مجاناً كامل بدون قيود. بدون بطاقة ائتمان، وإذا لم يعجبك، يمكن استرداد أموالك في أي وقت خلال هذه المدة." data-en="Yes, 14 days completely free with no restrictions">نعم، 14 يوم مجاناً كامل بدون قيود. بدون بطاقة ائتمان، وإذا لم يعجبك، يمكن استرداد أموالك في أي وقت خلال هذه المدة.</div></div></div>
+        <div class="faq-item" onclick="toggleFAQ(this)"><button class="faq-question"><span data-ar="كم من الوقت يستغرق إعداد النظام لشركتي؟" data-en="How long does setup take?">كم من الوقت يستغرق إعداد النظام لشركتي؟</span><svg class="faq-icon" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 10l5 5 5-5z"/></svg></button><div class="faq-answer"><div class="faq-answer-inner" data-ar="أقل من 30 دقيقة. نظامنا سهل جداً، ونقدم تدريب مجاني كامل لفريقك بالإضافة إلى فيديوهات شرح مفصلة." data-en="Less than 30 minutes">أقل من 30 دقيقة. نظامنا سهل جداً، ونقدم تدريب مجاني كامل لفريقك بالإضافة إلى فيديوهات شرح مفصلة.</div></div></div>
+        <div class="faq-item" onclick="toggleFAQ(this)"><button class="faq-question"><span data-ar="هل بياناتي آمنة وسرية؟" data-en="Is my data safe?">هل بياناتي آمنة وسرية؟</span><svg class="faq-icon" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 10l5 5 5-5z"/></svg></button><div class="faq-answer"><div class="faq-answer-inner" data-ar="نعم، نستخدم أعلى معايير الأمان: تشفير SSL كامل، سيرفرات مؤمنة، نسخ احتياطية يومية، ودعم فني 24/7." data-en="Yes, highest security standards">نعم، نستخدم أعلى معايير الأمان: تشفير SSL كامل، سيرفرات مؤمنة، نسخ احتياطية يومية، ودعم فني 24/7.</div></div></div>
+        <div class="faq-item" onclick="toggleFAQ(this)"><button class="faq-question"><span data-ar="هل النظام يناسب شركتي؟" data-en="Does the system fit my company?">هل النظام يناسب شركتي؟</span><svg class="faq-icon" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 10l5 5 5-5z"/></svg></button><div class="faq-answer"><div class="faq-answer-inner" data-ar="يناسب من 5 موظفين لـ 1000+ موظف. النظام مصمم للنمو معك." data-en="Suitable from 5 to 1000+ employees">يناسب من 5 موظفين لـ 1000+ موظف. النظام مصمم للنمو معك.</div></div></div>
+        <div class="faq-item" onclick="toggleFAQ(this)"><button class="faq-question"><span data-ar="هل النظام يعمل على الموبايل والويب؟" data-en="Mobile and web?">هل النظام يعمل على الموبايل والويب؟</span><svg class="faq-icon" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 10l5 5 5-5z"/></svg></button><div class="faq-answer"><div class="faq-answer-inner" data-ar="نعم، متكامل تماماً: تطبيق موبايل احترافي، نسخة ويب من أي كمبيوتر، وكل بياناتك متزامنة في الوقت الفعلي." data-en="Yes, fully integrated">نعم، متكامل تماماً: تطبيق موبايل احترافي، نسخة ويب من أي كمبيوتر، وكل بياناتك متزامنة في الوقت الفعلي.</div></div></div>
+        <div class="faq-item" onclick="toggleFAQ(this)"><button class="faq-question"><span data-ar="هل النظام يدعم اللغة العربية والإنجليزية؟" data-en="Arabic and English?">هل النظام يدعم اللغة العربية والإنجليزية؟</span><svg class="faq-icon" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 10l5 5 5-5z"/></svg></button><div class="faq-answer"><div class="faq-answer-inner" data-ar="نعم، النظام يدعم اللغتين بالكامل مع RTL. موظفوك يختارون لغتهم المفضلة." data-en="Yes, both languages fully supported">نعم، النظام يدعم اللغتين بالكامل مع RTL. موظفوك يختارون لغتهم المفضلة.</div></div></div>
+        <div class="faq-item" onclick="toggleFAQ(this)"><button class="faq-question"><span data-ar="ما هي طرق الدفع المتاحة؟" data-en="Payment methods?">ما هي طرق الدفع المتاحة؟</span><svg class="faq-icon" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 10l5 5 5-5z"/></svg></button><div class="faq-answer"><div class="faq-answer-inner" data-ar="فودافون كاش، إنستاباي، تحويل بنكي، بطاقات فيزا/ماستركارد. دفع شهري أو سنوي (خصم 17% للسنوي)." data-en="Multiple flexible options">فودافون كاش، إنستاباي، تحويل بنكي، بطاقات فيزا/ماستركارد. دفع شهري أو سنوي (خصم 17% للسنوي).</div></div></div>
+      </div>
+    </div>
+  </section>
 
-.logo-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1;
-}
+  <section class="cta-final">
+    <div class="cta-final-container">
+      <h2 class="cta-final-title" data-ar="جاهز تبدأ مع MotionHR؟" data-en="Ready to Start?">جاهز تبدأ مع MotionHR؟</h2>
+      <p class="cta-final-subtitle" data-ar="انضم لمئات الشركات اللي بتدير أعمالها بذكاء" data-en="Join hundreds of companies">انضم لمئات الشركات اللي بتدير أعمالها بذكاء</p>
+      <div class="cta-final-actions">
+        <a href="{% url 'landing:free_trial' %}" class="btn-primary-hero"><span>🚀</span><span data-ar="احصل على عرض سعر" data-en="Get Free Quote">احصل على عرض سعر</span></a>
+        <a href="https://wa.me/201501551593" class="btn-secondary-hero" target="_blank"><span>💬</span><span data-ar="واتساب" data-en="WhatsApp">واتساب</span></a>
+      </div>
+    </div>
+  </section>
 
-.logo-name {
-  font-family: 'Cairo', sans-serif;
-  font-weight: 900;
-  font-size: 1.35rem;
-  color: white;
-  letter-spacing: -0.5px;
-}
+  {% include 'landing/_footer.html' %}
 
-.logo-tagline {
-  font-family: 'Cairo', sans-serif;
-  font-size: 0.7rem;
-  color: rgba(6, 182, 212, 0.9);
-  font-weight: 500;
-  margin-top: 2px;
-}
-
-/* Menu */
-.nav-menu {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-  justify-content: center;
-}
-
-.nav-link {
-  font-family: 'Cairo', sans-serif;
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.85);
-  text-decoration: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.nav-link:hover {
-  color: #06B6D4;
-  background: rgba(6, 182, 212, 0.1);
-}
-
-/* Actions */
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* Language Toggle */
-.lang-toggle {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-family: 'Cairo', sans-serif;
-  font-weight: 700;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 55px;
-}
-
-.lang-toggle:hover {
-  background: rgba(6, 182, 212, 0.2);
-  border-color: #06B6D4;
-  color: #06B6D4;
-}
-
-/* Buttons */
-.btn-login,
-.btn-dashboard,
-.btn-quote {
-  font-family: 'Cairo', sans-serif;
-  font-weight: 700;
-  font-size: 0.9rem;
-  padding: 10px 20px;
-  border-radius: 8px;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.btn-login {
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.btn-login:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: white;
-  color: white;
-}
-
-.btn-dashboard,
-.btn-quote {
-  background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
-}
-
-.btn-dashboard:hover,
-.btn-quote:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4);
-  color: white;
-}
-
-/* Mobile Toggle */
-.mobile-toggle {
-  display: none;
-  flex-direction: column;
-  gap: 5px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-}
-
-.mobile-toggle span {
-  width: 24px;
-  height: 2px;
-  background: white;
-  border-radius: 2px;
-  transition: all 0.3s;
-}
-
-/* Responsive */
-@media (max-width: 992px) {
-  .nav-menu {
-    position: fixed;
-    top: 70px;
-    left: 0;
-    right: 0;
-    background: rgba(13, 46, 77, 0.98);
-    backdrop-filter: blur(20px);
-    flex-direction: column;
-    padding: 20px;
-    gap: 8px;
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
-    border-bottom: 1px solid rgba(6, 182, 212, 0.15);
-  }
-
-  .nav-menu.active {
-    max-height: 500px;
-  }
-
-  .nav-link {
-    width: 100%;
-    text-align: center;
-    padding: 12px;
-  }
-
-  .mobile-toggle {
-    display: flex;
-  }
-
-  .btn-login {
-    display: none;
-  }
-}
-
-@media (max-width: 576px) {
-  .logo-tagline {
-    display: none;
-  }
-
-  .btn-quote,
-  .btn-dashboard {
-    padding: 8px 14px;
-    font-size: 0.8rem;
-  }
-}
-</style>
-
-<script>
-// ═══════════════════════════════════════════
-// Navbar Interactions
-// ═══════════════════════════════════════════
-
-// Language Toggle
-function toggleLanguage() {
-  const html = document.documentElement;
-  const currentLang = html.getAttribute('lang') || 'ar';
-  const newLang = currentLang === 'ar' ? 'en' : 'ar';
-  const newDir = newLang === 'ar' ? 'rtl' : 'ltr';
-
-  // Update HTML attributes
-  html.setAttribute('lang', newLang);
-  html.setAttribute('dir', newDir);
-
-  // Update all elements with data-ar and data-en
-  document.querySelectorAll('[data-ar][data-en]').forEach(el => {
-    el.textContent = el.getAttribute('data-' + newLang);
-  });
-
-  // Update button label
-  const langLabel = document.getElementById('langLabel');
-  if (langLabel) {
-    langLabel.textContent = newLang === 'ar' ? 'EN' : 'عربي';
-  }
-
-  // Save preference
-  localStorage.setItem('motionhr_lang', newLang);
-}
-
-// Load saved language preference on page load
-document.addEventListener('DOMContentLoaded', function() {
-  const savedLang = localStorage.getItem('motionhr_lang');
-  if (savedLang && savedLang !== 'ar') {
-    toggleLanguage();
-  }
-});
-
-// Mobile Menu Toggle
-function toggleMobileMenu() {
-  const menu = document.getElementById('navMenu');
-  menu.classList.toggle('active');
-}
-
-// Close mobile menu when clicking a link
-document.querySelectorAll('.nav-link').forEach(link => {
-  link.addEventListener('click', () => {
-    document.getElementById('navMenu').classList.remove('active');
-  });
-});
-
-// Add shadow on scroll
-window.addEventListener('scroll', function() {
-  const navbar = document.getElementById('motionhrNavbar');
-  if (window.scrollY > 20) {
-    navbar.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
-  } else {
-    navbar.style.boxShadow = 'none';
-  }
-});
-</script>
+  <script>
+    function toggleFAQ(item) {
+      const isActive = item.classList.contains('active');
+      document.querySelectorAll('.faq-item').forEach(el => el.classList.remove('active'));
+      if (!isActive) item.classList.add('active');
+    }
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e) {
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      });
+    });
+  </script>
+</body>
+</html>

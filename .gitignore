@@ -42,3 +42,6 @@ seed_fix.py
 
 # Backup files من Announcements Fix
 *.broken_backup_*
+
+# Broken backup files (temporary)
+*.broken_backup
