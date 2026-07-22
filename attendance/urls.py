@@ -366,3 +366,32 @@ urlpatterns += [
     path('api/mobile/manager/permissions/override/remove/', remove_user_override),
 ]
 
+# ══════════════════════════════════════
+# Departments APIs
+# ══════════════════════════════════════
+from attendance.api_departments import (
+    list_departments, add_department, edit_department,
+    delete_department, transfer_employees_between_departments,
+)
+
+urlpatterns += [
+    path('api/mobile/manager/departments/list/', list_departments),
+    path('api/mobile/manager/departments/add/', add_department),
+    path('api/mobile/manager/departments/<int:dept_id>/edit/', edit_department),
+    path('api/mobile/manager/departments/<int:dept_id>/delete/', delete_department),
+    path('api/mobile/manager/departments/transfer-employees/', transfer_employees_between_departments),
+]
+
+# ══════════════════════════════════════
+# Offboarding APIs
+# ══════════════════════════════════════
+from attendance.api_offboarding import (
+    offboard_employee, reactivate_employee, offboarded_employees,
+)
+
+urlpatterns += [
+    path('api/mobile/manager/offboarding/<int:employee_id>/', offboard_employee),
+    path('api/mobile/manager/offboarding/<int:employee_id>/reactivate/', reactivate_employee),
+    path('api/mobile/manager/offboarding/list/', offboarded_employees),
+]
+
