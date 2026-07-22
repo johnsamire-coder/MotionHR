@@ -554,9 +554,8 @@ def manager_reset_employee_password(request, employee_id):
 
         requester_employee = Employee.objects.select_related("company").filter(user=request.user).first()
 
-        allowed_groups = {"company_admin", "manager", "hr_manager", "super_admin"}
-        user_groups = set(request.user.groups.values_list("name", flat=True))
-        is_allowed = request.user.is_superuser or bool(user_groups.intersection(allowed_groups))
+        allowed_groups = {"company_admin", "hr_manager", "super_admin"}
+        is_allowed = request.user.is_superuser or (request.user.role in allowed_groups)
 
         if not is_allowed:
             return Response(
@@ -650,9 +649,8 @@ def manager_update_employee(request, employee_id):
 
         requester_employee = Employee.objects.select_related("company").filter(user=request.user).first()
 
-        allowed_groups = {"company_admin", "manager", "hr_manager", "super_admin"}
-        user_groups = set(request.user.groups.values_list("name", flat=True))
-        is_allowed = request.user.is_superuser or bool(user_groups.intersection(allowed_groups))
+        allowed_groups = {"company_admin", "hr_manager", "super_admin"}
+        is_allowed = request.user.is_superuser or (request.user.role in allowed_groups)
 
         if not is_allowed:
             return Response(
@@ -850,9 +848,8 @@ def manager_transfer_employee(request, employee_id):
 
         requester_employee = Employee.objects.select_related("company").filter(user=request.user).first()
 
-        allowed_groups = {"company_admin", "manager", "hr_manager", "super_admin"}
-        user_groups = set(request.user.groups.values_list("name", flat=True))
-        is_allowed = request.user.is_superuser or bool(user_groups.intersection(allowed_groups))
+        allowed_groups = {"company_admin", "hr_manager", "super_admin"}
+        is_allowed = request.user.is_superuser or (request.user.role in allowed_groups)
 
         if not is_allowed:
             return Response(

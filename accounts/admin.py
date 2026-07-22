@@ -104,3 +104,81 @@ class UserAnnouncementReadAdmin(admin.ModelAdmin):
     list_filter = ['read_at']
     search_fields = ['user__username', 'announcement__title']
     readonly_fields = ['user', 'announcement', 'read_at']
+
+
+from .permissions_models import CustomRole, RolePermission, UserRole, UserPermissionOverride
+
+
+class RolePermissionInline(admin.TabularInline):
+    model = RolePermission
+    extra = 1
+
+
+class UserRoleInline(admin.TabularInline):
+    model = UserRole
+    extra = 1
+
+
+@admin.register(CustomRole)
+class CustomRoleAdmin(admin.ModelAdmin):
+    list_display = ['name', 'company', 'is_active', 'created_at']
+    list_filter = ['company', 'is_active']
+    search_fields = ['name', 'company__name_ar', 'company__name_en']
+    inlines = [RolePermissionInline]
+
+
+@admin.register(UserRole)
+class UserRoleAdmin(admin.ModelAdmin):
+    list_display = ['user', 'role', 'assigned_at']
+    list_filter = ['role__company', 'role']
+    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'role__name']
+
+
+@admin.register(UserPermissionOverride)
+class UserPermissionOverrideAdmin(admin.ModelAdmin):
+    list_display = ['user', 'permission', 'scope', 'is_granted']
+    list_filter = ['permission', 'scope', 'is_granted']
+    search_fields = ['user__username', 'user__first_name', 'user__last_name']
+
+
+# ══════════════════════════════════════
+# Export Actions للأدمن
+# ══════════════════════════════════════
+from django.shortcuts import get_object_or_404
+from .permissions_export import (
+    export_role_excel, export_role_pdf,
+    export_user_excel, export_user_pdf,
+    export_company_excel, export_company_pdf,
+)
+from .permissions_models import CustomRole, RolePermission, UserRole, UserPermissionOverride
+
+
+def action_export_role_excel(modeladmin, request, queryset):
+    role = queryset.first()
+    if role:
+        return export_role_excel(role)
+action_export_role_excel.short_description = "⬇️ تحميل Excel للدور"
+
+
+def action_export_role_pdf(modeladmin, request, queryset):
+    role = queryset.first()
+    if role:
+        return export_role_pdf(role)
+action_export_role_pdf.short_description = "⬇️ تحميل PDF للدور"
+
+
+def action_export_user_excel(modeladmin, request, queryset):
+    user = queryset.first()
+    if user:
+        return export_user_excel(user)
+action_export_user_excel.short_description = "⬇️ تحميل Excel لصلاحيات المستخدم"
+
+
+def action_export_user_pdf(modeladmin, request, queryset):
+    user = queryset.first()
+    if user:
+        return export_user_pdf(user)
+action_export_user_pdf.short_description = "⬇️ تحميل PDF لصلاحيات المستخدم"
+
+CustomRoleAdmin.actions = [action_export_role_excel, action_export_role_pdf]
+
