@@ -39,8 +39,8 @@ def scope_label(code):
 # ══════════════════════════════════════
 # PDF Arabic Helpers
 # ══════════════════════════════════════
-PDF_FONT_NAME = "CairoRegular"
-PDF_FONT_PATH = Path("/var/www/motionhr/core/fonts/Cairo-Regular.ttf")
+PDF_FONT_NAME = "NotoNaskhArabic"
+PDF_FONT_PATH = Path("/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Regular.ttf")
 
 def _ensure_pdf_font():
     if PDF_FONT_NAME in pdfmetrics.getRegisteredFontNames():
