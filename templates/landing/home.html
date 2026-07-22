@@ -1,897 +1,349 @@
-{% load custom_filters %}
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ page_title }}</title>
-  <meta name="description" content="MotionHR - نظام إدارة الموارد البشرية الأذكى لكل الشركات في مصر والعالم العربي">
+{% load static %}
 
-  <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<!-- ═══════════════════════════════════════════ -->
+<!-- MotionHR Navbar - Modern & Bilingual        -->
+<!-- Powered by JS Solutions                     -->
+<!-- ═══════════════════════════════════════════ -->
 
-  <!-- Bootstrap RTL -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<nav class="motionhr-navbar" id="motionhrNavbar">
+  <div class="nav-container">
 
-  <style>
-    * { font-family: 'Cairo', sans-serif; }
-
-    :root {
-      --primary: #06B6D4;
-      --primary-dark: #0891B2;
-      --dark: #0f172a;
-    }
-
-    /* ── Navbar ── */
-    .navbar-landing {
-      background: rgba(15, 23, 42, 0.95);
-      backdrop-filter: blur(10px);
-      padding: 16px 0;
-      position: sticky;
-      top: 0;
-      z-index: 1000;
-    }
-
-    .navbar-brand-text {
-      font-size: 1.5rem;
-      font-weight: 900;
-      color: var(--primary) !important;
-      letter-spacing: -1px;
-    }
-
-    .nav-link-landing {
-      color: rgba(255,255,255,0.8) !important;
-      font-weight: 600;
-      transition: color 0.2s;
-      padding: 8px 16px !important;
-    }
-
-    .nav-link-landing:hover { color: var(--primary) !important; }
-
-    /* ── Hero ── */
-    .hero {
-      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 60%, #0e7490 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(circle at 70% 50%, rgba(6,182,212,0.1) 0%, transparent 60%);
-      animation: pulse-bg 4s ease-in-out infinite;
-    }
-
-    @keyframes pulse-bg {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-    }
-
-    .hero-title {
-      font-size: clamp(2rem, 5vw, 3.5rem);
-      font-weight: 900;
-      color: white;
-      line-height: 1.2;
-    }
-
-    .hero-subtitle {
-      font-size: clamp(1rem, 2vw, 1.3rem);
-      color: rgba(255,255,255,0.75);
-      line-height: 1.7;
-    }
-
-    .hero-badge {
-      display: inline-block;
-      padding: 6px 16px;
-      background: rgba(6,182,212,0.2);
-      border: 1px solid rgba(6,182,212,0.4);
-      border-radius: 50px;
-      color: var(--primary);
-      font-size: 0.85rem;
-      font-weight: 700;
-      margin-bottom: 20px;
-    }
-
-    .btn-hero-primary {
-      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-      color: white;
-      padding: 14px 36px;
-      border-radius: 12px;
-      font-weight: 700;
-      font-size: 1.1rem;
-      border: none;
-      box-shadow: 0 8px 25px rgba(6,182,212,0.4);
-      transition: all 0.3s;
-      text-decoration: none;
-    }
-
-    .btn-hero-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 30px rgba(6,182,212,0.5);
-      color: white;
-    }
-
-    .btn-hero-secondary {
-      background: rgba(255,255,255,0.1);
-      color: white;
-      padding: 14px 36px;
-      border-radius: 12px;
-      font-weight: 700;
-      font-size: 1.1rem;
-      border: 1px solid rgba(255,255,255,0.3);
-      transition: all 0.3s;
-      text-decoration: none;
-    }
-
-    .btn-hero-secondary:hover {
-      background: rgba(255,255,255,0.2);
-      color: white;
-    }
-
-    /* ── Stats ── */
-    .stat-card {
-      text-align: center;
-      padding: 20px;
-      border-radius: 16px;
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.15);
-      backdrop-filter: blur(10px);
-    }
-
-    .stat-value {
-      font-size: 2rem;
-      font-weight: 900;
-      color: var(--primary);
-    }
-
-    .stat-label {
-      color: rgba(255,255,255,0.7);
-      font-size: 0.9rem;
-    }
-
-    /* ── Features ── */
-    .section-title {
-      font-size: clamp(1.5rem, 3vw, 2.2rem);
-      font-weight: 900;
-      color: #1f2937;
-    }
-
-    .feature-card {
-      border-radius: 16px;
-      padding: 28px;
-      border: 1px solid #e5e7eb;
-      transition: all 0.3s;
-      height: 100%;
-    }
-
-    .feature-card:hover {
-      border-color: var(--primary);
-      box-shadow: 0 8px 30px rgba(6,182,212,0.15);
-      transform: translateY(-4px);
-    }
-
-    .feature-icon {
-      width: 56px;
-      height: 56px;
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      margin-bottom: 16px;
-    }
-
-    /* ── Pricing ── */
-    .pricing-card {
-      border-radius: 20px;
-      padding: 32px;
-      border: 2px solid #e5e7eb;
-      transition: all 0.3s;
-      height: 100%;
-      position: relative;
-    }
-
-    .pricing-card.popular {
-      border-color: var(--primary);
-      box-shadow: 0 12px 40px rgba(6,182,212,0.2);
-    }
-
-    .popular-badge {
-      position: absolute;
-      top: -14px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--primary);
-      color: white;
-      padding: 4px 20px;
-      border-radius: 50px;
-      font-size: 0.8rem;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    .price-number {
-      font-size: 2.5rem;
-      font-weight: 900;
-    }
-
-    .feature-check {
-      color: #10b981;
-    }
-
-    .feature-x {
-      color: #d1d5db;
-    }
-
-    /* ── CTA ── */
-    .cta-section {
-      background: linear-gradient(135deg, var(--dark), #1e3a5f);
-      padding: 80px 0;
-    }
-
-    /* ── Footer ── */
-    .footer {
-      background: #0f172a;
-      color: rgba(255,255,255,0.6);
-      padding: 40px 0 20px;
-    }
-
-    .footer a {
-      color: rgba(255,255,255,0.6);
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-
-    .footer a:hover { color: var(--primary); }
-
-    /* ── Animations ── */
-    .fade-in {
-      opacity: 0;
-      transform: translateY(30px);
-      transition: all 0.6s ease;
-    }
-
-    .fade-in.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    /* ── Mockup ── */
-    .mockup-container {
-      position: relative;
-      z-index: 1;
-    }
-
-    .mockup-screen {
-      background: #1e293b;
-      border-radius: 16px;
-      padding: 20px;
-      border: 1px solid rgba(255,255,255,0.1);
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    }
-
-    .mockup-bar {
-      height: 32px;
-      background: #0f172a;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      padding: 0 12px;
-      gap: 6px;
-    }
-
-    .mockup-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-    }
-
-    .mockup-stat {
-      background: #0f172a;
-      border-radius: 10px;
-      padding: 14px;
-      margin-bottom: 8px;
-    }
-  </style>
-</head>
-
-<body>
-
-<!-- ════════════════════════════════════════
-     NAVBAR
-════════════════════════════════════════ -->
-<nav class="navbar-landing">
-  <div class="container">
-    <div class="d-flex align-items-center justify-content-between">
-
-      <!-- Logo -->
-      <a href="{% url 'landing:home' %}" class="navbar-brand-text text-decoration-none">
-        MotionHR
-        <span style="font-size:0.6rem; color:rgba(255,255,255,0.4);
-                     font-weight:400; vertical-align:super;">
-          v1.0
-        </span>
-      </a>
-
-      <!-- Nav Links (Desktop) -->
-      <div class="d-none d-md-flex align-items-center gap-1">
-        <a href="{% url 'landing:home' %}#features" class="nav-link-landing">المميزات</a>
-        <a href="{% url 'landing:pricing' %}"        class="nav-link-landing">الأسعار</a>
-        <a href="{% url 'landing:about' %}"          class="nav-link-landing">عن النظام</a>
-        <a href="{% url 'landing:contact' %}"        class="nav-link-landing">تواصل معنا</a>
+    <!-- Logo -->
+    <a href="{% url 'landing:home' %}" class="nav-logo">
+      <div class="logo-icon">M</div>
+      <div class="logo-text">
+        <span class="logo-name">MotionHR</span>
+        <span class="logo-tagline" data-ar="من JS Solutions" data-en="by JS Solutions">من JS Solutions</span>
       </div>
+    </a>
 
-      <!-- CTA Buttons -->
-      <div class="d-flex align-items-center gap-2">
-        <a href="{% url 'login' %}"
-           class="btn btn-sm btn-outline-light rounded-pill px-3">
-          تسجيل الدخول
-        </a>
-        <a href="{% url 'landing:contact' %}"
-           class="btn btn-sm rounded-pill px-3 text-white"
-           style="background:var(--primary); font-weight:700;">
-          اطلب عرضاً
-        </a>
-      </div>
+    <!-- Desktop Menu -->
+    <div class="nav-menu" id="navMenu">
+      <a href="#home" class="nav-link" data-ar="الرئيسية" data-en="Home">الرئيسية</a>
+      <a href="#features" class="nav-link" data-ar="المميزات" data-en="Features">المميزات</a>
+      <a href="#how-it-works" class="nav-link" data-ar="كيف يعمل" data-en="How It Works">كيف يعمل</a>
+      <a href="#faq" class="nav-link" data-ar="الأسئلة الشائعة" data-en="FAQ">الأسئلة الشائعة</a>
+      <a href="{% url 'landing:contact' %}" class="nav-link" data-ar="تواصل معنا" data-en="Contact">تواصل معنا</a>
+    </div>
+
+    <!-- Actions -->
+    <div class="nav-actions">
+
+      <!-- Language Toggle -->
+      <button class="lang-toggle" onclick="toggleLanguage()" title="Change Language">
+        <span id="langLabel">EN</span>
+      </button>
+
+      {% if request.user.is_authenticated %}
+        <a href="{% url 'dashboard' %}" class="btn-dashboard" data-ar="لوحة التحكم" data-en="Dashboard">لوحة التحكم</a>
+      {% else %}
+        <a href="{% url 'login' %}" class="btn-login" data-ar="تسجيل الدخول" data-en="Login">تسجيل الدخول</a>
+        <a href="{% url 'landing:free_trial' %}" class="btn-quote" data-ar="احصل على عرض سعر" data-en="Get Quote">احصل على عرض سعر</a>
+      {% endif %}
+
+      <!-- Mobile Menu Toggle -->
+      <button class="mobile-toggle" onclick="toggleMobileMenu()" aria-label="Menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
 
     </div>
   </div>
 </nav>
 
+<style>
+/* ═══════════════════════════════════════════ */
+/* Navbar Styles                                */
+/* ═══════════════════════════════════════════ */
 
-<!-- ════════════════════════════════════════
-     HERO SECTION
-════════════════════════════════════════ -->
-<section class="hero">
-  <div class="container position-relative" style="z-index:1;">
-    <div class="row align-items-center g-5">
+.motionhr-navbar {
+  background: rgba(13, 46, 77, 0.98);
+  backdrop-filter: blur(20px);
+  padding: 12px 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  border-bottom: 1px solid rgba(6, 182, 212, 0.15);
+  transition: all 0.3s ease;
+}
 
-      <!-- Text -->
-      <div class="col-lg-6">
-        <div class="hero-badge">
-          <i class="bi bi-stars me-1"></i>
-          نظام HR الأذكى لإدارة فريقك
-        </div>
-        <h1 class="hero-title mb-4">
-          أدِر فريقك
-          <span style="color:var(--primary);">بذكاء</span>
-          <br>وتابعهم في
-          <span style="color:var(--primary);">الوقت الفعلي</span>
-        </h1>
-        <p class="hero-subtitle mb-5">
-          MotionHR نظام إدارة موارد بشرية عصري مصمم لكل الشركات
-          في مصر والعالم العربي. تتبع حضور موظفيك بالـ GPS، وتابع الميدانيين
-          على الخريطة، وأدِر الإجازات والتقارير بسهولة تامة — مهما كان حجم فريقك.
-        </p>
-        <div class="d-flex gap-3 flex-wrap">
-          <a href="{% url 'landing:contact' %}" class="btn-hero-primary">
-            <i class="bi bi-rocket me-2"></i>
-            ابدأ مجاناً الآن
-          </a>
-          <a href="#features" class="btn-hero-secondary">
-            <i class="bi bi-play-circle me-2"></i>
-            اعرف أكثر
-          </a>
-        </div>
+.nav-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
 
-        <!-- Trust Badges -->
-        <div class="d-flex align-items-center gap-3 mt-4 flex-wrap">
-          <div class="d-flex align-items-center gap-1 text-white-50 small">
-            <i class="bi bi-shield-check text-success"></i>
-            بيانات آمنة ومشفرة
-          </div>
-          <div class="d-flex align-items-center gap-1 text-white-50 small">
-            <i class="bi bi-phone text-primary"></i>
-            يعمل على الموبايل
-          </div>
-          <div class="d-flex align-items-center gap-1 text-white-50 small">
-            <i class="bi bi-lightning text-warning"></i>
-            إعداد خلال ساعة
-          </div>
-        </div>
-      </div>
+/* Logo */
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: white;
+}
 
-      <!-- Mockup -->
-      <div class="col-lg-6">
-        <div class="mockup-container">
-          <div class="mockup-screen">
+.logo-icon {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: white;
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+}
 
-            <!-- Top Bar -->
-            <div class="mockup-bar">
-              <div class="mockup-dot" style="background:#ef4444;"></div>
-              <div class="mockup-dot" style="background:#f59e0b;"></div>
-              <div class="mockup-dot" style="background:#10b981;"></div>
-              <div style="flex:1; height:16px; background:#1e293b; border-radius:4px; margin-right:8px;"></div>
-            </div>
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
 
-            <!-- Dashboard Preview -->
-            <div class="row g-2 mb-2">
-              <div class="col-6">
-                <div class="mockup-stat">
-                  <div style="color:#06B6D4; font-size:1.5rem; font-weight:900;">47</div>
-                  <div style="color:rgba(255,255,255,0.5); font-size:0.7rem;">موظف نشط</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="mockup-stat">
-                  <div style="color:#10b981; font-size:1.5rem; font-weight:900;">89%</div>
-                  <div style="color:rgba(255,255,255,0.5); font-size:0.7rem;">نسبة الحضور</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="mockup-stat">
-                  <div style="color:#f59e0b; font-size:1.5rem; font-weight:900;">3</div>
-                  <div style="color:rgba(255,255,255,0.5); font-size:0.7rem;">إجازات معلقة</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="mockup-stat">
-                  <div style="color:#7c3aed; font-size:1.5rem; font-weight:900;">12</div>
-                  <div style="color:rgba(255,255,255,0.5); font-size:0.7rem;">ميدانيون نشطون</div>
-                </div>
-              </div>
-            </div>
+.logo-name {
+  font-family: 'Cairo', sans-serif;
+  font-weight: 900;
+  font-size: 1.35rem;
+  color: white;
+  letter-spacing: -0.5px;
+}
 
-            <!-- Map Preview -->
-            <div class="rounded-3 p-2 d-flex align-items-center justify-content-center"
-                 style="background:#0f172a; height:100px; position:relative; overflow:hidden;">
-              <div style="position:absolute; inset:0; background:
-                radial-gradient(circle at 30% 50%, rgba(6,182,212,0.3) 0%, transparent 40%),
-                radial-gradient(circle at 70% 30%, rgba(16,185,129,0.2) 0%, transparent 40%);">
-              </div>
-              <div style="position:relative; z-index:1; text-center;">
-                <i class="bi bi-geo-alt-fill"
-                   style="font-size:2rem; color:#06B6D4;
-                          text-shadow: 0 0 20px rgba(6,182,212,0.8);"></i>
-                <div style="color:rgba(255,255,255,0.7); font-size:0.7rem; margin-top:4px;">
-                  خريطة الموظفين الميدانيين
-                </div>
-              </div>
-            </div>
+.logo-tagline {
+  font-family: 'Cairo', sans-serif;
+  font-size: 0.7rem;
+  color: rgba(6, 182, 212, 0.9);
+  font-weight: 500;
+  margin-top: 2px;
+}
 
-          </div>
-        </div>
-      </div>
+/* Menu */
+.nav-menu {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
 
-    </div>
+.nav-link {
+  font-family: 'Cairo', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
 
-    <!-- Stats Row -->
-    <div class="row g-3 mt-5">
-      {% for stat in stats %}
-      <div class="col-6 col-md-3">
-        <div class="stat-card">
-          <div class="stat-value">{{ stat.value }}</div>
-          <div class="stat-label">{{ stat.label }}</div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
+.nav-link:hover {
+  color: #06B6D4;
+  background: rgba(6, 182, 212, 0.1);
+}
 
-  </div>
-</section>
+/* Actions */
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
+/* Language Toggle */
+.lang-toggle {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 55px;
+}
 
-<!-- ════════════════════════════════════════
-     FEATURES SECTION
-════════════════════════════════════════ -->
-<section id="features" class="py-6" style="padding: 80px 0; background:#f8fafc;">
-  <div class="container">
+.lang-toggle:hover {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: #06B6D4;
+  color: #06B6D4;
+}
 
-    <div class="text-center mb-5 fade-in">
-      <span class="badge px-3 py-2 mb-3 fs-6"
-            style="background:#e0f7fa; color:#06B6D4;">
-        المميزات
-      </span>
-      <h2 class="section-title mb-3">كل ما تحتاجه في مكان واحد</h2>
-      <p class="text-muted fs-5 mx-auto" style="max-width:600px;">
-        MotionHR مش بس نظام HR - هو نظام ذكي لإدارة فريقك بالكامل
-        من أي مكان وفي أي وقت
-      </p>
-    </div>
+/* Buttons */
+.btn-login,
+.btn-dashboard,
+.btn-quote {
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 10px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
 
-    <div class="row g-4">
-      {% for feature in features %}
-      <div class="col-md-6 col-lg-4 fade-in">
-        <div class="feature-card bg-white">
-          <div class="feature-icon" style="background:{{ feature.bg }};">
-            <i class="bi bi-{{ feature.icon }}" style="color:{{ feature.color }};"></i>
-          </div>
-          <h5 class="fw-bold mb-2">{{ feature.title }}</h5>
-          <p class="text-muted small mb-0">{{ feature.desc }}</p>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
+.btn-login {
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
 
-  </div>
-</section>
+.btn-login:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: white;
+  color: white;
+}
 
+.btn-dashboard,
+.btn-quote {
+  background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+}
 
-<!-- ════════════════════════════════════════
-     GPS HIGHLIGHT SECTION
-════════════════════════════════════════ -->
-<section style="padding: 80px 0; background:white;">
-  <div class="container">
-    <div class="row align-items-center g-5">
+.btn-dashboard:hover,
+.btn-quote:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4);
+  color: white;
+}
 
-      <div class="col-lg-6 fade-in">
-        <span class="badge px-3 py-2 mb-3 fs-6"
-              style="background:#e8f5e9; color:#4caf50;">
-          الميزة الأهم
-        </span>
-        <h2 class="section-title mb-4">
-          تتبع موظفيك الميدانيين
-          <span style="color:#06B6D4;">في الوقت الفعلي</span>
-        </h2>
-        <p class="text-muted fs-5 mb-4">
-          شوف فين كل موظف ميداني على الخريطة لحظة بلحظة.
-          سجّل زياراتهم، تابع مساراتهم، واعرف إيه اللي بيحصل
-          حتى لو إنت مش في المكتب.
-        </p>
-        <div class="d-flex flex-column gap-3">
-          {% for point in "خريطة حية بتتحدث كل 30 ثانية|تسجيل تلقائي لكل الزيارات|مسار كامل ليوم العمل|تنبيهات فورية عند التحرك أو التوقف"|split:"|" %}
-          <div class="d-flex align-items-center gap-3">
-            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-                 style="width:36px;height:36px;background:#e0f7fa;">
-              <i class="bi bi-check-lg" style="color:#06B6D4;"></i>
-            </div>
-            <span>{{ point }}</span>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
+/* Mobile Toggle */
+.mobile-toggle {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+}
 
-      <div class="col-lg-6 fade-in">
-        <div class="rounded-3 p-4 text-center"
-             style="background: linear-gradient(135deg, #0f172a, #1e3a5f);
-                    min-height:350px; display:flex; align-items:center;
-                    justify-content:center; position:relative; overflow:hidden;">
+.mobile-toggle span {
+  width: 24px;
+  height: 2px;
+  background: white;
+  border-radius: 2px;
+  transition: all 0.3s;
+}
 
-          <!-- خريطة وهمية -->
-          <div style="position:absolute; inset:0; opacity:0.3;
-                      background: repeating-linear-gradient(
-                        0deg,
-                        transparent,
-                        transparent 40px,
-                        rgba(255,255,255,0.05) 40px,
-                        rgba(255,255,255,0.05) 41px
-                      ),
-                      repeating-linear-gradient(
-                        90deg,
-                        transparent,
-                        transparent 40px,
-                        rgba(255,255,255,0.05) 40px,
-                        rgba(255,255,255,0.05) 41px
-                      );">
-          </div>
+/* Responsive */
+@media (max-width: 992px) {
+  .nav-menu {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    right: 0;
+    background: rgba(13, 46, 77, 0.98);
+    backdrop-filter: blur(20px);
+    flex-direction: column;
+    padding: 20px;
+    gap: 8px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    border-bottom: 1px solid rgba(6, 182, 212, 0.15);
+  }
 
-          <div style="position:relative; z-index:1;">
-            <!-- نقاط الموظفين -->
-            <div style="position:relative; width:280px; height:250px; margin:0 auto;">
+  .nav-menu.active {
+    max-height: 500px;
+  }
 
-              {% for emp in "أ|م|س|ك"|split:"|" %}
-              <div style="position:absolute;
-                          {% if forloop.counter == 1 %}top:20%; left:30%;
-                          {% elif forloop.counter == 2 %}top:60%; left:60%;
-                          {% elif forloop.counter == 3 %}top:40%; left:75%;
-                          {% else %}top:70%; left:20%;{% endif %}">
-                <div style="width:44px; height:44px; border-radius:50%;
-                             background:#06B6D4; border:3px solid white;
-                             display:flex; align-items:center; justify-content:center;
-                             color:white; font-weight:900; font-size:1rem;
-                             box-shadow: 0 0 0 8px rgba(6,182,212,0.2);">
-                  {{ emp }}
-                </div>
-                <div style="position:absolute; top:-28px; left:50%; transform:translateX(-50%);
-                             background:rgba(0,0,0,0.8); color:white;
-                             padding:2px 8px; border-radius:4px; font-size:0.65rem;
-                             white-space:nowrap;">
-                  متحرك الآن
-                </div>
-              </div>
-              {% endfor %}
+  .nav-link {
+    width: 100%;
+    text-align: center;
+    padding: 12px;
+  }
 
-              <!-- خطوط المسار -->
-              <svg style="position:absolute; inset:0; width:100%; height:100%;"
-                   viewBox="0 0 280 250">
-                <polyline points="84,50 168,150 210,100 56,175"
-                          fill="none" stroke="#06B6D4" stroke-width="2"
-                          stroke-dasharray="5,5" opacity="0.5"/>
-              </svg>
+  .mobile-toggle {
+    display: flex;
+  }
 
-            </div>
+  .btn-login {
+    display: none;
+  }
+}
 
-            <div class="mt-3 d-flex justify-content-center gap-2">
-              <span class="badge" style="background:#10b981;">4 متصل</span>
-              <span class="badge" style="background:#06B6D4;">متحرك</span>
-            </div>
-          </div>
-        </div>
-      </div>
+@media (max-width: 576px) {
+  .logo-tagline {
+    display: none;
+  }
 
-    </div>
-  </div>
-</section>
+  .btn-quote,
+  .btn-dashboard {
+    padding: 8px 14px;
+    font-size: 0.8rem;
+  }
+}
+</style>
 
-
-<!-- ════════════════════════════════════════
-     PRICING SECTION
-════════════════════════════════════════ -->
-<section id="pricing" style="padding:80px 0; background:#f8fafc;">
-  <div class="container">
-
-    <div class="text-center mb-5 fade-in">
-      <span class="badge px-3 py-2 mb-3 fs-6"
-            style="background:#e0f7fa; color:#06B6D4;">
-        الأسعار
-      </span>
-      <h2 class="section-title mb-3">اختر الخطة المناسبة لشركتك</h2>
-      <p class="text-muted">بدون عقود ملزمة - يمكنك الترقية أو الإلغاء في أي وقت</p>
-    </div>
-
-    <div class="row g-4 justify-content-center">
-      {% for plan in plans %}
-      <div class="col-md-6 col-lg-3 fade-in">
-        <div class="pricing-card bg-white {% if plan.popular %}popular{% endif %}">
-
-          {% if plan.popular %}
-          <div class="popular-badge">⭐ الأكثر شيوعاً</div>
-          {% endif %}
-
-          <div class="d-flex align-items-center gap-2 mb-3">
-            <div class="rounded-circle d-flex align-items-center justify-content-center"
-                 style="width:40px;height:40px;background:{{ plan.color }}20;">
-              <i class="bi bi-building" style="color:{{ plan.color }};"></i>
-            </div>
-            <div>
-              <div class="fw-bold">{{ plan.name_ar }}</div>
-              <small class="text-muted">{{ plan.employees }} موظف</small>
-            </div>
-          </div>
-
-          <div class="mb-4">
-            {% if plan.price > 0 %}
-              <span class="price-number" style="color:{{ plan.color }};">
-                {{ plan.price }}
-              </span>
-              <span class="text-muted"> ج.م/شهر</span>
-              <div class="text-muted small mt-1">
-                أو {{ plan.price_year }} ج.م/سنة
-                <span class="badge bg-success ms-1">وفر 17%</span>
-              </div>
-            {% else %}
-              <div class="price-number text-dark" style="font-size:1.8rem;">
-                حسب الطلب
-              </div>
-              <div class="text-muted small">تواصل معنا للسعر</div>
-            {% endif %}
-          </div>
-
-          <ul class="list-unstyled mb-4">
-            {% for f in plan.features %}
-            <li class="d-flex align-items-center gap-2 mb-2 small">
-              <i class="bi bi-check-circle-fill feature-check flex-shrink-0"></i>
-              {{ f }}
-            </li>
-            {% endfor %}
-            {% for f in plan.missing %}
-            <li class="d-flex align-items-center gap-2 mb-2 small text-muted">
-              <i class="bi bi-x-circle feature-x flex-shrink-0"></i>
-              {{ f }}
-            </li>
-            {% endfor %}
-          </ul>
-
-          <a href="{% url 'landing:contact' %}"
-             class="btn w-100 fw-bold rounded-3"
-             style="{% if plan.popular %}
-                      background:{{ plan.color }}; color:white;
-                    {% else %}
-                      background:transparent; color:{{ plan.color }};
-                      border: 2px solid {{ plan.color }};
-                    {% endif %}">
-            {% if plan.price == 0 %}تواصل معنا{% else %}ابدأ الآن{% endif %}
-          </a>
-
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-
-    <!-- Addons -->
-    <div class="row justify-content-center mt-4">
-      <div class="col-lg-8">
-        <div class="card border-0 shadow-sm">
-          <div class="card-body p-4">
-            <h5 class="fw-bold mb-3 text-center">إضافات متاحة</h5>
-            <div class="row g-2 text-center">
-              <div class="col-6 col-md-3">
-                <div class="p-2 rounded" style="background:#f8fafc;">
-                  <div class="fw-bold" style="color:#06B6D4;">+200 ج.م</div>
-                  <small class="text-muted">تتبع ميداني</small>
-                </div>
-              </div>
-              <div class="col-6 col-md-3">
-                <div class="p-2 rounded" style="background:#f8fafc;">
-                  <div class="fw-bold" style="color:#06B6D4;">+300 ج.م</div>
-                  <small class="text-muted">Payroll متقدم</small>
-                </div>
-              </div>
-              <div class="col-6 col-md-3">
-                <div class="p-2 rounded" style="background:#f8fafc;">
-                  <div class="fw-bold" style="color:#06B6D4;">5,000 ج.م</div>
-                  <small class="text-muted">سيرفر العميل</small>
-                </div>
-              </div>
-              <div class="col-6 col-md-3">
-                <div class="p-2 rounded" style="background:#f8fafc;">
-                  <div class="fw-bold" style="color:#06B6D4;">2,000 ج.م</div>
-                  <small class="text-muted">إعداد وتدريب</small>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</section>
-
-
-<!-- ════════════════════════════════════════
-     CTA SECTION
-════════════════════════════════════════ -->
-<section class="cta-section">
-  <div class="container text-center">
-    <div class="fade-in">
-      <h2 class="fw-black text-white mb-3" style="font-size:2.5rem;">
-        جاهز تبدأ مع MotionHR؟
-      </h2>
-      <p class="text-white-50 fs-5 mb-5">
-        تواصل معنا اليوم واحصل على نسخة تجريبية مجانية لمدة 14 يوم
-      </p>
-      <div class="d-flex gap-3 justify-content-center flex-wrap">
-        <a href="{% url 'landing:contact' %}"
-           class="btn btn-lg fw-bold rounded-pill px-5"
-           style="background:#06B6D4; color:white;
-                  box-shadow:0 8px 25px rgba(6,182,212,0.4);">
-          <i class="bi bi-rocket me-2"></i>
-          ابدأ التجربة المجانية
-        </a>
-        <a href="{% url 'login' %}"
-           class="btn btn-lg fw-bold rounded-pill px-5"
-           style="background:rgba(255,255,255,0.1); color:white;
-                  border:1px solid rgba(255,255,255,0.3);">
-          <i class="bi bi-box-arrow-in-right me-2"></i>
-          تسجيل الدخول
-        </a>
-      </div>
-    </div>
-  </div>
-</section>
-
-
-<!-- ════════════════════════════════════════
-     FOOTER
-════════════════════════════════════════ -->
-<footer class="footer">
-  <div class="container">
-    <div class="row g-4 mb-4">
-
-      <div class="col-md-4">
-        <h5 class="fw-black text-white mb-3" style="color:#06B6D4 !important;">
-          MotionHR
-        </h5>
-        <p class="small mb-3">
-          نظام إدارة الموارد البشرية الأذكى للشركات الصغيرة والمتوسطة
-          في مصر والعالم العربي.
-        </p>
-        <div class="d-flex gap-2">
-          <a href="#" class="btn btn-sm"
-             style="background:rgba(255,255,255,0.1); color:white; border-radius:8px;">
-            <i class="bi bi-facebook"></i>
-          </a>
-          <a href="#" class="btn btn-sm"
-             style="background:rgba(255,255,255,0.1); color:white; border-radius:8px;">
-            <i class="bi bi-whatsapp"></i>
-          </a>
-          <a href="#" class="btn btn-sm"
-             style="background:rgba(255,255,255,0.1); color:white; border-radius:8px;">
-            <i class="bi bi-linkedin"></i>
-          </a>
-        </div>
-      </div>
-
-      <div class="col-md-2">
-        <h6 class="text-white fw-bold mb-3">روابط سريعة</h6>
-        <ul class="list-unstyled small">
-          <li class="mb-2"><a href="{% url 'landing:home' %}">الرئيسية</a></li>
-          <li class="mb-2"><a href="{% url 'landing:home' %}#features">المميزات</a></li>
-          <li class="mb-2"><a href="{% url 'landing:pricing' %}">الأسعار</a></li>
-          <li class="mb-2"><a href="{% url 'landing:about' %}">عن النظام</a></li>
-          <li class="mb-2"><a href="{% url 'landing:contact' %}">تواصل معنا</a></li>
-        </ul>
-      </div>
-
-      <div class="col-md-3">
-        <h6 class="text-white fw-bold mb-3">المميزات</h6>
-        <ul class="list-unstyled small">
-          <li class="mb-2"><a href="#">إدارة الموظفين</a></li>
-          <li class="mb-2"><a href="#">الحضور GPS</a></li>
-          <li class="mb-2"><a href="#">التتبع الميداني</a></li>
-          <li class="mb-2"><a href="#">إدارة الإجازات</a></li>
-          <li class="mb-2"><a href="#">التقارير</a></li>
-        </ul>
-      </div>
-
-      <div class="col-md-3">
-        <h6 class="text-white fw-bold mb-3">تواصل معنا</h6>
-        <ul class="list-unstyled small">
-          <li class="mb-2">
-            <i class="bi bi-telephone me-2" style="color:#06B6D4;"></i>
-            01000000000
-          </li>
-          <li class="mb-2">
-            <i class="bi bi-envelope me-2" style="color:#06B6D4;"></i>
-            sales@motionhr.com
-          </li>
-          <li class="mb-2">
-            <i class="bi bi-clock me-2" style="color:#06B6D4;"></i>
-            أحد - خميس، 9ص - 5م
-          </li>
-        </ul>
-      </div>
-
-    </div>
-
-    <hr style="border-color:rgba(255,255,255,0.1);">
-
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <small>© 2025 MotionHR - جميع الحقوق محفوظة</small>
-      <small>
-        صُنع بـ ❤️ في مصر
-      </small>
-    </div>
-
-  </div>
-</footer>
-
-
-<!-- Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  // Fade in on scroll
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('visible');
-      }
-    });
-  }, { threshold: 0.1 });
+// ═══════════════════════════════════════════
+// Navbar Interactions
+// ═══════════════════════════════════════════
 
-  document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+// Language Toggle
+function toggleLanguage() {
+  const html = document.documentElement;
+  const currentLang = html.getAttribute('lang') || 'ar';
+  const newLang = currentLang === 'ar' ? 'en' : 'ar';
+  const newDir = newLang === 'ar' ? 'rtl' : 'ltr';
 
-  // Smooth scroll for anchor links
-  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function(e) {
-      const target = document.querySelector(this.getAttribute('href'));
-      if (target) {
-        e.preventDefault();
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
+  // Update HTML attributes
+  html.setAttribute('lang', newLang);
+  html.setAttribute('dir', newDir);
+
+  // Update all elements with data-ar and data-en
+  document.querySelectorAll('[data-ar][data-en]').forEach(el => {
+    el.textContent = el.getAttribute('data-' + newLang);
   });
-</script>
 
-</body>
-</html>
+  // Update button label
+  const langLabel = document.getElementById('langLabel');
+  if (langLabel) {
+    langLabel.textContent = newLang === 'ar' ? 'EN' : 'عربي';
+  }
+
+  // Save preference
+  localStorage.setItem('motionhr_lang', newLang);
+}
+
+// Load saved language preference on page load
+document.addEventListener('DOMContentLoaded', function() {
+  const savedLang = localStorage.getItem('motionhr_lang');
+  if (savedLang && savedLang !== 'ar') {
+    toggleLanguage();
+  }
+});
+
+// Mobile Menu Toggle
+function toggleMobileMenu() {
+  const menu = document.getElementById('navMenu');
+  menu.classList.toggle('active');
+}
+
+// Close mobile menu when clicking a link
+document.querySelectorAll('.nav-link').forEach(link => {
+  link.addEventListener('click', () => {
+    document.getElementById('navMenu').classList.remove('active');
+  });
+});
+
+// Add shadow on scroll
+window.addEventListener('scroll', function() {
+  const navbar = document.getElementById('motionhrNavbar');
+  if (window.scrollY > 20) {
+    navbar.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+  } else {
+    navbar.style.boxShadow = 'none';
+  }
+});
+</script>

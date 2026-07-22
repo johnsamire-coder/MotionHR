@@ -440,7 +440,12 @@ def js_solutions_home(request):
     }
     return render(request, 'landing/js_solutions.html', context)
 
-
+def coming_soon(request):
+    """صفحة قريباً - لتحميل التطبيق أو أي ميزة قادمة"""
+    context = {
+        'page_title': 'قريباً',
+    }
+    return render(request, 'landing/coming_soon.html', context)
 
 def smart_home(request):
     """يفتح صفحة مختلفة حسب الدومين"""

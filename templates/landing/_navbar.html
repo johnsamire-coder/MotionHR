@@ -1,52 +1,349 @@
-<nav style="background:rgba(15,23,42,0.97); padding:16px 0; position:sticky; top:0; z-index:1000;">
-  <div class="container">
-    <div class="d-flex align-items-center justify-content-between">
+{% load static %}
 
-      <!-- Logo -->
-      <a href="{% url 'landing:home' %}"
-         style="font-size:1.5rem;font-weight:900;color:#06B6D4;text-decoration:none;">
-        MotionHR
-        <small style="font-size:0.6rem;color:rgba(255,255,255,0.3);font-weight:400;vertical-align:super;">v1.0</small>
-      </a>
+<!-- ═══════════════════════════════════════════ -->
+<!-- MotionHR Navbar - Modern & Bilingual        -->
+<!-- Powered by JS Solutions                     -->
+<!-- ═══════════════════════════════════════════ -->
 
-      <!-- Links (Desktop) -->
-      <div class="d-none d-md-flex align-items-center gap-1">
-        <a href="{% url 'landing:home' %}" style="color:rgba(255,255,255,0.8);text-decoration:none;padding:8px 16px;font-weight:600;font-family:'Cairo',sans-serif;">الرئيسية</a>
-        <a href="{% url 'landing:pricing' %}" style="color:rgba(255,255,255,0.8);text-decoration:none;padding:8px 16px;font-weight:600;font-family:'Cairo',sans-serif;">الأسعار</a>
-        <a href="{% url 'landing:about' %}" style="color:rgba(255,255,255,0.8);text-decoration:none;padding:8px 16px;font-weight:600;font-family:'Cairo',sans-serif;">عن النظام</a>
-        <a href="{% url 'landing:contact' %}" style="color:rgba(255,255,255,0.8);text-decoration:none;padding:8px 16px;font-weight:600;font-family:'Cairo',sans-serif;">تواصل معنا</a>
+<nav class="motionhr-navbar" id="motionhrNavbar">
+  <div class="nav-container">
+
+    <!-- Logo -->
+    <a href="{% url 'landing:home' %}" class="nav-logo">
+      <div class="logo-icon">M</div>
+      <div class="logo-text">
+        <span class="logo-name">MotionHR</span>
+        <span class="logo-tagline" data-ar="من JS Solutions" data-en="by JS Solutions">من JS Solutions</span>
       </div>
+    </a>
 
-      <!-- CTA Buttons -->
-      <div class="d-flex align-items-center gap-2">
-        {% if request.user.is_authenticated %}
-          <a href="{% url 'dashboard' %}"
-             class="btn btn-sm rounded-pill text-white"
-             style="background:#06B6D4;font-family:'Cairo',sans-serif;font-weight:700;">
-            لوحة التحكم
-          </a>
-          <form method="post" action="{% url 'logout' %}" class="m-0">
-            {% csrf_token %}
-            <button type="submit"
-                    class="btn btn-sm btn-outline-light rounded-pill"
-                    style="font-family:'Cairo',sans-serif;">
-              تسجيل الخروج
-            </button>
-          </form>
-        {% else %}
-          <a href="{% url 'login' %}"
-             class="btn btn-sm btn-outline-light rounded-pill"
-             style="font-family:'Cairo',sans-serif;">
-            تسجيل الدخول
-          </a>
-          <a href="{% url 'landing:contact' %}"
-             class="btn btn-sm rounded-pill text-white"
-             style="background:#06B6D4;font-family:'Cairo',sans-serif;font-weight:700;">
-            اطلب عرضاً
-          </a>
-        {% endif %}
-      </div>
+    <!-- Desktop Menu -->
+    <div class="nav-menu" id="navMenu">
+      <a href="#home" class="nav-link" data-ar="الرئيسية" data-en="Home">الرئيسية</a>
+      <a href="#features" class="nav-link" data-ar="المميزات" data-en="Features">المميزات</a>
+      <a href="#how-it-works" class="nav-link" data-ar="كيف يعمل" data-en="How It Works">كيف يعمل</a>
+      <a href="#faq" class="nav-link" data-ar="الأسئلة الشائعة" data-en="FAQ">الأسئلة الشائعة</a>
+      <a href="{% url 'landing:contact' %}" class="nav-link" data-ar="تواصل معنا" data-en="Contact">تواصل معنا</a>
+    </div>
+
+    <!-- Actions -->
+    <div class="nav-actions">
+
+      <!-- Language Toggle -->
+      <button class="lang-toggle" onclick="toggleLanguage()" title="Change Language">
+        <span id="langLabel">EN</span>
+      </button>
+
+      {% if request.user.is_authenticated %}
+        <a href="{% url 'dashboard' %}" class="btn-dashboard" data-ar="لوحة التحكم" data-en="Dashboard">لوحة التحكم</a>
+      {% else %}
+        <a href="{% url 'login' %}" class="btn-login" data-ar="تسجيل الدخول" data-en="Login">تسجيل الدخول</a>
+        <a href="{% url 'landing:free_trial' %}" class="btn-quote" data-ar="احصل على عرض سعر" data-en="Get Quote">احصل على عرض سعر</a>
+      {% endif %}
+
+      <!-- Mobile Menu Toggle -->
+      <button class="mobile-toggle" onclick="toggleMobileMenu()" aria-label="Menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
 
     </div>
   </div>
 </nav>
+
+<style>
+/* ═══════════════════════════════════════════ */
+/* Navbar Styles                                */
+/* ═══════════════════════════════════════════ */
+
+.motionhr-navbar {
+  background: rgba(13, 46, 77, 0.98);
+  backdrop-filter: blur(20px);
+  padding: 12px 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  border-bottom: 1px solid rgba(6, 182, 212, 0.15);
+  transition: all 0.3s ease;
+}
+
+.nav-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+/* Logo */
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: white;
+}
+
+.logo-icon {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: white;
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.logo-name {
+  font-family: 'Cairo', sans-serif;
+  font-weight: 900;
+  font-size: 1.35rem;
+  color: white;
+  letter-spacing: -0.5px;
+}
+
+.logo-tagline {
+  font-family: 'Cairo', sans-serif;
+  font-size: 0.7rem;
+  color: rgba(6, 182, 212, 0.9);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* Menu */
+.nav-menu {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
+.nav-link {
+  font-family: 'Cairo', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  color: #06B6D4;
+  background: rgba(6, 182, 212, 0.1);
+}
+
+/* Actions */
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Language Toggle */
+.lang-toggle {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 55px;
+}
+
+.lang-toggle:hover {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: #06B6D4;
+  color: #06B6D4;
+}
+
+/* Buttons */
+.btn-login,
+.btn-dashboard,
+.btn-quote {
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 10px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-login {
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-login:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: white;
+  color: white;
+}
+
+.btn-dashboard,
+.btn-quote {
+  background: linear-gradient(135deg, #06B6D4 0%, #10B981 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+}
+
+.btn-dashboard:hover,
+.btn-quote:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4);
+  color: white;
+}
+
+/* Mobile Toggle */
+.mobile-toggle {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+}
+
+.mobile-toggle span {
+  width: 24px;
+  height: 2px;
+  background: white;
+  border-radius: 2px;
+  transition: all 0.3s;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+  .nav-menu {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    right: 0;
+    background: rgba(13, 46, 77, 0.98);
+    backdrop-filter: blur(20px);
+    flex-direction: column;
+    padding: 20px;
+    gap: 8px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    border-bottom: 1px solid rgba(6, 182, 212, 0.15);
+  }
+
+  .nav-menu.active {
+    max-height: 500px;
+  }
+
+  .nav-link {
+    width: 100%;
+    text-align: center;
+    padding: 12px;
+  }
+
+  .mobile-toggle {
+    display: flex;
+  }
+
+  .btn-login {
+    display: none;
+  }
+}
+
+@media (max-width: 576px) {
+  .logo-tagline {
+    display: none;
+  }
+
+  .btn-quote,
+  .btn-dashboard {
+    padding: 8px 14px;
+    font-size: 0.8rem;
+  }
+}
+</style>
+
+<script>
+// ═══════════════════════════════════════════
+// Navbar Interactions
+// ═══════════════════════════════════════════
+
+// Language Toggle
+function toggleLanguage() {
+  const html = document.documentElement;
+  const currentLang = html.getAttribute('lang') || 'ar';
+  const newLang = currentLang === 'ar' ? 'en' : 'ar';
+  const newDir = newLang === 'ar' ? 'rtl' : 'ltr';
+
+  // Update HTML attributes
+  html.setAttribute('lang', newLang);
+  html.setAttribute('dir', newDir);
+
+  // Update all elements with data-ar and data-en
+  document.querySelectorAll('[data-ar][data-en]').forEach(el => {
+    el.textContent = el.getAttribute('data-' + newLang);
+  });
+
+  // Update button label
+  const langLabel = document.getElementById('langLabel');
+  if (langLabel) {
+    langLabel.textContent = newLang === 'ar' ? 'EN' : 'عربي';
+  }
+
+  // Save preference
+  localStorage.setItem('motionhr_lang', newLang);
+}
+
+// Load saved language preference on page load
+document.addEventListener('DOMContentLoaded', function() {
+  const savedLang = localStorage.getItem('motionhr_lang');
+  if (savedLang && savedLang !== 'ar') {
+    toggleLanguage();
+  }
+});
+
+// Mobile Menu Toggle
+function toggleMobileMenu() {
+  const menu = document.getElementById('navMenu');
+  menu.classList.toggle('active');
+}
+
+// Close mobile menu when clicking a link
+document.querySelectorAll('.nav-link').forEach(link => {
+  link.addEventListener('click', () => {
+    document.getElementById('navMenu').classList.remove('active');
+  });
+});
+
+// Add shadow on scroll
+window.addEventListener('scroll', function() {
+  const navbar = document.getElementById('motionhrNavbar');
+  if (window.scrollY > 20) {
+    navbar.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+  } else {
+    navbar.style.boxShadow = 'none';
+  }
+});
+</script>
