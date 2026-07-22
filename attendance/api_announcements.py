@@ -49,7 +49,7 @@ def announcements_list(request):
         })
 
     qs = CompanyAnnouncement.objects.filter(
-        company=company,
+        company=user.company,
         is_active=True,
         publish_at__lte=now,
     ).filter(
@@ -150,7 +150,7 @@ def manager_create_announcement(request):
         return Response({'error': 'العنوان والمحتوى مطلوبان'}, status=400)
 
     ann = CompanyAnnouncement.objects.create(
-        company=company,
+        company=user.company,
         title=title,
         message=message,
         announcement_type=data.get('type', 'general'),
