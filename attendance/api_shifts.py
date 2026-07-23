@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.response import Response
 from django.utils import timezone
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -186,6 +186,12 @@ def manager_shift_create(request):
         if not start_time or not end_time:
             return Response({"success": False, "error": "وقت البداية والنهاية مطلوبان"}, status=400)
 
+        try:
+            start_time = datetime.strptime(str(start_time), "%H:%M").time()
+            end_time = datetime.strptime(str(end_time), "%H:%M").time()
+        except ValueError:
+            return Response({"success": False, "error": "صيغة الوقت لازم تكون HH:MM"}, status=400)
+
         valid_types = ("fixed", "flexible", "rotating", "morning", "evening", "night", "split")
         shift_type = str(data.get("shift_type", "fixed")).strip()
         if shift_type not in valid_types:
@@ -253,9 +259,15 @@ def manager_shift_update(request, shift_id):
         if "shift_type" in data:
             shift.shift_type = data["shift_type"]
         if "start_time" in data:
-            shift.start_time = data["start_time"]
+            try:
+                shift.start_time = datetime.strptime(str(data["start_time"]), "%H:%M").time()
+            except ValueError:
+                return Response({"success": False, "error": "صيغة وقت البداية لازم تكون HH:MM"}, status=400)
         if "end_time" in data:
-            shift.end_time = data["end_time"]
+            try:
+                shift.end_time = datetime.strptime(str(data["end_time"]), "%H:%M").time()
+            except ValueError:
+                return Response({"success": False, "error": "صيغة وقت النهاية لازم تكون HH:MM"}, status=400)
         if "crosses_midnight" in data:
             shift.crosses_midnight = bool(data["crosses_midnight"])
         if "grace_period" in data:
