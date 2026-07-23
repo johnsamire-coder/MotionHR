@@ -192,6 +192,90 @@ def manager_create_announcement(request):
     }, status=201)
 
 
+
+# ─────────────────────────────────────────────
+# PUT/PATCH /manager/announcements/<id>/update/
+# ─────────────────────────────────────────────
+@api_view(['PUT', 'PATCH'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_update_announcement(request, pk):
+    user = request.user
+    if not is_manager(user):
+        return Response({'error': 'غير مصرح'}, status=403)
+
+    company = get_user_company(user)
+    if not company:
+        return Response({'error': 'شركة المستخدم غير موجودة'}, status=400)
+
+    try:
+        ann = CompanyAnnouncement.objects.get(id=pk, company=company)
+    except CompanyAnnouncement.DoesNotExist:
+        return Response({'error': 'الإعلان غير موجود'}, status=404)
+
+    data = request.data
+
+    if 'title' in data:
+        title = str(data.get('title') or '').strip()
+        if not title:
+            return Response({'error': 'العنوان مطلوب'}, status=400)
+        ann.title = title
+
+    if 'message' in data:
+        message = str(data.get('message') or '').strip()
+        if not message:
+            return Response({'error': 'المحتوى مطلوب'}, status=400)
+        ann.message = message
+
+    if 'type' in data:
+        ann.announcement_type = data.get('type') or ann.announcement_type
+
+    if 'priority' in data:
+        ann.priority = data.get('priority') or ann.priority
+
+    if 'target_type' in data:
+        ann.target_type = data.get('target_type') or ann.target_type
+
+    if 'requires_confirmation' in data:
+        ann.requires_confirmation = bool(data.get('requires_confirmation'))
+
+    if 'send_push' in data:
+        ann.send_push = bool(data.get('send_push'))
+
+    if 'is_active' in data:
+        ann.is_active = bool(data.get('is_active'))
+
+    ann.save()
+
+    # إعادة إرسال الإشعار لو المدير طلب ده
+    resend = bool(request.data.get('resend_notification', False))
+    resent_count = 0
+    if resend:
+        try:
+            from accounts.fcm_service import send_notification_to_user
+            targets = ann.get_target_employees()
+            for emp in targets:
+                if hasattr(emp, 'user') and emp.user:
+                    send_notification_to_user(
+                        user=emp.user,
+                        title=f"📢 تم تعديل الإعلان: {ann.title}",
+                        body=ann.message[:100],
+                        data={
+                            'type': 'announcement_updated',
+                            'announcement_id': str(ann.id),
+                        },
+                    )
+                    resent_count += 1
+        except Exception:
+            pass
+
+    return Response({
+        'success': True,
+        'message': 'تم تعديل الإعلان',
+        'announcement_id': ann.id,
+        'resent_count': resent_count,
+    })
+
 # ─────────────────────────────────────────────
 # DELETE /manager/announcements/<id>/delete/
 # ─────────────────────────────────────────────
@@ -211,6 +295,26 @@ def manager_delete_announcement(request, pk):
         ann = CompanyAnnouncement.objects.get(id=pk, company=company)
     except CompanyAnnouncement.DoesNotExist:
         return Response({'error': 'الإعلان غير موجود'}, status=404)
+
+    # إرسال إشعار بالحذف لو المدير طلب ده
+    send_deletion_notice = bool(request.data.get('send_deletion_notice', True))
+    if send_deletion_notice:
+        try:
+            from accounts.fcm_service import send_notification_to_user
+            targets = ann.get_target_employees()
+            for emp in targets:
+                if hasattr(emp, 'user') and emp.user:
+                    send_notification_to_user(
+                        user=emp.user,
+                        title=f"🗑️ تم حذف الإعلان: {ann.title}",
+                        body="تم حذف هذا الإعلان من قِبل الإدارة",
+                        data={
+                            'type': 'announcement_deleted',
+                            'announcement_id': str(ann.id),
+                        },
+                    )
+        except Exception:
+            pass
 
     ann.delete()
     return Response({'success': True, 'message': 'تم حذف الإعلان'})
