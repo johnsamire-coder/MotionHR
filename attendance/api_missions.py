@@ -309,9 +309,11 @@ def manager_cancel_mission(request, mission_id):
 def manager_pending_requests(request):
     """طلبات المهمات من الموظفين في انتظار الموافقة"""
     company = get_company(request.user)
+    # المدير يشوف الطلبات الموجهة له فقط
     requests_qs = MissionRequest.objects.filter(
         mission__company=company,
-        manager_approval='pending'
+        manager_approval='pending',
+        manager=request.user,
     ).select_related('mission', 'requested_by')
 
     data = []
@@ -337,9 +339,13 @@ def manager_approve_request(request, request_id):
     """موافقة/رفض طلب مهمة من موظف"""
     company = get_company(request.user)
     try:
-        req = MissionRequest.objects.get(id=request_id, mission__company=company)
+        req = MissionRequest.objects.get(
+            id=request_id,
+            mission__company=company,
+            manager=request.user,
+        )
     except MissionRequest.DoesNotExist:
-        return Response({'error': 'الطلب غير موجود'}, status=404)
+        return Response({'error': 'الطلب غير موجود أو غير موجه لك'}, status=404)
 
     action = request.data.get('action')  # 'approve' or 'reject'
     notes = request.data.get('notes', '')
@@ -777,10 +783,13 @@ def employee_request_mission(request):
         client_phone=d.get('client_phone', ''),
     )
 
-    # إنشاء طلب للموافقة
+    # إنشاء طلب للموافقة — مربوط بالمدير المباشر
+    direct_manager = getattr(employee, 'direct_manager', None)
+    manager_user = direct_manager.user if direct_manager and getattr(direct_manager, 'user', None) else None
     MissionRequest.objects.create(
         mission=mission,
         requested_by=employee,
+        manager=manager_user,
         manager_approval='pending',
         final_status='pending',
     )
