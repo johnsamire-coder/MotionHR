@@ -55,7 +55,7 @@ def is_manager_or_hr(user):
 
 
 def serialize_mission(mission, employee=None):
-    assignments = mission.assignments.select_related('employee').all()
+    assignments = MissionAssignment._base_manager.filter(mission=mission).select_related('employee')
     assignment_data = []
     my_assignment = None
 
@@ -222,7 +222,7 @@ def manager_create_mission(request):
         role = assignee.get('role', 'lead')
         is_lead = assignee.get('is_lead', i == 0)
         try:
-            emp = Employee.objects.get(id=emp_id, company=company)
+            emp = Employee._base_manager.get(id=emp_id, company=company)
             MissionAssignment.objects.create(
                 mission=mission,
                 employee=emp,
@@ -233,6 +233,8 @@ def manager_create_mission(request):
             )
         except Employee.DoesNotExist:
             pass
+
+    mission.refresh_from_db()
 
     return Response({
         'success': True,
