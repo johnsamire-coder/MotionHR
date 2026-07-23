@@ -147,7 +147,7 @@ def manager_missions_list(request):
     if not company:
         return Response({'error': 'لم يتم العثور على بيانات الشركة'}, status=400)
 
-    missions = Mission.objects.filter(company=company).prefetch_related('assignments__employee')
+    missions = Mission._base_manager.filter(company=company).prefetch_related('assignments__employee')
 
     # فلتر الحالة
     status_filter = request.GET.get('status')
