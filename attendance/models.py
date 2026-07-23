@@ -6,41 +6,61 @@ from core.models import TenantModel
 
 class Shift(TenantModel):
     """الشيفت - أوقات العمل"""
-    
+
     SHIFT_TYPE_CHOICES = [
         ('fixed', 'ثابت'),
         ('flexible', 'مرن'),
         ('rotating', 'متغير'),
+        ('morning', 'صباحي'),
+        ('evening', 'مسائي'),
+        ('night', 'ليلي'),
+        ('split', 'مقسم'),
     ]
-    
+
     name = models.CharField(
         max_length=100,
         verbose_name='اسم الشيفت'
     )
-    
+
     shift_type = models.CharField(
         max_length=20,
         choices=SHIFT_TYPE_CHOICES,
         default='fixed',
         verbose_name='نوع الشيفت'
     )
-    
+
     start_time = models.TimeField(
         verbose_name='وقت البداية'
     )
-    
+
     end_time = models.TimeField(
         verbose_name='وقت النهاية'
     )
-    
-    # فترة السماح للتأخير بالدقائق
+
+    crosses_midnight = models.BooleanField(
+        default=False,
+        verbose_name='يمتد لليوم التالي',
+        help_text='فعّل لو الشيفت بيبدأ بالليل وبينتهي الصبح'
+    )
+
     grace_period = models.IntegerField(
         default=15,
-        verbose_name='فترة السماح (دقيقة)',
+        verbose_name='فترة السماح للتأخير (دقيقة)',
         help_text='الوقت المسموح للتأخير بدون احتساب تأخير'
     )
-    
-    # أيام العمل
+
+    grace_early_leave = models.IntegerField(
+        default=0,
+        verbose_name='فترة السماح للانصراف المبكر (دقيقة)',
+        help_text='الوقت المسموح للانصراف قبل نهاية الشيفت بدون احتساب انصراف مبكر'
+    )
+
+    early_checkin_minutes = models.IntegerField(
+        default=30,
+        verbose_name='مسموح الحضور قبل الشيفت (دقيقة)',
+        help_text='الحد الأقصى المسموح لتسجيل الحضور قبل بداية الشيفت'
+    )
+
     work_sunday = models.BooleanField(default=True, verbose_name='الأحد')
     work_monday = models.BooleanField(default=True, verbose_name='الاثنين')
     work_tuesday = models.BooleanField(default=True, verbose_name='الثلاثاء')
@@ -48,82 +68,298 @@ class Shift(TenantModel):
     work_thursday = models.BooleanField(default=True, verbose_name='الخميس')
     work_friday = models.BooleanField(default=False, verbose_name='الجمعة')
     work_saturday = models.BooleanField(default=False, verbose_name='السبت')
-    
-    # وقت الراحة
+
     break_duration = models.IntegerField(
         default=60,
         verbose_name='مدة الراحة (دقيقة)'
     )
-    
+
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name='شيفت افتراضي للشركة',
+        help_text='لو مفيش شيفت محدد للموظف، هيستخدم الشيفت الافتراضي'
+    )
+
     is_active = models.BooleanField(
         default=True,
         verbose_name='نشط'
     )
-    
+
     class Meta:
         verbose_name = 'شيفت'
         verbose_name_plural = 'الشيفتات'
         ordering = ['name']
-    
+
     def __str__(self):
         return f"{self.name} ({self.start_time} - {self.end_time})"
-    
+
     @property
     def work_hours(self):
-        """إجمالي ساعات العمل"""
         start = datetime.combine(datetime.today(), self.start_time)
         end = datetime.combine(datetime.today(), self.end_time)
-        
-        # لو الشيفت بالليل
-        if end < start:
+
+        if self.crosses_midnight or end <= start:
             end += timedelta(days=1)
-        
+
         duration = end - start
         hours = duration.total_seconds() / 3600
-        # خصم وقت الراحة
         hours -= self.break_duration / 60
         return round(hours, 2)
+
+    def is_work_day(self, date):
+        day_map = {
+            0: self.work_sunday,
+            1: self.work_monday,
+            2: self.work_tuesday,
+            3: self.work_wednesday,
+            4: self.work_thursday,
+            5: self.work_friday,
+            6: self.work_saturday,
+        }
+        return day_map.get(date.weekday(), False)
 
 
 class EmployeeShift(TenantModel):
     """ربط الموظف بالشيفت"""
-    
+
+    ASSIGNMENT_TYPE_CHOICES = [
+        ('company', 'شركة'),
+        ('branch', 'فرع'),
+        ('department', 'قسم'),
+        ('employee', 'موظف'),
+    ]
+
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='shifts',
         verbose_name='الموظف'
     )
-    
+
     shift = models.ForeignKey(
         Shift,
         on_delete=models.PROTECT,
         related_name='employees',
         verbose_name='الشيفت'
     )
-    
+
+    assignment_type = models.CharField(
+        max_length=20,
+        choices=ASSIGNMENT_TYPE_CHOICES,
+        default='employee',
+        verbose_name='نوع التعيين'
+    )
+
     start_date = models.DateField(
         verbose_name='تاريخ البداية'
     )
-    
+
     end_date = models.DateField(
         blank=True,
         null=True,
         verbose_name='تاريخ النهاية'
     )
-    
+
     is_active = models.BooleanField(
         default=True,
         verbose_name='نشط'
     )
-    
+
+    priority = models.IntegerField(
+        default=1,
+        verbose_name='الأولوية',
+        help_text='1=موظف, 2=قسم, 3=فرع, 4=شركة'
+    )
+
     class Meta:
         verbose_name = 'شيفت موظف'
         verbose_name_plural = 'شيفتات الموظفين'
         ordering = ['-start_date']
-    
+
     def __str__(self):
         return f"{self.employee.full_name_ar} - {self.shift.name}"
+
+
+class ShiftChangeRequest(TenantModel):
+    """طلب تغيير شيفت مع موافقات"""
+
+    STATUS_CHOICES = [
+        ('pending', 'في الانتظار'),
+        ('approved', 'موافق عليه'),
+        ('rejected', 'مرفوض'),
+        ('cancelled', 'ملغي'),
+    ]
+
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='shift_change_requests',
+        verbose_name='الموظف'
+    )
+
+    requested_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='shift_changes_requested',
+        verbose_name='طلب بواسطة'
+    )
+
+    old_shift = models.ForeignKey(
+        Shift,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='old_change_requests',
+        verbose_name='الشيفت القديم'
+    )
+
+    new_shift = models.ForeignKey(
+        Shift,
+        on_delete=models.PROTECT,
+        related_name='new_change_requests',
+        verbose_name='الشيفت الجديد'
+    )
+
+    effective_from = models.DateField(
+        verbose_name='تاريخ بداية السريان'
+    )
+
+    effective_to = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name='تاريخ نهاية السريان'
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='الحالة'
+    )
+
+    requires_approval = models.BooleanField(
+        default=True,
+        verbose_name='يحتاج موافقة'
+    )
+
+    approved_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='shift_changes_approved',
+        verbose_name='وافق بواسطة'
+    )
+
+    rejection_reason = models.TextField(
+        blank=True,
+        verbose_name='سبب الرفض'
+    )
+
+    reason = models.TextField(
+        blank=True,
+        verbose_name='سبب طلب التغيير'
+    )
+
+    notified_manager = models.BooleanField(default=False, verbose_name='تم إبلاغ المدير')
+    notified_hr = models.BooleanField(default=False, verbose_name='تم إبلاغ HR')
+    notified_employee = models.BooleanField(default=False, verbose_name='تم إبلاغ الموظف')
+
+    class Meta:
+        verbose_name = 'طلب تغيير شيفت'
+        verbose_name_plural = 'طلبات تغيير الشيفتات'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"طلب تغيير شيفت - {self.employee} - {self.status}"
+
+
+class ShiftOverride(TenantModel):
+    """استثناء شيفت ليوم معين"""
+
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='shift_overrides',
+        verbose_name='الموظف'
+    )
+
+    override_date = models.DateField(
+        verbose_name='تاريخ الاستثناء'
+    )
+
+    shift = models.ForeignKey(
+        Shift,
+        on_delete=models.PROTECT,
+        related_name='overrides',
+        verbose_name='الشيفت البديل'
+    )
+
+    reason = models.TextField(
+        blank=True,
+        verbose_name='سبب الاستثناء'
+    )
+
+    class Meta:
+        verbose_name = 'استثناء شيفت'
+        verbose_name_plural = 'استثناءات الشيفتات'
+        ordering = ['-override_date']
+        unique_together = [['employee', 'override_date']]
+
+    def __str__(self):
+        return f"{self.employee} - {self.override_date} - {self.shift.name}"
+
+
+class ShiftRotation(TenantModel):
+    """تناوب الشيفتات"""
+
+    ROTATION_TYPE_CHOICES = [
+        ('weekly', 'أسبوعي'),
+        ('biweekly', 'كل أسبوعين'),
+        ('monthly', 'شهري'),
+    ]
+
+    name = models.CharField(
+        max_length=100,
+        verbose_name='اسم التناوب'
+    )
+
+    rotation_type = models.CharField(
+        max_length=20,
+        choices=ROTATION_TYPE_CHOICES,
+        default='weekly',
+        verbose_name='نوع التناوب'
+    )
+
+    shifts = models.ManyToManyField(
+        Shift,
+        related_name='rotations',
+        verbose_name='الشيفتات'
+    )
+
+    employees = models.ManyToManyField(
+        'employees.Employee',
+        related_name='rotations',
+        verbose_name='الموظفون'
+    )
+
+    start_date = models.DateField(
+        verbose_name='تاريخ بداية التناوب'
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='نشط'
+    )
+
+    class Meta:
+        verbose_name = 'تناوب شيفتات'
+        verbose_name_plural = 'تناوبات الشيفتات'
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_rotation_type_display()})"
 
 
 class Attendance(TenantModel):

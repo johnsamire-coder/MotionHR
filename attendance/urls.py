@@ -104,6 +104,7 @@ urlpatterns = [
     path('api/mobile/announcements/list/', api_announcements.announcements_list),
     path('api/mobile/announcements/mark-read/', api_announcements.announcements_mark_read),
     path('api/mobile/manager/announcements/create/', api_announcements.manager_create_announcement),
+    path('api/mobile/manager/announcements/<int:pk>/update/', api_announcements.manager_update_announcement),
     path('api/mobile/manager/announcements/<int:pk>/delete/', api_announcements.manager_delete_announcement),
     path('api/mobile/manager/announcements/<int:pk>/stats/', api_announcements.manager_announcement_stats),
 
@@ -329,7 +330,9 @@ urlpatterns += [
 from attendance.api_shifts import (
     manager_shifts_list, manager_shift_create, manager_shift_update,
     manager_shift_delete, manager_shift_assign, manager_employee_shifts,
-    manager_shift_employees,
+    manager_shift_employees, my_shift, shift_change_requests_list,
+    shift_change_request_action, shift_override_create, shift_override_delete,
+    employee_effective_shift,
 )
 urlpatterns += [
     path('api/mobile/manager/shifts/', manager_shifts_list),
@@ -339,6 +342,12 @@ urlpatterns += [
     path('api/mobile/manager/shifts/<int:shift_id>/employees/', manager_shift_employees),
     path('api/mobile/manager/shifts/assign/', manager_shift_assign),
     path('api/mobile/manager/employees/<int:employee_id>/shifts/', manager_employee_shifts),
+    path('api/mobile/manager/employees/<int:employee_id>/effective-shift/', employee_effective_shift),
+    path('api/mobile/manager/shifts/change-requests/', shift_change_requests_list),
+    path('api/mobile/manager/shifts/change-requests/<int:request_id>/action/', shift_change_request_action),
+    path('api/mobile/manager/shifts/override/create/', shift_override_create),
+    path('api/mobile/manager/shifts/override/<int:override_id>/delete/', shift_override_delete),
+    path('api/mobile/my-shift/', my_shift),
 ]
 
 # ══════════════════════════════════════
