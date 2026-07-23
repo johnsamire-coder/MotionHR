@@ -119,6 +119,100 @@ class Shift(TenantModel):
         return day_map.get(date.weekday(), False)
 
 
+class ShiftAssignment(TenantModel):
+    """تعيين الشيفت على مستوى شركة / فرع / قسم / موظف"""
+
+    ASSIGNMENT_TYPE_CHOICES = [
+        ('company', 'شركة'),
+        ('branch', 'فرع'),
+        ('department', 'قسم'),
+        ('employee', 'موظف'),
+    ]
+
+    shift = models.ForeignKey(
+        Shift,
+        on_delete=models.PROTECT,
+        related_name='assignments',
+        verbose_name='الشيفت'
+    )
+
+    assignment_type = models.CharField(
+        max_length=20,
+        choices=ASSIGNMENT_TYPE_CHOICES,
+        verbose_name='نوع التعيين'
+    )
+
+    branch = models.ForeignKey(
+        'companies.Branch',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name='shift_assignments',
+        verbose_name='الفرع'
+    )
+
+    department = models.ForeignKey(
+        'companies.Department',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name='shift_assignments',
+        verbose_name='القسم'
+    )
+
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name='shift_assignments',
+        verbose_name='الموظف'
+    )
+
+    start_date = models.DateField(
+        verbose_name='تاريخ البداية'
+    )
+
+    end_date = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name='تاريخ النهاية'
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='نشط'
+    )
+
+    priority = models.IntegerField(
+        default=4,
+        verbose_name='الأولوية',
+        help_text='1=موظف, 2=قسم, 3=فرع, 4=شركة'
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name='ملاحظات'
+    )
+
+    class Meta:
+        verbose_name = 'تعيين شيفت'
+        verbose_name_plural = 'تعيينات الشيفتات'
+        ordering = ['priority', '-start_date']
+
+    def __str__(self):
+        target = 'غير محدد'
+        if self.assignment_type == 'employee' and self.employee:
+            target = self.employee.full_name_ar
+        elif self.assignment_type == 'department' and self.department:
+            target = self.department.name_ar
+        elif self.assignment_type == 'branch' and self.branch:
+            target = self.branch.name_ar
+        elif self.assignment_type == 'company' and self.company:
+            target = self.company.name_ar
+        return f"{self.shift.name} → {target}"
+
+
 class EmployeeShift(TenantModel):
     """ربط الموظف بالشيفت"""
 

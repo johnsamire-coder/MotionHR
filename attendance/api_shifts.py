@@ -96,17 +96,19 @@ def get_effective_shift(employee, target_date):
     """
     يجيب الشيفت الفعلي للموظف في يوم معين
     الأولوية:
-    1. ShiftOverride (استثناء يوم معين)
-    2. EmployeeShift للموظف نفسه
-    3. EmployeeShift للقسم
-    4. EmployeeShift للفرع
-    5. EmployeeShift للشركة
-    6. Shift is_default = True
-    7. None
+    1. ShiftOverride
+    2. ShiftAssignment للموظف
+    3. ShiftAssignment للقسم
+    4. ShiftAssignment للفرع
+    5. ShiftAssignment للشركة
+    6. EmployeeShift القديم (fallback)
+    7. Shift الافتراضي للشركة
+    8. None
     """
-    from attendance.models import ShiftOverride, EmployeeShift, Shift
+    from django.db.models import Q
+    from attendance.models import ShiftOverride, ShiftAssignment, EmployeeShift, Shift
 
-    # 1. شوف لو فيه override لليوم ده
+    # 1) override يومي
     override = ShiftOverride._base_manager.filter(
         employee=employee,
         override_date=target_date,
@@ -115,21 +117,64 @@ def get_effective_shift(employee, target_date):
     if override:
         return override.shift, 'override'
 
-    # 2. شوف EmployeeShift للموظف نفسه
-    from django.db.models import Q
-    emp_shift = EmployeeShift._base_manager.filter(
+    active_date_filter = Q(end_date__isnull=True) | Q(end_date__gte=target_date)
+
+    # 2) تعيين مباشر للموظف
+    employee_assignment = ShiftAssignment._base_manager.filter(
+        company=employee.company,
+        assignment_type='employee',
+        employee=employee,
+        is_active=True,
+        start_date__lte=target_date,
+    ).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+    if employee_assignment:
+        return employee_assignment.shift, 'employee_assignment'
+
+    # 3) تعيين القسم
+    if getattr(employee, 'department_id', None):
+        department_assignment = ShiftAssignment._base_manager.filter(
+            company=employee.company,
+            assignment_type='department',
+            department_id=employee.department_id,
+            is_active=True,
+            start_date__lte=target_date,
+        ).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+        if department_assignment:
+            return department_assignment.shift, 'department_assignment'
+
+    # 4) تعيين الفرع
+    if getattr(employee, 'branch_id', None):
+        branch_assignment = ShiftAssignment._base_manager.filter(
+            company=employee.company,
+            assignment_type='branch',
+            branch_id=employee.branch_id,
+            is_active=True,
+            start_date__lte=target_date,
+        ).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+        if branch_assignment:
+            return branch_assignment.shift, 'branch_assignment'
+
+    # 5) تعيين الشركة
+    company_assignment = ShiftAssignment._base_manager.filter(
+        company=employee.company,
+        assignment_type='company',
+        is_active=True,
+        start_date__lte=target_date,
+    ).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+    if company_assignment:
+        return company_assignment.shift, 'company_assignment'
+
+    # 6) fallback قديم على EmployeeShift لعدم كسر النظام الحالي
+    legacy_emp_shift = EmployeeShift._base_manager.filter(
         employee=employee,
         company=employee.company,
         is_active=True,
         start_date__lte=target_date,
-    ).filter(
-        Q(end_date__isnull=True) | Q(end_date__gte=target_date)
-    ).select_related('shift').order_by('priority', '-start_date').first()
+    ).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+    if legacy_emp_shift:
+        return legacy_emp_shift.shift, 'legacy_employee_shift'
 
-    if emp_shift:
-        return emp_shift.shift, emp_shift.assignment_type
-
-    # 3. شوف default shift للشركة
+    # 7) default shift
     default_shift = Shift._base_manager.filter(
         company=employee.company,
         is_default=True,
@@ -342,19 +387,22 @@ def manager_shift_assign(request):
     try:
         company = _get_company(request)
         data = request.data
-        employee_id = data.get("employee_id")
         shift_id = data.get("shift_id")
         start_date = data.get("start_date")
-        if not all([employee_id, shift_id, start_date]):
-            return Response({"success": False, "error": "employee_id و shift_id و start_date مطلوبة"}, status=400)
+        assignment_type = str(data.get("assignment_type", "employee")).strip()
+        end_date = data.get("end_date") or None
+        reason = data.get("reason", "")
+        lang = data.get("lang", "ar")
 
-        from attendance.models import Shift, EmployeeShift
+        if assignment_type not in ("employee", "department", "branch", "company"):
+            return Response({"success": False, "error": "assignment_type غير صحيح"}, status=400)
+
+        if not all([shift_id, start_date]):
+            return Response({"success": False, "error": "shift_id و start_date مطلوبان"}, status=400)
+
+        from attendance.models import Shift, EmployeeShift, ShiftAssignment, ShiftChangeRequest
         from employees.models import Employee
-
-        try:
-            employee = Employee._base_manager.get(id=employee_id, company=company)
-        except Employee.DoesNotExist:
-            return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
+        from companies.models import Department, Branch
 
         try:
             shift = Shift._base_manager.get(id=shift_id, company=company)
@@ -362,13 +410,52 @@ def manager_shift_assign(request):
             return Response({"success": False, "error": "الشيفت غير موجود"}, status=404)
 
         user_role = _get_user_role(request)
-        requires_approval = user_role not in HR_ROLES
+        requires_approval = user_role not in HR_ROLES and not request.user.is_superuser
 
-        if requires_approval:
-            # المدير محتاج موافقة HR
-            from attendance.models import ShiftChangeRequest
+        employee = None
+        department = None
+        branch = None
+
+        if assignment_type == "employee":
+            employee_id = data.get("employee_id")
+            if not employee_id:
+                return Response({"success": False, "error": "employee_id مطلوب لتعيين الموظف"}, status=400)
+            try:
+                employee = Employee._base_manager.get(id=employee_id, company=company)
+            except Employee.DoesNotExist:
+                return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
+
+        elif assignment_type == "department":
+            department_id = data.get("department_id")
+            if not department_id:
+                return Response({"success": False, "error": "department_id مطلوب لتعيين القسم"}, status=400)
+            try:
+                department = Department.objects.get(id=department_id, company=company)
+            except Department.DoesNotExist:
+                return Response({"success": False, "error": "القسم غير موجود"}, status=404)
+
+        elif assignment_type == "branch":
+            branch_id = data.get("branch_id")
+            if not branch_id:
+                return Response({"success": False, "error": "branch_id مطلوب لتعيين الفرع"}, status=400)
+            try:
+                branch = Branch.objects.get(id=branch_id, company=company)
+            except Branch.DoesNotExist:
+                return Response({"success": False, "error": "الفرع غير موجود"}, status=404)
+
+        # المدير العادي: مسموح له فقط طلب تغيير شيفت لموظف واحد
+        if requires_approval and assignment_type != "employee":
+            return Response({
+                "success": False,
+                "error": "تعيين شيفت لقسم أو فرع أو شركة متاح حاليًا لـ HR أو صاحب الشركة فقط"
+            }, status=403)
+
+        if requires_approval and assignment_type == "employee":
+            # المدير محتاج موافقة HR لتغيير شيفت موظف واحد
             current_shift = EmployeeShift._base_manager.filter(
-                employee=employee, company=company, is_active=True
+                employee=employee,
+                company=company,
+                is_active=True
             ).select_related('shift').order_by('-start_date').first()
 
             change_req = ShiftChangeRequest._base_manager.create(
@@ -378,33 +465,53 @@ def manager_shift_assign(request):
                 old_shift=current_shift.shift if current_shift else None,
                 new_shift=shift,
                 effective_from=start_date,
-                effective_to=data.get("end_date") or None,
+                effective_to=end_date,
                 status='pending',
                 requires_approval=True,
-                reason=data.get("reason", ""),
+                reason=reason,
                 notified_hr=False,
             )
 
-            # إشعار HR
             _notify_hr_shift_change(employee, shift, request.user, company)
 
-            lang = data.get("lang", "ar")
-            emp_name = getattr(employee, "full_name_ar", str(employee))
             return Response({
                 "success": True,
                 "pending_approval": True,
-                "message": f"تم إرسال طلب تغيير الشيفت لـ HR للموافقة" if lang == 'ar' else "Shift change request sent to HR for approval",
+                "message": "تم إرسال طلب تغيير الشيفت لـ HR للموافقة" if lang == 'ar' else "Shift change request sent to HR for approval",
                 "request_id": change_req.id,
             }, status=201)
 
-        else:
-            # HR أو صاحب الشركة → يطبق مباشرة
-            EmployeeShift._base_manager.filter(
-                employee=employee, is_active=True, company=company
+        # ── تطبيق مباشر: HR أو Company Admin أو Super Admin ──
+        if assignment_type == "employee":
+            # 1) التعيين الجديد الحقيقي
+            ShiftAssignment._base_manager.filter(
+                company=company,
+                assignment_type='employee',
+                employee=employee,
+                is_active=True
             ).update(is_active=False)
 
-            end_date = data.get("end_date") or None
-            emp_shift = EmployeeShift._base_manager.create(
+            assignment = ShiftAssignment._base_manager.create(
+                company=company,
+                shift=shift,
+                assignment_type='employee',
+                employee=employee,
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True,
+                priority=1,
+                notes=reason,
+                created_by=request.user,
+            )
+
+            # 2) legacy mirror عشان الحضور القديم مايتكسرش
+            EmployeeShift._base_manager.filter(
+                employee=employee,
+                is_active=True,
+                company=company
+            ).update(is_active=False)
+
+            legacy_emp_shift = EmployeeShift._base_manager.create(
                 company=company,
                 employee=employee,
                 shift=shift,
@@ -416,25 +523,155 @@ def manager_shift_assign(request):
                 created_by=request.user,
             )
 
-            # إشعار الموظف والمدير
             _notify_employee_shift_changed(employee, shift, request.user)
 
-            lang = data.get("lang", "ar")
             emp_name = getattr(employee, "full_name_ar", str(employee))
             return Response({
                 "success": True,
                 "pending_approval": False,
+                "assignment_type": "employee",
                 "message": f"تم تعيين شيفت '{shift.name}' للموظف {emp_name}" if lang == 'ar' else f"Shift '{shift.name}' assigned to {emp_name}",
                 "assignment": {
-                    "id": emp_shift.id,
+                    "id": assignment.id,
+                    "legacy_employee_shift_id": legacy_emp_shift.id,
                     "employee_id": employee.id,
                     "employee_name": emp_name,
                     "shift_id": shift.id,
                     "shift_name": shift.name,
-                    "start_date": str(emp_shift.start_date),
-                    "end_date": str(emp_shift.end_date) if emp_shift.end_date else None,
+                    "start_date": str(assignment.start_date),
+                    "end_date": str(assignment.end_date) if assignment.end_date else None,
                 }
             }, status=201)
+
+        if assignment_type == "department":
+            ShiftAssignment._base_manager.filter(
+                company=company,
+                assignment_type='department',
+                department=department,
+                is_active=True
+            ).update(is_active=False)
+
+            assignment = ShiftAssignment._base_manager.create(
+                company=company,
+                shift=shift,
+                assignment_type='department',
+                department=department,
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True,
+                priority=2,
+                notes=reason,
+                created_by=request.user,
+            )
+
+            affected_count = Employee._base_manager.filter(
+                company=company,
+                department=department,
+                status='active'
+            ).count()
+
+            return Response({
+                "success": True,
+                "pending_approval": False,
+                "assignment_type": "department",
+                "message": f"تم تعيين الشيفت '{shift.name}' للقسم {department.name_ar}" if lang == 'ar' else f"Shift '{shift.name}' assigned to department {department.name_ar}",
+                "assignment": {
+                    "id": assignment.id,
+                    "department_id": department.id,
+                    "department_name": department.name_ar,
+                    "shift_id": shift.id,
+                    "shift_name": shift.name,
+                    "start_date": str(assignment.start_date),
+                    "end_date": str(assignment.end_date) if assignment.end_date else None,
+                    "affected_employees_count": affected_count,
+                }
+            }, status=201)
+
+        if assignment_type == "branch":
+            ShiftAssignment._base_manager.filter(
+                company=company,
+                assignment_type='branch',
+                branch=branch,
+                is_active=True
+            ).update(is_active=False)
+
+            assignment = ShiftAssignment._base_manager.create(
+                company=company,
+                shift=shift,
+                assignment_type='branch',
+                branch=branch,
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True,
+                priority=3,
+                notes=reason,
+                created_by=request.user,
+            )
+
+            affected_count = Employee._base_manager.filter(
+                company=company,
+                branch=branch,
+                status='active'
+            ).count()
+
+            return Response({
+                "success": True,
+                "pending_approval": False,
+                "assignment_type": "branch",
+                "message": f"تم تعيين الشيفت '{shift.name}' للفرع {branch.name_ar}" if lang == 'ar' else f"Shift '{shift.name}' assigned to branch {branch.name_ar}",
+                "assignment": {
+                    "id": assignment.id,
+                    "branch_id": branch.id,
+                    "branch_name": branch.name_ar,
+                    "shift_id": shift.id,
+                    "shift_name": shift.name,
+                    "start_date": str(assignment.start_date),
+                    "end_date": str(assignment.end_date) if assignment.end_date else None,
+                    "affected_employees_count": affected_count,
+                }
+            }, status=201)
+
+        # assignment_type == company
+        ShiftAssignment._base_manager.filter(
+            company=company,
+            assignment_type='company',
+            is_active=True
+        ).update(is_active=False)
+
+        assignment = ShiftAssignment._base_manager.create(
+            company=company,
+            shift=shift,
+            assignment_type='company',
+            start_date=start_date,
+            end_date=end_date,
+            is_active=True,
+            priority=4,
+            notes=reason,
+            created_by=request.user,
+        )
+
+        affected_count = Employee._base_manager.filter(
+            company=company,
+            status='active'
+        ).count()
+
+        return Response({
+            "success": True,
+            "pending_approval": False,
+            "assignment_type": "company",
+            "message": f"تم تعيين الشيفت '{shift.name}' على مستوى الشركة" if lang == 'ar' else f"Shift '{shift.name}' assigned at company level",
+            "assignment": {
+                "id": assignment.id,
+                "company_id": company.id,
+                "company_name": getattr(company, 'name_ar', str(company)),
+                "shift_id": shift.id,
+                "shift_name": shift.name,
+                "start_date": str(assignment.start_date),
+                "end_date": str(assignment.end_date) if assignment.end_date else None,
+                "affected_employees_count": affected_count,
+            }
+        }, status=201)
+
     except Exception as e:
         logger.exception("manager_shift_assign error")
         return Response({"success": False, "error": str(e)}, status=500)
