@@ -250,7 +250,7 @@ def manager_mission_detail(request, mission_id):
     """تفاصيل مهمة للمدير"""
     company = get_company(request.user)
     try:
-        mission = Mission.objects.get(id=mission_id, company=company)
+        mission = Mission._base_manager.get(id=mission_id, company=company)
     except Mission.DoesNotExist:
         return Response({'error': 'المهمة غير موجودة'}, status=404)
 
@@ -264,7 +264,7 @@ def manager_update_mission(request, mission_id):
     """تعديل مهمة"""
     company = get_company(request.user)
     try:
-        mission = Mission.objects.get(id=mission_id, company=company)
+        mission = Mission._base_manager.get(id=mission_id, company=company)
     except Mission.DoesNotExist:
         return Response({'error': 'المهمة غير موجودة'}, status=404)
 
@@ -293,7 +293,7 @@ def manager_cancel_mission(request, mission_id):
     """إلغاء مهمة"""
     company = get_company(request.user)
     try:
-        mission = Mission.objects.get(id=mission_id, company=company)
+        mission = Mission._base_manager.get(id=mission_id, company=company)
     except Mission.DoesNotExist:
         return Response({'error': 'المهمة غير موجودة'}, status=404)
 
@@ -1001,7 +1001,7 @@ def manager_reassign_employee(request, mission_id):
         return Response({'error': 'لم يتم العثور على بيانات الشركة'}, status=400)
 
     try:
-        mission = Mission.objects.get(id=mission_id, company=company)
+        mission = Mission._base_manager.get(id=mission_id, company=company)
     except Mission.DoesNotExist:
         return Response({'error': 'المهمة غير موجودة'}, status=404)
 
@@ -1214,7 +1214,7 @@ def manager_force_cancel_mission(request, mission_id):
         return Response({'error': 'غير مصرح. يجب أن تكون مدير أو HR'}, status=403)
 
     try:
-        mission = Mission.objects.get(id=mission_id, company=company)
+        mission = Mission._base_manager.get(id=mission_id, company=company)
     except Mission.DoesNotExist:
         return Response({'error': 'المهمة غير موجودة'}, status=404)
 
