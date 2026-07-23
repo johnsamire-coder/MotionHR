@@ -114,8 +114,18 @@ def consume_permission(permission_request, actual_hours, used_at):
 
 def get_active_shift(employee, day):
     from django.db.models import Q
-    from attendance.models import EmployeeShift
+    from attendance.models import ShiftOverride, EmployeeShift, Shift
 
+    # 1. شوف لو فيه override لليوم ده
+    override = ShiftOverride._base_manager.filter(
+        employee=employee,
+        override_date=day,
+        company=employee.company
+    ).select_related('shift').first()
+    if override:
+        return override.shift
+
+    # 2. شوف EmployeeShift للموظف نفسه
     assignment = EmployeeShift._base_manager.filter(
         company=employee.company,
         employee=employee,
@@ -123,9 +133,18 @@ def get_active_shift(employee, day):
         start_date__lte=day,
     ).filter(
         Q(end_date__isnull=True) | Q(end_date__gte=day)
-    ).select_related("shift").order_by("-start_date").first()
+    ).select_related("shift").order_by("priority", "-start_date").first()
 
-    return assignment.shift if assignment else None
+    if assignment:
+        return assignment.shift
+
+    # 3. لو مفيش شيء، دور على default shift للشركة
+    default_shift = Shift._base_manager.filter(
+        company=employee.company,
+        is_default=True,
+        is_active=True
+    ).first()
+    return default_shift
 
 
 def get_shift_bounds(shift, day):
@@ -516,14 +535,10 @@ def mobile_attendance_action(request):
     early_leave_minutes = 0
 
     try:
-        from attendance.models import EmployeeShift
-        emp_shift = EmployeeShift._base_manager.filter(
-            employee=employee
-        ).order_by('-start_date').first()
+        today = timezone.localdate()
+        shift = get_active_shift(employee, today)
 
-        if emp_shift and emp_shift.shift and emp_shift.shift.start_time and emp_shift.shift.end_time:
-            shift = emp_shift.shift
-            today = timezone.localdate()
+        if shift and shift.start_time and shift.end_time:
             start_dt = datetime.combine(today, shift.start_time)
             end_dt = datetime.combine(today, shift.end_time)
             if end_dt <= start_dt:
@@ -694,13 +709,9 @@ def mobile_attendance_status(request):
     has_early_leave = False
 
     try:
-        from attendance.models import EmployeeShift
-        emp_shift = EmployeeShift._base_manager.filter(
-            employee=employee
-        ).order_by('-start_date').first()
+        shift = get_active_shift(employee, today)
 
-        if emp_shift and emp_shift.shift:
-            shift = emp_shift.shift
+        if shift:
             shift_name = shift.name
             if shift.start_time:
                 shift_start_str = shift.start_time.strftime('%H:%M')
