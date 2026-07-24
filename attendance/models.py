@@ -203,6 +203,105 @@ class Shift(TenantModel):
         return day_map.get(date.weekday(), False)
 
 
+
+class AttendanceSession(TenantModel):
+    """
+    فترة حضور واحدة — للشيفتات المقسمة والمرنة المقسمة
+    كل يوم ممكن يكون فيه أكتر من فترة (session)
+    """
+
+    attendance = models.ForeignKey(
+        'Attendance',
+        on_delete=models.CASCADE,
+        related_name='sessions',
+        verbose_name='سجل الحضور'
+    )
+
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='attendance_sessions',
+        verbose_name='الموظف'
+    )
+
+    session_number = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name='رقم الفترة',
+        help_text='1 للفترة الأولى، 2 للثانية...'
+    )
+
+    check_in_time = models.DateTimeField(
+        verbose_name='وقت دخول الفترة'
+    )
+
+    check_out_time = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name='وقت خروج الفترة'
+    )
+
+    check_in_latitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        blank=True, null=True,
+        verbose_name='خط عرض الدخول'
+    )
+
+    check_in_longitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        blank=True, null=True,
+        verbose_name='خط طول الدخول'
+    )
+
+    check_out_latitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        blank=True, null=True,
+        verbose_name='خط عرض الخروج'
+    )
+
+    check_out_longitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        blank=True, null=True,
+        verbose_name='خط طول الخروج'
+    )
+
+    is_partial = models.BooleanField(
+        default=False,
+        verbose_name='خروج جزئي',
+        help_text='True لو الموظف خرج ورجع تاني'
+    )
+
+    worked_minutes = models.IntegerField(
+        default=0,
+        verbose_name='دقائق العمل في الفترة دي'
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name='ملاحظات'
+    )
+
+    class Meta:
+        verbose_name = 'فترة حضور'
+        verbose_name_plural = 'فترات الحضور'
+        ordering = ['attendance', 'session_number']
+        unique_together = [['attendance', 'session_number']]
+
+    def __str__(self):
+        return f"{self.employee} - يوم {self.attendance.date} - فترة {self.session_number}"
+
+    def calculate_worked_minutes(self):
+        """بيحسب دقائق العمل لو فيه check_out"""
+        if self.check_in_time and self.check_out_time:
+            delta = self.check_out_time - self.check_in_time
+            self.worked_minutes = int(delta.total_seconds() / 60)
+            return self.worked_minutes
+        return 0
+
+    @property
+    def is_complete(self):
+        """هل الفترة اكتملت (فيها دخول وخروج)"""
+        return self.check_in_time is not None and self.check_out_time is not None
+
 class ShiftAssignment(TenantModel):
     """تعيين الشيفت على مستوى شركة / فرع / قسم / موظف"""
 

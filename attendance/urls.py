@@ -332,7 +332,7 @@ from attendance.api_shifts import (
     manager_shift_delete, manager_shift_assign, manager_employee_shifts,
     manager_shift_employees, my_shift, shift_change_requests_list,
     shift_change_request_action, shift_override_create, shift_override_delete,
-    employee_effective_shift,
+    employee_effective_shift, partial_checkout, resume_checkin, today_sessions,
 )
 urlpatterns += [
     path('api/mobile/manager/shifts/', manager_shifts_list),
@@ -348,6 +348,9 @@ urlpatterns += [
     path('api/mobile/manager/shifts/override/create/', shift_override_create),
     path('api/mobile/manager/shifts/override/<int:override_id>/delete/', shift_override_delete),
     path('api/mobile/my-shift/', my_shift),
+    path('api/mobile/employee/partial-checkout/', partial_checkout),
+    path('api/mobile/employee/resume-checkin/', resume_checkin),
+    path('api/mobile/employee/today-sessions/', today_sessions),
 ]
 
 # ══════════════════════════════════════

@@ -1162,3 +1162,206 @@ def _notify_employee_shift_override(employee, shift, override_date):
             )
     except Exception:
         pass
+
+
+# ── PARTIAL CHECKOUT / SESSION APIs ──
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def partial_checkout(request):
+    """
+    خروج جزئي — الموظف بيخرج ويرجع تاني
+    يُستخدم مع shift_mode: flex_split أو split_fixed
+    """
+    try:
+        from employees.models import Employee
+        from attendance.models import Attendance, AttendanceSession
+        from django.utils import timezone
+
+        employee = Employee._base_manager.filter(user=request.user).first()
+        if not employee:
+            return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
+
+        today = timezone.localdate()
+        attendance = Attendance._base_manager.filter(
+            employee=employee, date=today
+        ).first()
+
+        if not attendance:
+            return Response({"success": False, "error": "مفيش سجل حضور لليوم ده"}, status=400)
+
+        shift, _ = get_effective_shift(employee, today)
+        if shift and not shift.allow_partial_checkout:
+            return Response({"success": False, "error": "الشيفت ده مش بيسمح بخروج جزئي"}, status=400)
+
+        # شوف آخر session مفتوحة (مالهاش check_out)
+        open_session = AttendanceSession._base_manager.filter(
+            attendance=attendance,
+            employee=employee,
+            check_out_time__isnull=True
+        ).order_by('-session_number').first()
+
+        if not open_session:
+            return Response({"success": False, "error": "مفيش فترة مفتوحة تقدر تخرج منها"}, status=400)
+
+        now = timezone.now()
+        lat = request.data.get('latitude')
+        lon = request.data.get('longitude')
+
+        open_session.check_out_time = now
+        if lat:
+            open_session.check_out_latitude = lat
+        if lon:
+            open_session.check_out_longitude = lon
+        open_session.is_partial = True
+        open_session.calculate_worked_minutes()
+        open_session.save()
+
+        return Response({
+            "success": True,
+            "message": "تم تسجيل الخروج الجزئي",
+            "session_number": open_session.session_number,
+            "worked_minutes": open_session.worked_minutes,
+            "check_out_time": now.strftime('%H:%M'),
+        })
+
+    except Exception as e:
+        logger.exception("partial_checkout error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def resume_checkin(request):
+    """
+    عودة للعمل بعد خروج جزئي
+    بتفتح session جديدة
+    """
+    try:
+        from employees.models import Employee
+        from attendance.models import Attendance, AttendanceSession
+        from django.utils import timezone
+
+        employee = Employee._base_manager.filter(user=request.user).first()
+        if not employee:
+            return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
+
+        today = timezone.localdate()
+        attendance = Attendance._base_manager.filter(
+            employee=employee, date=today
+        ).first()
+
+        if not attendance:
+            return Response({"success": False, "error": "مفيش سجل حضور لليوم ده"}, status=400)
+
+        shift, _ = get_effective_shift(employee, today)
+        if shift and not shift.allow_partial_checkout:
+            return Response({"success": False, "error": "الشيفت ده مش بيسمح بالرجوع بعد الخروج"}, status=400)
+
+        # تأكيد إن فيه partial checkout قبل كده
+        last_session = AttendanceSession._base_manager.filter(
+            attendance=attendance,
+            employee=employee
+        ).order_by('-session_number').first()
+
+        if not last_session:
+            return Response({"success": False, "error": "مفيش خروج جزئي قبل كده"}, status=400)
+
+        if last_session.check_out_time is None:
+            return Response({"success": False, "error": "لسه مسجلتش خروج جزئي"}, status=400)
+
+        # شوف max sessions
+        max_sessions = shift.max_sessions_per_day if shift else 2
+        current_count = AttendanceSession._base_manager.filter(
+            attendance=attendance,
+            employee=employee
+        ).count()
+
+        if current_count >= max_sessions:
+            return Response({
+                "success": False,
+                "error": f"وصلت للحد الأقصى من الفترات ({max_sessions} فترات)"
+            }, status=400)
+
+        now = timezone.now()
+        lat = request.data.get('latitude')
+        lon = request.data.get('longitude')
+
+        new_session = AttendanceSession._base_manager.create(
+            company=employee.company,
+            attendance=attendance,
+            employee=employee,
+            session_number=current_count + 1,
+            check_in_time=now,
+            check_in_latitude=lat,
+            check_in_longitude=lon,
+            is_partial=False,
+        )
+
+        return Response({
+            "success": True,
+            "message": "تم تسجيل العودة للعمل",
+            "session_number": new_session.session_number,
+            "check_in_time": now.strftime('%H:%M'),
+        })
+
+    except Exception as e:
+        logger.exception("resume_checkin error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def today_sessions(request):
+    """
+    جيب كل الفترات لليوم ده للموظف
+    """
+    try:
+        from employees.models import Employee
+        from attendance.models import Attendance, AttendanceSession
+        from django.utils import timezone
+
+        employee = Employee._base_manager.filter(user=request.user).first()
+        if not employee:
+            return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
+
+        today = timezone.localdate()
+        attendance = Attendance._base_manager.filter(
+            employee=employee, date=today
+        ).first()
+
+        if not attendance:
+            return Response({"success": True, "sessions": [], "total_worked_minutes": 0})
+
+        sessions = AttendanceSession._base_manager.filter(
+            attendance=attendance,
+            employee=employee
+        ).order_by('session_number')
+
+        total_minutes = 0
+        data = []
+        for s in sessions:
+            worked = s.worked_minutes if s.is_complete else 0
+            total_minutes += worked
+            data.append({
+                "session_number": s.session_number,
+                "check_in": s.check_in_time.strftime('%H:%M') if s.check_in_time else None,
+                "check_out": s.check_out_time.strftime('%H:%M') if s.check_out_time else None,
+                "is_partial": s.is_partial,
+                "is_complete": s.is_complete,
+                "worked_minutes": worked,
+            })
+
+        return Response({
+            "success": True,
+            "sessions": data,
+            "total_worked_minutes": total_minutes,
+            "sessions_count": len(data),
+        })
+
+    except Exception as e:
+        logger.exception("today_sessions error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
