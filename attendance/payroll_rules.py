@@ -4,10 +4,75 @@ Phase 15: Payroll Pro
 Mission-aware + Shift-aware + Policy-aware
 + Allowances / Deductions / Bonuses / Penalties / Installments / Insurance
 """
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from calendar import monthrange
 from django.db.models import Q
 from .models import Attendance
+
+
+def _get_shift_for_date(employee, target_date):
+    """يجيب الشيفت الفعلي للموظف في يوم معين"""
+    try:
+        from attendance.api_shifts import get_effective_shift
+        shift, source = get_effective_shift(employee, target_date)
+        return shift
+    except Exception:
+        return None
+
+
+def _calc_late_minutes(shift, att):
+    """يحسب دقائق التأخير بناءً على الشيفت الفعلي"""
+    if not shift or not att or not att.check_in_time:
+        return 0
+    try:
+        from django.utils import timezone
+        shift_start = datetime.combine(att.check_in_time.date(), shift.start_time)
+        grace = int(shift.grace_period or 0)
+        deadline = shift_start + timedelta(minutes=grace)
+        check_in_local = timezone.localtime(att.check_in_time)
+        check_in_naive = check_in_local.replace(tzinfo=None)
+        if check_in_naive > deadline:
+            return int((check_in_naive - deadline).total_seconds() / 60)
+        return 0
+    except Exception:
+        return int(getattr(att, 'late_minutes', 0) or 0)
+
+
+def _calc_overtime_hours(shift, att):
+    """يحسب ساعات الأوفر تايم بناءً على الشيفت الفعلي"""
+    if not shift or not att or not att.check_in_time or not att.check_out_time:
+        return float(getattr(att, 'overtime_hours', 0) or 0)
+    try:
+        from django.utils import timezone
+        today = att.check_in_time.date()
+        shift_end = datetime.combine(today, shift.end_time)
+        if shift.crosses_midnight or shift.end_time <= shift.start_time:
+            shift_end += timedelta(days=1)
+        check_out_local = timezone.localtime(att.check_out_time)
+        check_out_naive = check_out_local.replace(tzinfo=None)
+        if check_out_naive > shift_end:
+            ot_minutes = (check_out_naive - shift_end).total_seconds() / 60
+            return round(ot_minutes / 60, 2)
+        return 0.0
+    except Exception:
+        return float(getattr(att, 'overtime_hours', 0) or 0)
+
+
+def _is_night_shift(shift):
+    """هل الشيفت ليلي؟"""
+    if not shift:
+        return False
+    return bool(getattr(shift, 'crosses_midnight', False)) or shift.shift_mode == 'night'
+
+
+def _is_weekend_work(shift, target_date):
+    """هل الموظف اشتغل يوم راحة؟"""
+    if not shift:
+        return False
+    try:
+        return not shift.is_work_day(target_date)
+    except Exception:
+        return False
 
 
 def _safe_float(value, default=0.0):
@@ -385,8 +450,12 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     total_overtime_hours = 0.0
     daily_details = []
 
+    night_shift_days = 0
+    weekend_work_days = 0
+
     for d in working_dates:
         att = attendance_by_date.get(d)
+        day_shift = _get_shift_for_date(employee, d)
 
         if d in leave_dates:
             on_leave_days += 1
@@ -395,15 +464,20 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 'effective_status': 'on_leave', 'check_in': None,
                 'check_out': None, 'work_hours': 0,
                 'late_minutes': 0, 'overtime_hours': 0,
+                'shift_name': day_shift.name if day_shift else '',
+                'is_night_shift': False, 'is_weekend_work': False,
             })
             continue
 
         if d in mission_dates:
             mission_days += 1
             work_h = _safe_float(att.work_hours if att else 0)
-            ot_h = _safe_float(att.overtime_hours if att else 0)
+            ot_h = _calc_overtime_hours(day_shift, att)
             total_work_hours += work_h
             total_overtime_hours += ot_h
+            is_night = _is_night_shift(day_shift)
+            if is_night:
+                night_shift_days += 1
             daily_details.append({
                 'date': d.isoformat(), 'status': 'mission_day',
                 'effective_status': 'present',
@@ -411,15 +485,25 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 'check_out': att.check_out_time.strftime('%H:%M') if att and att.check_out_time else None,
                 'work_hours': round(work_h, 2),
                 'late_minutes': 0, 'overtime_hours': round(ot_h, 2),
+                'shift_name': day_shift.name if day_shift else '',
+                'is_night_shift': is_night, 'is_weekend_work': False,
             })
             continue
 
         if d in attended_dates and att:
             work_h = _safe_float(att.work_hours)
-            ot_h = _safe_float(att.overtime_hours)
-            late_min = _safe_int(att.late_minutes)
+            ot_h = _calc_overtime_hours(day_shift, att)
+            late_min = _calc_late_minutes(day_shift, att)
+            is_night = _is_night_shift(day_shift)
+            is_weekend = _is_weekend_work(day_shift, d)
+
             total_work_hours += work_h
             total_overtime_hours += ot_h
+
+            if is_night:
+                night_shift_days += 1
+            if is_weekend:
+                weekend_work_days += 1
 
             if late_min > 0:
                 late_days += 1
@@ -438,6 +522,9 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 'work_hours': round(work_h, 2),
                 'late_minutes': late_min,
                 'overtime_hours': round(ot_h, 2),
+                'shift_name': day_shift.name if day_shift else '',
+                'is_night_shift': is_night,
+                'is_weekend_work': is_weekend,
             })
             continue
 
@@ -447,6 +534,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             'effective_status': 'absent', 'check_in': None,
             'check_out': None, 'work_hours': 0,
             'late_minutes': 0, 'overtime_hours': 0,
+            'shift_name': day_shift.name if day_shift else '',
+            'is_night_shift': False, 'is_weekend_work': False,
         })
 
     basic_salary = _safe_float(getattr(employee, 'basic_salary', 0))
@@ -525,6 +614,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'total_late_minutes': total_late_minutes,
         'total_work_hours': round(total_work_hours, 2),
         'overtime_hours': round(total_overtime_hours, 2),
+        'night_shift_days': night_shift_days,
+        'weekend_work_days': weekend_work_days,
 
         'allowance_items': allowance_items,
         'bonus_items': bonus_items,
