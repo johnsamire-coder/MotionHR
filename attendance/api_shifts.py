@@ -1756,3 +1756,229 @@ def manager_shift_assignment_delete(request, assignment_id):
     except Exception as e:
         logger.exception("manager_shift_assignment_delete error")
         return Response({"success": False, "error": str(e)}, status=500)
+
+
+# ══════════════════════════════════════
+# ROTATION APIs
+# ══════════════════════════════════════
+
+@api_view(["GET", "POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def rotation_list_create(request):
+    err = _check_manager(request)
+    if err:
+        return err
+    company = _get_company(request)
+    from attendance.models import ShiftRotation, ShiftRotationSlot
+
+    if request.method == "GET":
+        rotations = ShiftRotation._base_manager.filter(
+            company=company
+        ).prefetch_related('slots', 'slots__shift').order_by('-start_date')
+
+        data = []
+        for r in rotations:
+            slots = []
+            for s in r.slots.all():
+                slots.append({
+                    "id": s.id,
+                    "start_day_index": s.start_day_index,
+                    "end_day_index": s.end_day_index,
+                    "shift_id": s.shift_id,
+                    "shift_name": s.shift.name if s.shift else None,
+                })
+            data.append({
+                "id": r.id,
+                "name": r.name,
+                "cycle_length_days": r.cycle_length_days,
+                "start_date": str(r.start_date),
+                "is_active": r.is_active,
+                "slots": slots,
+            })
+        return Response({"success": True, "rotations": data, "count": len(data)})
+
+    # POST - إنشاء rotation جديد
+    d = request.data
+    name = d.get("name", "").strip()
+    cycle_length_days = int(d.get("cycle_length_days", 7))
+    start_date = d.get("start_date")
+    slots_data = d.get("slots", [])
+
+    if not name or not start_date:
+        return Response({"success": False, "error": "name و start_date مطلوبان"}, status=400)
+
+    try:
+        from datetime import datetime as dt
+        start_date = dt.strptime(str(start_date), "%Y-%m-%d").date()
+    except ValueError:
+        return Response({"success": False, "error": "صيغة التاريخ لازم تكون YYYY-MM-DD"}, status=400)
+
+    rotation = ShiftRotation._base_manager.create(
+        company=company,
+        name=name,
+        cycle_length_days=cycle_length_days,
+        start_date=start_date,
+        is_active=True,
+        created_by=request.user,
+    )
+
+    from attendance.models import Shift
+    for slot in slots_data:
+        try:
+            shift = Shift._base_manager.get(id=slot["shift_id"], company=company) if slot.get("shift_id") else None
+            ShiftRotationSlot._base_manager.create(
+                company=company,
+                rotation=rotation,
+                start_day_index=int(slot["start_day_index"]),
+                end_day_index=int(slot["end_day_index"]),
+                shift=shift,
+                created_by=request.user,
+            )
+        except Exception:
+            continue
+
+    return Response({"success": True, "rotation_id": rotation.id, "message": f"تم إنشاء التناوب '{name}'"}, status=201)
+
+
+@api_view(["PUT", "DELETE"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def rotation_detail(request, rotation_id):
+    err = _check_manager(request)
+    if err:
+        return err
+    company = _get_company(request)
+    from attendance.models import ShiftRotation
+
+    try:
+        rotation = ShiftRotation._base_manager.get(id=rotation_id, company=company)
+    except ShiftRotation.DoesNotExist:
+        return Response({"success": False, "error": "التناوب غير موجود"}, status=404)
+
+    if request.method == "DELETE":
+        rotation.delete()
+        return Response({"success": True, "message": "تم حذف التناوب"})
+
+    # PUT
+    d = request.data
+    if "name" in d:
+        rotation.name = d["name"]
+    if "cycle_length_days" in d:
+        rotation.cycle_length_days = int(d["cycle_length_days"])
+    if "start_date" in d:
+        from datetime import datetime as dt
+        rotation.start_date = dt.strptime(str(d["start_date"]), "%Y-%m-%d").date()
+    if "is_active" in d:
+        rotation.is_active = bool(d["is_active"])
+    rotation.save()
+
+    return Response({"success": True, "message": "تم تعديل التناوب"})
+
+
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def rotation_assign(request, rotation_id):
+    err = _check_manager(request)
+    if err:
+        return err
+    company = _get_company(request)
+    from attendance.models import ShiftRotation, ShiftRotationAssignment
+    from employees.models import Employee
+    from companies.models import Department, Branch
+
+    try:
+        rotation = ShiftRotation._base_manager.get(id=rotation_id, company=company)
+    except ShiftRotation.DoesNotExist:
+        return Response({"success": False, "error": "التناوب غير موجود"}, status=404)
+
+    d = request.data
+    assignment_type = d.get("assignment_type", "employee")
+    start_date_raw = d.get("start_date")
+    end_date_raw = d.get("end_date")
+
+    if not start_date_raw:
+        return Response({"success": False, "error": "start_date مطلوب"}, status=400)
+
+    from datetime import datetime as dt
+    start_date = dt.strptime(str(start_date_raw), "%Y-%m-%d").date()
+    end_date = dt.strptime(str(end_date_raw), "%Y-%m-%d").date() if end_date_raw else None
+
+    priority_map = {"employee": 1, "department": 2, "branch": 3, "company": 4}
+    priority = priority_map.get(assignment_type, 4)
+
+    kwargs = {
+        "company": company,
+        "rotation": rotation,
+        "assignment_type": assignment_type,
+        "start_date": start_date,
+        "end_date": end_date,
+        "priority": priority,
+        "is_active": True,
+        "created_by": request.user,
+    }
+
+    if assignment_type == "employee":
+        emp_id = d.get("employee_id")
+        if not emp_id:
+            return Response({"success": False, "error": "employee_id مطلوب"}, status=400)
+        kwargs["employee"] = Employee._base_manager.get(id=emp_id, company=company)
+
+    elif assignment_type == "department":
+        dept_id = d.get("department_id")
+        if not dept_id:
+            return Response({"success": False, "error": "department_id مطلوب"}, status=400)
+        kwargs["department"] = Department.objects.get(id=dept_id, company=company)
+
+    elif assignment_type == "branch":
+        branch_id = d.get("branch_id")
+        if not branch_id:
+            return Response({"success": False, "error": "branch_id مطلوب"}, status=400)
+        kwargs["branch"] = Branch.objects.get(id=branch_id, company=company)
+
+    ShiftRotationAssignment._base_manager.create(**kwargs)
+
+    return Response({"success": True, "message": f"تم تعيين التناوب '{rotation.name}' بنجاح"}, status=201)
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def rotation_assignments_list(request, rotation_id):
+    err = _check_manager(request)
+    if err:
+        return err
+    company = _get_company(request)
+    from attendance.models import ShiftRotation, ShiftRotationAssignment
+
+    try:
+        rotation = ShiftRotation._base_manager.get(id=rotation_id, company=company)
+    except ShiftRotation.DoesNotExist:
+        return Response({"success": False, "error": "التناوب غير موجود"}, status=404)
+
+    assignments = ShiftRotationAssignment._base_manager.filter(
+        rotation=rotation,
+        is_active=True,
+        company=company,
+    ).select_related("employee", "department", "branch")
+
+    data = []
+    for a in assignments:
+        item = {
+            "id": a.id,
+            "assignment_type": a.assignment_type,
+            "start_date": str(a.start_date),
+            "end_date": str(a.end_date) if a.end_date else None,
+        }
+        if a.assignment_type == "employee" and a.employee:
+            item["target_name"] = getattr(a.employee, "full_name_ar", str(a.employee))
+        elif a.assignment_type == "department" and a.department:
+            item["target_name"] = a.department.name_ar
+        elif a.assignment_type == "branch" and a.branch:
+            item["target_name"] = a.branch.name_ar
+        else:
+            item["target_name"] = "الشركة كلها"
+        data.append(item)
+
+    return Response({"success": True, "assignments": data, "rotation_name": rotation.name})

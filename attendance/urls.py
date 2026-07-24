@@ -344,6 +344,7 @@ from attendance.api_shifts import (
     employee_effective_shift, partial_checkout, resume_checkin, today_sessions,
     manager_shift_assignments_list, manager_shift_assignment_update,
     manager_shift_assignment_delete,
+    rotation_list_create, rotation_detail, rotation_assign, rotation_assignments_list,
 )
 urlpatterns += [
     path('api/mobile/manager/shifts/', manager_shifts_list),
@@ -360,6 +361,10 @@ urlpatterns += [
     path('api/mobile/manager/shifts/change-requests/', shift_change_requests_list),
     path('api/mobile/manager/shifts/change-requests/<int:request_id>/action/', shift_change_request_action),
     path('api/mobile/manager/shifts/overrides/', shift_override_list),
+    path('api/mobile/manager/rotations/', rotation_list_create),
+    path('api/mobile/manager/rotations/<int:rotation_id>/', rotation_detail),
+    path('api/mobile/manager/rotations/<int:rotation_id>/assign/', rotation_assign),
+    path('api/mobile/manager/rotations/<int:rotation_id>/assignments/', rotation_assignments_list),
     path('api/mobile/manager/shifts/override/create/', shift_override_create),
     path('api/mobile/manager/shifts/override/<int:override_id>/delete/', shift_override_delete),
     path('api/mobile/my-shift/', my_shift),
