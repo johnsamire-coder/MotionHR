@@ -29,6 +29,90 @@ class Shift(TenantModel):
         verbose_name='نوع الشيفت'
     )
 
+    # النوع السلوكي الحقيقي للشيفت (نضيفه من غير ما نكسر القديم)
+    SHIFT_MODE_CHOICES = [
+        ('fixed', 'ثابت'),
+        ('flex_fixed', 'مرن ثابت'),
+        ('flex_split', 'مرن مقسم'),
+        ('variable_daily', 'متغير يومي'),
+        ('variable_weekly', 'متغير أسبوعي'),
+        ('variable_weekly_flex', 'متغير أسبوعي مرن'),
+        ('split_fixed', 'مقسم ثابت'),
+    ]
+
+    shift_mode = models.CharField(
+        max_length=30,
+        choices=SHIFT_MODE_CHOICES,
+        default='fixed',
+        verbose_name='النمط السلوكي للشيفت',
+        help_text='بيحدد منطق الشيفت: ثابت، مرن، متغير، مقسم...'
+    )
+
+    # preset للتوقيت الافتراضي في الواجهة
+    TIME_PRESET_CHOICES = [
+        ('custom', 'مخصص'),
+        ('morning', 'صباحي'),
+        ('evening', 'مسائي'),
+        ('night', 'ليلي'),
+    ]
+
+    time_preset = models.CharField(
+        max_length=20,
+        choices=TIME_PRESET_CHOICES,
+        default='custom',
+        verbose_name='توقيت افتراضي',
+        help_text='للواجهة فقط: صباحي / مسائي / ليلي / مخصص'
+    )
+
+    # عدد الساعات المطلوبة يوميًا في الشيفتات المرنة
+    required_daily_hours = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=8,
+        verbose_name='عدد الساعات المطلوبة يوميًا',
+        help_text='مهم للمرن الثابت والمرن المقسم'
+    )
+
+    # هل مسموح بخروج جزئي ثم رجوع؟
+    allow_partial_checkout = models.BooleanField(
+        default=False,
+        verbose_name='يسمح بخروج جزئي',
+        help_text='مطلوب للمرن المقسم والمقسم الثابت'
+    )
+
+    # أقصى عدد فترات شغل في اليوم
+    max_sessions_per_day = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name='أقصى عدد فترات في اليوم',
+        help_text='مثلاً 2 للمرن المقسم أو المقسم الثابت'
+    )
+
+    # نوع الجدول المتغير
+    VARIABLE_SCHEDULE_TYPE_CHOICES = [
+        ('none', 'لا يوجد'),
+        ('daily', 'يومي'),
+        ('weekly', 'أسبوعي'),
+        ('weekly_flex', 'أسبوعي مرن'),
+    ]
+
+    variable_schedule_type = models.CharField(
+        max_length=20,
+        choices=VARIABLE_SCHEDULE_TYPE_CHOICES,
+        default='none',
+        verbose_name='نوع الجدول المتغير'
+    )
+
+    # جدول ديناميكي JSON:
+    # variable_daily  -> أوقات اليوم
+    # variable_weekly -> أوقات الأيام
+    # split_fixed     -> فترتين أو أكثر
+    # flex_split      -> قواعد الفترات
+    schedule_config = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='إعدادات الجدول الديناميكي'
+    )
+
     start_time = models.TimeField(
         verbose_name='وقت البداية'
     )

@@ -89,6 +89,15 @@ def _shift_data(shift, lang='ar'):
         "is_default": shift.is_default,
         "is_active": shift.is_active,
         "employee_count": shift.employees.filter(is_active=True).count(),
+        "shift_mode": shift.shift_mode,
+        "time_preset": shift.time_preset,
+        "required_daily_hours": float(shift.required_daily_hours),
+        "allow_partial_checkout": shift.allow_partial_checkout,
+        "max_sessions_per_day": shift.max_sessions_per_day,
+        "variable_schedule_type": shift.variable_schedule_type,
+        "schedule_config": shift.schedule_config or {},
+        "shift_mode_label": dict(shift.SHIFT_MODE_CHOICES).get(shift.shift_mode, shift.shift_mode),
+        "time_preset_label": dict(shift.TIME_PRESET_CHOICES).get(shift.time_preset, shift.time_preset),
     }
 
 
@@ -270,6 +279,13 @@ def manager_shift_create(request):
             is_default=is_default,
             is_active=True,
             created_by=request.user,
+            shift_mode=str(data.get("shift_mode", "fixed")).strip(),
+            time_preset=str(data.get("time_preset", "custom")).strip(),
+            required_daily_hours=float(data.get("required_daily_hours", 8)),
+            allow_partial_checkout=bool(data.get("allow_partial_checkout", False)),
+            max_sessions_per_day=int(data.get("max_sessions_per_day", 1)),
+            variable_schedule_type=str(data.get("variable_schedule_type", "none")).strip(),
+            schedule_config=data.get("schedule_config", {}),
         )
         lang = data.get("lang", "ar")
         return Response({
@@ -329,6 +345,20 @@ def manager_shift_update(request, shift_id):
                 setattr(shift, day, bool(data[day]))
         if "is_active" in data:
             shift.is_active = bool(data["is_active"])
+        if "shift_mode" in data:
+            shift.shift_mode = str(data["shift_mode"]).strip()
+        if "time_preset" in data:
+            shift.time_preset = str(data["time_preset"]).strip()
+        if "required_daily_hours" in data:
+            shift.required_daily_hours = float(data["required_daily_hours"])
+        if "allow_partial_checkout" in data:
+            shift.allow_partial_checkout = bool(data["allow_partial_checkout"])
+        if "max_sessions_per_day" in data:
+            shift.max_sessions_per_day = int(data["max_sessions_per_day"])
+        if "variable_schedule_type" in data:
+            shift.variable_schedule_type = str(data["variable_schedule_type"]).strip()
+        if "schedule_config" in data:
+            shift.schedule_config = data["schedule_config"]
         if "is_default" in data:
             is_default = bool(data["is_default"])
             if is_default:
