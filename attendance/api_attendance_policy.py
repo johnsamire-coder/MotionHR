@@ -123,6 +123,12 @@ def _policy_data(policy):
         "approved_by": policy.approved_by.get_full_name() if policy.approved_by else None,
         "approved_at": str(policy.approved_at)[:16] if policy.approved_at else None,
         "created_at": str(policy.created_at)[:16],
+        "permission_enabled": policy.permission_enabled,
+        "permission_monthly_hours": float(policy.permission_monthly_hours),
+        "permission_monthly_count": policy.permission_monthly_count,
+        "permission_max_hours_per_request": float(policy.permission_max_hours_per_request),
+        "permission_fraction_as_full": policy.permission_fraction_as_full,
+        "permission_reset_cycle": policy.permission_reset_cycle,
         "assignments": assignments,
         "late_rules": late_rules,
         "absence_rules": absence_rules,
@@ -178,6 +184,12 @@ def policy_list_create(request):
             status='draft',
             notes=data.get("notes", ""),
             created_by=request.user,
+            permission_enabled=bool(data.get("permission_enabled", False)),
+            permission_monthly_hours=float(data.get("permission_monthly_hours", 0)),
+            permission_monthly_count=int(data.get("permission_monthly_count", 0)),
+            permission_max_hours_per_request=float(data.get("permission_max_hours_per_request", 0)),
+            permission_fraction_as_full=bool(data.get("permission_fraction_as_full", False)),
+            permission_reset_cycle=str(data.get("permission_reset_cycle", "calendar")),
         )
 
         # إضافة القواعد لو موجودة في الـ request
@@ -232,6 +244,18 @@ def policy_detail(request, policy_id):
         policy.effective_to = data["effective_to"] or None
     if "notes" in data:
         policy.notes = data["notes"]
+    if "permission_enabled" in data:
+        policy.permission_enabled = bool(data["permission_enabled"])
+    if "permission_monthly_hours" in data:
+        policy.permission_monthly_hours = float(data["permission_monthly_hours"])
+    if "permission_monthly_count" in data:
+        policy.permission_monthly_count = int(data["permission_monthly_count"])
+    if "permission_max_hours_per_request" in data:
+        policy.permission_max_hours_per_request = float(data["permission_max_hours_per_request"])
+    if "permission_fraction_as_full" in data:
+        policy.permission_fraction_as_full = bool(data["permission_fraction_as_full"])
+    if "permission_reset_cycle" in data:
+        policy.permission_reset_cycle = str(data["permission_reset_cycle"])
     policy.updated_by = request.user
     policy.save()
 

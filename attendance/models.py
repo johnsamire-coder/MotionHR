@@ -304,6 +304,18 @@ class AttendanceSession(TenantModel):
 
 
 class AttendancePolicy(TenantModel):
+    # سياسة الأذونات
+    permission_enabled = models.BooleanField(default=False)
+    permission_monthly_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0.0)
+    permission_monthly_count = models.IntegerField(default=0)
+    permission_max_hours_per_request = models.DecimalField(max_digits=5, decimal_places=2, default=0.0)
+    permission_fraction_as_full = models.BooleanField(default=False)
+    permission_reset_cycle = models.CharField(
+        max_length=20, 
+        choices=[('calendar', 'شهر ميلادي'), ('payroll', 'دورة المرتب')],
+        default='calendar'
+    )
+
     """سياسة الحضور والخصم — لكل شركة/فرع/قسم"""
 
     STATUS_CHOICES = [
@@ -1951,3 +1963,33 @@ from .company_policy_models import CompanyWorkPolicy
 from .payroll_settings_model import PayrollSettings
 
 from .payroll_pro_models import PayrollRun, PayrollLine, PayrollBonus, PayrollPenalty, PayrollInstallment
+
+
+class PermissionLedger(TenantModel):
+    """
+    سجل حركة الأذونات للموظف
+    """
+    ENTRY_TYPE_CHOICES = [
+        ('manual_request', 'Manual Permission Request'),
+        ('auto_late', 'Auto Deduction From Late'),
+        ('manual_grant', 'Manual Grant Extra'),
+        ('rollback', 'Rollback / Cancel Late'),
+    ]
+
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='permission_ledger'
+    )
+    entry_type = models.CharField(max_length=20, choices=ENTRY_TYPE_CHOICES)
+    minutes_used = models.IntegerField(default=0)
+    count_used = models.IntegerField(default=0)
+    reference_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.employee} - {self.entry_type} - {self.minutes_used} min"
