@@ -147,6 +147,132 @@ def get_active_shift(employee, day):
     return default_shift
 
 
+
+
+def get_shift_periods(shift, day):
+    """
+    بترجع قائمة الفترات للشيفت
+    - split_fixed: بترجع الفترات من schedule_config
+    - غيره: بترجع فترة واحدة من start_time و end_time
+    """
+    from datetime import datetime, timedelta
+
+    if not shift:
+        return []
+
+    periods = []
+
+    if getattr(shift, 'shift_mode', 'fixed') == 'split_fixed':
+        config = getattr(shift, 'schedule_config', {}) or {}
+        raw_periods = config.get('periods', [])
+
+        for i, p in enumerate(raw_periods):
+            try:
+                start_parts = str(p.get('start', '09:00')).split(':')
+                end_parts = str(p.get('end', '17:00')).split(':')
+
+                start_dt = datetime.combine(day,
+                    __import__('datetime').time(int(start_parts[0]), int(start_parts[1])))
+                end_dt = datetime.combine(day,
+                    __import__('datetime').time(int(end_parts[0]), int(end_parts[1])))
+
+                if end_dt <= start_dt:
+                    end_dt += timedelta(days=1)
+
+                tz = timezone.get_current_timezone()
+                periods.append({
+                    'period_number': i + 1,
+                    'start': timezone.make_aware(start_dt, tz),
+                    'end': timezone.make_aware(end_dt, tz),
+                    'start_str': p.get('start', '09:00'),
+                    'end_str': p.get('end', '17:00'),
+                    'name': p.get('name', f'فترة {i + 1}'),
+                })
+            except Exception:
+                continue
+
+        # لو schedule_config فاضل → fallback على start/end عادي
+        if not periods and shift.start_time and shift.end_time:
+            start_dt = datetime.combine(day, shift.start_time)
+            end_dt = datetime.combine(day, shift.end_time)
+            if end_dt <= start_dt:
+                end_dt += timedelta(days=1)
+            tz = timezone.get_current_timezone()
+            periods.append({
+                'period_number': 1,
+                'start': timezone.make_aware(start_dt, tz),
+                'end': timezone.make_aware(end_dt, tz),
+                'start_str': shift.start_time.strftime('%H:%M'),
+                'end_str': shift.end_time.strftime('%H:%M'),
+                'name': 'فترة 1',
+            })
+    else:
+        # شيفت عادي → فترة واحدة بس
+        if shift.start_time and shift.end_time:
+            start_dt = datetime.combine(day, shift.start_time)
+            end_dt = datetime.combine(day, shift.end_time)
+            if end_dt <= start_dt:
+                end_dt += timedelta(days=1)
+            tz = timezone.get_current_timezone()
+            periods.append({
+                'period_number': 1,
+                'start': timezone.make_aware(start_dt, tz),
+                'end': timezone.make_aware(end_dt, tz),
+                'start_str': shift.start_time.strftime('%H:%M'),
+                'end_str': shift.end_time.strftime('%H:%M'),
+                'name': 'الفترة الأساسية',
+            })
+
+    return periods
+
+
+def get_missing_periods(shift, day, employee):
+    """
+    بترجع الفترات اللي الموظف ما حضرهاش لـ split_fixed
+    """
+    from attendance.models import Attendance, AttendanceSession
+
+    if not shift or getattr(shift, 'shift_mode', 'fixed') != 'split_fixed':
+        return []
+
+    periods = get_shift_periods(shift, day)
+    if not periods:
+        return []
+
+    attendance = Attendance._base_manager.filter(
+        employee=employee, date=day
+    ).first()
+
+    if not attendance:
+        return periods  # كل الفترات فاتت
+
+    sessions = AttendanceSession._base_manager.filter(
+        attendance=attendance,
+        employee=employee,
+    ).order_by('session_number')
+
+    missed = []
+    now = timezone.now()
+
+    for period in periods:
+        # الفترة لو لسه مجيتش ساعتها ما نعدهاش فاتت
+        if period['end'] > now:
+            continue
+
+        # الفترة فاتت، شوف لو فيه session فيها
+        covered = False
+        for session in sessions:
+            s_in = session.check_in_time
+            if s_in and period['start'] <= s_in <= period['end']:
+                covered = True
+                break
+
+        if not covered:
+            missed.append(period)
+
+    return missed
+
+
 def get_shift_bounds(shift, day):
     from datetime import datetime, timedelta
 
@@ -768,10 +894,35 @@ def mobile_attendance_status(request):
     can_partial_checkout = False
     can_resume = False
 
+    periods_data = []
+    missing_periods_data = []
+
     try:
         if shift:
             allow_partial_checkout = getattr(shift, 'allow_partial_checkout', False)
             shift_mode = getattr(shift, 'shift_mode', 'fixed')
+
+            periods = get_shift_periods(shift, today)
+            periods_data = [
+                {
+                    'period_number': p.get('period_number'),
+                    'name': p.get('name'),
+                    'start': p.get('start_str'),
+                    'end': p.get('end_str'),
+                }
+                for p in periods
+            ]
+
+            missing_periods = get_missing_periods(shift, today, employee)
+            missing_periods_data = [
+                {
+                    'period_number': p.get('period_number'),
+                    'name': p.get('name'),
+                    'start': p.get('start_str'),
+                    'end': p.get('end_str'),
+                }
+                for p in missing_periods
+            ]
 
         if allow_partial_checkout and attendance:
             from attendance.models import AttendanceSession
@@ -812,6 +963,8 @@ def mobile_attendance_status(request):
         'has_early_leave_permission': has_early_leave,
         'allow_partial_checkout': allow_partial_checkout,
         'shift_mode': shift_mode,
+        'shift_periods': periods_data,
+        'missing_periods': missing_periods_data,
         'sessions_today': sessions_today,
         'has_open_session': has_open_session,
         'can_partial_checkout': can_partial_checkout,
