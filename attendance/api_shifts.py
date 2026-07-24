@@ -207,7 +207,80 @@ def get_effective_shift(employee, target_date):
     if company_assignment:
         return company_assignment.shift, 'company_assignment'
 
-    # 6) fallback قديم على EmployeeShift لعدم كسر النظام الحالي
+    # 6) تناوب الشيفتات (ShiftRotation)
+    from attendance.models import ShiftRotation, ShiftRotationSlot, ShiftRotationAssignment
+    active_rotation_filter = Q(end_date__isnull=True) | Q(end_date__gte=target_date)
+
+    def _get_shift_from_rotation(rotation):
+        """بيحسب أنهي شيفت في هذا اليوم من الدورة"""
+        if not rotation.start_date:
+            return None
+        days_diff = (target_date - rotation.start_date).days
+        if days_diff < 0:
+            return None
+        day_in_cycle = days_diff % rotation.cycle_length_days
+        slot = ShiftRotationSlot._base_manager.filter(
+            rotation=rotation,
+            start_day_index__lte=day_in_cycle,
+            end_day_index__gte=day_in_cycle,
+            company=employee.company,
+        ).select_related('shift').first()
+        return slot.shift if slot else None
+
+    # 6a) تناوب للموظف مباشرة
+    emp_rotation_assignment = ShiftRotationAssignment._base_manager.filter(
+        company=employee.company,
+        assignment_type='employee',
+        employee=employee,
+        is_active=True,
+        start_date__lte=target_date,
+    ).filter(active_rotation_filter).select_related('rotation').order_by('priority', '-start_date').first()
+    if emp_rotation_assignment:
+        rotation_shift = _get_shift_from_rotation(emp_rotation_assignment.rotation)
+        if rotation_shift:
+            return rotation_shift, 'rotation_employee'
+
+    # 6b) تناوب للقسم
+    if getattr(employee, 'department_id', None):
+        dept_rotation_assignment = ShiftRotationAssignment._base_manager.filter(
+            company=employee.company,
+            assignment_type='department',
+            department_id=employee.department_id,
+            is_active=True,
+            start_date__lte=target_date,
+        ).filter(active_rotation_filter).select_related('rotation').order_by('priority', '-start_date').first()
+        if dept_rotation_assignment:
+            rotation_shift = _get_shift_from_rotation(dept_rotation_assignment.rotation)
+            if rotation_shift:
+                return rotation_shift, 'rotation_department'
+
+    # 6c) تناوب للفرع
+    if getattr(employee, 'branch_id', None):
+        branch_rotation_assignment = ShiftRotationAssignment._base_manager.filter(
+            company=employee.company,
+            assignment_type='branch',
+            branch_id=employee.branch_id,
+            is_active=True,
+            start_date__lte=target_date,
+        ).filter(active_rotation_filter).select_related('rotation').order_by('priority', '-start_date').first()
+        if branch_rotation_assignment:
+            rotation_shift = _get_shift_from_rotation(branch_rotation_assignment.rotation)
+            if rotation_shift:
+                return rotation_shift, 'rotation_branch'
+
+    # 6d) تناوب للشركة
+    company_rotation_assignment = ShiftRotationAssignment._base_manager.filter(
+        company=employee.company,
+        assignment_type='company',
+        is_active=True,
+        start_date__lte=target_date,
+    ).filter(active_rotation_filter).select_related('rotation').order_by('priority', '-start_date').first()
+    if company_rotation_assignment:
+        rotation_shift = _get_shift_from_rotation(company_rotation_assignment.rotation)
+        if rotation_shift:
+            return rotation_shift, 'rotation_company'
+
+    # 7) fallback قديم على EmployeeShift لعدم كسر النظام الحالي
     legacy_emp_shift = EmployeeShift._base_manager.filter(
         employee=employee,
         company=employee.company,
