@@ -11,7 +11,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-HR_ROLES = {"super_admin", "company_admin", "hr_manager"}
+HR_ROLES = {"super_admin", "company_admin", "hr_manager", "manager", "branch_manager"}
 
 
 def _get_employee(request):
