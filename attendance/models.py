@@ -302,6 +302,303 @@ class AttendanceSession(TenantModel):
         """هل الفترة اكتملت (فيها دخول وخروج)"""
         return self.check_in_time is not None and self.check_out_time is not None
 
+
+class AttendancePolicy(TenantModel):
+    """سياسة الحضور والخصم — لكل شركة/فرع/قسم"""
+
+    STATUS_CHOICES = [
+        ('draft', 'مسودة'),
+        ('approved', 'معتمد'),
+        ('active', 'نشط'),
+        ('archived', 'مؤرشف'),
+    ]
+
+    name = models.CharField(max_length=200, verbose_name='اسم السياسة')
+    effective_from = models.DateField(verbose_name='سارية من')
+    effective_to = models.DateField(blank=True, null=True, verbose_name='سارية لحد')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', verbose_name='الحالة')
+    approved_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='approved_policies',
+        verbose_name='وافق بواسطة'
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, verbose_name='ملاحظات')
+
+    class Meta:
+        verbose_name = 'سياسة حضور'
+        verbose_name_plural = 'سياسات الحضور'
+        ordering = ['-effective_from']
+
+    def __str__(self):
+        return f"{self.name} ({self.effective_from})"
+
+
+class AttendancePolicyAssignment(TenantModel):
+    """ربط السياسة بشركة/فرع/قسم"""
+
+    ASSIGNMENT_TYPE_CHOICES = [
+        ('company', 'شركة'),
+        ('branch', 'فرع'),
+        ('department', 'قسم'),
+    ]
+
+    policy = models.ForeignKey(
+        AttendancePolicy, on_delete=models.CASCADE,
+        related_name='assignments', verbose_name='السياسة'
+    )
+    assignment_type = models.CharField(
+        max_length=20, choices=ASSIGNMENT_TYPE_CHOICES,
+        default='company', verbose_name='نوع التعيين'
+    )
+    branch = models.ForeignKey(
+        'companies.Branch', on_delete=models.CASCADE,
+        blank=True, null=True, verbose_name='الفرع'
+    )
+    department = models.ForeignKey(
+        'companies.Department', on_delete=models.CASCADE,
+        blank=True, null=True, verbose_name='القسم'
+    )
+    priority = models.IntegerField(
+        default=3,
+        help_text='1=قسم, 2=فرع, 3=شركة',
+        verbose_name='الأولوية'
+    )
+
+    class Meta:
+        verbose_name = 'تعيين سياسة'
+        verbose_name_plural = 'تعيينات السياسات'
+
+
+class LateRule(models.Model):
+    """قواعد خصم التأخير"""
+
+    DEDUCTION_TYPE_CHOICES = [
+        ('none', 'لا خصم'),
+        ('day_fraction', 'نسبة من اليوم'),
+        ('fixed_amount', 'مبلغ ثابت'),
+        ('per_minute', 'لكل دقيقة'),
+    ]
+
+    policy = models.ForeignKey(
+        AttendancePolicy, on_delete=models.CASCADE,
+        related_name='late_rules', verbose_name='السياسة'
+    )
+    from_minutes = models.IntegerField(default=0, verbose_name='من دقيقة')
+    to_minutes = models.IntegerField(default=15, verbose_name='إلى دقيقة')
+    deduction_type = models.CharField(
+        max_length=20, choices=DEDUCTION_TYPE_CHOICES,
+        default='none', verbose_name='نوع الخصم'
+    )
+    deduction_value = models.DecimalField(
+        max_digits=8, decimal_places=4, default=0,
+        verbose_name='قيمة الخصم',
+        help_text='0.25 = ربع يوم / 50 = مبلغ ثابت / 1 = لكل دقيقة'
+    )
+    display_order = models.IntegerField(default=0, verbose_name='الترتيب')
+
+    class Meta:
+        verbose_name = 'قاعدة تأخير'
+        verbose_name_plural = 'قواعد التأخير'
+        ordering = ['display_order', 'from_minutes']
+
+    def __str__(self):
+        return f"{self.policy.name}: {self.from_minutes}-{self.to_minutes} د → {self.deduction_type}"
+
+
+class AbsenceRule(models.Model):
+    """قواعد خصم الغياب"""
+
+    ABSENCE_TYPE_CHOICES = [
+        ('unexcused', 'بدون إذن'),
+        ('consecutive', 'متتالي'),
+        ('repeated', 'متكرر في الشهر'),
+    ]
+
+    DEDUCTION_TYPE_CHOICES = [
+        ('day_fraction', 'نسبة من اليوم'),
+        ('fixed_amount', 'مبلغ ثابت'),
+        ('warning', 'إنذار فقط'),
+    ]
+
+    policy = models.ForeignKey(
+        AttendancePolicy, on_delete=models.CASCADE,
+        related_name='absence_rules', verbose_name='السياسة'
+    )
+    absence_type = models.CharField(
+        max_length=20, choices=ABSENCE_TYPE_CHOICES,
+        default='unexcused', verbose_name='نوع الغياب'
+    )
+    consecutive_days = models.IntegerField(
+        default=1, null=True, blank=True,
+        verbose_name='عدد الأيام المتتالية'
+    )
+    occurrences_in_month = models.IntegerField(
+        default=1, null=True, blank=True,
+        verbose_name='عدد المرات في الشهر'
+    )
+    deduction_type = models.CharField(
+        max_length=20, choices=DEDUCTION_TYPE_CHOICES,
+        default='day_fraction', verbose_name='نوع الخصم'
+    )
+    deduction_value = models.DecimalField(
+        max_digits=8, decimal_places=4, default=1,
+        verbose_name='قيمة الخصم',
+        help_text='1 = يوم كامل / 1.5 = يوم ونص / 50 = مبلغ ثابت'
+    )
+    display_order = models.IntegerField(default=0, verbose_name='الترتيب')
+
+    class Meta:
+        verbose_name = 'قاعدة غياب'
+        verbose_name_plural = 'قواعد الغياب'
+        ordering = ['display_order']
+
+
+class OvertimeRule(models.Model):
+    """قواعد الأوفر تايم"""
+
+    OVERTIME_TYPE_CHOICES = [
+        ('regular', 'عادي'),
+        ('after_shift', 'بعد الشيفت'),
+        ('weekend', 'يوم راحة'),
+        ('holiday', 'إجازة رسمية'),
+    ]
+
+    policy = models.ForeignKey(
+        AttendancePolicy, on_delete=models.CASCADE,
+        related_name='overtime_rules', verbose_name='السياسة'
+    )
+    overtime_type = models.CharField(
+        max_length=20, choices=OVERTIME_TYPE_CHOICES,
+        default='after_shift', verbose_name='نوع الأوفر تايم'
+    )
+    multiplier = models.DecimalField(
+        max_digits=4, decimal_places=2, default=1.5,
+        verbose_name='المضاعف',
+        help_text='1.5 = مرة ونص / 2.0 = ضعفين'
+    )
+    min_minutes = models.IntegerField(
+        default=30,
+        verbose_name='أقل وقت يتحسب (دقيقة)'
+    )
+    max_hours_per_day = models.IntegerField(
+        default=4, null=True, blank=True,
+        verbose_name='أقصى ساعات في اليوم'
+    )
+    max_hours_per_month = models.IntegerField(
+        default=40, null=True, blank=True,
+        verbose_name='أقصى ساعات في الشهر'
+    )
+    requires_approval = models.BooleanField(
+        default=False, verbose_name='يحتاج موافقة مسبقة'
+    )
+    display_order = models.IntegerField(default=0, verbose_name='الترتيب')
+
+    class Meta:
+        verbose_name = 'قاعدة أوفر تايم'
+        verbose_name_plural = 'قواعد الأوفر تايم'
+        ordering = ['display_order']
+
+
+class NightShiftRule(models.Model):
+    """قواعد بدل الشيفت الليلي"""
+
+    ALLOWANCE_TYPE_CHOICES = [
+        ('fixed_amount', 'مبلغ ثابت'),
+        ('percentage', 'نسبة من اليومي'),
+    ]
+
+    policy = models.ForeignKey(
+        AttendancePolicy, on_delete=models.CASCADE,
+        related_name='night_shift_rules', verbose_name='السياسة'
+    )
+    allowance_type = models.CharField(
+        max_length=20, choices=ALLOWANCE_TYPE_CHOICES,
+        default='fixed_amount', verbose_name='نوع البدل'
+    )
+    amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=50,
+        verbose_name='المبلغ الثابت'
+    )
+    percentage = models.DecimalField(
+        max_digits=5, decimal_places=2, default=10,
+        verbose_name='النسبة المئوية من الأجر اليومي'
+    )
+    night_start_hour = models.IntegerField(
+        default=20, verbose_name='بداية الليل (ساعة)',
+        help_text='20 = 8 مساءً'
+    )
+    min_night_hours = models.IntegerField(
+        default=4, verbose_name='أقل ساعات ليلية للاستحقاق'
+    )
+
+    class Meta:
+        verbose_name = 'قاعدة بدل ليلي'
+        verbose_name_plural = 'قواعد البدل الليلي'
+
+
+class WeekendWorkRule(models.Model):
+    """قواعد العمل يوم الراحة"""
+
+    COMPENSATION_TYPE_CHOICES = [
+        ('overtime_multiplier', 'نسبة من المرتب'),
+        ('fixed_amount', 'مبلغ ثابت'),
+        ('day_off', 'يوم إجازة بديل'),
+    ]
+
+    policy = models.ForeignKey(
+        AttendancePolicy, on_delete=models.CASCADE,
+        related_name='weekend_work_rules', verbose_name='السياسة'
+    )
+    compensation_type = models.CharField(
+        max_length=30, choices=COMPENSATION_TYPE_CHOICES,
+        default='overtime_multiplier', verbose_name='نوع التعويض'
+    )
+    multiplier = models.DecimalField(
+        max_digits=4, decimal_places=2, default=2.0,
+        verbose_name='المضاعف'
+    )
+    amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        null=True, blank=True, verbose_name='المبلغ الثابت'
+    )
+
+    class Meta:
+        verbose_name = 'قاعدة عمل يوم الراحة'
+        verbose_name_plural = 'قواعد العمل يوم الراحة'
+
+
+class LateRepeatPenalty(models.Model):
+    """جزاء تكرار التأخير في الشهر"""
+
+    PENALTY_TYPE_CHOICES = [
+        ('warning', 'إنذار'),
+        ('deduction', 'خصم'),
+        ('suspension', 'وقف'),
+    ]
+
+    policy = models.ForeignKey(
+        AttendancePolicy, on_delete=models.CASCADE,
+        related_name='late_repeat_penalties', verbose_name='السياسة'
+    )
+    occurrences = models.IntegerField(
+        default=3, verbose_name='عدد مرات التأخير في الشهر'
+    )
+    penalty_type = models.CharField(
+        max_length=20, choices=PENALTY_TYPE_CHOICES,
+        default='warning', verbose_name='نوع الجزاء'
+    )
+    deduction_value = models.DecimalField(
+        max_digits=8, decimal_places=2, default=0,
+        null=True, blank=True, verbose_name='قيمة الخصم'
+    )
+    description = models.TextField(blank=True, verbose_name='وصف الجزاء')
+
+    class Meta:
+        verbose_name = 'جزاء تكرار التأخير'
+        verbose_name_plural = 'جزاءات تكرار التأخير'
+        ordering = ['occurrences']
+
 class ShiftAssignment(TenantModel):
     """تعيين الشيفت على مستوى شركة / فرع / قسم / موظف"""
 
