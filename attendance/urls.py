@@ -418,3 +418,21 @@ urlpatterns += [
     path('api/mobile/manager/offboarding/list/', offboarded_employees),
 ]
 
+
+
+# ══════════════════════════════════════
+# Permission Balance APIs
+# ══════════════════════════════════════
+from attendance.api_permissions_balance import (
+    my_permission_balance,
+    employee_permission_balance,
+    grant_extra_permission,
+    rollback_late,
+)
+
+urlpatterns += [
+    path('api/mobile/employee/permission-balance/', my_permission_balance),
+    path('api/mobile/manager/employees/<int:employee_id>/permission-balance/', employee_permission_balance),
+    path('api/mobile/manager/employees/<int:employee_id>/permission-grant/', grant_extra_permission),
+    path('api/mobile/manager/employees/<int:employee_id>/permission-rollback/', rollback_late),
+]
