@@ -18,18 +18,30 @@ def _get_shift_assigned_employees(shift):
     affected = {}
     assignments = ShiftAssignment._base_manager.filter(
         company=shift.company, shift=shift, is_active=True,
-    ).select_related('employee', 'department', 'branch')
+    ).select_related('employee', 'department', 'branch').prefetch_related('excluded_employees')
     for a in assignments:
+        excluded_ids = set(a.excluded_employees.values_list('id', flat=True))
         if a.assignment_type == 'employee' and a.employee:
             affected[a.employee.id] = a.employee
         elif a.assignment_type == 'department' and a.department:
-            for emp in Employee._base_manager.filter(company=shift.company, department=a.department, status='active'):
+            for emp in Employee._base_manager.filter(
+                company=shift.company,
+                department=a.department,
+                status='active'
+            ).exclude(id__in=excluded_ids):
                 affected[emp.id] = emp
         elif a.assignment_type == 'branch' and a.branch:
-            for emp in Employee._base_manager.filter(company=shift.company, branch=a.branch, status='active'):
+            for emp in Employee._base_manager.filter(
+                company=shift.company,
+                branch=a.branch,
+                status='active'
+            ).exclude(id__in=excluded_ids):
                 affected[emp.id] = emp
         elif a.assignment_type == 'company':
-            for emp in Employee._base_manager.filter(company=shift.company, status='active'):
+            for emp in Employee._base_manager.filter(
+                company=shift.company,
+                status='active'
+            ).exclude(id__in=excluded_ids):
                 affected[emp.id] = emp
     return list(affected.values())
 
@@ -169,7 +181,7 @@ def get_effective_shift(employee, target_date):
             department_id=employee.department_id,
             is_active=True,
             start_date__lte=target_date,
-        ).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+        ).exclude(excluded_employees=employee).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
         if department_assignment:
             return department_assignment.shift, 'department_assignment'
 
@@ -181,7 +193,7 @@ def get_effective_shift(employee, target_date):
             branch_id=employee.branch_id,
             is_active=True,
             start_date__lte=target_date,
-        ).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+        ).exclude(excluded_employees=employee).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
         if branch_assignment:
             return branch_assignment.shift, 'branch_assignment'
 
@@ -191,7 +203,7 @@ def get_effective_shift(employee, target_date):
         assignment_type='company',
         is_active=True,
         start_date__lte=target_date,
-    ).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+    ).exclude(excluded_employees=employee).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
     if company_assignment:
         return company_assignment.shift, 'company_assignment'
 
@@ -487,11 +499,13 @@ def manager_shift_assign(request):
         employee_ids = _as_int_list(data.get("employee_ids")) + _as_int_list(data.get("employee_id"))
         department_ids = _as_int_list(data.get("department_ids")) + _as_int_list(data.get("department_id"))
         branch_ids = _as_int_list(data.get("branch_ids")) + _as_int_list(data.get("branch_id"))
+        excluded_employee_ids = _as_int_list(data.get("excluded_employee_ids")) + _as_int_list(data.get("excluded_employee_id"))
 
         # dedupe with order
         employee_ids = list(dict.fromkeys(employee_ids))
         department_ids = list(dict.fromkeys(department_ids))
         branch_ids = list(dict.fromkeys(branch_ids))
+        excluded_employee_ids = list(dict.fromkeys(excluded_employee_ids))
 
         assign_to_company = bool(data.get("assign_to_company", False))
         assignment_type = str(data.get("assignment_type", "")).strip()
@@ -507,11 +521,17 @@ def manager_shift_assign(request):
         direct_employees = []
         departments = []
         branches = []
+        excluded_employees = []
 
         if employee_ids:
             direct_employees = list(Employee._base_manager.filter(id__in=employee_ids, company=company))
             if len(direct_employees) != len(employee_ids):
                 return Response({"success": False, "error": "بعض الموظفين غير موجودين"}, status=404)
+
+        if excluded_employee_ids:
+            excluded_employees = list(Employee._base_manager.filter(id__in=excluded_employee_ids, company=company))
+            if len(excluded_employees) != len(excluded_employee_ids):
+                return Response({"success": False, "error": "بعض الموظفين المستثنين غير موجودين"}, status=404)
 
         if department_ids:
             departments = list(Department.objects.filter(id__in=department_ids, company=company))
@@ -523,8 +543,9 @@ def manager_shift_assign(request):
             if len(branches) != len(branch_ids):
                 return Response({"success": False, "error": "بعض الفروع غير موجودة"}, status=404)
 
-        # جمع الموظفين المتأثرين مع إزالة التكرار
+        # جمع الموظفين المتأثرين مع إزالة التكرار + تطبيق الاستثناءات على التعيينات الجماعية فقط
         affected = {}
+        grouped_affected = {}
 
         for emp in direct_employees:
             affected[emp.id] = emp
@@ -536,7 +557,7 @@ def manager_shift_assign(request):
                 status='active'
             )
             for emp in dept_emps:
-                affected[emp.id] = emp
+                grouped_affected[emp.id] = emp
 
         if branches:
             branch_emps = Employee._base_manager.filter(
@@ -545,7 +566,7 @@ def manager_shift_assign(request):
                 status='active'
             )
             for emp in branch_emps:
-                affected[emp.id] = emp
+                grouped_affected[emp.id] = emp
 
         if assign_to_company:
             company_emps = Employee._base_manager.filter(
@@ -553,8 +574,12 @@ def manager_shift_assign(request):
                 status='active'
             )
             for emp in company_emps:
-                affected[emp.id] = emp
+                grouped_affected[emp.id] = emp
 
+        for excluded_emp in excluded_employees:
+            grouped_affected.pop(excluded_emp.id, None)
+
+        affected.update(grouped_affected)
         affected_employees = list(affected.values())
 
         user_role = _get_user_role(request)
@@ -609,19 +634,20 @@ def manager_shift_assign(request):
                 is_active=True
             ).update(is_active=False)
 
-            created_assignments.append(
-                ShiftAssignment._base_manager.create(
-                    company=company,
-                    shift=shift,
-                    assignment_type='company',
-                    start_date=start_date,
-                    end_date=end_date,
-                    is_active=True,
-                    priority=4,
-                    notes=reason,
-                    created_by=request.user,
-                )
+            assignment = ShiftAssignment._base_manager.create(
+                company=company,
+                shift=shift,
+                assignment_type='company',
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True,
+                priority=4,
+                notes=reason,
+                created_by=request.user,
             )
+            if excluded_employees:
+                assignment.excluded_employees.set(excluded_employees)
+            created_assignments.append(assignment)
 
         # branch assignments
         for branch in branches:
@@ -632,20 +658,21 @@ def manager_shift_assign(request):
                 is_active=True
             ).update(is_active=False)
 
-            created_assignments.append(
-                ShiftAssignment._base_manager.create(
-                    company=company,
-                    shift=shift,
-                    assignment_type='branch',
-                    branch=branch,
-                    start_date=start_date,
-                    end_date=end_date,
-                    is_active=True,
-                    priority=3,
-                    notes=reason,
-                    created_by=request.user,
-                )
+            assignment = ShiftAssignment._base_manager.create(
+                company=company,
+                shift=shift,
+                assignment_type='branch',
+                branch=branch,
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True,
+                priority=3,
+                notes=reason,
+                created_by=request.user,
             )
+            if excluded_employees:
+                assignment.excluded_employees.set(excluded_employees)
+            created_assignments.append(assignment)
 
         # department assignments
         for department in departments:
@@ -656,20 +683,21 @@ def manager_shift_assign(request):
                 is_active=True
             ).update(is_active=False)
 
-            created_assignments.append(
-                ShiftAssignment._base_manager.create(
-                    company=company,
-                    shift=shift,
-                    assignment_type='department',
-                    department=department,
-                    start_date=start_date,
-                    end_date=end_date,
-                    is_active=True,
-                    priority=2,
-                    notes=reason,
-                    created_by=request.user,
-                )
+            assignment = ShiftAssignment._base_manager.create(
+                company=company,
+                shift=shift,
+                assignment_type='department',
+                department=department,
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True,
+                priority=2,
+                notes=reason,
+                created_by=request.user,
             )
+            if excluded_employees:
+                assignment.excluded_employees.set(excluded_employees)
+            created_assignments.append(assignment)
 
         # direct employee assignments
         for employee in direct_employees:
@@ -766,6 +794,7 @@ def manager_shift_assign(request):
             "selected_employee_count": len(direct_employees),
             "selected_department_count": len(departments),
             "selected_branch_count": len(branches),
+            "excluded_employee_count": len(excluded_employees),
             "assign_to_company": assign_to_company,
             "created_assignments_count": len(created_assignments),
         }, status=201)
@@ -1432,3 +1461,150 @@ def today_sessions(request):
         logger.exception("today_sessions error")
         return Response({"success": False, "error": str(e)}, status=500)
 
+
+
+# ══════════════════════════════════════
+# BATCH 1: Shift Assignments Management APIs
+# ══════════════════════════════════════
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_shift_assignments_list(request):
+    """قائمة كل التعيينات الحالية للشيفتات في الشركة"""
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        company = _get_company(request)
+        from attendance.models import ShiftAssignment
+        lang = request.GET.get("lang", "ar")
+        shift_id = request.GET.get("shift_id")
+
+        qs = ShiftAssignment._base_manager.filter(
+            company=company,
+            is_active=True,
+        ).select_related("shift", "employee", "employee__job_title", "employee__department", "employee__branch", "department", "branch").order_by("shift__name", "assignment_type", "-start_date")
+
+        if shift_id:
+            qs = qs.filter(shift_id=shift_id)
+
+        data = []
+        for a in qs:
+            item = {
+                "id": a.id,
+                "shift_id": a.shift_id,
+                "shift_name": a.shift.name if a.shift else "",
+                "assignment_type": a.assignment_type,
+                "start_date": str(a.start_date),
+                "end_date": str(a.end_date) if a.end_date else None,
+                "notes": a.notes or "",
+                "priority": a.priority,
+            }
+            if a.assignment_type == "employee" and a.employee:
+                item["target_id"] = a.employee.id
+                item["target_name"] = getattr(a.employee, "full_name_ar", str(a.employee))
+                item["target_sub"] = getattr(a.employee.job_title, "name_ar", "") if a.employee.job_title else ""
+                item["department"] = getattr(a.employee.department, "name_ar", "") if a.employee.department else ""
+                item["branch"] = getattr(a.employee.branch, "name_ar", "") if a.employee.branch else ""
+            elif a.assignment_type == "department" and a.department:
+                item["target_id"] = a.department.id
+                item["target_name"] = a.department.name_ar if lang == "ar" else (a.department.name_en or a.department.name_ar)
+                item["target_sub"] = ""
+                item["department"] = item["target_name"]
+                item["branch"] = ""
+            elif a.assignment_type == "branch" and a.branch:
+                item["target_id"] = a.branch.id
+                item["target_name"] = a.branch.name_ar if lang == "ar" else (a.branch.name_en or a.branch.name_ar)
+                item["target_sub"] = ""
+                item["department"] = ""
+                item["branch"] = item["target_name"]
+            elif a.assignment_type == "company":
+                item["target_id"] = company.id
+                item["target_name"] = company.name_ar if lang == "ar" else (company.name_en or company.name_ar)
+                item["target_sub"] = ""
+                item["department"] = ""
+                item["branch"] = ""
+            else:
+                continue
+            data.append(item)
+
+        return Response({"success": True, "assignments": data, "count": len(data)})
+    except Exception as e:
+        logger.exception("manager_shift_assignments_list error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
+@api_view(["PUT", "PATCH"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_shift_assignment_update(request, assignment_id):
+    """تعديل تعيين شيفت موجود (تاريخ / ملاحظات)"""
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        company = _get_company(request)
+        from attendance.models import ShiftAssignment
+        try:
+            assignment = ShiftAssignment._base_manager.get(id=assignment_id, company=company, is_active=True)
+        except ShiftAssignment.DoesNotExist:
+            return Response({"success": False, "error": "التعيين غير موجود"}, status=404)
+
+        data = request.data
+        changed = False
+
+        if "start_date" in data:
+            try:
+                assignment.start_date = datetime.strptime(str(data["start_date"]), "%Y-%m-%d").date()
+                changed = True
+            except ValueError:
+                return Response({"success": False, "error": "صيغة start_date غلط"}, status=400)
+
+        if "end_date" in data:
+            if data["end_date"]:
+                try:
+                    assignment.end_date = datetime.strptime(str(data["end_date"]), "%Y-%m-%d").date()
+                    changed = True
+                except ValueError:
+                    return Response({"success": False, "error": "صيغة end_date غلط"}, status=400)
+            else:
+                assignment.end_date = None
+                changed = True
+
+        if "notes" in data:
+            assignment.notes = data["notes"]
+            changed = True
+
+        if changed:
+            assignment.save()
+
+        return Response({"success": True, "message": "تم تعديل التعيين بنجاح", "assignment_id": assignment.id})
+    except Exception as e:
+        logger.exception("manager_shift_assignment_update error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
+@api_view(["DELETE"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_shift_assignment_delete(request, assignment_id):
+    """حذف (إلغاء تفعيل) تعيين شيفت"""
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        company = _get_company(request)
+        from attendance.models import ShiftAssignment
+        try:
+            assignment = ShiftAssignment._base_manager.get(id=assignment_id, company=company, is_active=True)
+        except ShiftAssignment.DoesNotExist:
+            return Response({"success": False, "error": "التعيين غير موجود أو اتحذف قبل كده"}, status=404)
+
+        assignment.is_active = False
+        assignment.save()
+
+        return Response({"success": True, "message": "تم إلغاء التعيين بنجاح", "assignment_id": assignment_id})
+    except Exception as e:
+        logger.exception("manager_shift_assignment_delete error")
+        return Response({"success": False, "error": str(e)}, status=500)

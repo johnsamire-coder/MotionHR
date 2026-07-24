@@ -158,7 +158,7 @@ def manager_employees_simple(request):
             return Response({"success": False, "error": "لا توجد شركة مرتبطة"}, status=400)
         from employees.models import Employee
         # جلب كل الموظفين النشطين
-        all_emps = get_visible_employees_qs(request.user).exclude(user=request.user).filter(status="active").select_related("job_title", "user").order_by("first_name_ar")[:200]
+        all_emps = get_visible_employees_qs(request.user).exclude(user=request.user).filter(status="active").select_related("job_title", "user", "department", "branch").order_by("first_name_ar")[:200]
         data = []
         for e in all_emps:
             user_role = getattr(e.user, "role", "employee") if e.user else "employee"
@@ -171,6 +171,10 @@ def manager_employees_simple(request):
                 "phone": getattr(e, "phone", "") or "",
                 "national_id": getattr(e, "national_id", "") or "",
                 "job_title": getattr(e.job_title, "name_ar", "") if e.job_title else "",
+                "department": getattr(e.department, "name_ar", "") if e.department else "",
+                "department_id": e.department_id,
+                "branch": getattr(e.branch, "name_ar", "") if e.branch else "",
+                "branch_id": e.branch_id,
                 "role": user_role,
                 "is_manager": is_manager,
             })

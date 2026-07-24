@@ -661,6 +661,13 @@ class ShiftAssignment(TenantModel):
         verbose_name='الموظف'
     )
 
+    excluded_employees = models.ManyToManyField(
+        'employees.Employee',
+        blank=True,
+        related_name='excluded_from_shift_assignments',
+        verbose_name='الموظفون المستثنون'
+    )
+
     start_date = models.DateField(
         verbose_name='تاريخ البداية'
     )
