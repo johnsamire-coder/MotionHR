@@ -486,6 +486,90 @@ def _apply_late_rule(policy, late_minutes, daily_salary):
     return 0.0
 
 
+
+
+def _apply_permission_balance(employee, late_minutes, reference_date, policy):
+    """
+    لو الموظف عنده رصيد أذونات → نحول التأخير لإذن تلقائي
+    ونرجع الدقايق اللي اتحولت + الدقايق اللي فضلت (لازم تتحسب خصم)
+    """
+    if not policy or not policy.permission_enabled:
+        return 0, late_minutes  # مفيش سياسة → كل التأخير خصم
+
+    if late_minutes <= 0:
+        return 0, 0
+
+    from attendance.models import PermissionLedger
+    from datetime import date
+
+    today = reference_date or date.today()
+
+    # نحدد فترة الشهر
+    if policy.permission_reset_cycle == 'payroll':
+        period_start = today.replace(day=1)
+    else:
+        period_start = today.replace(day=1)
+
+    if today.month == 12:
+        period_end = today.replace(year=today.year + 1, month=1, day=1)
+    else:
+        period_end = today.replace(month=today.month + 1, day=1)
+
+    # نجيب الحركات في الفترة دي
+    entries = PermissionLedger._base_manager.filter(
+        employee=employee,
+        reference_date__gte=period_start,
+        reference_date__lt=period_end,
+    )
+
+    total_minutes_used = sum(e.minutes_used for e in entries)
+    total_count_used = sum(e.count_used for e in entries)
+
+    monthly_minutes = int(float(policy.permission_monthly_hours) * 60)
+    monthly_count = policy.permission_monthly_count
+
+    remaining_minutes = max(0, monthly_minutes - total_minutes_used)
+    remaining_count = max(0, monthly_count - total_count_used)
+
+    if remaining_minutes <= 0 or remaining_count <= 0:
+        return 0, late_minutes  # الرصيد خلص → كل التأخير خصم
+
+    # نحسب كام دقيقة هنحولها لإذن
+    max_per_request = int(float(policy.permission_max_hours_per_request) * 60)
+
+    # لو الكسر بمرة كاملة → نحسب المرة كاملة
+    if policy.permission_fraction_as_full:
+        minutes_to_convert = min(max_per_request, remaining_minutes)
+        count_to_use = 1
+    else:
+        minutes_to_convert = min(late_minutes, max_per_request, remaining_minutes)
+        count_to_use = 1
+
+    # مش هنحول أكتر من التأخير نفسه
+    minutes_to_convert = min(minutes_to_convert, late_minutes)
+
+    if minutes_to_convert <= 0 or count_to_use > remaining_count:
+        return 0, late_minutes
+
+    # نسجل الحركة في الـ Ledger
+    try:
+        PermissionLedger._base_manager.create(
+            employee=employee,
+            company=employee.company,
+            entry_type='auto_late',
+            minutes_used=minutes_to_convert,
+            count_used=count_to_use,
+            reference_date=reference_date,
+            notes=f'خصم تلقائي من رصيد الأذونات بسبب تأخير {late_minutes} دقيقة',
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f'PermissionLedger create error: {e}')
+        return 0, late_minutes
+
+    remaining_late = max(0, late_minutes - minutes_to_convert)
+    return minutes_to_convert, remaining_late
+
 def _apply_absence_rule(policy, absent_days, daily_salary):
     """يطبق قاعدة الخصم على أيام الغياب"""
     if not policy or absent_days <= 0:
@@ -683,7 +767,12 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
             if late_min > 0:
                 late_days += 1
-                total_late_minutes += late_min
+                # نحاول نحول التأخير لإذن لو الموظف عنده رصيد
+                converted, remaining_late = _apply_permission_balance(
+                    employee, late_min, day_date, active_policy
+                )
+                effective_late_min = remaining_late
+                total_late_minutes += effective_late_min
                 eff_status = 'late'
             else:
                 present_days += 1
