@@ -1055,6 +1055,58 @@ def shift_change_request_action(request, request_id):
 
 
 # ── SHIFT OVERRIDE ──
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def shift_override_list(request):
+    """قائمة كل الاستثناءات الحالية والمستقبلية"""
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        company = _get_company(request)
+        from attendance.models import ShiftOverride
+        from datetime import timedelta
+
+        show_past = request.GET.get('show_past', 'false').lower() == 'true'
+        employee_id = request.GET.get('employee_id')
+        lang = request.GET.get('lang', 'ar')
+
+        qs = ShiftOverride._base_manager.filter(
+            company=company,
+        ).select_related('employee', 'employee__job_title', 'employee__department', 'shift').order_by('-override_date')
+
+        if not show_past:
+            qs = qs.filter(override_date__gte=date.today() - timedelta(days=7))
+
+        if employee_id:
+            qs = qs.filter(employee_id=employee_id)
+
+        data = []
+        for o in qs[:200]:
+            is_past = o.override_date < date.today()
+            data.append({
+                "id": o.id,
+                "employee_id": o.employee_id,
+                "employee_name": getattr(o.employee, "full_name_ar", str(o.employee)),
+                "employee_code": getattr(o.employee, "employee_code", ""),
+                "department": getattr(o.employee.department, "name_ar", "") if o.employee.department else "",
+                "branch": getattr(o.employee.branch, "name_ar", "") if o.employee.branch else "",
+                "shift_id": o.shift_id,
+                "shift_name": o.shift.name if o.shift else "",
+                "override_date": str(o.override_date),
+                "reason": o.reason or "",
+                "is_past": is_past,
+                "created_at": str(o.created_at) if hasattr(o, 'created_at') else "",
+            })
+
+        return Response({"success": True, "overrides": data, "count": len(data)})
+    except Exception as e:
+        logger.exception("shift_override_list error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
 @api_view(["POST"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
