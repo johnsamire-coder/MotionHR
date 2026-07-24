@@ -760,6 +760,41 @@ def mobile_attendance_status(request):
     if has_early_leave:
         can_check_out = True
 
+    # بيانات الخروج الجزئي
+    allow_partial_checkout = False
+    shift_mode = 'fixed'
+    sessions_today = 0
+    has_open_session = False
+    can_partial_checkout = False
+    can_resume = False
+
+    try:
+        if shift:
+            allow_partial_checkout = getattr(shift, 'allow_partial_checkout', False)
+            shift_mode = getattr(shift, 'shift_mode', 'fixed')
+
+        if allow_partial_checkout and attendance:
+            from attendance.models import AttendanceSession
+            sessions = AttendanceSession._base_manager.filter(
+                attendance=attendance,
+                employee=employee
+            ).order_by('session_number')
+
+            sessions_today = sessions.count()
+            open_session = sessions.filter(check_out_time__isnull=True).first()
+            has_open_session = open_session is not None
+
+            max_sessions = getattr(shift, 'max_sessions_per_day', 2) if shift else 2
+
+            if has_open_session:
+                can_partial_checkout = True
+                can_resume = False
+            elif sessions_today > 0 and sessions_today < max_sessions:
+                can_partial_checkout = False
+                can_resume = True
+    except Exception:
+        pass
+
     response_data = {
         'success': True,
         'date': today.isoformat(),
@@ -775,6 +810,12 @@ def mobile_attendance_status(request):
         'remaining_seconds': remaining_seconds,
         'can_check_out': can_check_out,
         'has_early_leave_permission': has_early_leave,
+        'allow_partial_checkout': allow_partial_checkout,
+        'shift_mode': shift_mode,
+        'sessions_today': sessions_today,
+        'has_open_session': has_open_session,
+        'can_partial_checkout': can_partial_checkout,
+        'can_resume': can_resume,
         'today': today_dict,
     }
     return Response(response_data)
