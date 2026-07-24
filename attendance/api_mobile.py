@@ -112,6 +112,105 @@ def consume_permission(permission_request, actual_hours, used_at):
 
 
 
+
+
+def _notify_missing_period(employee, period, shift, after_grace=False):
+    """
+    إشعار الموظف والمدير والـ HR لو الموظف ما حضرش فترة في split_fixed
+    after_grace=False → بداية الفترة → للموظف فقط
+    after_grace=True  → بعد انتهاء السماحية → للموظف + المدير + HR
+    """
+    try:
+        from accounts.fcm_service import send_notification_to_user, send_notification_to_managers
+        from accounts.models import EmployeeNotification
+        from employees.models import Employee
+
+        period_name = period.get('name', 'فترة')
+        period_start = period.get('start_str', '')
+        period_end = period.get('end_str', '')
+        shift_name = shift.name if shift else ''
+        emp_name = getattr(employee, 'full_name_ar', '') or str(employee)
+
+        if not after_grace:
+            # تذكير للموظف فقط
+            title_ar = f'⏰ تذكير: {period_name}'
+            body_ar = f'حان وقت {period_name} ({period_start} - {period_end}) من شيفت {shift_name}'
+            title_en = f'⏰ Reminder: {period_name}'
+            body_en = f'Time for {period_name} ({period_start} - {period_end}) from shift {shift_name}'
+
+            send_notification_to_user(
+                user=employee.user,
+                title=title_ar,
+                body=body_ar,
+                title_en=title_en,
+                body_en=body_en,
+                data={
+                    'type': 'period_reminder',
+                    'screen': 'attendance',
+                    'period_number': str(period.get('period_number', 1)),
+                }
+            )
+
+            # إشعار داخلي للموظف
+            EmployeeNotification.objects.create(
+                employee=employee,
+                title=title_ar,
+                message=body_ar,
+                notification_type='general_notice',
+                severity='info',
+            )
+
+        else:
+            # بعد انتهاء السماحية → تصعيد للموظف + المدير + HR
+            title_ar = f'🚨 غياب عن {period_name}'
+            body_ar = f'الموظف {emp_name} لم يسجل حضور في {period_name} ({period_start} - {period_end}) من شيفت {shift_name}'
+            title_en = f'🚨 Missing Period: {period_name}'
+            body_en = f'Employee {emp_name} missed {period_name} ({period_start} - {period_end}) from shift {shift_name}'
+
+            # إشعار للموظف
+            send_notification_to_user(
+                user=employee.user,
+                title=f'🚨 لم تسجل حضور في {period_name}',
+                body=f'لم تسجل حضور في {period_name} ({period_start} - {period_end})',
+                title_en=f'🚨 Missed {period_name}',
+                body_en=f'You missed {period_name} ({period_start} - {period_end})',
+                data={
+                    'type': 'period_missed',
+                    'screen': 'attendance',
+                    'period_number': str(period.get('period_number', 1)),
+                }
+            )
+
+            # إشعار داخلي للموظف
+            EmployeeNotification.objects.create(
+                employee=employee,
+                title=f'🚨 غياب عن {period_name}',
+                message=f'لم تسجل حضور في {period_name} ({period_start} - {period_end})',
+                notification_type='late_warning',
+                severity='danger',
+            )
+
+            # إشعار للمدير والـ HR
+            if employee.company:
+                send_notification_to_managers(
+                    company=employee.company,
+                    title=title_ar,
+                    body=body_ar,
+                    title_en=title_en,
+                    body_en=body_en,
+                    data={
+                        'type': 'employee_missed_period',
+                        'screen': 'manager_attendance',
+                        'employee_id': str(employee.id),
+                        'period_number': str(period.get('period_number', 1)),
+                    }
+                )
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f'notify_missing_period error: {e}')
+
+
 def get_active_shift(employee, day):
     from django.db.models import Q
     from attendance.models import ShiftOverride, EmployeeShift, Shift

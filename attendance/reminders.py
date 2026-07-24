@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def _send_to_users(user_qs, title, body, data=None, title_en=None, body_en=None):
     """إرسال إشعار لقائمة يوزرز مع دعم عربي/إنجليزي حسب لغة التطبيق."""
     try:
-        from accounts.fcm_service import send_fcm_notification
+        from attendance.fcm_logic import send_fcm_notification
 
         sent = 0
         for user in user_qs:
@@ -33,6 +33,42 @@ def _send_to_users(user_qs, title, body, data=None, title_en=None, body_en=None)
         logger.error(f"_send_to_users error: {e}")
         return 0
 
+
+
+
+def _create_internal_notification_for_user(user, title, message, notification_type="general_notice", severity="info"):
+    """إنشاء إشعار داخلي مرة واحدة فقط في اليوم لنفس الرسالة"""
+    try:
+        from employees.models import Employee
+        from accounts.models import EmployeeNotification
+
+        employee = Employee._base_manager.filter(user=user).first()
+        if not employee:
+            return False
+
+        today = timezone.localdate()
+        exists = EmployeeNotification.objects.filter(
+            employee=employee,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            created_at__date=today,
+        ).exists()
+
+        if exists:
+            return False
+
+        EmployeeNotification.objects.create(
+            employee=employee,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            severity=severity,
+        )
+        return True
+    except Exception as e:
+        logger.error(f"_create_internal_notification_for_user error: {e}")
+        return False
 
 # ═══════════════════════════════════════════════════════
 # 7.1  تذكير عدم تسجيل الحضور
@@ -335,13 +371,208 @@ def remind_expiring_documents():
     pass
 
 
+
+
+# ═══════════════════════════════════════════════════════
+# 7.6  تذكير فترات split_fixed
+# ═══════════════════════════════════════════════════════
+def remind_split_fixed_periods():
+    """
+    split_fixed:
+    - عند بداية الفترة: إشعار للموظف فقط (مرة واحدة)
+    - بعد انتهاء السماحية: إشعار للموظف + المدير + HR (مرة واحدة)
+    """
+    try:
+        from django.contrib.auth import get_user_model
+        from employees.models import Employee
+        from attendance.models import Attendance, AttendanceSession
+        from attendance.api_mobile import get_active_shift, get_shift_periods
+
+        User = get_user_model()
+        today = timezone.localdate()
+        now = timezone.now()
+
+        logger.info(f"remind_split_fixed_periods: checking for {today}")
+
+        employees = Employee._base_manager.filter(
+            status='active'
+        ).select_related('user', 'company')
+
+        total_employee_reminders = 0
+        total_escalations = 0
+
+        for employee in employees:
+            try:
+                if not employee.user or not employee.company:
+                    continue
+
+                shift = get_active_shift(employee, today)
+                if not shift or getattr(shift, 'shift_mode', 'fixed') != 'split_fixed':
+                    continue
+
+                periods = get_shift_periods(shift, today)
+                if not periods:
+                    continue
+
+                attendance = Attendance._base_manager.filter(
+                    employee=employee,
+                    date=today
+                ).first()
+
+                sessions = AttendanceSession._base_manager.none()
+                if attendance:
+                    sessions = AttendanceSession._base_manager.filter(
+                        attendance=attendance,
+                        employee=employee
+                    ).order_by('session_number')
+
+                grace_minutes = int(getattr(shift, 'grace_period', 0) or 0)
+
+                for period in periods:
+                    period_number = period.get('period_number', 1)
+                    period_name = period.get('name') or f'الفترة {period_number}'
+                    period_start = period.get('start')
+                    period_end = period.get('end')
+                    period_start_str = period.get('start_str', '')
+                    period_end_str = period.get('end_str', '')
+
+                    if not period_start or not period_end:
+                        continue
+
+                    # هل الموظف سجل حضور داخل الفترة دي؟
+                    covered = False
+                    for session in sessions:
+                        check_in_time = getattr(session, 'check_in_time', None)
+                        if check_in_time and period_start <= check_in_time <= period_end:
+                            covered = True
+                            break
+
+                    if covered:
+                        continue
+
+                    # 1) بداية الفترة → للموظف فقط
+                    if now >= period_start:
+                        title_ar = f'⏰ تذكير: {period_name}'
+                        body_ar = f'ابدأ تسجيل حضورك الآن في {period_name} ({period_start_str} - {period_end_str}) من شيفت {shift.name}'
+                        title_en = f'⏰ Reminder: {period_name}'
+                        body_en = f'Please check in now for {period_name} ({period_start_str} - {period_end_str}) from shift {shift.name}'
+
+                        created = _create_internal_notification_for_user(
+                            employee.user,
+                            title_ar,
+                            body_ar,
+                            notification_type='general_notice',
+                            severity='info',
+                        )
+
+                        if created:
+                            _send_to_users(
+                                User.objects.filter(pk=employee.user.pk),
+                                title=title_ar,
+                                body=body_ar,
+                                title_en=title_en,
+                                body_en=body_en,
+                                data={
+                                    "type": "split_period_start_reminder",
+                                    "screen": "attendance",
+                                    "date": str(today),
+                                    "period_number": str(period_number),
+                                },
+                            )
+                            total_employee_reminders += 1
+
+                    # 2) بعد انتهاء السماحية → للموظف + المدير + HR
+                    grace_end = period_start + timedelta(minutes=grace_minutes)
+                    if now >= grace_end:
+                        emp_name = getattr(employee, 'full_name_ar', '') or str(employee)
+
+                        # إشعار الموظف
+                        emp_title_ar = f'🚨 فاتتك {period_name}'
+                        emp_body_ar = f'لم تسجل حضورك في {period_name} ({period_start_str} - {period_end_str}) من شيفت {shift.name}'
+                        emp_title_en = f'🚨 Missed {period_name}'
+                        emp_body_en = f'You missed check-in for {period_name} ({period_start_str} - {period_end_str}) from shift {shift.name}'
+
+                        emp_created = _create_internal_notification_for_user(
+                            employee.user,
+                            emp_title_ar,
+                            emp_body_ar,
+                            notification_type='late_warning',
+                            severity='danger',
+                        )
+
+                        if emp_created:
+                            _send_to_users(
+                                User.objects.filter(pk=employee.user.pk),
+                                title=emp_title_ar,
+                                body=emp_body_ar,
+                                title_en=emp_title_en,
+                                body_en=emp_body_en,
+                                data={
+                                    "type": "split_period_missed_employee",
+                                    "screen": "attendance",
+                                    "date": str(today),
+                                    "period_number": str(period_number),
+                                },
+                            )
+
+                        # إشعار المدير + HR + company_admin
+                        managers = User.objects.filter(
+                            company=employee.company,
+                            role__in=["company_admin", "manager", "hr_manager", "super_admin"],
+                            is_active=True,
+                        )
+
+                        mgr_title_ar = f'🚨 الموظف {emp_name} لم يسجل {period_name}'
+                        mgr_body_ar = f'شيفت: {shift.name} | الفترة: {period_start_str} - {period_end_str}'
+                        mgr_title_en = f'🚨 {emp_name} missed {period_name}'
+                        mgr_body_en = f'Shift: {shift.name} | Period: {period_start_str} - {period_end_str}'
+
+                        manager_sent_once = False
+                        for manager in managers:
+                            created_mgr = _create_internal_notification_for_user(
+                                manager,
+                                mgr_title_ar,
+                                mgr_body_ar,
+                                notification_type='general_notice',
+                                severity='danger',
+                            )
+                            if created_mgr:
+                                manager_sent_once = True
+
+                        if manager_sent_once:
+                            _send_to_users(
+                                managers,
+                                title=mgr_title_ar,
+                                body=mgr_body_ar,
+                                title_en=mgr_title_en,
+                                body_en=mgr_body_en,
+                                data={
+                                    "type": "split_period_missed_manager",
+                                    "screen": "manager_attendance",
+                                    "date": str(today),
+                                    "employee_id": str(employee.id),
+                                    "period_number": str(period_number),
+                                },
+                            )
+                            total_escalations += 1
+
+            except Exception as emp_error:
+                logger.error(f"remind_split_fixed_periods employee error: {emp_error}")
+
+        logger.info(
+            f"remind_split_fixed_periods: done - reminders={total_employee_reminders}, escalations={total_escalations}"
+        )
+
+    except Exception as e:
+        logger.error(f"remind_split_fixed_periods error: {e}")
+
 # ═══════════════════════════════════════════════════════
 # الدالة الرئيسية — بيتم استدعاؤها من Cron
 # ═══════════════════════════════════════════════════════
 def run_all_reminders(reminder_type="all"):
     """
     نقطة الدخول الرئيسية.
-    reminder_type: all | checkin | checkout | pending | charter | documents
+    reminder_type: all | checkin | checkout | pending | charter | documents | split_periods
     """
     logger.info(f"=== MotionHR Reminders — type={reminder_type} ===")
 
@@ -351,6 +582,7 @@ def run_all_reminders(reminder_type="all"):
         "pending": remind_pending_requests,
         "charter": remind_charter_acceptance,
         "documents": remind_expiring_documents,
+        "split_periods": remind_split_fixed_periods,
     }
 
     if reminder_type == "all":
