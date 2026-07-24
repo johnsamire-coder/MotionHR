@@ -651,6 +651,42 @@ def manager_shift_assign(request):
 
         # direct employee assignments
         for employee in direct_employees:
+            active_direct_assignments = ShiftAssignment._base_manager.filter(
+                company=company,
+                assignment_type='employee',
+                employee=employee,
+                is_active=True
+            ).select_related('shift')
+
+            new_end = end_date or date.max
+            overlapping_assignment = None
+
+            for existing_assignment in active_direct_assignments:
+                existing_end = existing_assignment.end_date or date.max
+                if existing_assignment.start_date <= new_end and start_date <= existing_end:
+                    overlapping_assignment = existing_assignment
+                    break
+
+            if overlapping_assignment:
+                employee_name = (
+                    employee.user.get_full_name()
+                    or getattr(employee.user, 'username', '')
+                    or f'#{employee.id}'
+                )
+                return Response({
+                    "success": False,
+                    "error": (
+                        f"الموظف {employee_name} عليه شيفت مباشر متداخل بالفعل"
+                        if lang == 'ar'
+                        else f"Employee {employee_name} already has an overlapping direct shift assignment"
+                    ),
+                    "employee_id": employee.id,
+                    "existing_shift_id": overlapping_assignment.shift_id,
+                    "existing_shift_name": overlapping_assignment.shift.name if overlapping_assignment.shift else None,
+                    "existing_start_date": str(overlapping_assignment.start_date),
+                    "existing_end_date": str(overlapping_assignment.end_date) if overlapping_assignment.end_date else None,
+                }, status=400)
+
             ShiftAssignment._base_manager.filter(
                 company=company,
                 assignment_type='employee',
