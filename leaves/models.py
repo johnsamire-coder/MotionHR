@@ -234,3 +234,126 @@ class LeaveRequest(TenantModel):
             balance.save()
         except LeaveBalance.DoesNotExist:
             pass
+
+class LeaveRecallRequest(TenantModel):
+    """استدعاء موظف من إجازته"""
+
+    STATUS_CHOICES = [
+        ('pending',   'قيد الانتظار'),
+        ('approved',  'موافق عليه'),
+        ('rejected',  'مرفوض'),
+        ('cancelled', 'ملغي'),
+    ]
+
+    leave_request = models.ForeignKey(
+        LeaveRequest,
+        on_delete=models.CASCADE,
+        related_name='recall_requests',
+        verbose_name='طلب الإجازة الأصلي'
+    )
+
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='leave_recall_requests',
+        verbose_name='الموظف'
+    )
+
+    recall_date = models.DateField(
+        verbose_name='يوم الاستدعاء'
+    )
+
+    reason = models.TextField(
+        verbose_name='سبب الاستدعاء'
+    )
+
+    requested_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='leave_recall_requests_made',
+        verbose_name='طلب بواسطة'
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='الحالة'
+    )
+
+    reviewed_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='leave_recall_reviews',
+        verbose_name='وافق/رفض بواسطة'
+    )
+
+    reviewed_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='تاريخ المراجعة'
+    )
+
+    review_notes = models.TextField(
+        blank=True,
+        verbose_name='ملاحظات المراجع'
+    )
+
+    hr_notified = models.BooleanField(
+        default=False,
+        verbose_name='تم إشعار HR'
+    )
+
+    balance_restored = models.BooleanField(
+        default=False,
+        verbose_name='تم إرجاع الرصيد'
+    )
+
+    class Meta:
+        verbose_name = 'استدعاء من إجازة'
+        verbose_name_plural = 'استدعاءات من الإجازات'
+        ordering = ['-created_at']
+        unique_together = [['employee', 'recall_date']]
+
+    def __str__(self):
+        return f"{self.employee} - {self.recall_date} - {self.get_status_display()}"
+
+    def approve(self, user, notes=''):
+        """الموافقة على الاستدعاء"""
+        from django.utils import timezone
+        self.status = 'approved'
+        self.reviewed_by = user
+        self.reviewed_at = timezone.now()
+        self.review_notes = notes
+        self.save()
+        self._restore_balance()
+
+    def reject(self, user, notes=''):
+        """رفض الاستدعاء"""
+        from django.utils import timezone
+        self.status = 'rejected'
+        self.reviewed_by = user
+        self.reviewed_at = timezone.now()
+        self.review_notes = notes
+        self.save()
+
+    def _restore_balance(self):
+        """إرجاع يوم للرصيد عند الموافقة"""
+        if self.balance_restored:
+            return
+        try:
+            from leaves.models import LeaveBalance
+            balance = LeaveBalance._base_manager.filter(
+                employee=self.employee,
+                leave_type=self.leave_request.leave_type,
+                year=self.recall_date.year,
+                company=self.company,
+            ).first()
+            if balance:
+                balance.used_days = max(0, balance.used_days - 1)
+                balance.save()
+                self.balance_restored = True
+                self.save(update_fields=['balance_restored'])
+        except Exception:
+            pass

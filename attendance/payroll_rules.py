@@ -220,6 +220,21 @@ def get_leave_dates(employee, year, month):
     except Exception:
         pass
 
+    # استثناء أيام الاستدعاء المعتمدة من أيام الإجازة
+    try:
+        from leaves.models import LeaveRecallRequest
+        recalled_dates = set(
+            LeaveRecallRequest._base_manager.filter(
+                employee=employee,
+                status='approved',
+                recall_date__gte=first_day,
+                recall_date__lte=last_day,
+            ).values_list('recall_date', flat=True)
+        )
+        leave_dates -= recalled_dates
+    except Exception:
+        pass
+
     return leave_dates
 
 

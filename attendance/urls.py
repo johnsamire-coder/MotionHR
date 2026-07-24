@@ -79,6 +79,9 @@ urlpatterns = [
     # Leaves & Requests APIs
     path('api/mobile/leave-types/', api_mobile_requests.mobile_leave_types, name='mobile_leave_types'),
     path('api/mobile/leave-request/', api_mobile_requests.mobile_leave_request, name='mobile_leave_request'),
+    path('api/mobile/leave-recall/create/', api_mobile_requests.create_leave_recall, name='create_leave_recall'),
+    path('api/mobile/leave-recall/<int:recall_id>/review/', api_mobile_requests.review_leave_recall, name='review_leave_recall'),
+    path('api/mobile/leave-recall/list/', api_mobile_requests.list_leave_recalls, name='list_leave_recalls'),
     path('api/mobile/my-leaves/', api_mobile_requests.mobile_my_leaves, name='mobile_my_leaves'),
     path('api/mobile/request-types/', api_mobile_requests.mobile_request_types, name='mobile_request_types'),
     path('api/mobile/submit-request/', api_mobile_requests.mobile_submit_request, name='mobile_submit_request'),

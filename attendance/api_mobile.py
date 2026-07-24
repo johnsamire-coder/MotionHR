@@ -619,8 +619,8 @@ def mobile_attendance_action(request):
 
     attendance = Attendance._base_manager.filter(employee=employee, date=today).first()
 
-    # ── حماية الإجازات ──
-    from leaves.models import LeaveRequest
+    # ── حماية الإجازات مع دعم الاستدعاء ──
+    from leaves.models import LeaveRequest, LeaveRecallRequest
     has_approved_leave = LeaveRequest._base_manager.filter(
         employee=employee,
         status='approved',
@@ -628,7 +628,15 @@ def mobile_attendance_action(request):
         end_date__gte=today,
     ).exists()
 
+    has_approved_recall = False
     if has_approved_leave:
+        has_approved_recall = LeaveRecallRequest._base_manager.filter(
+            employee=employee,
+            recall_date=today,
+            status='approved',
+        ).exists()
+
+    if has_approved_leave and not has_approved_recall:
         return Response({
             "success": False,
             **bilingual_message(
@@ -636,7 +644,8 @@ def mobile_attendance_action(request):
                 "أنت في إجازة معتمدة اليوم. لا يمكنك تسجيل الحضور أو الانصراف إلا بعد تواصلك مع الموارد البشرية لعمل طلب استدعاء.",
                 "You are on an approved leave today. You cannot record attendance until you contact HR to create a leave recall request."
             ),
-            "is_on_leave": True
+            "is_on_leave": True,
+            "can_request_recall": True,
         }, status=400)
 
     active_shift = get_active_shift(employee, today)

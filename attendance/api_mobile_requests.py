@@ -1329,3 +1329,194 @@ def manager_cancel_leave(request, leave_id):
         'leave_id': leave.id,
     })
 
+
+
+# ══════════════════════════════════════════════════════
+# LEAVE RECALL APIs
+# ══════════════════════════════════════════════════════
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def create_leave_recall(request):
+    """المدير أو صاحب الشركة يطلب استدعاء موظف من إجازته"""
+    from django.utils import timezone as tz
+    role = getattr(request.user, 'role', None)
+    if role not in ('company_admin', 'hr_manager', 'manager', 'super_admin') and not request.user.is_superuser:
+        return Response({'success': False, 'message': 'غير مصرح'}, status=403)
+
+    d = request.data
+    employee_id = d.get('employee_id')
+    recall_date_raw = d.get('recall_date')
+    reason = d.get('reason', '').strip()
+
+    if not all([employee_id, recall_date_raw, reason]):
+        return Response({'success': False, 'message': 'employee_id و recall_date و reason مطلوبين'}, status=400)
+
+    try:
+        from datetime import datetime as dt
+        recall_date = dt.strptime(str(recall_date_raw), '%Y-%m-%d').date()
+    except ValueError:
+        return Response({'success': False, 'message': 'صيغة التاريخ لازم تكون YYYY-MM-DD'}, status=400)
+
+    try:
+        from employees.models import Employee
+        from leaves.models import LeaveRequest, LeaveRecallRequest
+
+        company = getattr(request.user, 'company', None)
+        employee = Employee._base_manager.get(id=employee_id, company=company)
+
+        leave_request = LeaveRequest._base_manager.filter(
+            employee=employee,
+            status='approved',
+            start_date__lte=recall_date,
+            end_date__gte=recall_date,
+        ).first()
+
+        if not leave_request:
+            return Response({'success': False, 'message': 'الموظف مش في إجازة معتمدة في هذا اليوم'}, status=400)
+
+        if LeaveRecallRequest._base_manager.filter(
+            employee=employee,
+            recall_date=recall_date,
+        ).exists():
+            return Response({'success': False, 'message': 'يوجد طلب استدعاء بالفعل لهذا اليوم'}, status=400)
+
+        recall = LeaveRecallRequest._base_manager.create(
+            company=company,
+            employee=employee,
+            leave_request=leave_request,
+            recall_date=recall_date,
+            reason=reason,
+            requested_by=request.user,
+            status='pending',
+            created_by=request.user,
+        )
+
+        # إشعار HR
+        try:
+            from accounts.fcm_service import send_push_to_role
+            emp_name = getattr(employee, 'full_name_ar', str(employee))
+            send_push_to_role(
+                company=company,
+                role='hr_manager',
+                title='🔔 طلب استدعاء من إجازة',
+                body=f'تم طلب استدعاء {emp_name} من إجازته يوم {recall_date}',
+                data={'type': 'leave_recall', 'recall_id': str(recall.id)},
+            )
+            recall.hr_notified = True
+            recall.save(update_fields=['hr_notified'])
+        except Exception:
+            pass
+
+        # لو صاحب الشركة هو اللي طلب → يعتمد مباشرة
+        if role in ('company_admin', 'super_admin'):
+            recall.approve(request.user, notes='اعتماد تلقائي من صاحب الشركة')
+
+        return Response({
+            'success': True,
+            'recall_id': recall.id,
+            'status': recall.status,
+            'message': 'تم إنشاء طلب الاستدعاء' if recall.status == 'pending' else 'تم الاستدعاء والاعتماد مباشرة ✅',
+        }, status=201)
+
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def review_leave_recall(request, recall_id):
+    """HR أو صاحب الشركة يوافق أو يرفض طلب الاستدعاء"""
+    role = getattr(request.user, 'role', None)
+    if role not in ('company_admin', 'hr_manager', 'super_admin') and not request.user.is_superuser:
+        return Response({'success': False, 'message': 'غير مصرح - للـ HR وصاحب الشركة فقط'}, status=403)
+
+    action = request.data.get('action', '').strip().lower()
+    notes = request.data.get('notes', '').strip()
+
+    if action not in ('approve', 'reject'):
+        return Response({'success': False, 'message': 'action لازم يكون approve أو reject'}, status=400)
+
+    try:
+        from leaves.models import LeaveRecallRequest
+        company = getattr(request.user, 'company', None)
+        recall = LeaveRecallRequest._base_manager.get(id=recall_id, company=company)
+
+        if recall.status != 'pending':
+            return Response({'success': False, 'message': f'الطلب حالته {recall.get_status_display()} مش pending'}, status=400)
+
+        if action == 'approve':
+            recall.approve(request.user, notes=notes)
+            msg = f'تم الموافقة على استدعاء {recall.employee} يوم {recall.recall_date} ✅'
+        else:
+            recall.reject(request.user, notes=notes)
+            msg = f'تم رفض طلب استدعاء {recall.employee} يوم {recall.recall_date}'
+
+        # إشعار المدير اللي طلب
+        try:
+            from accounts.fcm_service import send_push_to_user
+            if recall.requested_by:
+                send_push_to_user(
+                    user=recall.requested_by,
+                    title='✅ استدعاء من إجازة' if action == 'approve' else '❌ رفض استدعاء',
+                    body=msg,
+                    data={'type': 'leave_recall_reviewed', 'recall_id': str(recall.id)},
+                )
+        except Exception:
+            pass
+
+        return Response({'success': True, 'message': msg, 'status': recall.status})
+
+    except LeaveRecallRequest.DoesNotExist:
+        return Response({'success': False, 'message': 'طلب الاستدعاء غير موجود'}, status=404)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def list_leave_recalls(request):
+    """قائمة طلبات الاستدعاء"""
+    role = getattr(request.user, 'role', None)
+    if role not in ('company_admin', 'hr_manager', 'manager', 'super_admin') and not request.user.is_superuser:
+        return Response({'success': False, 'message': 'غير مصرح'}, status=403)
+
+    try:
+        from leaves.models import LeaveRecallRequest
+        company = getattr(request.user, 'company', None)
+        status_filter = request.GET.get('status')
+
+        qs = LeaveRecallRequest._base_manager.filter(
+            company=company,
+        ).select_related('employee', 'leave_request', 'requested_by', 'reviewed_by').order_by('-recall_date')
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        data = []
+        for r in qs[:100]:
+            data.append({
+                'id': r.id,
+                'employee_id': r.employee_id,
+                'employee_name': getattr(r.employee, 'full_name_ar', str(r.employee)),
+                'recall_date': str(r.recall_date),
+                'reason': r.reason,
+                'status': r.status,
+                'status_display': r.get_status_display(),
+                'requested_by': r.requested_by.get_full_name() if r.requested_by else '',
+                'reviewed_by': r.reviewed_by.get_full_name() if r.reviewed_by else '',
+                'reviewed_at': str(r.reviewed_at) if r.reviewed_at else None,
+                'review_notes': r.review_notes,
+                'balance_restored': r.balance_restored,
+                'hr_notified': r.hr_notified,
+            })
+
+        return Response({'success': True, 'recalls': data, 'count': len(data)})
+
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
