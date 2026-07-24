@@ -12,6 +12,28 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def _get_shift_assigned_employees(shift):
+    from employees.models import Employee
+    from attendance.models import ShiftAssignment
+    affected = {}
+    assignments = ShiftAssignment._base_manager.filter(
+        company=shift.company, shift=shift, is_active=True,
+    ).select_related('employee', 'department', 'branch')
+    for a in assignments:
+        if a.assignment_type == 'employee' and a.employee:
+            affected[a.employee.id] = a.employee
+        elif a.assignment_type == 'department' and a.department:
+            for emp in Employee._base_manager.filter(company=shift.company, department=a.department, status='active'):
+                affected[emp.id] = emp
+        elif a.assignment_type == 'branch' and a.branch:
+            for emp in Employee._base_manager.filter(company=shift.company, branch=a.branch, status='active'):
+                affected[emp.id] = emp
+        elif a.assignment_type == 'company':
+            for emp in Employee._base_manager.filter(company=shift.company, status='active'):
+                affected[emp.id] = emp
+    return list(affected.values())
+
+
 MANAGER_ROLES = {"super_admin", "company_admin", "manager", "hr_manager"}
 HR_ROLES = {"super_admin", "company_admin", "hr_manager"}
 OWNER_ROLES = {"super_admin", "company_admin"}
@@ -88,7 +110,7 @@ def _shift_data(shift, lang='ar'):
         "work_days": work_days,
         "is_default": shift.is_default,
         "is_active": shift.is_active,
-        "employee_count": shift.employees.filter(is_active=True).count(),
+        "employee_count": len(_get_shift_assigned_employees(shift)),
         "shift_mode": shift.shift_mode,
         "time_preset": shift.time_preset,
         "required_daily_hours": float(shift.required_daily_hours),
