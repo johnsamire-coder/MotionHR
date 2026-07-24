@@ -1381,6 +1381,29 @@ def resume_checkin(request):
             }, status=400)
 
         now = timezone.now()
+
+        from attendance.api_mobile import get_current_split_period, get_shift_periods
+        current_split_period = get_current_split_period(shift, now)
+        if shift and getattr(shift, 'shift_mode', 'fixed') == 'split_fixed' and not current_split_period:
+            periods = get_shift_periods(shift, today)
+            periods_text = " / ".join(
+                [f"{p['name']}: {p['start_str']} - {p['end_str']}" for p in periods]
+            ) or "لا توجد فترات معرفة"
+            return Response({
+                "success": False,
+                "error": f"لا يمكن تسجيل العودة الآن. مسموح فقط أثناء فترات الشيفت المحددة: {periods_text}",
+                "outside_allowed_period": True,
+                "shift_periods": [
+                    {
+                        "period_number": p["period_number"],
+                        "name": p["name"],
+                        "start": p["start_str"],
+                        "end": p["end_str"],
+                    }
+                    for p in periods
+                ],
+            }, status=400)
+
         lat = request.data.get('latitude')
         lon = request.data.get('longitude')
 

@@ -561,6 +561,33 @@ def mobile_send_location(request):
     })
 
 
+def get_current_split_period(shift, now_dt):
+    from datetime import timedelta
+
+    if not shift or getattr(shift, 'shift_mode', 'fixed') != 'split_fixed':
+        return None
+
+    early_minutes = int(getattr(shift, 'early_checkin_minutes', 0) or 0)
+    candidate_days = [
+        timezone.localdate(now_dt),
+        timezone.localdate(now_dt - timedelta(days=1)),
+    ]
+    seen_days = set()
+
+    for day in candidate_days:
+        if day in seen_days:
+            continue
+        seen_days.add(day)
+
+        periods = get_shift_periods(shift, day)
+        for period in periods:
+            allowed_start = period['start'] - timedelta(minutes=early_minutes)
+            if allowed_start <= now_dt <= period['end']:
+                return period
+
+    return None
+
+
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
@@ -594,6 +621,34 @@ def mobile_attendance_action(request):
 
     active_shift = get_active_shift(employee, today)
     shift_start, shift_end = get_shift_bounds(active_shift, today)
+
+    current_split_period = None
+    if action == 'check_in':
+        current_split_period = get_current_split_period(active_shift, now)
+        if active_shift and getattr(active_shift, 'shift_mode', 'fixed') == 'split_fixed' and not current_split_period:
+            periods = get_shift_periods(active_shift, today)
+            periods_text = " / ".join(
+                [f"{p['name']}: {p['start_str']} - {p['end_str']}" for p in periods]
+            ) or "لا توجد فترات معرفة"
+
+            return Response({
+                "success": False,
+                **bilingual_message(
+                    employee,
+                    f"لا يمكن تسجيل الحضور الآن. مسموح فقط أثناء فترات الشيفت المحددة: {periods_text}",
+                    f"Check-in is not allowed right now. It is only allowed during the configured shift periods: {periods_text}",
+                ),
+                "outside_allowed_period": True,
+                "shift_periods": [
+                    {
+                        "period_number": p["period_number"],
+                        "name": p["name"],
+                        "start": p["start_str"],
+                        "end": p["end_str"],
+                    }
+                    for p in periods
+                ],
+            }, status=400)
 
     late_minutes = 0
     late_permission = None
