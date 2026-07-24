@@ -905,46 +905,11 @@ class ShiftOverride(TenantModel):
 
 
 class ShiftRotation(TenantModel):
-    """تناوب الشيفتات"""
-
-    ROTATION_TYPE_CHOICES = [
-        ('weekly', 'أسبوعي'),
-        ('biweekly', 'كل أسبوعين'),
-        ('monthly', 'شهري'),
-    ]
-
-    name = models.CharField(
-        max_length=100,
-        verbose_name='اسم التناوب'
-    )
-
-    rotation_type = models.CharField(
-        max_length=20,
-        choices=ROTATION_TYPE_CHOICES,
-        default='weekly',
-        verbose_name='نوع التناوب'
-    )
-
-    shifts = models.ManyToManyField(
-        Shift,
-        related_name='rotations',
-        verbose_name='الشيفتات'
-    )
-
-    employees = models.ManyToManyField(
-        'employees.Employee',
-        related_name='rotations',
-        verbose_name='الموظفون'
-    )
-
-    start_date = models.DateField(
-        verbose_name='تاريخ بداية التناوب'
-    )
-
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name='نشط'
-    )
+    """دورة التناوب"""
+    name = models.CharField(max_length=100, verbose_name='اسم التناوب')
+    cycle_length_days = models.PositiveSmallIntegerField(default=7, verbose_name='طول الدورة (أيام)')
+    start_date = models.DateField(verbose_name='تاريخ بداية التناوب المرجعي')
+    is_active = models.BooleanField(default=True, verbose_name='نشط')
 
     class Meta:
         verbose_name = 'تناوب شيفتات'
@@ -952,8 +917,92 @@ class ShiftRotation(TenantModel):
         ordering = ['-start_date']
 
     def __str__(self):
-        return f"{self.name} ({self.get_rotation_type_display()})"
+        return f"{self.name} ({self.cycle_length_days} يوم)"
 
+
+class ShiftRotationSlot(TenantModel):
+    """فترات الشيفتات داخل الدورة"""
+    rotation = models.ForeignKey(
+        ShiftRotation,
+        on_delete=models.CASCADE,
+        related_name='slots',
+        verbose_name='التناوب'
+    )
+    start_day_index = models.PositiveSmallIntegerField(
+        verbose_name='من يوم رقم',
+        help_text='0 = أول يوم في الدورة'
+    )
+    end_day_index = models.PositiveSmallIntegerField(
+        verbose_name='إلى يوم رقم'
+    )
+    shift = models.ForeignKey(
+        Shift,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rotation_slots',
+        verbose_name='الشيفت (فارغ = إجازة)'
+    )
+
+    class Meta:
+        ordering = ['start_day_index']
+
+    def __str__(self):
+        shift_name = self.shift.name if self.shift else 'راحة'
+        return f"يوم {self.start_day_index} - {self.end_day_index}: {shift_name}"
+
+
+class ShiftRotationAssignment(TenantModel):
+    """تعيين التناوب على الموظفين/الأقسام/الفروع"""
+    ASSIGNMENT_TYPE_CHOICES = [
+        ('company', 'شركة'),
+        ('branch', 'فرع'),
+        ('department', 'قسم'),
+        ('employee', 'موظف'),
+    ]
+    rotation = models.ForeignKey(
+        ShiftRotation,
+        on_delete=models.CASCADE,
+        related_name='assignments',
+        verbose_name='التناوب'
+    )
+    assignment_type = models.CharField(
+        max_length=20,
+        choices=ASSIGNMENT_TYPE_CHOICES,
+        verbose_name='نوع التعيين'
+    )
+    branch = models.ForeignKey(
+        'companies.Branch',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        verbose_name='الفرع'
+    )
+    department = models.ForeignKey(
+        'companies.Department',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        verbose_name='القسم'
+    )
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        verbose_name='الموظف'
+    )
+    start_date = models.DateField(verbose_name='تاريخ البداية')
+    end_date = models.DateField(blank=True, null=True, verbose_name='تاريخ النهاية')
+    priority = models.IntegerField(
+        default=4,
+        verbose_name='الأولوية',
+        help_text='1=موظف, 2=قسم, 3=فرع, 4=شركة'
+    )
+    is_active = models.BooleanField(default=True, verbose_name='نشط')
+
+    class Meta:
+        ordering = ['priority', '-start_date']
 
 class Attendance(TenantModel):
     """سجل الحضور اليومي"""
