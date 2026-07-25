@@ -73,6 +73,55 @@ class Company(models.Model):
         verbose_name='عنوان الشركة النصي'
     )
 
+    # ==== Payroll Cycle Settings ====
+    PAYROLL_CYCLE_TYPE_CHOICES = [
+        ('calendar_month', 'الشهر الميلادي'),
+        ('cutoff_day', 'يوم قفل ثابت'),
+    ]
+
+    PAYROLL_PAY_MONTH_OFFSET_CHOICES = [
+        ('same_month', 'نفس الشهر'),
+        ('next_month', 'الشهر اللي بعده'),
+    ]
+
+    PAYROLL_PERIOD_LABEL_MODE_CHOICES = [
+        ('cutoff_month', 'شهر القفل'),
+        ('pay_month', 'شهر الصرف'),
+        ('custom', 'تسمية مخصصة'),
+    ]
+
+    payroll_cycle_type = models.CharField(
+        max_length=20,
+        choices=PAYROLL_CYCLE_TYPE_CHOICES,
+        default='calendar_month',
+        verbose_name='نوع دورة المرتب',
+        help_text='calendar_month = من أول الشهر لآخره / cutoff_day = من يوم قفل ليوم القفل اللي بعده'
+    )
+    payroll_cutoff_day = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name='يوم قفل المرتب',
+        help_text='1-31، ويُستخدم فقط لو نوع الدورة cutoff_day'
+    )
+    payroll_pay_day = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name='يوم صرف المرتب',
+        help_text='1-31'
+    )
+    payroll_pay_month_offset = models.CharField(
+        max_length=20,
+        choices=PAYROLL_PAY_MONTH_OFFSET_CHOICES,
+        default='same_month',
+        verbose_name='شهر صرف المرتب',
+        help_text='نفس الشهر أو الشهر اللي بعده'
+    )
+    payroll_period_label_mode = models.CharField(
+        max_length=20,
+        choices=PAYROLL_PERIOD_LABEL_MODE_CHOICES,
+        default='cutoff_month',
+        verbose_name='طريقة تسمية دورة المرتب',
+        help_text='بتحدد اسم الدورة في التقارير والـ payroll runs'
+    )
+
     # ==== Geofencing Fields ====
     office_latitude = models.DecimalField(
         max_digits=10, decimal_places=7, null=True, blank=True,
@@ -87,10 +136,6 @@ class Company(models.Model):
     )
     geofence_enabled = models.BooleanField(
         default=False, verbose_name='تفعيل التحقق من موقع الحضور'
-    )
-    office_address = models.CharField(
-        max_length=500, blank=True, default='',
-        verbose_name='عنوان الشركة النصي'
     )
 
     is_active = models.BooleanField(

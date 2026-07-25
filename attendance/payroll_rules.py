@@ -172,6 +172,41 @@ def _period_bounds(year, month):
     return first_day, last_day
 
 
+def get_payroll_period_bounds(company, year, month):
+    """
+    يحسب فترة المرتب الفعلية حسب إعدادات الشركة.
+    year/month = شهر القفل دايماً.
+
+    calendar_month: من 1 الشهر لآخره
+    cutoff_day=20:  من 21 الشهر اللي فات لـ 20 الشهر ده
+    """
+    try:
+        cycle_type = getattr(company, 'payroll_cycle_type', 'calendar_month') or 'calendar_month'
+        cutoff_day = int(getattr(company, 'payroll_cutoff_day', 1) or 1)
+        cutoff_day = max(1, min(cutoff_day, 28))  # نحمي من أيام غير موجودة
+
+        if cycle_type == 'cutoff_day':
+            # نهاية الفترة = cutoff_day من شهر القفل (year/month)
+            last_day = date(year, month, cutoff_day)
+
+            # بداية الفترة = cutoff_day + 1 من الشهر اللي فاته
+            if month == 1:
+                prev_year, prev_month = year - 1, 12
+            else:
+                prev_year, prev_month = year, month - 1
+
+            first_day = date(prev_year, prev_month, cutoff_day + 1)
+            return first_day, last_day
+
+    except Exception:
+        pass
+
+    # fallback: شهر ميلادي عادي
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+    return first_day, last_day
+
+
 def _employee_name(employee, lang='ar'):
     if lang == 'en':
         parts = [
@@ -229,7 +264,11 @@ def get_company_working_days(company, year, month):
     except Exception:
         pass
 
-    first_day, last_day = _period_bounds(year, month)
+    company_obj = company if hasattr(company, 'payroll_cycle_type') else None
+    if company_obj:
+        first_day, last_day = get_payroll_period_bounds(company_obj, year, month)
+    else:
+        first_day, last_day = _period_bounds(year, month)
     today = date.today()
     upper_bound = min(last_day, today)
 
@@ -244,7 +283,11 @@ def get_company_working_days(company, year, month):
 
 def get_mission_dates(employee, year, month):
     mission_dates = set()
-    first_day, last_day = _period_bounds(year, month)
+    _company = getattr(employee, 'company', None)
+    if _company and hasattr(_company, 'payroll_cycle_type'):
+        first_day, last_day = get_payroll_period_bounds(_company, year, month)
+    else:
+        first_day, last_day = _period_bounds(year, month)
 
     try:
         from .models import DailyAssignment
@@ -279,7 +322,11 @@ def get_mission_dates(employee, year, month):
 
 def get_leave_dates(employee, year, month):
     leave_dates = set()
-    first_day, last_day = _period_bounds(year, month)
+    _company = getattr(employee, 'company', None)
+    if _company and hasattr(_company, 'payroll_cycle_type'):
+        first_day, last_day = get_payroll_period_bounds(_company, year, month)
+    else:
+        first_day, last_day = _period_bounds(year, month)
 
     try:
         from leaves.models import LeaveRequest
@@ -353,7 +400,11 @@ def _get_monthly_deductions(employee, year, month, lang='ar'):
     extra_items = []
     legacy_items = []
 
-    first_day, last_day = _period_bounds(year, month)
+    _emp_company = getattr(employee, 'company', None)
+    if _emp_company and hasattr(_emp_company, 'payroll_cycle_type'):
+        first_day, last_day = get_payroll_period_bounds(_emp_company, year, month)
+    else:
+        first_day, last_day = _period_bounds(year, month)
 
     try:
         from .company_policy_models import PayrollDeduction
@@ -596,16 +647,19 @@ def _apply_permission_balance(employee, late_minutes, reference_date, policy):
 
     today = reference_date or date.today()
 
-    # نحدد فترة الشهر
-    if policy.permission_reset_cycle == 'payroll':
-        period_start = today.replace(day=1)
-    else:
-        period_start = today.replace(day=1)
+    # نحدد فترة الشهر حسب نوع الدورة
+    emp_company = getattr(employee, 'company', None)
 
-    if today.month == 12:
-        period_end = today.replace(year=today.year + 1, month=1, day=1)
+    if policy.permission_reset_cycle == 'payroll' and emp_company and hasattr(emp_company, 'payroll_cycle_type'):
+        # نستخدم نفس دورة المرتب
+        period_start, period_end = get_payroll_period_bounds(emp_company, today.year, today.month)
     else:
-        period_end = today.replace(month=today.month + 1, day=1)
+        # دورة شهرية ميلادية عادية
+        period_start = today.replace(day=1)
+        if today.month == 12:
+            period_end = today.replace(year=today.year + 1, month=1, day=1)
+        else:
+            period_end = today.replace(month=today.month + 1, day=1)
 
     # نجيب الحركات في الفترة دي
     entries = PermissionLedger._base_manager.filter(
@@ -767,10 +821,15 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     insurance_fixed_amount = _safe_float(settings.get('insurance_fixed_amount', 0))
     insurance_percent = _safe_float(settings.get('insurance_percent', 0))
 
-    first_day, last_day = _period_bounds(year, month)
     company = getattr(employee, 'company', None)
     department = getattr(employee, 'department', None)
     branch = getattr(employee, 'branch', None)
+
+    # Phase 1: فترة المرتب حسب إعدادات الشركة
+    if company and hasattr(company, 'payroll_cycle_type'):
+        first_day, last_day = get_payroll_period_bounds(company, year, month)
+    else:
+        first_day, last_day = _period_bounds(year, month)
 
     # م-6: السياسة بتتجاب لكل يوم مش مرة واحدة للشهر كله
     # active_policy = للتوافق مع القديم (بتاخد السياسة السائدة في الشهر)
