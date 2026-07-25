@@ -858,6 +858,23 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         if getattr(a, 'check_in_time', None) is not None
     }
 
+    # Hybrid: جلب الملخصات اليومية المتاحة (لو موجودة تسرّع الحساب)
+    try:
+        from attendance.models import DailyAttendanceSummary
+        from datetime import date as _date_cls
+        _today = _date_cls.today()
+        _summaries = {
+            s.date: s
+            for s in DailyAttendanceSummary._base_manager.filter(
+                employee=employee,
+                date__gte=first_day,
+                date__lte=last_day,
+            ).select_related('shift', 'policy')
+            if s.date < _today  # نتجاهل النهارده لأنه ممكن يكون ناقص
+        }
+    except Exception:
+        _summaries = {}
+
     present_days = 0
     late_days = 0
     absent_days = 0
@@ -871,10 +888,59 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     night_shift_days = 0
     weekend_work_days = 0
 
-        # ندمج أيام الشركة مع أي أيام الموظف اشتغلها فعلياً وهي مش أيام عمل للشركة
+    # ندمج أيام الشركة مع أي أيام الموظف اشتغلها فعلياً وهي مش أيام عمل للشركة
     all_eval_dates = sorted(list(set(working_dates) | attended_dates))
     for d in all_eval_dates:
         att = attendance_by_date.get(d)
+
+        # Hybrid: لو عندنا summary لليوم ده نستخدمها
+        _summary = _summaries.get(d)
+        if _summary and d not in leave_dates and d not in mission_dates:
+            _es = _summary.effective_status or _summary.status
+            _day_shift = _summary.shift or _get_shift_for_date(employee, d)
+
+            if _es == 'present':
+                present_days += 1
+            elif _es == 'late':
+                late_days += 1
+                _day_pol = _get_day_policy(d)
+                _conv, _remaining = _apply_permission_balance(
+                    employee, _summary.late_minutes, d, _day_pol
+                )
+                total_late_minutes += _remaining
+            elif _es == 'absent':
+                absent_days += 1
+            elif _es == 'weekend':
+                pass
+            elif _es == 'on_leave':
+                on_leave_days += 1
+
+            _wh = float(_summary.work_hours or 0)
+            _oth = float(_summary.overtime_hours or 0)
+            total_work_hours += _wh
+            total_overtime_hours += _oth
+
+            if _summary.is_night_shift:
+                night_shift_days += 1
+            if _summary.is_weekend_work:
+                weekend_work_days += 1
+
+            daily_details.append({
+                'date': d.isoformat(),
+                'status': _summary.status,
+                'effective_status': _es,
+                'check_in': att.check_in_time.strftime('%H:%M') if att and att.check_in_time else None,
+                'check_out': att.check_out_time.strftime('%H:%M') if att and att.check_out_time else None,
+                'work_hours': round(_wh, 2),
+                'late_minutes': _summary.late_minutes,
+                'overtime_hours': round(_oth, 2),
+                'shift_name': _day_shift.name if _day_shift else '',
+                'is_night_shift': _summary.is_night_shift,
+                'is_weekend_work': _summary.is_weekend_work,
+            })
+            continue
+
+        # Fallback: الحساب التقليدي لو مفيش summary
         day_shift = _get_shift_for_date(employee, d)
 
         if d in leave_dates:

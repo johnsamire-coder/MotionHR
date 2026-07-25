@@ -1020,6 +1020,14 @@ def mobile_attendance_action(request):
     attendance.calculate_work_hours()
     attendance.save()
 
+    # DailyAttendanceSummary: نعبّي الملخص اليومي بعد الانصراف
+    try:
+        from attendance.models import DailyAttendanceSummary
+        DailyAttendanceSummary.compute_for_day(employee, today)
+    except Exception as _ds_err:
+        import logging
+        logging.getLogger(__name__).warning(f'DailyAttendanceSummary checkout error: {_ds_err}')
+
     LocationLog._base_manager.create(
         company=employee.company,
         employee=employee,

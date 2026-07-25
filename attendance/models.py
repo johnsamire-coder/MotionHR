@@ -1408,6 +1408,218 @@ class LocationCheckIn(TenantModel):
             return int(duration.total_seconds() / 60)
         return None
 
+
+
+class DailyAttendanceSummary(TenantModel):
+    """
+    ملخص يومي لحضور كل موظف.
+    بيتحسب وقت check_out ويتحدث بـ Cron كل ليلة.
+    بيسرّع حساب المرتبات والتقارير.
+    """
+
+    STATUS_CHOICES = [
+        ('present', 'حاضر'),
+        ('absent', 'غائب'),
+        ('late', 'متأخر'),
+        ('on_leave', 'في إجازة'),
+        ('weekend', 'إجازة أسبوعية'),
+        ('mission', 'مأمورية'),
+        ('holiday', 'عطلة رسمية'),
+    ]
+
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='daily_summaries',
+        verbose_name='الموظف'
+    )
+
+    date = models.DateField(
+        verbose_name='التاريخ'
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='absent',
+        verbose_name='الحالة'
+    )
+
+    effective_status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='absent',
+        verbose_name='الحالة الفعلية (بعد الأذونات)'
+    )
+
+    late_minutes = models.IntegerField(
+        default=0,
+        verbose_name='دقائق التأخير'
+    )
+
+    work_hours = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name='ساعات العمل'
+    )
+
+    overtime_hours = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name='ساعات الأوفرتايم'
+    )
+
+    is_night_shift = models.BooleanField(
+        default=False,
+        verbose_name='شيفت ليلي'
+    )
+
+    is_weekend_work = models.BooleanField(
+        default=False,
+        verbose_name='عمل في يوم الراحة'
+    )
+
+    shift = models.ForeignKey(
+        'attendance.Shift',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='daily_summaries',
+        verbose_name='الشيفت'
+    )
+
+    policy = models.ForeignKey(
+        'attendance.AttendancePolicy',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='daily_summaries',
+        verbose_name='السياسة'
+    )
+
+    class Meta:
+        verbose_name = 'ملخص يومي'
+        verbose_name_plural = 'الملخصات اليومية'
+        ordering = ['-date']
+        unique_together = [['employee', 'date']]
+
+    def __str__(self):
+        return f"{self.employee} - {self.date} - {self.status}"
+
+    @classmethod
+    def compute_for_day(cls, employee, target_date):
+        """
+        يحسب أو يحدث الملخص اليومي لموظف في يوم معين.
+        بيستخدم نفس المنطق اللي في payroll_rules.
+        """
+        try:
+            from attendance.payroll_rules import (
+                _get_shift_for_date,
+                _calc_late_minutes,
+                _calc_overtime_hours,
+                _calc_split_shift_metrics,
+                _is_night_shift,
+                _is_weekend_work,
+                _get_active_policy,
+            )
+            from attendance.models import Attendance, AttendanceSession
+
+            from django.utils import timezone
+
+            att = Attendance._base_manager.filter(
+                employee=employee,
+                date=target_date,
+            ).first()
+
+            # لو فيه Attendance متسجل على شيفت معين، ده أولى من إعادة جلب الشيفت الفعلي
+            day_shift = getattr(att, 'shift', None) or _get_shift_for_date(employee, target_date)
+            company = getattr(employee, 'company', None)
+            department = getattr(employee, 'department', None)
+            branch = getattr(employee, 'branch', None)
+            policy = _get_active_policy(company, target_date, department=department, branch=branch)
+
+            # أي يوم فيه حضور مفتوح من غير check_out -> ما نطلعش له summary نهائية
+            # ولو فيه summary قديمة لنفس اليوم نمسحها عشان ما يبقاش فيه بيانات كدابة
+            if att and getattr(att, 'check_in_time', None) and not getattr(att, 'check_out_time', None):
+                cls._base_manager.filter(employee=employee, date=target_date).delete()
+                return None
+
+            # ما نحسبش ملخص نهائي لليوم الحالي لو لسه مفيش حضور/انصراف مكتمل
+            if target_date == timezone.localdate() and (not att or not getattr(att, 'check_out_time', None)):
+                cls._base_manager.filter(employee=employee, date=target_date).delete()
+                return None
+
+            if not att or not getattr(att, 'check_in_time', None):
+                if day_shift and not day_shift.is_work_day(target_date):
+                    status = 'weekend'
+                else:
+                    status = 'absent'
+
+                obj, _ = cls._base_manager.update_or_create(
+                    employee=employee,
+                    date=target_date,
+                    defaults=dict(
+                        company=company,
+                        status=status,
+                        effective_status=status,
+                        late_minutes=0,
+                        work_hours=0,
+                        overtime_hours=0,
+                        is_night_shift=False,
+                        is_weekend_work=False,
+                        shift=day_shift,
+                        policy=policy,
+                    )
+                )
+                return obj
+
+            shift_mode = getattr(day_shift, 'shift_mode', '') if day_shift else ''
+            if day_shift and shift_mode == 'split_fixed':
+                sessions = list(AttendanceSession._base_manager.filter(
+                    attendance=att
+                ).order_by('session_number'))
+                metrics = _calc_split_shift_metrics(day_shift, att, sessions, target_date)
+                late_min = metrics['late_minutes'] + metrics['shortage_minutes']
+                work_h = round(metrics['worked_minutes'] / 60, 2)
+                ot_h = 0.0
+            else:
+                late_min = _calc_late_minutes(day_shift, att)
+                work_h = float(getattr(att, 'work_hours', 0) or 0)
+                ot_h = _calc_overtime_hours(day_shift, att)
+
+            is_night = _is_night_shift(day_shift)
+            is_weekend = _is_weekend_work(day_shift, target_date)
+
+            if late_min > 0:
+                status = 'late'
+            else:
+                status = 'present'
+
+            obj, _ = cls._base_manager.update_or_create(
+                employee=employee,
+                date=target_date,
+                defaults=dict(
+                    company=company,
+                    status=status,
+                    effective_status=status,
+                    late_minutes=late_min,
+                    work_hours=work_h,
+                    overtime_hours=ot_h,
+                    is_night_shift=is_night,
+                    is_weekend_work=is_weekend,
+                    shift=day_shift,
+                    policy=policy,
+                )
+            )
+            return obj
+
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f'DailyAttendanceSummary.compute_for_day error: {e}')
+            return None
+
 class AttendanceActionLog(TenantModel):
     """سجل تعديلات الحضور والانصراف"""
 
