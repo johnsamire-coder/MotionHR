@@ -483,3 +483,13 @@ urlpatterns += [
     path('api/mobile/manager/reports/permissions/', permissions_report, name='reports-permissions'),
     path('api/mobile/manager/reports/daily-attendance/', daily_attendance_report, name='reports-daily-attendance'),
 ]
+
+from .api_reports import (
+    leaves_report_enhanced,
+    shifts_report,
+)
+
+urlpatterns += [
+    path('api/mobile/manager/reports/leaves-enhanced/', leaves_report_enhanced, name='reports-leaves-enhanced'),
+    path('api/mobile/manager/reports/shifts/', shifts_report, name='reports-shifts'),
+]

@@ -1142,3 +1142,167 @@ def daily_attendance_report(request):
         'stats': stats,
         'employees': results,
     })
+
+
+# ══════════════════════════════════════════════════════════════════
+# 5.4 تقرير الإجازات المحسّن (مع أرصدة + unpaid + نص يوم)
+# ══════════════════════════════════════════════════════════════════
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def leaves_report_enhanced(request):
+    """تقرير الإجازات الشامل مع الأرصدة"""
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    year, month = _parse_month(request)
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+    employees = _get_company_employees(user)
+
+    from leaves.models import LeaveRequest, LeaveBalance, LeaveType
+
+    results = []
+    for emp in employees:
+        leaves = LeaveRequest._base_manager.filter(
+            employee=emp,
+            start_date__lte=last_day,
+            end_date__gte=first_day,
+        ).select_related('leave_type').order_by('-start_date')
+
+        leave_items = []
+        total_days = 0.0
+        unpaid_days = 0.0
+        half_day_count = 0
+
+        for lv in leaves:
+            days = float(lv.days_count or 1)
+            is_unpaid = not getattr(lv.leave_type, 'is_paid', True) if lv.leave_type else False
+            is_half = days <= 0.5
+            half_type = getattr(lv, 'half_day_type', '') or ''
+
+            if lv.status == 'approved':
+                total_days += days
+                if is_unpaid:
+                    unpaid_days += days
+                if is_half:
+                    half_day_count += 1
+
+            leave_items.append({
+                'id': lv.id,
+                'leave_type': lv.leave_type.name if lv.leave_type else '',
+                'is_paid': not is_unpaid,
+                'start_date': str(lv.start_date) if lv.start_date else '',
+                'end_date': str(lv.end_date) if lv.end_date else '',
+                'days_count': days,
+                'is_half_day': is_half,
+                'half_day_type': half_type,
+                'status': lv.status,
+                'reason': lv.reason or '',
+            })
+
+        balances = LeaveBalance._base_manager.filter(
+            employee=emp,
+            year=year,
+        ).select_related('leave_type')
+
+        balance_items = []
+        for bal in balances:
+            balance_items.append({
+                'leave_type': bal.leave_type.name if bal.leave_type else '',
+                'total_days': float(bal.total_days or 0),
+                'used_days': float(bal.used_days or 0),
+                'pending_days': float(bal.pending_days or 0),
+                'remaining_days': float(bal.remaining_days if hasattr(bal, 'remaining_days') else 0),
+            })
+
+        results.append({
+            'employee_id': emp.id,
+            'employee_name': _employee_name(emp),
+            'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+            'total_approved_days': total_days,
+            'unpaid_days': unpaid_days,
+            'half_day_count': half_day_count,
+            'leaves_count': len(leave_items),
+            'leaves': leave_items,
+            'balances': balance_items,
+        })
+
+    return Response({
+        'year': year,
+        'month': month,
+        'total_employees': len(results),
+        'employees': results,
+    })
+
+
+# ══════════════════════════════════════════════════════════════════
+# 5.2 تقرير الشيفتات
+# ══════════════════════════════════════════════════════════════════
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def shifts_report(request):
+    """تقرير توزيع الموظفين على الشيفتات"""
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    employees = _get_company_employees(user)
+    company = getattr(user, 'company', None)
+
+    from attendance.models import Shift, ShiftAssignment, EmployeeShift
+    from attendance.api_shifts import get_effective_shift
+
+    today = date.today()
+    shift_distribution = {}
+    no_shift_employees = []
+
+    for emp in employees:
+        try:
+            shift, source = get_effective_shift(emp, today)
+        except Exception:
+            shift = None
+            source = 'error'
+
+        if shift:
+            shift_id = shift.id
+            if shift_id not in shift_distribution:
+                shift_distribution[shift_id] = {
+                    'shift_id': shift_id,
+                    'shift_name': shift.name,
+                    'shift_type': shift.shift_type,
+                    'shift_mode': getattr(shift, 'shift_mode', ''),
+                    'start_time': str(shift.start_time)[:5] if shift.start_time else '',
+                    'end_time': str(shift.end_time)[:5] if shift.end_time else '',
+                    'crosses_midnight': shift.crosses_midnight,
+                    'employees_count': 0,
+                    'employees': [],
+                }
+            shift_distribution[shift_id]['employees_count'] += 1
+            shift_distribution[shift_id]['employees'].append({
+                'employee_id': emp.id,
+                'employee_name': _employee_name(emp),
+                'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+                'source': source,
+            })
+        else:
+            no_shift_employees.append({
+                'employee_id': emp.id,
+                'employee_name': _employee_name(emp),
+                'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+            })
+
+    all_shifts = list(shift_distribution.values())
+    all_shifts.sort(key=lambda x: x['employees_count'], reverse=True)
+
+    return Response({
+        'date': str(today),
+        'total_employees': employees.count(),
+        'employees_with_shifts': sum(s['employees_count'] for s in all_shifts),
+        'employees_without_shifts': len(no_shift_employees),
+        'shifts_count': len(all_shifts),
+        'shifts': all_shifts,
+        'no_shift_employees': no_shift_employees,
+    })
