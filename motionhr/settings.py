@@ -298,3 +298,6 @@ if not DEBUG:
 
 # Timezone from env
 TIME_ZONE = os.getenv('TIME_ZONE', 'Africa/Cairo')
+
+# Activation link expiry
+PASSWORD_RESET_TIMEOUT = 48 * 60 * 60  # 48 hours
