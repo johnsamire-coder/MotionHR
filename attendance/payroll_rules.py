@@ -391,6 +391,48 @@ def get_leave_dates(employee, year, month):
     return leave_dates
 
 
+def get_unpaid_leave_dates(employee, year, month):
+    unpaid_dates = set()
+    _company = getattr(employee, 'company', None)
+    if _company and hasattr(_company, 'payroll_cycle_type'):
+        first_day, last_day = get_payroll_period_bounds(_company, year, month)
+    else:
+        first_day, last_day = _period_bounds(year, month)
+
+    try:
+        from leaves.models import LeaveRequest
+        for lv in LeaveRequest._base_manager.filter(
+            employee=employee,
+            status='approved',
+            leave_type__is_paid=False,
+            start_date__lte=last_day,
+            end_date__gte=first_day,
+        ).select_related('leave_type'):
+            current = max(lv.start_date, first_day)
+            end = min(lv.end_date, last_day)
+            while current <= end:
+                unpaid_dates.add(current)
+                current += timedelta(days=1)
+    except Exception:
+        pass
+
+    try:
+        from leaves.models import LeaveRecallRequest
+        recalled_dates = set(
+            LeaveRecallRequest._base_manager.filter(
+                employee=employee,
+                status='approved',
+                recall_date__gte=first_day,
+                recall_date__lte=last_day,
+            ).values_list('recall_date', flat=True)
+        )
+        unpaid_dates -= recalled_dates
+    except Exception:
+        pass
+
+    return unpaid_dates
+
+
 def _get_allowances(employee, first_day, last_day, lang='ar'):
     total = 0.0
     items = []
@@ -962,6 +1004,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     working_dates = get_company_working_days(company, year, month)
     mission_dates = get_mission_dates(employee, year, month)
     leave_dates = get_leave_dates(employee, year, month)
+    unpaid_leave_dates = get_unpaid_leave_dates(employee, year, month)
 
     attendances = list(
         Attendance._base_manager.filter(
@@ -997,6 +1040,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     late_days = 0
     absent_days = 0
     on_leave_days = 0
+    unpaid_leave_days = 0
     mission_days = 0
     total_late_minutes = 0
     total_early_leave_minutes = 0
@@ -1067,6 +1111,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
         if d in leave_dates:
             on_leave_days += 1
+            if d in unpaid_leave_dates:
+                unpaid_leave_days += 1
             daily_details.append({
                 'date': d.isoformat(), 'status': 'on_leave',
                 'effective_status': 'on_leave', 'check_in': None,
@@ -1301,6 +1347,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     # خصم الانصراف المبكر = بنفس معدل التأخير الحالي
     early_leave_deduction = round(total_early_leave_minutes * late_per_min, 2)
 
+    unpaid_leave_deduction = round(unpaid_leave_days * daily_salary, 2)
+
     allowances_total, allowance_items = _get_allowances(employee, first_day, last_day, lang=lang)
     deductions = _get_monthly_deductions(employee, year, month, lang=lang)
     bonuses_total, bonus_items = _get_bonuses(employee, year, month, lang=lang)
@@ -1329,7 +1377,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         + penalties_total
         + extra_deductions_total
         + flex_shortage_deduction
-        + early_leave_deduction,
+        + early_leave_deduction
+        + unpaid_leave_deduction,
         2
     )
 
@@ -1357,6 +1406,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'policy_name': active_policy.name if active_policy else None,
         'flex_shortage_deduction': round(flex_shortage_deduction, 2),
         'early_leave_deduction': round(early_leave_deduction, 2),
+        'unpaid_leave_deduction': round(unpaid_leave_deduction, 2),
         'late_deduction': round(late_deduction, 2),
         'absence_deduction': round(absence_deduction, 2),
         'insurance_deduction': round(insurance_deduction, 2),
@@ -1373,6 +1423,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'late_days': late_days,
         'mission_days': mission_days,
         'on_leave_days': on_leave_days,
+        'unpaid_leave_days': unpaid_leave_days,
         'total_late_minutes': total_late_minutes,
         'total_early_leave_minutes': total_early_leave_minutes,
         'total_work_hours': round(total_work_hours, 2),
