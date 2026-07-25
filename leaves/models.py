@@ -112,6 +112,11 @@ class LeaveRequest(TenantModel):
         ("cancelled", "ملغي"),
     ]
 
+    HALF_DAY_TYPE_CHOICES = [
+        ("morning", "صباحي"),
+        ("afternoon", "مسائي"),
+    ]
+
     employee    = models.ForeignKey(
         "employees.Employee",
         on_delete=models.CASCADE,
@@ -131,6 +136,20 @@ class LeaveRequest(TenantModel):
     days_count  = models.DecimalField(
         max_digits=4, decimal_places=1,
         default=1, verbose_name="عدد الأيام"
+    )
+    half_day_type = models.CharField(
+        max_length=20,
+        choices=HALF_DAY_TYPE_CHOICES,
+        blank=True,
+        default="",
+        verbose_name="نوع نصف اليوم"
+    )
+    leave_hours = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="عدد ساعات الإجازة"
     )
 
     # التفاصيل

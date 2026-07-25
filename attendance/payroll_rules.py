@@ -351,6 +351,7 @@ def get_mission_dates(employee, year, month):
 
 def get_leave_dates(employee, year, month):
     leave_dates = set()
+    half_day_dates = {}  # date -> {'type': morning/afternoon, 'hours': float}
     _company = getattr(employee, 'company', None)
     if _company and hasattr(_company, 'payroll_cycle_type'):
         first_day, last_day = get_payroll_period_bounds(_company, year, month)
@@ -367,8 +368,17 @@ def get_leave_dates(employee, year, month):
         ):
             current = max(lv.start_date, first_day)
             end = min(lv.end_date, last_day)
+            _half = getattr(lv, 'half_day_type', '') or ''
+            _hours = float(getattr(lv, 'leave_hours', 0) or 0)
             while current <= end:
-                leave_dates.add(current)
+                if _half and lv.days_count <= 0.5:
+                    # نص يوم: نسجله لكن ما نضيفوش لـ leave_dates
+                    half_day_dates[current] = {
+                        'type': _half,
+                        'hours': _hours if _hours > 0 else 4.0,
+                    }
+                else:
+                    leave_dates.add(current)
                 current += timedelta(days=1)
     except Exception:
         pass
@@ -388,7 +398,7 @@ def get_leave_dates(employee, year, month):
     except Exception:
         pass
 
-    return leave_dates
+    return leave_dates, half_day_dates
 
 
 
@@ -1035,7 +1045,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
     working_dates = get_company_working_days(company, year, month)
     mission_dates = get_mission_dates(employee, year, month)
-    leave_dates = get_leave_dates(employee, year, month)
+    leave_dates, half_day_dates = get_leave_dates(employee, year, month)
     unpaid_leave_dates = get_unpaid_leave_dates(employee, year, month)
 
     attendances = list(
@@ -1145,6 +1155,13 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             on_leave_days += 1
             if d in unpaid_leave_dates:
                 unpaid_leave_days += 1
+        elif d in half_day_dates:
+            # نص يوم: حاضر نص الوقت فقط
+            on_leave_days += 0.5
+            _hd = half_day_dates[d]
+            _hd_hours = _hd.get('hours', 4.0)
+            _hd_daily_deduct = round(_hd_hours / max(float(getattr(att.employee if att else employee, 'required_daily_hours', 8) or 8), 1) * daily_salary, 2)
+            absence_deduction += _hd_daily_deduct
             daily_details.append({
                 'date': d.isoformat(), 'status': 'on_leave',
                 'effective_status': 'on_leave', 'check_in': None,

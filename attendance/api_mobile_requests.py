@@ -123,6 +123,9 @@ def mobile_leave_request(request):
     else:
         days_count = (end - start).days + 1
 
+    _half_day_type_val = half_day_type if half_day and half_day_type in ('morning', 'afternoon') else ''
+    _leave_hours = 4.0 if half_day else None
+
     _leave_notes = ''
     if half_day:
         _half_label = 'صباحي' if half_day_type == 'morning' else 'مسائي'
@@ -135,6 +138,8 @@ def mobile_leave_request(request):
         start_date=start,
         end_date=end,
         days_count=days_count,
+        half_day_type=_half_day_type_val,
+        leave_hours=_leave_hours,
         reason=reason,
         notes=_leave_notes if half_day else '',
         status='pending',
