@@ -256,7 +256,108 @@ def get_shift_periods(shift, day):
 
     periods = []
 
-    if getattr(shift, 'shift_mode', 'fixed') == 'split_fixed':
+    shift_mode = getattr(shift, 'shift_mode', 'fixed') or 'fixed'
+
+    if shift_mode in ('variable_weekly', 'variable_weekly_flex'):
+        # جدول أسبوعي: كل يوم في الأسبوع ليه أوقات مختلفة
+        # schedule_config = {"days": {"0": {"start": "09:00", "end": "17:00"}, ...}}
+        # 0=الاثنين ... 6=الأحد (Python weekday)
+        try:
+            config = getattr(shift, 'schedule_config', {}) or {}
+            days_config = config.get('days', {})
+            day_key = str(day.weekday())  # 0=الاثنين, 6=الأحد
+            day_cfg = days_config.get(day_key)
+
+            if day_cfg:
+                from datetime import datetime as _dt
+                start_str = str(day_cfg.get('start', '09:00'))
+                end_str = str(day_cfg.get('end', '17:00'))
+                start_parts = start_str.split(':')
+                end_parts = end_str.split(':')
+                start_dt = _dt.combine(day, __import__('datetime').time(
+                    int(start_parts[0]), int(start_parts[1])))
+                end_dt = _dt.combine(day, __import__('datetime').time(
+                    int(end_parts[0]), int(end_parts[1])))
+                if end_dt <= start_dt:
+                    end_dt += timedelta(days=1)
+                tz = timezone.get_current_timezone()
+                periods.append({
+                    'period_number': 1,
+                    'start': timezone.make_aware(start_dt, tz),
+                    'end': timezone.make_aware(end_dt, tz),
+                    'start_str': start_str,
+                    'end_str': end_str,
+                    'name': day_cfg.get('name', 'فترة العمل'),
+                })
+        except Exception:
+            pass
+
+        # fallback لو اليوم مش في الجدول
+        if not periods and shift.start_time and shift.end_time:
+            start_dt = datetime.combine(day, shift.start_time)
+            end_dt = datetime.combine(day, shift.end_time)
+            if end_dt <= start_dt:
+                end_dt += timedelta(days=1)
+            tz = timezone.get_current_timezone()
+            periods.append({
+                'period_number': 1,
+                'start': timezone.make_aware(start_dt, tz),
+                'end': timezone.make_aware(end_dt, tz),
+                'start_str': shift.start_time.strftime('%H:%M'),
+                'end_str': shift.end_time.strftime('%H:%M'),
+                'name': 'فترة العمل',
+            })
+
+    elif shift_mode == 'variable_daily':
+        # جدول يومي: كل تاريخ ليه أوقات مختلفة
+        # schedule_config = {"dates": {"2026-07-25": {"start": "08:00", "end": "16:00"}, ...}}
+        try:
+            config = getattr(shift, 'schedule_config', {}) or {}
+            dates_config = config.get('dates', {})
+            date_key = day.isoformat()
+            date_cfg = dates_config.get(date_key)
+
+            if date_cfg:
+                from datetime import datetime as _dt
+                start_str = str(date_cfg.get('start', '09:00'))
+                end_str = str(date_cfg.get('end', '17:00'))
+                start_parts = start_str.split(':')
+                end_parts = end_str.split(':')
+                start_dt = _dt.combine(day, __import__('datetime').time(
+                    int(start_parts[0]), int(start_parts[1])))
+                end_dt = _dt.combine(day, __import__('datetime').time(
+                    int(end_parts[0]), int(end_parts[1])))
+                if end_dt <= start_dt:
+                    end_dt += timedelta(days=1)
+                tz = timezone.get_current_timezone()
+                periods.append({
+                    'period_number': 1,
+                    'start': timezone.make_aware(start_dt, tz),
+                    'end': timezone.make_aware(end_dt, tz),
+                    'start_str': start_str,
+                    'end_str': end_str,
+                    'name': date_cfg.get('name', 'فترة العمل'),
+                })
+        except Exception:
+            pass
+
+        # fallback لو التاريخ مش في الجدول
+        if not periods and shift.start_time and shift.end_time:
+            start_dt = datetime.combine(day, shift.start_time)
+            end_dt = datetime.combine(day, shift.end_time)
+            if end_dt <= start_dt:
+                end_dt += timedelta(days=1)
+            tz = timezone.get_current_timezone()
+            periods.append({
+                'period_number': 1,
+                'start': timezone.make_aware(start_dt, tz),
+                'end': timezone.make_aware(end_dt, tz),
+                'start_str': shift.start_time.strftime('%H:%M'),
+                'end_str': shift.end_time.strftime('%H:%M'),
+                'name': 'فترة العمل',
+            })
+
+    elif shift_mode == 'split_fixed':
         config = getattr(shift, 'schedule_config', {}) or {}
         raw_periods = config.get('periods', [])
 
