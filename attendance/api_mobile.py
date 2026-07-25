@@ -216,10 +216,28 @@ def get_active_shift(employee, day):
     مصدر موحّد للشيفت الفعلي.
     بنخلّي الحضور يستخدم نفس منطق الشيفتات والمرتبات
     عشان مايبقاش فيه اختلاف بين الحضور وكشف المرتب.
+
+    للشيفت الليلي: لو الوقت الحالي بعد نص الليل (crosses_midnight)
+    ممكن الشيفت يكون بدأ يوم فات → نجرب يومين
     """
     from attendance.api_shifts import get_effective_shift
+    from datetime import timedelta
 
     shift, _source = get_effective_shift(employee, day)
+
+    # لو مش لاقيين شيفت ليلي → نجرب يوم فات
+    if not shift or not getattr(shift, 'crosses_midnight', False):
+        return shift
+
+    # لو الشيفت ليلي وبدايته بعد ظهر اليوم → الشيفت صح
+    if shift.start_time and shift.start_time.hour >= 12:
+        return shift
+
+    # لو الشيفت ليلي وبدايته قبل الظهر → ممكن يكون الشيفت بتاع امبارح
+    yesterday_shift, _ = get_effective_shift(employee, day - timedelta(days=1))
+    if yesterday_shift and getattr(yesterday_shift, 'crosses_midnight', False):
+        return yesterday_shift
+
     return shift
 
 
@@ -350,13 +368,29 @@ def get_missing_periods(shift, day, employee):
 
 
 def get_shift_bounds(shift, day):
+    """
+    بترجع حدود الشيفت (start, end) كـ datetime aware.
+
+    للشيفت الليلي (crosses_midnight):
+    - لو start_time بعد 12: الشيفت بيبدأ يوم day وبينتهي يوم day+1
+    - لو start_time قبل 12: الشيفت بدأ يوم day-1 وبينتهي يوم day
+    """
     from datetime import datetime, timedelta
 
     if not shift or not shift.start_time or not shift.end_time:
         return None, None
 
-    start_dt = datetime.combine(day, shift.start_time)
-    end_dt = datetime.combine(day, shift.end_time)
+    crosses = getattr(shift, 'crosses_midnight', False)
+    start_hour = shift.start_time.hour
+
+    if crosses and start_hour < 12:
+        # الشيفت بدأ يوم فات (مثلاً: بدأ 10pm يوم 25، خلص 6am يوم 26)
+        shift_day = day - timedelta(days=1)
+    else:
+        shift_day = day
+
+    start_dt = datetime.combine(shift_day, shift.start_time)
+    end_dt = datetime.combine(shift_day, shift.end_time)
 
     if end_dt <= start_dt:
         end_dt += timedelta(days=1)
