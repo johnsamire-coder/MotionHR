@@ -24,13 +24,18 @@ def _calc_late_minutes(shift, att):
     """يحسب دقائق التأخير بناءً على الشيفت الفعلي"""
     if not shift or not att or not att.check_in_time:
         return 0
+
+    # الشيفت المرن: مفيش تأخير بالوقت — المهم الساعات (بتتحسب في FlexDayAdjustment)
+    shift_mode = getattr(shift, 'shift_mode', '') or ''
+    if shift_mode in ('flex_fixed', 'flex_split'):
+        return 0
+
     try:
         from django.utils import timezone
         check_in_local = timezone.localtime(att.check_in_time)
         shift_start = datetime.combine(check_in_local.date(), shift.start_time)
         grace = int(shift.grace_period or 0)
         deadline = shift_start + timedelta(minutes=grace)
-        check_in_local = timezone.localtime(att.check_in_time)
         check_in_naive = check_in_local.replace(tzinfo=None)
         if check_in_naive > deadline:
             return int((check_in_naive - deadline).total_seconds() / 60)
@@ -43,6 +48,24 @@ def _calc_overtime_hours(shift, att):
     """يحسب ساعات الأوفر تايم بناءً على الشيفت الفعلي"""
     if not shift or not att or not att.check_in_time or not att.check_out_time:
         return float(getattr(att, 'overtime_hours', 0) or 0)
+
+    # الشيفت المرن: الأوفر تايم بيجي من FlexDayAdjustment المعتمد بس
+    shift_mode = getattr(shift, 'shift_mode', '') or ''
+    if shift_mode in ('flex_fixed', 'flex_split'):
+        try:
+            from attendance.models import FlexDayAdjustment
+            approved = FlexDayAdjustment._base_manager.filter(
+                employee=att.employee,
+                date=att.date,
+                adjustment_type='overtime',
+                status='approved',
+            ).order_by('-reviewed_at').first()
+            if approved:
+                return float(approved.delta_hours or 0)
+            return 0.0
+        except Exception:
+            return 0.0
+
     try:
         from django.utils import timezone
         today = att.check_in_time.date()
@@ -629,6 +652,95 @@ def _apply_late_rule(policy, late_minutes, daily_salary):
     return 0.0
 
 
+
+
+
+def _upsert_flex_adjustment(employee, att, day_shift, actual_hours):
+    """
+    ينشئ أو يحدث FlexDayAdjustment لليوم ده.
+    بيشتغل بس لو الشيفت مرن (flex_fixed / flex_split).
+    القواعد:
+      - لو الفرق = 0 → ماينشئش حاجة
+      - لو فيه سجل Pending → يحدثه
+      - لو فيه سجل Approved/Rejected → ينشئ سجل Pending جديد
+    """
+    try:
+        if not day_shift or not employee or not att:
+            return
+
+        shift_mode = getattr(day_shift, 'shift_mode', '') or ''
+        if shift_mode not in ('flex_fixed', 'flex_split'):
+            return
+
+        required = float(getattr(day_shift, 'required_daily_hours', 8) or 8)
+        actual = float(actual_hours or 0)
+        delta = round(actual - required, 2)
+
+        if abs(delta) < 0.01:
+            return
+
+        adj_type = 'overtime' if delta > 0 else 'shortage'
+        target_date = getattr(att, 'date', None)
+        if not target_date:
+            return
+
+        from attendance.models import FlexDayAdjustment
+        from django.db.models import Q
+
+        company = getattr(employee, 'company', None)
+
+        existing_pending = FlexDayAdjustment._base_manager.filter(
+            employee=employee,
+            date=target_date,
+            status='pending',
+        ).first()
+
+        if existing_pending:
+            existing_pending.attendance = att
+            existing_pending.shift = day_shift
+            existing_pending.required_hours = required
+            existing_pending.actual_hours = actual
+            existing_pending.delta_hours = delta
+            existing_pending.adjustment_type = adj_type
+            existing_pending.save()
+            return
+
+        closed = FlexDayAdjustment._base_manager.filter(
+            employee=employee,
+            date=target_date,
+            status__in=('approved', 'rejected'),
+        ).exists()
+
+        if not closed:
+            FlexDayAdjustment._base_manager.create(
+                company=company,
+                employee=employee,
+                attendance=att,
+                shift=day_shift,
+                date=target_date,
+                required_hours=required,
+                actual_hours=actual,
+                delta_hours=delta,
+                adjustment_type=adj_type,
+                status='pending',
+            )
+        else:
+            FlexDayAdjustment._base_manager.create(
+                company=company,
+                employee=employee,
+                attendance=att,
+                shift=day_shift,
+                date=target_date,
+                required_hours=required,
+                actual_hours=actual,
+                delta_hours=delta,
+                adjustment_type=adj_type,
+                status='pending',
+            )
+
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).warning(f'_upsert_flex_adjustment error: {_e}')
 
 
 def _apply_permission_balance(employee, late_minutes, reference_date, policy):

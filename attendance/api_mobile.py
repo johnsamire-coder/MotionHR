@@ -1028,6 +1028,16 @@ def mobile_attendance_action(request):
         import logging
         logging.getLogger(__name__).warning(f'DailyAttendanceSummary checkout error: {_ds_err}')
 
+    # FlexDayAdjustment: لو شيفت مرن → ننشئ/نحدث طلب التعديل
+    try:
+        from attendance.payroll_rules import _upsert_flex_adjustment
+        _flex_shift = getattr(attendance, 'shift', None) or shift
+        _flex_hours = float(getattr(attendance, 'work_hours', 0) or 0)
+        _upsert_flex_adjustment(employee, attendance, _flex_shift, _flex_hours)
+    except Exception as _fx_err:
+        import logging
+        logging.getLogger(__name__).warning(f'FlexDayAdjustment checkout error: {_fx_err}')
+
     LocationLog._base_manager.create(
         company=employee.company,
         employee=employee,

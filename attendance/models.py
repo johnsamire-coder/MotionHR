@@ -1613,12 +1613,130 @@ class DailyAttendanceSummary(TenantModel):
                     policy=policy,
                 )
             )
+            # FlexDayAdjustment: مزامنة أمان للشيفت المرن
+            try:
+                from attendance.payroll_rules import _upsert_flex_adjustment
+                _upsert_flex_adjustment(employee, att, day_shift, work_h)
+            except Exception as _fx_err:
+                import logging
+                logging.getLogger(__name__).warning(f'FlexDayAdjustment sync error: {_fx_err}')
+
             return obj
 
         except Exception as e:
             import logging
             logging.getLogger(__name__).error(f'DailyAttendanceSummary.compute_for_day error: {e}')
             return None
+
+
+class FlexDayAdjustment(TenantModel):
+    """
+    تسوية يومية للشيفت المرن (flex_fixed / flex_split).
+    بتتنشأ تلقائي وقت check-out أو compute_for_day.
+    HR يوافق أو يرفض قبل ما تتحسب في المرتب.
+    """
+
+    TYPE_CHOICES = [
+        ('overtime', 'ساعات إضافية'),
+        ('shortage', 'نقص ساعات'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending',  'قيد مراجعة HR'),
+        ('approved', 'معتمد'),
+        ('rejected', 'مرفوض'),
+    ]
+
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='flex_adjustments',
+        verbose_name='الموظف'
+    )
+
+    attendance = models.ForeignKey(
+        'Attendance',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='flex_adjustments',
+        verbose_name='سجل الحضور'
+    )
+
+    shift = models.ForeignKey(
+        'Shift',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='flex_adjustments',
+        verbose_name='الشيفت'
+    )
+
+    date = models.DateField(verbose_name='التاريخ')
+
+    required_hours = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        verbose_name='الساعات المطلوبة'
+    )
+
+    actual_hours = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        verbose_name='الساعات الفعلية'
+    )
+
+    delta_hours = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        verbose_name='الفرق (موجب = زيادة، سالب = نقص)'
+    )
+
+    adjustment_type = models.CharField(
+        max_length=10,
+        choices=TYPE_CHOICES,
+        verbose_name='النوع'
+    )
+
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='الحالة'
+    )
+
+    reviewed_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='flex_reviews',
+        verbose_name='تمت المراجعة بواسطة'
+    )
+
+    reviewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='تاريخ المراجعة'
+    )
+
+    review_notes = models.TextField(
+        blank=True,
+        verbose_name='ملاحظات HR'
+    )
+
+    class Meta:
+        verbose_name = 'تسوية شيفت مرن'
+        verbose_name_plural = 'تسويات الشيفت المرن'
+        ordering = ['-date']
+        unique_together = [['employee', 'date', 'status']]
+
+    def __str__(self):
+        return (
+            f"{self.employee} - {self.date} - "
+            f"{self.adjustment_type} - {self.delta_hours}h - {self.status}"
+        )
+
 
 class AttendanceActionLog(TenantModel):
     """سجل تعديلات الحضور والانصراف"""
