@@ -173,6 +173,13 @@ class Shift(TenantModel):
         verbose_name = 'شيفت'
         verbose_name_plural = 'الشيفتات'
         ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company'],
+                condition=models.Q(is_default=True),
+                name='uniq_default_shift_per_company',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.start_time} - {self.end_time})"

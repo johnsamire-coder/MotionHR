@@ -780,8 +780,15 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     department = getattr(employee, 'department', None)
     branch = getattr(employee, 'branch', None)
 
-    # جيب السياسة الفعالة
+    # م-6: السياسة بتتجاب لكل يوم مش مرة واحدة للشهر كله
+    # active_policy = للتوافق مع القديم (بتاخد السياسة السائدة في الشهر)
     active_policy = _get_active_policy(company, first_day, department=department, branch=branch)
+    _policy_cache = {}  # cache عشان ما نعملش query لكل يوم لوحده
+
+    def _get_day_policy(d):
+        if d not in _policy_cache:
+            _policy_cache[d] = _get_active_policy(company, d, department=department, branch=branch)
+        return _policy_cache[d]
 
     working_dates = get_company_working_days(company, year, month)
     mission_dates = get_mission_dates(employee, year, month)
@@ -892,9 +899,10 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
             if late_min > 0:
                 late_days += 1
-                # نحاول نحول التأخير لإذن لو الموظف عنده رصيد
+                # نحاول نحول التأخير لإذن لو الموظف عنده رصيد (م-6: سياسة اليوم)
+                _day_pol = _get_day_policy(d)
                 converted, remaining_late = _apply_permission_balance(
-                    employee, late_min, d, active_policy
+                    employee, late_min, d, _day_pol
                 )
                 effective_late_min = remaining_late
                 total_late_minutes += effective_late_min
@@ -952,19 +960,80 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     _work_hours_for_rate = float(_default_shift_for_rate.work_hours) if _default_shift_for_rate and _default_shift_for_rate.work_hours else 8.0
     hourly_rate = round(daily_salary / _work_hours_for_rate, 4)
 
-    # تطبيق السياسة أو الـ settings الافتراضية
-    if active_policy:
-        late_deduction = _apply_late_rule(active_policy, total_late_minutes, daily_salary)
-        absence_deduction = _apply_absence_rule(active_policy, absent_days, daily_salary)
-        overtime_bonus = _apply_overtime_rule(active_policy, total_overtime_hours, hourly_rate)
-        night_allowance = _apply_night_allowance(active_policy, night_shift_days, daily_salary)
-        weekend_allowance = _apply_weekend_allowance(active_policy, weekend_work_days, daily_salary)
+    # م-6: نجمع الأرقام لكل سياسة لوحدها ثم نطبق قواعدها
+    _policy_totals = {}  # policy_id -> {late, absent, overtime, night, weekend}
+    _no_policy_totals = {'late': 0, 'absent': 0, 'overtime': 0.0, 'night': 0, 'weekend': 0}
+
+    for dd in daily_details:
+        _d_date = None
+        try:
+            from datetime import date as _date_cls
+            _d_date = _date_cls.fromisoformat(dd['date'])
+        except Exception:
+            pass
+
+        _dp = _get_day_policy(_d_date) if _d_date else None
+        _es = dd.get('effective_status', '')
+
+        if _dp:
+            _pid = _dp.id
+            if _pid not in _policy_totals:
+                _policy_totals[_pid] = {'policy': _dp, 'late': 0, 'absent': 0, 'overtime': 0.0, 'night': 0, 'weekend': 0}
+            if _es in ('late',):
+                _policy_totals[_pid]['late'] += dd.get('late_minutes', 0)
+            if _es == 'absent':
+                _policy_totals[_pid]['absent'] += 1
+            _policy_totals[_pid]['overtime'] += dd.get('overtime_hours', 0.0)
+            if dd.get('is_night_shift'):
+                _policy_totals[_pid]['night'] += 1
+            if dd.get('is_weekend_work'):
+                _policy_totals[_pid]['weekend'] += 1
+        else:
+            if _es in ('late',):
+                _no_policy_totals['late'] += dd.get('late_minutes', 0)
+            if _es == 'absent':
+                _no_policy_totals['absent'] += 1
+            _no_policy_totals['overtime'] += dd.get('overtime_hours', 0.0)
+            if dd.get('is_night_shift'):
+                _no_policy_totals['night'] += 1
+            if dd.get('is_weekend_work'):
+                _no_policy_totals['weekend'] += 1
+
+    # نجمع الناتج من كل السياسات
+    late_deduction = 0.0
+    absence_deduction = 0.0
+    overtime_bonus = 0.0
+    night_allowance = 0.0
+    weekend_allowance = 0.0
+
+    for _pid, _pt in _policy_totals.items():
+        _pol = _pt['policy']
+        late_deduction += _apply_late_rule(_pol, _pt['late'], daily_salary)
+        absence_deduction += _apply_absence_rule(_pol, _pt['absent'], daily_salary)
+        overtime_bonus += _apply_overtime_rule(_pol, _pt['overtime'], hourly_rate)
+        night_allowance += _apply_night_allowance(_pol, _pt['night'], daily_salary)
+        weekend_allowance += _apply_weekend_allowance(_pol, _pt['weekend'], daily_salary)
+
+    # الأيام بدون سياسة -> settings الافتراضية
+    if _no_policy_totals['late'] or _no_policy_totals['absent'] or _no_policy_totals['overtime']:
+        late_deduction += round(_no_policy_totals['late'] * late_per_min, 2)
+        absence_deduction += round(_no_policy_totals['absent'] * absence_per_day, 2)
+        overtime_bonus += round(_no_policy_totals['overtime'] * overtime_per_hour, 2)
+
+    late_deduction = round(late_deduction, 2)
+    absence_deduction = round(absence_deduction, 2)
+    overtime_bonus = round(overtime_bonus, 2)
+    night_allowance = round(night_allowance, 2)
+    weekend_allowance = round(weekend_allowance, 2)
+
+    # policy_name: لو فيه أكتر من سياسة نقول "سياسات متعددة"
+    _used_policies = list(_policy_totals.values())
+    if len(_used_policies) == 0:
+        active_policy = None
+    elif len(_used_policies) == 1:
+        active_policy = _used_policies[0]['policy']
     else:
-        late_deduction = round(total_late_minutes * late_per_min, 2)
-        absence_deduction = round(absent_days * absence_per_day, 2)
-        overtime_bonus = round(total_overtime_hours * overtime_per_hour, 2)
-        night_allowance = 0.0
-        weekend_allowance = 0.0
+        active_policy = type('_MultiPolicy', (), {'name': 'سياسات متعددة' if True else 'Multiple Policies'})()
 
     allowances_total, allowance_items = _get_allowances(employee, first_day, last_day, lang=lang)
     deductions = _get_monthly_deductions(employee, year, month, lang=lang)

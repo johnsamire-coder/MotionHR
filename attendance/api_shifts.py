@@ -840,16 +840,133 @@ def manager_shift_assign(request):
                 "affected_employees_count": 1,
             }, status=201)
 
+        def _find_same_scope_overlapping_assignment(assignment_type, branch=None, department=None):
+            qs = ShiftAssignment._base_manager.filter(
+                company=company,
+                assignment_type=assignment_type,
+                is_active=True
+            ).select_related('shift', 'branch', 'department', 'employee', 'employee__user')
+
+            if assignment_type == 'branch' and branch is not None:
+                qs = qs.filter(branch=branch)
+            elif assignment_type == 'department' and department is not None:
+                qs = qs.filter(department=department)
+
+            new_end = end_date or date.max
+            for existing_assignment in qs.order_by('-start_date'):
+                existing_end = existing_assignment.end_date or date.max
+                if existing_assignment.start_date <= new_end and start_date <= existing_end:
+                    return existing_assignment
+            return None
+
+        def _build_assignment_conflict(scope_key, scope_label_ar, scope_label_en, existing_assignment, target_id=None, target_name=None):
+            return {
+                "scope": scope_key,
+                "scope_label": scope_label_ar if lang == 'ar' else scope_label_en,
+                "target_id": target_id,
+                "target_name": target_name,
+                "existing_assignment_id": existing_assignment.id,
+                "existing_shift_id": existing_assignment.shift_id,
+                "existing_shift_name": existing_assignment.shift.name if existing_assignment.shift else None,
+                "existing_start_date": str(existing_assignment.start_date),
+                "existing_end_date": str(existing_assignment.end_date) if existing_assignment.end_date else None,
+            }
+
+        # م-7: نتحقق من كل التعارضات قبل أي create/update عشان مايبقاش فيه تعطيل صامت أو partial writes
+        assignment_conflicts = []
+
+        if assign_to_company:
+            existing_company_assignment = _find_same_scope_overlapping_assignment('company')
+            if existing_company_assignment:
+                assignment_conflicts.append(
+                    _build_assignment_conflict(
+                        'company', 'الشركة', 'Company',
+                        existing_company_assignment,
+                        target_name=(getattr(company, 'name_ar', None) or getattr(company, 'name_en', None) or str(company))
+                    )
+                )
+
+        for branch in branches:
+            existing_branch_assignment = _find_same_scope_overlapping_assignment('branch', branch=branch)
+            if existing_branch_assignment:
+                assignment_conflicts.append(
+                    _build_assignment_conflict(
+                        'branch', 'الفرع', 'Branch',
+                        existing_branch_assignment,
+                        target_id=branch.id,
+                        target_name=(getattr(branch, 'name_ar', None) or getattr(branch, 'name_en', None) or f'#{branch.id}')
+                    )
+                )
+
+        for department in departments:
+            existing_department_assignment = _find_same_scope_overlapping_assignment('department', department=department)
+            if existing_department_assignment:
+                assignment_conflicts.append(
+                    _build_assignment_conflict(
+                        'department', 'القسم', 'Department',
+                        existing_department_assignment,
+                        target_id=department.id,
+                        target_name=(getattr(department, 'name_ar', None) or getattr(department, 'name_en', None) or f'#{department.id}')
+                    )
+                )
+
+        for employee in direct_employees:
+            active_direct_assignments = ShiftAssignment._base_manager.filter(
+                company=company,
+                assignment_type='employee',
+                employee=employee,
+                is_active=True
+            ).select_related('shift', 'employee', 'employee__user').order_by('-start_date')
+
+            new_end = end_date or date.max
+            overlapping_assignment = None
+
+            for existing_assignment in active_direct_assignments:
+                existing_end = existing_assignment.end_date or date.max
+                if existing_assignment.start_date <= new_end and start_date <= existing_end:
+                    overlapping_assignment = existing_assignment
+                    break
+
+            if overlapping_assignment:
+                _user = getattr(employee, 'user', None)
+                employee_name = (
+                    (_user.get_full_name() if _user else '')
+                    or getattr(_user, 'username', '')
+                    or getattr(employee, 'full_name_ar', '')
+                    or f'#{employee.id}'
+                )
+                assignment_conflicts.append({
+                    "scope": "employee",
+                    "scope_label": "موظف مباشر" if lang == 'ar' else "Direct Employee",
+                    "target_id": employee.id,
+                    "target_name": employee_name,
+                    "existing_assignment_id": overlapping_assignment.id,
+                    "existing_shift_id": overlapping_assignment.shift_id,
+                    "existing_shift_name": overlapping_assignment.shift.name if overlapping_assignment.shift else None,
+                    "existing_start_date": str(overlapping_assignment.start_date),
+                    "existing_end_date": str(overlapping_assignment.end_date) if overlapping_assignment.end_date else None,
+                })
+
+        if assignment_conflicts:
+            conflicts_count = len(assignment_conflicts)
+            return Response({
+                "success": False,
+                "error": (
+                    "يوجد تعيين شيفت متداخل على نفس النطاق. عدّل أو احذف التعيين الحالي أولاً"
+                    if conflicts_count == 1 else
+                    f"يوجد {conflicts_count} تعارضات في التعيينات الحالية. عدّل أو احذف التعيينات الحالية أولاً"
+                ) if lang == 'ar' else (
+                    "There is an overlapping shift assignment on the same scope. Update or delete the current assignment first"
+                    if conflicts_count == 1 else
+                    f"There are {conflicts_count} conflicts in current assignments. Update or delete them first"
+                ),
+                "conflicts": assignment_conflicts,
+            }, status=400)
+
         created_assignments = []
 
         # company assignment
         if assign_to_company:
-            ShiftAssignment._base_manager.filter(
-                company=company,
-                assignment_type='company',
-                is_active=True
-            ).update(is_active=False)
-
             assignment = ShiftAssignment._base_manager.create(
                 company=company,
                 shift=shift,
@@ -867,13 +984,6 @@ def manager_shift_assign(request):
 
         # branch assignments
         for branch in branches:
-            ShiftAssignment._base_manager.filter(
-                company=company,
-                assignment_type='branch',
-                branch=branch,
-                is_active=True
-            ).update(is_active=False)
-
             assignment = ShiftAssignment._base_manager.create(
                 company=company,
                 shift=shift,
@@ -892,13 +1002,6 @@ def manager_shift_assign(request):
 
         # department assignments
         for department in departments:
-            ShiftAssignment._base_manager.filter(
-                company=company,
-                assignment_type='department',
-                department=department,
-                is_active=True
-            ).update(is_active=False)
-
             assignment = ShiftAssignment._base_manager.create(
                 company=company,
                 shift=shift,
