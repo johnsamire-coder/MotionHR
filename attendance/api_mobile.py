@@ -1,4 +1,4 @@
-from .fcm_logic import notify_managers, notify_employee_checkin, notify_employee_checkout, notify_manager_checkin, notify_manager_checkout
+from .fcm_logic import notify_managers, notify_employee_checkin, notify_employee_checkout, notify_manager_checkin, notify_manager_checkout, notify_manager_early_leave
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, parser_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -891,6 +891,20 @@ def mobile_attendance_action(request):
             attendance.status = check_in_status
             attendance.save()
 
+        # ── on_mission flag ──
+        try:
+            from attendance.missions_models import MissionAssignment
+            has_mission = MissionAssignment._base_manager.filter(
+                employee=employee,
+                mission__date=today,
+                status='approved',
+            ).exists()
+            if has_mission:
+                attendance.on_mission = True
+                attendance.save(update_fields=['on_mission'])
+        except Exception:
+            pass
+
         from attendance.models import AttendanceSession
 
         open_session = AttendanceSession._base_manager.filter(
@@ -914,6 +928,7 @@ def mobile_attendance_action(request):
                 check_in_latitude=latitude,
                 check_in_longitude=longitude,
                 is_partial=False,
+                on_mission=attendance.on_mission,
                 notes='Initial check-in session',
             )
 
@@ -1183,7 +1198,15 @@ def mobile_attendance_action(request):
     try:
         emp_name = request.user.get_full_name() or request.user.username
         notify_employee_checkout(request.user, format_time_value(now), hours_worked='')
-        notify_manager_checkout(employee.company, emp_name, format_time_value(now))
+        if early_leave_minutes > 0:
+            notify_manager_early_leave(
+                employee.company,
+                emp_name,
+                format_time_value(now),
+                early_leave_minutes,
+            )
+        else:
+            notify_manager_checkout(employee.company, emp_name, format_time_value(now))
     except Exception as e:
         print(f"Check-out notification error: {e}")
 

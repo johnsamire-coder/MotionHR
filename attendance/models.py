@@ -284,6 +284,7 @@ class AttendanceSession(TenantModel):
         verbose_name='خط طول الخروج'
     )
 
+    on_mission = models.BooleanField(default=False, verbose_name='في مأمورية')
     is_partial = models.BooleanField(
         default=False,
         verbose_name='خروج جزئي',
@@ -1161,6 +1162,7 @@ class Attendance(TenantModel):
     )
     
     # هل تم تعديله يدوياً
+    on_mission = models.BooleanField(default=False, verbose_name='في مأمورية')
     is_manually_edited = models.BooleanField(
         default=False,
         verbose_name='معدل يدوياً'

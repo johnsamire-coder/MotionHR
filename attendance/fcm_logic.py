@@ -145,3 +145,32 @@ def notify_manager_checkout(company, employee_name, time_str, hours_worked=''):
         title_en='Employee Check-out 🏁',
         body_en=body_en
     )
+
+
+def notify_manager_early_leave(company, employee_name, time_str, early_minutes, hours_worked=''):
+    """إشعار المدير لما موظف ينصرف مبكر"""
+    early_h = early_minutes // 60
+    early_m = early_minutes % 60
+
+    if early_h > 0:
+        duration_ar = f'{early_h} ساعة {early_m} دقيقة' if early_m > 0 else f'{early_h} ساعة'
+        duration_en = f'{early_h}h {early_m}m early' if early_m > 0 else f'{early_h}h early'
+    else:
+        duration_ar = f'{early_m} دقيقة'
+        duration_en = f'{early_m}m early'
+
+    body = f'{employee_name} انصرف مبكراً بـ {duration_ar} الساعة {time_str}'
+    body_en = f'{employee_name} left {duration_en} at {time_str}'
+
+    if hours_worked:
+        body += f' — عمل {hours_worked} ساعة'
+        body_en += f' — worked {hours_worked} hours'
+
+    notify_managers(
+        'انصراف مبكر ⚠️',
+        body,
+        data={'type': 'manager_attendance', 'action': 'early_leave'},
+        company=company,
+        title_en='Early Leave ⚠️',
+        body_en=body_en,
+    )
