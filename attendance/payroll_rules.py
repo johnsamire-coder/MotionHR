@@ -26,7 +26,8 @@ def _calc_late_minutes(shift, att):
         return 0
     try:
         from django.utils import timezone
-        shift_start = datetime.combine(att.check_in_time.date(), shift.start_time)
+        check_in_local = timezone.localtime(att.check_in_time)
+        shift_start = datetime.combine(check_in_local.date(), shift.start_time)
         grace = int(shift.grace_period or 0)
         deadline = shift_start + timedelta(minutes=grace)
         check_in_local = timezone.localtime(att.check_in_time)
@@ -56,6 +57,90 @@ def _calc_overtime_hours(shift, att):
         return 0.0
     except Exception:
         return float(getattr(att, 'overtime_hours', 0) or 0)
+
+
+
+
+def _calc_split_shift_metrics(shift, att, sessions, target_date):
+    """
+    يحسب التأخير والعجز للشيفت المقسم (split_fixed)
+    بيطابق كل session مع فترتها في الشيفت
+    """
+    try:
+        from django.utils import timezone
+        from datetime import datetime, timedelta
+
+        # جيب فترات الشيفت
+        periods = shift.get_shift_periods(target_date) if hasattr(shift, 'get_shift_periods') else []
+        if not periods:
+            return {'late_minutes': 0, 'shortage_minutes': 0, 'is_fully_absent': False, 'worked_minutes': 0}
+
+        total_late = 0
+        total_shortage = 0
+        total_worked = 0
+        periods_attended = 0
+
+        for idx, period in enumerate(periods):
+            period_start_time = period.get('start_time')
+            period_end_time = period.get('end_time')
+            if not period_start_time or not period_end_time:
+                continue
+
+            # حول وقت الفترة لـ datetime
+            if isinstance(period_start_time, str):
+                from datetime import time
+                h, m = period_start_time.split(':')[:2]
+                period_start_time = time(int(h), int(m))
+            if isinstance(period_end_time, str):
+                from datetime import time
+                h, m = period_end_time.split(':')[:2]
+                period_end_time = time(int(h), int(m))
+
+            period_start_dt = datetime.combine(target_date, period_start_time)
+            period_end_dt = datetime.combine(target_date, period_end_time)
+            period_minutes = int((period_end_dt - period_start_dt).total_seconds() / 60)
+
+            # دور على الـ session المقابلة للفترة دي
+            matched_session = None
+            for s in sessions:
+                s_in = timezone.localtime(s.check_in_time)
+                s_in_naive = s_in.replace(tzinfo=None)
+                # الـ session بتتطابق لو بداتها قريبة من بداية الفترة (±60 دقيقة)
+                diff = abs((s_in_naive - period_start_dt).total_seconds() / 60)
+                if diff <= 60:
+                    matched_session = s
+                    break
+
+            if matched_session:
+                periods_attended += 1
+                # حساب التأخير للفترة دي
+                grace = int(shift.grace_period or 0)
+                deadline = period_start_dt + timedelta(minutes=grace)
+                s_in_local = timezone.localtime(matched_session.check_in_time).replace(tzinfo=None)
+                if s_in_local > deadline:
+                    total_late += int((s_in_local - deadline).total_seconds() / 60)
+                # حساب الدقائق اللي اشتغلها
+                if matched_session.check_out_time:
+                    s_out_local = timezone.localtime(matched_session.check_out_time).replace(tzinfo=None)
+                    worked = int((s_out_local - s_in_local).total_seconds() / 60)
+                    total_worked += max(worked, 0)
+                else:
+                    total_worked += matched_session.worked_minutes or 0
+            else:
+                # مجاش الفترة دي → عجز بساعاتها
+                total_shortage += period_minutes
+
+        is_fully_absent = periods_attended == 0
+
+        return {
+            'late_minutes': total_late,
+            'shortage_minutes': total_shortage,
+            'is_fully_absent': is_fully_absent,
+            'worked_minutes': total_worked,
+        }
+    except Exception:
+        return {'late_minutes': 0, 'shortage_minutes': 0, 'is_fully_absent': False, 'worked_minutes': 0}
+
 
 
 def _is_night_shift(shift):
@@ -728,7 +813,9 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     night_shift_days = 0
     weekend_work_days = 0
 
-    for d in working_dates:
+        # ندمج أيام الشركة مع أي أيام الموظف اشتغلها فعلياً وهي مش أيام عمل للشركة
+    all_eval_dates = sorted(list(set(working_dates) | attended_dates))
+    for d in all_eval_dates:
         att = attendance_by_date.get(d)
         day_shift = _get_shift_for_date(employee, d)
 
@@ -766,9 +853,32 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             continue
 
         if d in attended_dates and att:
-            work_h = _safe_float(att.work_hours)
-            ot_h = _calc_overtime_hours(day_shift, att)
-            late_min = _calc_late_minutes(day_shift, att)
+            # شيفت مقسم له منطق خاص
+            shift_mode = getattr(day_shift, 'shift_mode', '') or getattr(day_shift, 'shift_type', '')
+            if day_shift and shift_mode == 'split_fixed':
+                from attendance.models import AttendanceSession
+                day_sessions = list(AttendanceSession._base_manager.filter(
+                    attendance=att
+                ).order_by('session_number'))
+                split_metrics = _calc_split_shift_metrics(day_shift, att, day_sessions, d)
+                if split_metrics['is_fully_absent']:
+                    absent_days += 1
+                    daily_details.append({
+                        'date': d.isoformat(), 'status': 'absent',
+                        'effective_status': 'absent', 'check_in': None,
+                        'check_out': None, 'work_hours': 0,
+                        'late_minutes': 0, 'overtime_hours': 0,
+                        'shift_name': day_shift.name if day_shift else '',
+                        'is_night_shift': False, 'is_weekend_work': False,
+                    })
+                    continue
+                work_h = round(split_metrics['worked_minutes'] / 60, 2)
+                late_min = split_metrics['late_minutes'] + split_metrics['shortage_minutes']
+                ot_h = 0.0
+            else:
+                work_h = _safe_float(att.work_hours)
+                ot_h = _calc_overtime_hours(day_shift, att)
+                late_min = _calc_late_minutes(day_shift, att)
             is_night = _is_night_shift(day_shift)
             is_weekend = _is_weekend_work(day_shift, d)
 
@@ -808,6 +918,17 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             })
             continue
 
+        if day_shift and not day_shift.is_work_day(d):
+            # لو الموظف مجاش في يوم راحته -> مش غياب
+            daily_details.append({
+                'date': d.isoformat(), 'status': 'weekend',
+                'effective_status': 'weekend', 'check_in': None,
+                'check_out': None, 'work_hours': 0,
+                'late_minutes': 0, 'overtime_hours': 0,
+                'shift_name': day_shift.name if day_shift else '',
+                'is_night_shift': False, 'is_weekend_work': True,
+            })
+            continue
         absent_days += 1
         daily_details.append({
             'date': d.isoformat(), 'status': 'absent',
@@ -826,7 +947,10 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     working_days_count = max(len(working_dates), 1)
     basic_salary_temp = _safe_float(getattr(employee, 'basic_salary', 0))
     daily_salary = round(basic_salary_temp / working_days_count, 4)
-    hourly_rate = round(daily_salary / 8, 4)
+    # اجيب الشيفت الافتراضي للموظف عشان احسب أجر الساعة منه
+    _default_shift_for_rate = _get_shift_for_date(employee, first_day)
+    _work_hours_for_rate = float(_default_shift_for_rate.work_hours) if _default_shift_for_rate and _default_shift_for_rate.work_hours else 8.0
+    hourly_rate = round(daily_salary / _work_hours_for_rate, 4)
 
     # تطبيق السياسة أو الـ settings الافتراضية
     if active_policy:
