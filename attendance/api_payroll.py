@@ -218,6 +218,17 @@ def payroll_settings(request):
 
     if request.method == 'GET':
         settings = _get_payroll_settings(user)
+        try:
+            from accounts.models import User
+            company = getattr(user, 'company', None)
+            if company:
+                settings['payroll_cycle_type'] = getattr(company, 'payroll_cycle_type', 'calendar_month') or 'calendar_month'
+                settings['payroll_cutoff_day'] = getattr(company, 'payroll_cutoff_day', 1) or 1
+                settings['payroll_pay_day'] = getattr(company, 'payroll_pay_day', 1) or 1
+                settings['payroll_pay_month_offset'] = getattr(company, 'payroll_pay_month_offset', 'same_month') or 'same_month'
+                settings['payroll_period_label_mode'] = getattr(company, 'payroll_period_label_mode', 'cutoff_month') or 'cutoff_month'
+        except Exception:
+            pass
         return Response(settings)
 
     try:
@@ -251,6 +262,31 @@ def payroll_settings(request):
                 obj.insurance_percent = data['insurance_percent']
             obj.save()
 
+        try:
+            company = getattr(user, 'company', None)
+            if company:
+                if 'payroll_cycle_type' in data:
+                    company.payroll_cycle_type = data['payroll_cycle_type']
+                if 'payroll_cutoff_day' in data:
+                    val = int(data['payroll_cutoff_day'])
+                    company.payroll_cutoff_day = max(1, min(val, 28))
+                if 'payroll_pay_day' in data:
+                    val = int(data['payroll_pay_day'])
+                    company.payroll_pay_day = max(1, min(val, 31))
+                if 'payroll_pay_month_offset' in data:
+                    company.payroll_pay_month_offset = data['payroll_pay_month_offset']
+                if 'payroll_period_label_mode' in data:
+                    company.payroll_period_label_mode = data['payroll_period_label_mode']
+                company.save(update_fields=[
+                    'payroll_cycle_type', 'payroll_cutoff_day',
+                    'payroll_pay_day', 'payroll_pay_month_offset',
+                    'payroll_period_label_mode'
+                ])
+        except Exception as cycle_err:
+            import logging
+            logging.getLogger(__name__).warning(f'payroll cycle save error: {cycle_err}')
+
+        company = getattr(user, 'company', None)
         return Response({
             'status': 'saved',
             'late_deduction_per_minute': float(obj.late_deduction_per_minute),
@@ -259,6 +295,11 @@ def payroll_settings(request):
             'insurance_mode': getattr(obj, 'insurance_mode', 'none'),
             'insurance_fixed_amount': float(getattr(obj, 'insurance_fixed_amount', 0) or 0),
             'insurance_percent': float(getattr(obj, 'insurance_percent', 0) or 0),
+            'payroll_cycle_type': getattr(company, 'payroll_cycle_type', 'calendar_month') if company else 'calendar_month',
+            'payroll_cutoff_day': getattr(company, 'payroll_cutoff_day', 1) if company else 1,
+            'payroll_pay_day': getattr(company, 'payroll_pay_day', 1) if company else 1,
+            'payroll_pay_month_offset': getattr(company, 'payroll_pay_month_offset', 'same_month') if company else 'same_month',
+            'payroll_period_label_mode': getattr(company, 'payroll_period_label_mode', 'cutoff_month') if company else 'cutoff_month',
         })
     except Exception as e:
         return Response({
