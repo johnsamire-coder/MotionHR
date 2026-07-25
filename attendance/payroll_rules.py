@@ -62,7 +62,7 @@ def _is_night_shift(shift):
     """هل الشيفت ليلي؟"""
     if not shift:
         return False
-    return bool(getattr(shift, 'crosses_midnight', False)) or shift.shift_mode == 'night'
+    return bool(getattr(shift, 'crosses_midnight', False)) or getattr(shift, 'shift_type', '') == 'night'
 
 
 def _is_weekend_work(shift, target_date):
@@ -784,7 +784,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 late_days += 1
                 # نحاول نحول التأخير لإذن لو الموظف عنده رصيد
                 converted, remaining_late = _apply_permission_balance(
-                    employee, late_min, day_date, active_policy
+                    employee, late_min, d, active_policy
                 )
                 effective_late_min = remaining_late
                 total_late_minutes += effective_late_min

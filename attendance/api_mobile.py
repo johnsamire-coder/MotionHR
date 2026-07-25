@@ -212,38 +212,15 @@ def _notify_missing_period(employee, period, shift, after_grace=False):
 
 
 def get_active_shift(employee, day):
-    from django.db.models import Q
-    from attendance.models import ShiftOverride, EmployeeShift, Shift
+    """
+    مصدر موحّد للشيفت الفعلي.
+    بنخلّي الحضور يستخدم نفس منطق الشيفتات والمرتبات
+    عشان مايبقاش فيه اختلاف بين الحضور وكشف المرتب.
+    """
+    from attendance.api_shifts import get_effective_shift
 
-    # 1. شوف لو فيه override لليوم ده
-    override = ShiftOverride._base_manager.filter(
-        employee=employee,
-        override_date=day,
-        company=employee.company
-    ).select_related('shift').first()
-    if override:
-        return override.shift
-
-    # 2. شوف EmployeeShift للموظف نفسه
-    assignment = EmployeeShift._base_manager.filter(
-        company=employee.company,
-        employee=employee,
-        is_active=True,
-        start_date__lte=day,
-    ).filter(
-        Q(end_date__isnull=True) | Q(end_date__gte=day)
-    ).select_related("shift").order_by("priority", "-start_date").first()
-
-    if assignment:
-        return assignment.shift
-
-    # 3. لو مفيش شيء، دور على default shift للشركة
-    default_shift = Shift._base_manager.filter(
-        company=employee.company,
-        is_default=True,
-        is_active=True
-    ).first()
-    return default_shift
+    shift, _source = get_effective_shift(employee, day)
+    return shift
 
 
 

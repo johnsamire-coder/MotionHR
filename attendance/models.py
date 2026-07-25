@@ -191,14 +191,15 @@ class Shift(TenantModel):
         return round(hours, 2)
 
     def is_work_day(self, date):
+        # date.weekday(): 0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday
         day_map = {
-            0: self.work_sunday,
-            1: self.work_monday,
-            2: self.work_tuesday,
-            3: self.work_wednesday,
-            4: self.work_thursday,
-            5: self.work_friday,
-            6: self.work_saturday,
+            6: self.work_sunday,
+            0: self.work_monday,
+            1: self.work_tuesday,
+            2: self.work_wednesday,
+            3: self.work_thursday,
+            4: self.work_friday,
+            5: self.work_saturday,
         }
         return day_map.get(date.weekday(), False)
 
