@@ -866,3 +866,279 @@ def work_hours_report(request):
         'total_employees': len(results),
         'employees': results,
     })
+
+
+# ══════════════════════════════════════════════════════════════════
+# 5.1 تقرير الرواتب الشهري
+# ══════════════════════════════════════════════════════════════════
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def payroll_report(request):
+    """تقرير الرواتب الشهري لكل الموظفين"""
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    year, month = _parse_month(request)
+    lang = request.GET.get('lang', 'ar')
+    employees = _get_company_employees(user)
+
+    try:
+        from attendance.payroll_rules import calculate_effective_payroll
+        from attendance.api_payroll import _get_payroll_settings
+    except ImportError:
+        return Response({'error': 'payroll module not available'}, status=500)
+
+    settings = _get_payroll_settings(user)
+
+    results = []
+    totals = {
+        'basic_salary': 0.0,
+        'allowances_total': 0.0,
+        'overtime_bonus': 0.0,
+        'bonuses_total': 0.0,
+        'night_allowance': 0.0,
+        'weekend_allowance': 0.0,
+        'gross_salary': 0.0,
+        'late_deduction': 0.0,
+        'absence_deduction': 0.0,
+        'early_leave_deduction': 0.0,
+        'unpaid_leave_deduction': 0.0,
+        'flex_shortage_deduction': 0.0,
+        'insurance_deduction': 0.0,
+        'installments_total': 0.0,
+        'penalties_total': 0.0,
+        'total_deductions': 0.0,
+        'net_salary': 0.0,
+    }
+
+    for emp in employees:
+        try:
+            p = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+            row = {
+                'employee_id': emp.id,
+                'employee_code': getattr(emp, 'employee_code', '') or '',
+                'employee_name': _employee_name(emp),
+                'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+                'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
+                'job_title': getattr(getattr(emp, 'job_title', None), 'name_ar', '') or '',
+                'currency': p.get('currency', 'EGP'),
+                'basic_salary': p.get('basic_salary', 0),
+                'allowances_total': p.get('allowances_total', 0),
+                'overtime_bonus': p.get('overtime_bonus', 0),
+                'bonuses_total': p.get('bonuses_total', 0),
+                'night_allowance': p.get('night_allowance', 0),
+                'weekend_allowance': p.get('weekend_allowance', 0),
+                'gross_salary': p.get('gross_salary', 0),
+                'late_deduction': p.get('late_deduction', 0),
+                'absence_deduction': p.get('absence_deduction', 0),
+                'early_leave_deduction': p.get('early_leave_deduction', 0),
+                'unpaid_leave_deduction': p.get('unpaid_leave_deduction', 0),
+                'flex_shortage_deduction': p.get('flex_shortage_deduction', 0),
+                'insurance_deduction': p.get('insurance_deduction', 0),
+                'installments_total': p.get('installments_total', 0),
+                'penalties_total': p.get('penalties_total', 0),
+                'total_deductions': p.get('total_deductions', 0),
+                'net_salary': p.get('net_salary', 0),
+                'total_working_days': p.get('total_working_days', 0),
+                'attended_days': p.get('attended_days', 0),
+                'absent_days': p.get('absent_days', 0),
+                'late_days': p.get('late_days', 0),
+                'on_leave_days': p.get('on_leave_days', 0),
+                'unpaid_leave_days': p.get('unpaid_leave_days', 0),
+                'total_late_minutes': p.get('total_late_minutes', 0),
+                'policy_name': p.get('policy_name'),
+            }
+            results.append(row)
+            for key in totals:
+                totals[key] += float(row.get(key, 0) or 0)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f'payroll_report error for {emp}: {e}')
+
+    return Response({
+        'year': year,
+        'month': month,
+        'total_employees': len(results),
+        'totals': {k: round(v, 2) for k, v in totals.items()},
+        'employees': results,
+    })
+
+
+# ══════════════════════════════════════════════════════════════════
+# 5.3 تقرير الأذونات
+# ══════════════════════════════════════════════════════════════════
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def permissions_report(request):
+    """تقرير رصيد الأذونات والحركات"""
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    year, month = _parse_month(request)
+    employees = _get_company_employees(user)
+    company = getattr(user, 'company', None)
+
+    from datetime import date
+    first_day = date(year, month, 1)
+    import calendar
+    last_day = date(year, month, calendar.monthrange(year, month)[1])
+
+    results = []
+    for emp in employees:
+        try:
+            from attendance.models import PermissionLedger
+            entries = PermissionLedger._base_manager.filter(
+                employee=emp,
+                reference_date__gte=first_day,
+                reference_date__lte=last_day,
+            ).order_by('reference_date')
+
+            total_minutes = 0
+            movements = []
+            for e in entries:
+                total_minutes += int(e.minutes_used or 0)
+                movements.append({
+                    'date': str(e.reference_date) if e.reference_date else '',
+                    'type': e.entry_type,
+                    'minutes': e.minutes_used or 0,
+                    'notes': e.notes or '',
+                })
+
+            from requests_app.models import PermissionPolicy
+            policy = PermissionPolicy._base_manager.filter(company=emp.company).first()
+            max_hours = float(policy.max_hours_per_month) if policy else 0.0
+            max_times = policy.max_times_per_month if policy else 0
+
+            results.append({
+                'employee_id': emp.id,
+                'employee_name': _employee_name(emp),
+                'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+                'max_hours_per_month': max_hours,
+                'max_times_per_month': max_times,
+                'used_minutes': total_minutes,
+                'used_hours': round(total_minutes / 60, 2),
+                'movements_count': len(movements),
+                'movements': movements,
+            })
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f'permissions_report error for {emp}: {e}')
+
+    return Response({
+        'year': year,
+        'month': month,
+        'total_employees': len(results),
+        'employees': results,
+    })
+
+
+# ══════════════════════════════════════════════════════════════════
+# 5.5 تقرير يومي للحضور
+# ══════════════════════════════════════════════════════════════════
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def daily_attendance_report(request):
+    """تقرير حالة الحضور لكل الموظفين في يوم معين"""
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    from datetime import date
+    date_str = request.GET.get('date', str(date.today()))
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        return Response({'error': 'صيغة التاريخ غير صحيحة (YYYY-MM-DD)'}, status=400)
+
+    employees = _get_company_employees(user)
+
+    try:
+        from attendance.models import DailyAttendanceSummary, Attendance
+    except ImportError:
+        return Response({'error': 'attendance module not available'}, status=500)
+
+    results = []
+    stats = {
+        'present': 0, 'late': 0, 'absent': 0,
+        'on_leave': 0, 'weekend': 0, 'mission': 0,
+        'no_data': 0,
+    }
+
+    for emp in employees:
+        summary = DailyAttendanceSummary._base_manager.filter(
+            employee=emp, date=target_date
+        ).first()
+
+        att = Attendance._base_manager.filter(
+            employee=emp, date=target_date
+        ).first()
+
+        if summary:
+            status = summary.effective_status or summary.status
+            row = {
+                'employee_id': emp.id,
+                'employee_name': _employee_name(emp),
+                'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+                'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
+                'status': status,
+                'check_in': att.check_in_time.strftime('%H:%M') if att and att.check_in_time else None,
+                'check_out': att.check_out_time.strftime('%H:%M') if att and att.check_out_time else None,
+                'work_hours': float(summary.work_hours or 0),
+                'late_minutes': summary.late_minutes or 0,
+                'early_leave_minutes': summary.early_leave_minutes or 0,
+                'overtime_hours': float(summary.overtime_hours or 0),
+                'is_night_shift': summary.is_night_shift,
+                'is_weekend_work': summary.is_weekend_work,
+                'shift_name': summary.shift.name if summary.shift else '',
+            }
+        elif att and att.check_in_time:
+            status = 'present'
+            row = {
+                'employee_id': emp.id,
+                'employee_name': _employee_name(emp),
+                'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+                'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
+                'status': status,
+                'check_in': att.check_in_time.strftime('%H:%M') if att.check_in_time else None,
+                'check_out': att.check_out_time.strftime('%H:%M') if att and att.check_out_time else None,
+                'work_hours': float(att.work_hours or 0),
+                'late_minutes': att.late_minutes or 0,
+                'early_leave_minutes': att.early_leave_minutes or 0,
+                'overtime_hours': float(att.overtime_hours or 0),
+                'is_night_shift': False,
+                'is_weekend_work': False,
+                'shift_name': att.shift.name if att.shift else '',
+            }
+        else:
+            status = 'no_data'
+            row = {
+                'employee_id': emp.id,
+                'employee_name': _employee_name(emp),
+                'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+                'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
+                'status': 'no_data',
+                'check_in': None,
+                'check_out': None,
+                'work_hours': 0,
+                'late_minutes': 0,
+                'early_leave_minutes': 0,
+                'overtime_hours': 0,
+                'is_night_shift': False,
+                'is_weekend_work': False,
+                'shift_name': '',
+            }
+
+        results.append(row)
+        stats[status] = stats.get(status, 0) + 1
+
+    return Response({
+        'date': str(target_date),
+        'total_employees': len(results),
+        'stats': stats,
+        'employees': results,
+    })

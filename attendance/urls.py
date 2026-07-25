@@ -471,3 +471,15 @@ urlpatterns += [
     path('api/mobile/manager/flex-adjustments/<int:adjustment_id>/review/', flex_adjustment_review, name='flex-adjustment-review'),
     path('api/mobile/manager/employees/<int:emp_id>/flex-adjustments/', employee_flex_adjustments, name='employee-flex-adjustments'),
 ]
+
+from .api_reports import (
+    payroll_report,
+    permissions_report,
+    daily_attendance_report,
+)
+
+urlpatterns += [
+    path('api/mobile/manager/reports/payroll/', payroll_report, name='reports-payroll'),
+    path('api/mobile/manager/reports/permissions/', permissions_report, name='reports-permissions'),
+    path('api/mobile/manager/reports/daily-attendance/', daily_attendance_report, name='reports-daily-attendance'),
+]
