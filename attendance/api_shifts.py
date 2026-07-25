@@ -1061,7 +1061,7 @@ def shift_change_request_action(request, request_id):
         if user_role not in HR_ROLES and not request.user.is_superuser:
             return Response({"success": False, "error": "غير مصرح - HR فقط"}, status=403)
 
-        from attendance.models import ShiftChangeRequest, EmployeeShift
+        from attendance.models import ShiftChangeRequest, EmployeeShift, ShiftAssignment
         try:
             change_req = ShiftChangeRequest._base_manager.get(id=request_id, company=company)
         except ShiftChangeRequest.DoesNotExist:
@@ -1075,7 +1075,28 @@ def shift_change_request_action(request, request_id):
             return Response({"success": False, "error": "action لازم يكون approve أو reject"}, status=400)
 
         if action == 'approve':
-            # طبّق الشيفت الجديد
+            # طبّق الشيفت الجديد على النظام الحالي
+            ShiftAssignment._base_manager.filter(
+                company=company,
+                assignment_type='employee',
+                employee=change_req.employee,
+                is_active=True
+            ).update(is_active=False)
+
+            ShiftAssignment._base_manager.create(
+                company=company,
+                shift=change_req.new_shift,
+                assignment_type='employee',
+                employee=change_req.employee,
+                start_date=change_req.effective_from,
+                end_date=change_req.effective_to,
+                is_active=True,
+                priority=1,
+                notes=change_req.reason or 'Approved shift change request',
+                created_by=request.user,
+            )
+
+            # legacy mirror لعدم كسر أي جزء قديم
             EmployeeShift._base_manager.filter(
                 employee=change_req.employee,
                 company=company,
@@ -1751,6 +1772,16 @@ def manager_shift_assignment_delete(request, assignment_id):
 
         assignment.is_active = False
         assignment.save()
+
+        # لو التعيين كان لموظف مباشر → نلغي الـ EmployeeShift المرآة برضو
+        if assignment.assignment_type == 'employee' and assignment.employee:
+            from attendance.models import EmployeeShift
+            EmployeeShift._base_manager.filter(
+                company=company,
+                employee=assignment.employee,
+                shift=assignment.shift,
+                is_active=True,
+            ).update(is_active=False)
 
         return Response({"success": True, "message": "تم إلغاء التعيين بنجاح", "assignment_id": assignment_id})
     except Exception as e:

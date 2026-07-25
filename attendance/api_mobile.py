@@ -756,6 +756,32 @@ def mobile_attendance_action(request):
             attendance.status = check_in_status
             attendance.save()
 
+        from attendance.models import AttendanceSession
+
+        open_session = AttendanceSession._base_manager.filter(
+            attendance=attendance,
+            employee=employee,
+            check_out_time__isnull=True
+        ).order_by('-session_number').first()
+
+        if not open_session:
+            existing_sessions_count = AttendanceSession._base_manager.filter(
+                attendance=attendance,
+                employee=employee
+            ).count()
+
+            AttendanceSession._base_manager.create(
+                company=employee.company,
+                attendance=attendance,
+                employee=employee,
+                session_number=existing_sessions_count + 1,
+                check_in_time=now,
+                check_in_latitude=latitude,
+                check_in_longitude=longitude,
+                is_partial=False,
+                notes='Initial check-in session',
+            )
+
         address = reverse_geocode(latitude, longitude)
         LocationLog._base_manager.create(
             company=employee.company,
@@ -909,6 +935,45 @@ def mobile_attendance_action(request):
     attendance.check_out_longitude = longitude
     attendance.check_out_address = reverse_geocode(latitude, longitude)
     attendance.check_out_within_range = True
+
+    from attendance.models import AttendanceSession
+
+    open_session = AttendanceSession._base_manager.filter(
+        attendance=attendance,
+        employee=employee,
+        check_out_time__isnull=True
+    ).order_by('-session_number').first()
+
+    if open_session:
+        open_session.check_out_time = now
+        open_session.check_out_latitude = latitude
+        open_session.check_out_longitude = longitude
+        open_session.is_partial = False
+        open_session.calculate_worked_minutes()
+        open_session.save()
+    else:
+        existing_sessions_count = AttendanceSession._base_manager.filter(
+            attendance=attendance,
+            employee=employee
+        ).count()
+
+        if existing_sessions_count == 0:
+            fallback_session = AttendanceSession._base_manager.create(
+                company=employee.company,
+                attendance=attendance,
+                employee=employee,
+                session_number=1,
+                check_in_time=attendance.check_in_time,
+                check_out_time=now,
+                check_in_latitude=attendance.check_in_latitude,
+                check_in_longitude=attendance.check_in_longitude,
+                check_out_latitude=latitude,
+                check_out_longitude=longitude,
+                is_partial=False,
+                notes='Backfilled from legacy attendance record',
+            )
+            fallback_session.calculate_worked_minutes()
+            fallback_session.save()
 
     if shift_end and now < shift_end:
         early_leave_minutes = int((shift_end - now).total_seconds() // 60)
