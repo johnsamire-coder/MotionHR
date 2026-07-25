@@ -1217,15 +1217,43 @@ def my_shift(request):
             day = today + timedelta(days=i)
             day_shift, day_source = get_effective_shift(employee, day)
             if day_shift:
+                # جيب الوقت الحقيقي لو variable shift
+                day_start = str(day_shift.start_time)[:5] if day_shift.start_time else None
+                day_end = str(day_shift.end_time)[:5] if day_shift.end_time else None
+                day_mode = getattr(day_shift, 'shift_mode', 'fixed')
+
+                try:
+                    config = getattr(day_shift, 'schedule_config', {}) or {}
+                    if day_mode in ('variable_weekly', 'variable_weekly_flex'):
+                        # weekday: 0=Monday في Python، بس عندنا 0=Sunday
+                        # نحول: Sunday=0, Monday=1, ...
+                        wd = (day.weekday() + 1) % 7  # Python: Mon=0 → Sunday=0
+                        days_config = config.get('days', {})
+                        day_cfg = days_config.get(str(wd), {})
+                        if day_cfg.get('start'):
+                            day_start = day_cfg['start']
+                        if day_cfg.get('end'):
+                            day_end = day_cfg['end']
+                    elif day_mode == 'variable_daily':
+                        dates_config = config.get('dates', {})
+                        day_cfg = dates_config.get(str(day), {})
+                        if day_cfg.get('start'):
+                            day_start = day_cfg['start']
+                        if day_cfg.get('end'):
+                            day_end = day_cfg['end']
+                except Exception:
+                    pass
+
                 schedule.append({
                     "date": str(day),
                     "day_name": day.strftime("%A"),
                     "shift_name": day_shift.name,
-                    "start_time": str(day_shift.start_time)[:5] if day_shift.start_time else None,
-                    "end_time": str(day_shift.end_time)[:5] if day_shift.end_time else None,
+                    "start_time": day_start,
+                    "end_time": day_end,
                     "crosses_midnight": day_shift.crosses_midnight,
                     "work_hours": day_shift.work_hours,
                     "is_work_day": day_shift.is_work_day(day),
+                    "shift_mode": day_mode,
                     "source": day_source,
                 })
             else:
