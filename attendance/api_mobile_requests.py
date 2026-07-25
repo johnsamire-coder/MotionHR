@@ -86,6 +86,8 @@ def mobile_leave_request(request):
     start_date = request.data.get('start_date')
     end_date = request.data.get('end_date')
     reason = request.data.get('reason', '').strip()
+    half_day = request.data.get('half_day', False)
+    half_day_type = request.data.get('half_day_type', 'morning').strip()
 
     if not all([leave_type_id, start_date, end_date, reason]):
         return Response({
@@ -116,7 +118,15 @@ def mobile_leave_request(request):
             'message': 'تاريخ النهاية لازم يكون بعد تاريخ البداية'
         }, status=400)
 
-    days_count = (end - start).days + 1
+    if half_day and start_date == end_date:
+        days_count = 0.5
+    else:
+        days_count = (end - start).days + 1
+
+    _leave_notes = ''
+    if half_day:
+        _half_label = 'صباحي' if half_day_type == 'morning' else 'مسائي'
+        _leave_notes = f'نص يوم ({_half_label})'
 
     leave_request = LeaveRequest._base_manager.create(
         company=employee.company,
@@ -126,6 +136,7 @@ def mobile_leave_request(request):
         end_date=end,
         days_count=days_count,
         reason=reason,
+        notes=_leave_notes if half_day else '',
         status='pending',
     )
 
