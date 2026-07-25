@@ -208,7 +208,7 @@ def get_effective_shift(employee, target_date):
         return company_assignment.shift, 'company_assignment'
 
     # 6) تناوب الشيفتات (ShiftRotation)
-    from attendance.models import ShiftRotation, ShiftRotationSlot, ShiftRotationAssignment
+    from attendance.models import ShiftRotation, ShiftRotationSlot, ShiftRotationSlot, ShiftRotationAssignment
     active_rotation_filter = Q(end_date__isnull=True) | Q(end_date__gte=target_date)
 
     def _get_shift_from_rotation(rotation):
@@ -379,8 +379,8 @@ def manager_shifts_list(request):
         company = _get_company(request)
         if not company:
             return Response({"success": False, "error": "لا توجد شركة"}, status=400)
-        lang = request.GET.get('lang', 'ar')
         from attendance.models import Shift
+        lang = request.GET.get("lang", "ar")
         shifts = Shift._base_manager.filter(
             company=company
         ).order_by('-is_active', '-is_default', 'name')
@@ -1136,7 +1136,6 @@ def manager_employee_shifts(request, employee_id):
         assignments = EmployeeShift._base_manager.filter(
             employee_id=employee_id, company=company
         ).select_related("shift").order_by("-start_date")
-        lang = request.GET.get("lang", "ar")
         data = []
         for a in assignments:
             data.append({
@@ -1411,7 +1410,6 @@ def shift_override_list(request):
 
         show_past = request.GET.get('show_past', 'false').lower() == 'true'
         employee_id = request.GET.get('employee_id')
-        lang = request.GET.get('lang', 'ar')
 
         qs = ShiftOverride._base_manager.filter(
             company=company,
@@ -2127,12 +2125,19 @@ def rotation_list_create(request):
     # POST - إنشاء rotation جديد
     d = request.data
     name = d.get("name", "").strip()
-    cycle_length_days = int(d.get("cycle_length_days", 7))
     start_date = d.get("start_date")
     slots_data = d.get("slots", [])
 
+    try:
+        cycle_length_days = int(d.get("cycle_length_days", 7))
+    except (TypeError, ValueError):
+        return Response({"success": False, "error": "cycle_length_days لازم يكون رقم صحيح"}, status=400)
+
     if not name or not start_date:
         return Response({"success": False, "error": "name و start_date مطلوبان"}, status=400)
+
+    if cycle_length_days <= 0:
+        return Response({"success": False, "error": "cycle_length_days لازم يكون أكبر من صفر"}, status=400)
 
     try:
         from datetime import datetime as dt
@@ -2140,31 +2145,111 @@ def rotation_list_create(request):
     except ValueError:
         return Response({"success": False, "error": "صيغة التاريخ لازم تكون YYYY-MM-DD"}, status=400)
 
-    rotation = ShiftRotation._base_manager.create(
-        company=company,
-        name=name,
-        cycle_length_days=cycle_length_days,
-        start_date=start_date,
-        is_active=True,
-        created_by=request.user,
-    )
+    if not isinstance(slots_data, list):
+        return Response({"success": False, "error": "slots لازم تكون قائمة"}, status=400)
 
     from attendance.models import Shift
-    for slot in slots_data:
+    from django.db import transaction
+
+    validated_slots = []
+    covered_days = set()
+
+    for index, slot in enumerate(slots_data, start=1):
+        if not isinstance(slot, dict):
+            return Response({"success": False, "error": f"slot رقم {index} غير صالح"}, status=400)
+
         try:
-            shift = Shift._base_manager.get(id=slot["shift_id"], company=company) if slot.get("shift_id") else None
+            start_idx = int(slot["start_day_index"])
+            end_idx = int(slot["end_day_index"])
+        except (KeyError, TypeError, ValueError):
+            return Response({
+                "success": False,
+                "error": f"slot رقم {index}: start_day_index و end_day_index لازم يكونوا أرقام صحيحة"
+            }, status=400)
+
+        if start_idx < 0 or end_idx < 0:
+            return Response({
+                "success": False,
+                "error": f"slot رقم {index}: أرقام الأيام لازم تبدأ من 0 أو أكبر"
+            }, status=400)
+
+        if start_idx > end_idx:
+            return Response({
+                "success": False,
+                "error": f"slot رقم {index}: start_day_index لازم يكون أصغر من أو يساوي end_day_index"
+            }, status=400)
+
+        if end_idx >= cycle_length_days:
+            return Response({
+                "success": False,
+                "error": f"slot رقم {index}: end_day_index خارج حدود دورة التناوب"
+            }, status=400)
+
+        shift_id = slot.get("shift_id")
+        if not shift_id:
+            return Response({
+                "success": False,
+                "error": f"slot رقم {index}: لازم تختار شيفت لكل فترة في دورة التناوب"
+            }, status=400)
+
+        try:
+            shift = Shift._base_manager.get(id=int(shift_id), company=company)
+        except (TypeError, ValueError, Shift.DoesNotExist):
+            return Response({
+                "success": False,
+                "error": f"slot رقم {index}: الشيفت غير موجود أو لا ينتمي للشركة"
+            }, status=400)
+
+        slot_days = set(range(start_idx, end_idx + 1))
+        overlap_days = sorted(slot_days & covered_days)
+        if overlap_days:
+            return Response({
+                "success": False,
+                "error": f"slot رقم {index}: يوجد تداخل في الأيام داخل دورة التناوب",
+                "overlap_day_indexes": overlap_days,
+            }, status=400)
+
+        covered_days.update(slot_days)
+        validated_slots.append({
+            "start_day_index": start_idx,
+            "end_day_index": end_idx,
+            "shift": shift,
+        })
+
+    missing_days = [day for day in range(cycle_length_days) if day not in covered_days]
+    if missing_days:
+        return Response({
+            "success": False,
+            "error": "دورة التناوب لازم تغطي كل أيام الدورة من غير فجوات",
+            "missing_day_indexes": missing_days,
+        }, status=400)
+
+    with transaction.atomic():
+        rotation = ShiftRotation._base_manager.create(
+            company=company,
+            name=name,
+            cycle_length_days=cycle_length_days,
+            start_date=start_date,
+            is_active=True,
+            created_by=request.user,
+        )
+
+        for slot in validated_slots:
             ShiftRotationSlot._base_manager.create(
                 company=company,
                 rotation=rotation,
-                start_day_index=int(slot["start_day_index"]),
-                end_day_index=int(slot["end_day_index"]),
-                shift=shift,
+                start_day_index=slot["start_day_index"],
+                end_day_index=slot["end_day_index"],
+                shift=slot["shift"],
                 created_by=request.user,
             )
-        except Exception:
-            continue
 
-    return Response({"success": True, "rotation_id": rotation.id, "message": f"تم إنشاء التناوب '{name}'"}, status=201)
+    return Response({
+        "success": True,
+        "rotation_id": rotation.id,
+        "slots_count": len(validated_slots),
+        "message": f"تم إنشاء التناوب '{name}'"
+    }, status=201)
 
 
 @api_view(["PUT", "DELETE"])
@@ -2190,16 +2275,78 @@ def rotation_detail(request, rotation_id):
     d = request.data
     if "name" in d:
         rotation.name = d["name"]
+
     if "cycle_length_days" in d:
-        rotation.cycle_length_days = int(d["cycle_length_days"])
+        try:
+            rotation.cycle_length_days = int(d["cycle_length_days"])
+        except (TypeError, ValueError):
+            return Response({"success": False, "error": "cycle_length_days لازم يكون رقم صحيح"}, status=400)
+
+        if rotation.cycle_length_days <= 0:
+            return Response({"success": False, "error": "cycle_length_days لازم يكون أكبر من صفر"}, status=400)
+
     if "start_date" in d:
-        from datetime import datetime as dt
-        rotation.start_date = dt.strptime(str(d["start_date"]), "%Y-%m-%d").date()
+        try:
+            from datetime import datetime as dt
+            rotation.start_date = dt.strptime(str(d["start_date"]), "%Y-%m-%d").date()
+        except ValueError:
+            return Response({"success": False, "error": "صيغة التاريخ لازم تكون YYYY-MM-DD"}, status=400)
+
     if "is_active" in d:
         rotation.is_active = bool(d["is_active"])
+
     rotation.save()
 
-    return Response({"success": True, "message": "تم تعديل التناوب"})
+    slots = list(
+        ShiftRotationSlot._base_manager.filter(
+            rotation=rotation,
+            company=company
+        ).select_related('shift').order_by('start_day_index', 'id')
+    )
+
+    covered_days = set()
+    overlap_days = set()
+    invalid_slot_ids = []
+    missing_shift_slot_ids = []
+
+    for slot in slots:
+        try:
+            start_idx = int(slot.start_day_index)
+            end_idx = int(slot.end_day_index)
+        except (TypeError, ValueError):
+            invalid_slot_ids.append(slot.id)
+            continue
+
+        if start_idx < 0 or end_idx < 0 or start_idx > end_idx or end_idx >= rotation.cycle_length_days:
+            invalid_slot_ids.append(slot.id)
+            continue
+
+        if not slot.shift_id:
+            missing_shift_slot_ids.append(slot.id)
+
+        slot_days = set(range(start_idx, end_idx + 1))
+        overlap_days.update(slot_days & covered_days)
+        covered_days.update(slot_days)
+
+    missing_days = [day for day in range(rotation.cycle_length_days) if day not in covered_days]
+    coverage_ok = not invalid_slot_ids and not overlap_days and not missing_days and not missing_shift_slot_ids
+
+    response_data = {
+        "success": True,
+        "message": "تم تعديل التناوب",
+        "rotation_coverage_ok": coverage_ok,
+    }
+
+    if not coverage_ok:
+        response_data["warning"] = "تم تعديل التناوب لكن التغطية فيها فجوات أو مشاكل. راجع الـ slots"
+        response_data["coverage_details"] = {
+            "missing_day_indexes": missing_days,
+            "overlap_day_indexes": sorted(overlap_days),
+            "invalid_slot_ids": invalid_slot_ids,
+            "missing_shift_slot_ids": missing_shift_slot_ids,
+        }
+
+    return Response(response_data)
 
 
 @api_view(["POST"])
