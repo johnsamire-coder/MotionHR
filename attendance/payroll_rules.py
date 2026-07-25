@@ -34,6 +34,12 @@ def _calc_late_minutes(shift, att):
         from django.utils import timezone
         check_in_local = timezone.localtime(att.check_in_time)
         shift_start = datetime.combine(check_in_local.date(), shift.start_time)
+
+        # الشيفت الليلي: لو الحضور بعد نص الليل والشيفت بيبدأ قبله → الشيفت بدأ امبارح
+        if getattr(shift, 'crosses_midnight', False):
+            if check_in_local.time() < shift.start_time:
+                shift_start -= timedelta(days=1)
+
         grace = int(shift.grace_period or 0)
         deadline = shift_start + timedelta(minutes=grace)
         check_in_naive = check_in_local.replace(tzinfo=None)
