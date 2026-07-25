@@ -391,6 +391,38 @@ def get_leave_dates(employee, year, month):
     return leave_dates
 
 
+
+def get_approved_permission_minutes(employee, first_day, last_day):
+    """
+    يجيب الدقايق المعتمدة من الطلبات (EmployeeRequest) في فترة المرتب
+    بيرجع:
+        late_approved_minutes: دقايق إذن التأخير المعتمدة
+        early_approved_minutes: دقايق إذن الانصراف المبكر المعتمدة
+    """
+    late_minutes = 0
+    early_minutes = 0
+    try:
+        from requests_app.models import EmployeeRequest
+        approved_requests = EmployeeRequest._base_manager.filter(
+            employee=employee,
+            status='approved',
+            start_date__gte=first_day,
+            start_date__lte=last_day,
+            request_type__permission_kind__in=('late_arrival', 'early_leave'),
+        ).select_related('request_type')
+
+        for req in approved_requests:
+            kind = getattr(req.request_type, 'permission_kind', '') or ''
+            hours = float(req.duration_hours or 0)
+            minutes = int(hours * 60)
+            if kind == 'late_arrival':
+                late_minutes += minutes
+            elif kind == 'early_leave':
+                early_minutes += minutes
+    except Exception:
+        pass
+    return late_minutes, early_minutes
+
 def get_unpaid_leave_dates(employee, year, month):
     unpaid_dates = set()
     _company = getattr(employee, 'company', None)
@@ -1308,7 +1340,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
     # الأيام بدون سياسة -> settings الافتراضية
     if _no_policy_totals['late'] or _no_policy_totals['absent'] or _no_policy_totals['overtime']:
-        late_deduction += round(_no_policy_totals['late'] * late_per_min, 2)
+        late_deduction += round(max(0, _no_policy_totals['late'] - _approved_late_min) * late_per_min, 2)
         absence_deduction += round(_no_policy_totals['absent'] * absence_per_day, 2)
         overtime_bonus += round(_no_policy_totals['overtime'] * overtime_per_hour, 2)
 
@@ -1345,7 +1377,14 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         flex_shortage_deduction = 0.0
 
     # خصم الانصراف المبكر = بنفس معدل التأخير الحالي
-    early_leave_deduction = round(total_early_leave_minutes * late_per_min, 2)
+    # خصم الإذن المعتمد من التأخير والانصراف المبكر
+    _approved_late_min, _approved_early_min = get_approved_permission_minutes(
+        employee, first_day, last_day
+    )
+    effective_late_minutes = max(0, total_late_minutes - _approved_late_min)
+    effective_early_minutes = max(0, total_early_leave_minutes - _approved_early_min)
+
+    early_leave_deduction = round(effective_early_minutes * late_per_min, 2)
 
     unpaid_leave_deduction = round(unpaid_leave_days * daily_salary, 2)
 
@@ -1425,6 +1464,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'on_leave_days': on_leave_days,
         'unpaid_leave_days': unpaid_leave_days,
         'total_late_minutes': total_late_minutes,
+        'approved_late_minutes': _approved_late_min,
+        'approved_early_minutes': _approved_early_min,
         'total_early_leave_minutes': total_early_leave_minutes,
         'total_work_hours': round(total_work_hours, 2),
         'overtime_hours': round(total_overtime_hours, 2),
