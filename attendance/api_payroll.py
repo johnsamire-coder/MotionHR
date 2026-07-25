@@ -107,8 +107,13 @@ def _serialize_summary_row(payroll):
         'allowances_total': payroll.get('allowances_total', 0),
         'overtime_bonus': payroll.get('overtime_bonus', 0),
         'bonuses_total': payroll.get('bonuses_total', 0),
+        'night_allowance': payroll.get('night_allowance', 0),
+        'weekend_allowance': payroll.get('weekend_allowance', 0),
         'gross_salary': payroll.get('gross_salary', 0),
+        'policy_name': payroll.get('policy_name'),
 
+        'flex_shortage_deduction': payroll.get('flex_shortage_deduction', 0),
+        'early_leave_deduction': payroll.get('early_leave_deduction', 0),
         'late_deduction': payroll.get('late_deduction', 0),
         'absence_deduction': payroll.get('absence_deduction', 0),
         'insurance_deduction': payroll.get('insurance_deduction', 0),
@@ -129,6 +134,7 @@ def _serialize_summary_row(payroll):
         'total_work_hours': payroll['total_work_hours'],
         'overtime_hours': payroll['overtime_hours'],
         'total_late_minutes': payroll.get('total_late_minutes', 0),
+        'total_early_leave_minutes': payroll.get('total_early_leave_minutes', 0),
     }
 
 

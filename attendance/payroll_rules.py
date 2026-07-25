@@ -999,6 +999,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     on_leave_days = 0
     mission_days = 0
     total_late_minutes = 0
+    total_early_leave_minutes = 0
     total_work_hours = 0.0
     total_overtime_hours = 0.0
     daily_details = []
@@ -1035,8 +1036,10 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
             _wh = float(_summary.work_hours or 0)
             _oth = float(_summary.overtime_hours or 0)
+            _elm = int(getattr(att, 'early_leave_minutes', 0) or 0)
             total_work_hours += _wh
             total_overtime_hours += _oth
+            total_early_leave_minutes += _elm
 
             if _summary.is_night_shift:
                 night_shift_days += 1
@@ -1051,6 +1054,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 'check_out': att.check_out_time.strftime('%H:%M') if att and att.check_out_time else None,
                 'work_hours': round(_wh, 2),
                 'late_minutes': _summary.late_minutes,
+                'early_leave_minutes': _elm,
                 'overtime_hours': round(_oth, 2),
                 'shift_name': _day_shift.name if _day_shift else '',
                 'is_night_shift': _summary.is_night_shift,
@@ -1067,7 +1071,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 'date': d.isoformat(), 'status': 'on_leave',
                 'effective_status': 'on_leave', 'check_in': None,
                 'check_out': None, 'work_hours': 0,
-                'late_minutes': 0, 'overtime_hours': 0,
+                'late_minutes': 0, 'early_leave_minutes': 0, 'overtime_hours': 0,
                 'shift_name': day_shift.name if day_shift else '',
                 'is_night_shift': False, 'is_weekend_work': False,
             })
@@ -1077,8 +1081,10 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             mission_days += 1
             work_h = _safe_float(att.work_hours if att else 0)
             ot_h = _calc_overtime_hours(day_shift, att)
+            elm = int(getattr(att, 'early_leave_minutes', 0) or 0) if att else 0
             total_work_hours += work_h
             total_overtime_hours += ot_h
+            total_early_leave_minutes += elm
             is_night = _is_night_shift(day_shift)
             if is_night:
                 night_shift_days += 1
@@ -1088,7 +1094,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 'check_in': att.check_in_time.strftime('%H:%M') if att and att.check_in_time else None,
                 'check_out': att.check_out_time.strftime('%H:%M') if att and att.check_out_time else None,
                 'work_hours': round(work_h, 2),
-                'late_minutes': 0, 'overtime_hours': round(ot_h, 2),
+                'late_minutes': 0, 'early_leave_minutes': elm, 'overtime_hours': round(ot_h, 2),
                 'shift_name': day_shift.name if day_shift else '',
                 'is_night_shift': is_night, 'is_weekend_work': False,
             })
@@ -1133,6 +1139,9 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             if is_weekend:
                 weekend_work_days += 1
 
+            elm = int(getattr(att, 'early_leave_minutes', 0) or 0)
+            total_early_leave_minutes += elm
+
             if late_min > 0:
                 late_days += 1
                 # نحاول نحول التأخير لإذن لو الموظف عنده رصيد (م-6: سياسة اليوم)
@@ -1155,6 +1164,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 'check_out': att.check_out_time.strftime('%H:%M') if att.check_out_time else None,
                 'work_hours': round(work_h, 2),
                 'late_minutes': late_min,
+                'early_leave_minutes': elm,
                 'overtime_hours': round(ot_h, 2),
                 'shift_name': day_shift.name if day_shift else '',
                 'is_night_shift': is_night,
@@ -1168,7 +1178,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 'date': d.isoformat(), 'status': 'weekend',
                 'effective_status': 'weekend', 'check_in': None,
                 'check_out': None, 'work_hours': 0,
-                'late_minutes': 0, 'overtime_hours': 0,
+                'late_minutes': 0, 'early_leave_minutes': 0, 'overtime_hours': 0,
                 'shift_name': day_shift.name if day_shift else '',
                 'is_night_shift': False, 'is_weekend_work': True,
             })
@@ -1288,6 +1298,9 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     except Exception:
         flex_shortage_deduction = 0.0
 
+    # خصم الانصراف المبكر = بنفس معدل التأخير الحالي
+    early_leave_deduction = round(total_early_leave_minutes * late_per_min, 2)
+
     allowances_total, allowance_items = _get_allowances(employee, first_day, last_day, lang=lang)
     deductions = _get_monthly_deductions(employee, year, month, lang=lang)
     bonuses_total, bonus_items = _get_bonuses(employee, year, month, lang=lang)
@@ -1315,7 +1328,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         + installments_total
         + penalties_total
         + extra_deductions_total
-        + flex_shortage_deduction,
+        + flex_shortage_deduction
+        + early_leave_deduction,
         2
     )
 
@@ -1342,6 +1356,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'weekend_allowance': round(weekend_allowance, 2),
         'policy_name': active_policy.name if active_policy else None,
         'flex_shortage_deduction': round(flex_shortage_deduction, 2),
+        'early_leave_deduction': round(early_leave_deduction, 2),
         'late_deduction': round(late_deduction, 2),
         'absence_deduction': round(absence_deduction, 2),
         'insurance_deduction': round(insurance_deduction, 2),
@@ -1359,6 +1374,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'mission_days': mission_days,
         'on_leave_days': on_leave_days,
         'total_late_minutes': total_late_minutes,
+        'total_early_leave_minutes': total_early_leave_minutes,
         'total_work_hours': round(total_work_hours, 2),
         'overtime_hours': round(total_overtime_hours, 2),
         'night_shift_days': night_shift_days,

@@ -1182,12 +1182,39 @@ class Attendance(TenantModel):
         return f"{self.employee.full_name_ar} - {self.date}"
     
     def calculate_work_hours(self):
-        """حساب ساعات العمل"""
+        """حساب ساعات العمل - يعتمد على AttendanceSession لو موجودة"""
+        try:
+            from attendance.models import AttendanceSession
+
+            sessions = list(
+                AttendanceSession._base_manager.filter(
+                    attendance=self
+                ).order_by('session_number')
+            )
+
+            complete_sessions = [s for s in sessions if s.check_in_time and s.check_out_time]
+
+            if complete_sessions:
+                total_minutes = 0
+                for session in complete_sessions:
+                    if not (session.worked_minutes or 0):
+                        session.calculate_worked_minutes()
+                        session.save(update_fields=['worked_minutes'])
+                    total_minutes += int(session.worked_minutes or 0)
+
+                self.work_hours = round(total_minutes / 60.0, 2)
+                return self.work_hours
+        except Exception:
+            pass
+
+        # fallback القديم لو مفيش sessions
         if self.check_in_time and self.check_out_time:
             duration = self.check_out_time - self.check_in_time
             hours = duration.total_seconds() / 3600
             self.work_hours = round(hours, 2)
             return self.work_hours
+
+        self.work_hours = 0
         return 0
     
     def calculate_late_minutes(self):
