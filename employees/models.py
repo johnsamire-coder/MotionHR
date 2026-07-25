@@ -150,13 +150,6 @@ class Employee(TenantModel):
         default='ar',
         verbose_name='اللغة المفضلة'
     )
-
-    language = models.CharField(
-        max_length=2,
-        choices=LANGUAGE_CHOICES,
-        default='ar',
-        verbose_name='اللغة المفضلة'
-    )
     
     marital_status = models.CharField(
         max_length=20,
