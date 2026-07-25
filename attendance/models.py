@@ -1508,6 +1508,33 @@ class DailyAttendanceSummary(TenantModel):
         verbose_name='عمل في يوم الراحة'
     )
 
+    early_leave_minutes = models.IntegerField(
+        default=0,
+        verbose_name='دقائق الانصراف المبكر'
+    )
+
+    permission_hours_used = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name='ساعات الإذن المستخدمة'
+    )
+
+    flex_delta_hours = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name='فرق ساعات الشيفت المرن'
+    )
+
+    flex_status = models.CharField(
+        max_length=10,
+        blank=True,
+        default='',
+        verbose_name='حالة تسوية الشيفت المرن',
+        help_text='pending / approved / rejected / none'
+    )
+
     shift = models.ForeignKey(
         'attendance.Shift',
         on_delete=models.SET_NULL,
@@ -1624,6 +1651,36 @@ class DailyAttendanceSummary(TenantModel):
             else:
                 status = 'present'
 
+            _early_leave = int(getattr(att, 'early_leave_minutes', 0) or 0)
+
+            _perm_hours = 0.0
+            try:
+                from attendance.models import PermissionLedger
+                from decimal import Decimal
+                _entries = PermissionLedger._base_manager.filter(
+                    employee=employee,
+                    reference_date=target_date,
+                )
+                _perm_hours = float(sum(
+                    Decimal(str(e.minutes_used or 0)) for e in _entries
+                ) / 60)
+            except Exception:
+                pass
+
+            _flex_delta = 0.0
+            _flex_status = ''
+            try:
+                from attendance.models import FlexDayAdjustment
+                _flex = FlexDayAdjustment._base_manager.filter(
+                    employee=employee,
+                    date=target_date,
+                ).order_by('-created_at').first()
+                if _flex:
+                    _flex_delta = float(_flex.delta_hours or 0)
+                    _flex_status = _flex.status or ''
+            except Exception:
+                pass
+
             obj, _ = cls._base_manager.update_or_create(
                 employee=employee,
                 date=target_date,
@@ -1638,6 +1695,10 @@ class DailyAttendanceSummary(TenantModel):
                     is_weekend_work=is_weekend,
                     shift=day_shift,
                     policy=policy,
+                    early_leave_minutes=_early_leave,
+                    permission_hours_used=_perm_hours,
+                    flex_delta_hours=_flex_delta,
+                    flex_status=_flex_status,
                 )
             )
             # FlexDayAdjustment: مزامنة أمان للشيفت المرن
