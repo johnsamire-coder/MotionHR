@@ -537,9 +537,18 @@ def manager_shift_update(request, shift_id):
         if "is_active" in data:
             shift.is_active = bool(data["is_active"])
         if "shift_mode" in data:
-            shift.shift_mode = str(data["shift_mode"]).strip()
+            new_shift_mode = str(data["shift_mode"]).strip()
+            if new_shift_mode not in VALID_SHIFT_MODES:
+                return Response({
+                    "success": False,
+                    "error": f"shift_mode غير صحيح. المسموح: {', '.join(VALID_SHIFT_MODES)}"
+                }, status=400)
+            shift.shift_mode = new_shift_mode
         if "time_preset" in data:
-            shift.time_preset = str(data["time_preset"]).strip()
+            new_time_preset = str(data["time_preset"]).strip()
+            if new_time_preset not in VALID_TIME_PRESETS:
+                new_time_preset = "custom"
+            shift.time_preset = new_time_preset
         if "required_daily_hours" in data:
             shift.required_daily_hours = float(data["required_daily_hours"])
         if "allow_partial_checkout" in data:
@@ -547,8 +556,16 @@ def manager_shift_update(request, shift_id):
         if "max_sessions_per_day" in data:
             shift.max_sessions_per_day = int(data["max_sessions_per_day"])
         if "variable_schedule_type" in data:
-            shift.variable_schedule_type = str(data["variable_schedule_type"]).strip()
+            new_var_type = str(data["variable_schedule_type"]).strip()
+            if new_var_type not in VALID_VARIABLE_SCHEDULE_TYPES:
+                new_var_type = "none"
+            shift.variable_schedule_type = new_var_type
         if "schedule_config" in data:
+            # نتحقق من الـ schedule_config حسب shift_mode النهائي
+            final_shift_mode = shift.shift_mode
+            is_valid, err_msg = _validate_schedule_config(final_shift_mode, data["schedule_config"])
+            if not is_valid:
+                return Response({"success": False, "error": err_msg}, status=400)
             shift.schedule_config = data["schedule_config"]
         if "is_default" in data:
             is_default = bool(data["is_default"])
@@ -1779,13 +1796,29 @@ def manager_shift_assignments_list(request):
         qs = ShiftAssignment._base_manager.filter(
             company=company,
             is_active=True,
-        ).select_related("shift", "employee", "employee__job_title", "employee__department", "employee__branch", "department", "branch").order_by("shift__name", "assignment_type", "-start_date")
+        ).select_related(
+            "shift", "employee", "employee__job_title", "employee__department", "employee__branch",
+            "department", "branch"
+        ).prefetch_related(
+            "excluded_employees"
+        ).order_by("shift__name", "assignment_type", "-start_date")
 
         if shift_id:
             qs = qs.filter(shift_id=shift_id)
 
         data = []
         for a in qs:
+            excluded_list = []
+            if a.assignment_type in ("department", "branch", "company"):
+                for excl_emp in a.excluded_employees.all():
+                    excluded_list.append({
+                        "id": excl_emp.id,
+                        "full_name": getattr(excl_emp, "full_name_ar", str(excl_emp)),
+                        "employee_code": getattr(excl_emp, "employee_code", ""),
+                        "department": getattr(excl_emp.department, "name_ar", "") if excl_emp.department else "",
+                        "branch": getattr(excl_emp.branch, "name_ar", "") if excl_emp.branch else "",
+                    })
+
             item = {
                 "id": a.id,
                 "shift_id": a.shift_id,
@@ -1795,6 +1828,8 @@ def manager_shift_assignments_list(request):
                 "end_date": str(a.end_date) if a.end_date else None,
                 "notes": a.notes or "",
                 "priority": a.priority,
+                "excluded_employees": excluded_list,
+                "excluded_count": len(excluded_list),
             }
             if a.assignment_type == "employee" and a.employee:
                 item["target_id"] = a.employee.id
@@ -1874,7 +1909,38 @@ def manager_shift_assignment_update(request, assignment_id):
         if changed:
             assignment.save()
 
-        return Response({"success": True, "message": "تم تعديل التعيين بنجاح", "assignment_id": assignment.id})
+        # تعديل قائمة المستثنيين (مسموح لأي assignment_type غير employee)
+        if "excluded_employee_ids" in data and assignment.assignment_type != "employee":
+            from employees.models import Employee
+            ids = data.get("excluded_employee_ids") or []
+            if not isinstance(ids, list):
+                return Response({"success": False, "error": "excluded_employee_ids لازم يكون list"}, status=400)
+
+            clean_ids = []
+            seen = set()
+            for v in ids:
+                try:
+                    n = int(v)
+                except (TypeError, ValueError):
+                    continue
+                if n not in seen:
+                    seen.add(n)
+                    clean_ids.append(n)
+
+            if clean_ids:
+                excluded_employees = list(Employee._base_manager.filter(id__in=clean_ids, company=company))
+                if len(excluded_employees) != len(clean_ids):
+                    return Response({"success": False, "error": "بعض الموظفين المستثنين غير موجودين"}, status=404)
+                assignment.excluded_employees.set(excluded_employees)
+            else:
+                assignment.excluded_employees.clear()
+
+        return Response({
+            "success": True,
+            "message": "تم تعديل التعيين بنجاح",
+            "assignment_id": assignment.id,
+            "excluded_count": assignment.excluded_employees.count(),
+        })
     except Exception as e:
         logger.exception("manager_shift_assignment_update error")
         return Response({"success": False, "error": str(e)}, status=500)

@@ -23,11 +23,19 @@ DEFAULT_SETTINGS = {
 
 
 def _check_manager(user):
+    """
+    الوصول للمرتبات مقصور على:
+    - super_admin (is_superuser / is_staff)
+    - company_admin (صاحب الشركة)
+    - hr_manager (مدير الموارد البشرية)
+
+    المدير العادي (manager) ممنوع من الوصول للمرتبات لأسباب أمان.
+    """
     role = getattr(user, 'role', None)
     return (
         user.is_superuser
         or user.is_staff
-        or role in ['company_admin', 'hr_manager', 'manager']
+        or role in ['company_admin', 'hr_manager']
     )
 
 
