@@ -565,6 +565,7 @@ def manager_create_employee(request):
 @permission_classes([IsAuthenticated])
 def manager_reset_employee_password(request, employee_id):
     try:
+        from employees.models import Employee
         target_employee = Employee.objects.select_related("user", "company").filter(id=employee_id).first()
         if not target_employee:
             return Response(
@@ -660,6 +661,7 @@ def manager_reset_employee_password(request, employee_id):
 @permission_classes([IsAuthenticated])
 def manager_update_employee(request, employee_id):
     try:
+        from employees.models import Employee
         target_employee = Employee.objects.select_related("user", "company").filter(id=employee_id).first()
         if not target_employee:
             return Response(
@@ -857,6 +859,7 @@ def manager_company_info(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def manager_transfer_employee(request, employee_id):
+    from employees.models import Employee
     """نقل موظف: تغيير مدير / إدارة / فرع"""
     try:
         target_employee = Employee.objects.select_related("user", "company").filter(id=employee_id).first()

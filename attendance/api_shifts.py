@@ -2260,7 +2260,7 @@ def rotation_detail(request, rotation_id):
     if err:
         return err
     company = _get_company(request)
-    from attendance.models import ShiftRotation
+    from attendance.models import ShiftRotation, ShiftRotationSlot
 
     try:
         rotation = ShiftRotation._base_manager.get(id=rotation_id, company=company)
