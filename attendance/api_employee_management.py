@@ -220,6 +220,35 @@ def _generate_password(phone=None):
     return f"Emp@{suffix}{random_part}"
 
 
+
+def _make_activation_link(user):
+    """توليد رابط تفعيل آمن صالح 48 ساعة"""
+    from django.contrib.auth.tokens import default_token_generator
+    from django.utils.http import urlsafe_base64_encode
+    from django.utils.encoding import force_bytes
+    from django.conf import settings as django_settings
+
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    site_url = getattr(django_settings, 'SITE_URL', 'https://motion.jssolutions-eg.com')
+    return f"{site_url}/password-reset-confirm/{uid}/{token}/"
+
+
+def _make_wa_link(clean_phone, first_name_ar, username, activation_link):
+    """توليد رابط واتساب بدون كلمة السر"""
+    text = (
+        f"مرحباً {first_name_ar}%0A"
+        f"تم إنشاء حسابك في تطبيق MotionHR%0A%0A"
+        f"اسم المستخدم: {username}%0A%0A"
+        f"رابط تفعيل حسابك وتعيين كلمة المرور:%0A"
+        f"{activation_link}%0A%0A"
+        f"الرابط صالح 48 ساعة فقط%0A"
+        f"بعد التفعيل حمّل التطبيق من هنا:%0A"
+        f"https://jssolutions-eg.com/app/download"
+    )
+    return f"https://wa.me/{clean_phone}?text={text}"
+
+
 @api_view(["POST"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
@@ -536,21 +565,15 @@ def manager_create_employee(request):
             },
             "credentials": {
                 "username": username,
-                "password": password_plain,
                 "login_url": "https://jssolutions-eg.com",
                 "must_change_password": True,
+                "activation_link": _make_activation_link(user),
+                "expires_hours": 48,
             },
             "whatsapp": {
                 "phone": phone,
                 "clean_phone": clean_phone,
-                "wa_link": f"https://wa.me/{clean_phone}?text=" + 
-                    f"مرحباً {first_name_ar}%0A"
-                    f"تم إنشاء حسابك في تطبيق MotionHR%0A%0A"
-                    f"اسم المستخدم: {username}%0A"
-                    f"كلمة المرور: {password_plain}%0A%0A"
-                    f"حمّل التطبيق من هنا:%0A"
-                    f"https://jssolutions-eg.com/app/download%0A%0A"
-                    f"⚠️ يرجى تغيير كلمة المرور عند أول دخول",
+                "wa_link": _make_wa_link(clean_phone, first_name_ar, username, _make_activation_link(user)),
                 "download_link": "https://jssolutions-eg.com/app/download",
             }
         }, status=status.HTTP_201_CREATED)
