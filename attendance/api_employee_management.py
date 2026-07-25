@@ -626,27 +626,14 @@ def manager_reset_employee_password(request, employee_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        new_password = (request.data.get("new_password") or "").strip()
-
-        if not new_password:
-            import random
-            import string
-            digits = ''.join(random.choices(string.digits, k=4))
-            suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=2))
-            new_password = f"Emp@{digits}{suffix}"
-
-        if len(new_password) < 6:
-            return Response(
-                {"success": False, "error": "كلمة المرور يجب أن تكون 6 أحرف على الأقل"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        target_employee.user.set_password(new_password)
+        # توليد رابط تفعيل جديد بدل إعادة تعيين كلمة السر
+        import random, string
+        digits = ''.join(random.choices(string.digits, k=6))
+        suffix = ''.join(random.choices(string.ascii_uppercase, k=2))
+        temp_pass = f"Rx@{digits}{suffix}"
+        target_employee.user.set_password(temp_pass)
+        target_employee.user.must_change_password = True
         target_employee.user.save()
-
-        if hasattr(target_employee, "must_change_password"):
-            target_employee.must_change_password = True
-            target_employee.save(update_fields=["must_change_password"])
 
         full_name = (
             getattr(target_employee, "full_name_ar", "")
@@ -654,21 +641,32 @@ def manager_reset_employee_password(request, employee_id):
             or getattr(target_employee, "full_name", "")
             or target_employee.user.username
         )
+        phone = getattr(target_employee, "phone", "") or ""
+        clean_phone = ''.join(c for c in phone if c.isdigit())
+        first_name_ar = getattr(target_employee, "first_name_ar", "") or full_name
+        activation_link = _make_activation_link(target_employee.user)
 
         return Response({
             "success": True,
-            "message": f"تم إعادة تعيين كلمة مرور {full_name} بنجاح",
+            "message": f"تم إرسال رابط تفعيل جديد لـ {full_name}",
             "employee": {
                 "id": target_employee.id,
                 "employee_code": getattr(target_employee, "employee_code", ""),
                 "full_name": full_name,
-                "phone": getattr(target_employee, "phone", ""),
+                "phone": phone,
             },
             "credentials": {
                 "username": target_employee.user.username,
-                "password": new_password,
-                "must_change_password": True,
                 "login_url": "https://jssolutions-eg.com",
+                "must_change_password": True,
+                "activation_link": activation_link,
+                "expires_hours": 48,
+            },
+            "whatsapp": {
+                "phone": phone,
+                "clean_phone": clean_phone,
+                "wa_link": _make_wa_link(clean_phone, first_name_ar, target_employee.user.username, activation_link),
+                "download_link": "https://jssolutions-eg.com/app/download",
             }
         }, status=status.HTTP_200_OK)
 
