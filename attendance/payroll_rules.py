@@ -1095,9 +1095,10 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             continue
 
         if d in attended_dates and att:
-            # شيفت مقسم له منطق خاص
+            # شيفت مقسم أو متغير له منطق خاص
             shift_mode = getattr(day_shift, 'shift_mode', '') or getattr(day_shift, 'shift_type', '')
-            if day_shift and shift_mode == 'split_fixed':
+            _VARIABLE_MODES = ('split_fixed', 'variable_weekly', 'variable_weekly_flex', 'variable_daily')
+            if day_shift and shift_mode in _VARIABLE_MODES:
                 from attendance.models import AttendanceSession
                 day_sessions = list(AttendanceSession._base_manager.filter(
                     attendance=att
@@ -1270,6 +1271,23 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     else:
         active_policy = type('_MultiPolicy', (), {'name': 'سياسات متعددة' if True else 'Multiple Policies'})()
 
+    # [ب] خصم نقص ساعات الشيفت المرن (approved فقط)
+    flex_shortage_deduction = 0.0
+    try:
+        from attendance.models import FlexDayAdjustment
+        _shortage_adjs = FlexDayAdjustment._base_manager.filter(
+            employee=employee,
+            date__gte=first_day,
+            date__lte=last_day,
+            adjustment_type='shortage',
+            status='approved',
+        )
+        for _adj in _shortage_adjs:
+            flex_shortage_deduction += abs(float(_adj.delta_hours or 0)) * hourly_rate
+        flex_shortage_deduction = round(flex_shortage_deduction, 2)
+    except Exception:
+        flex_shortage_deduction = 0.0
+
     allowances_total, allowance_items = _get_allowances(employee, first_day, last_day, lang=lang)
     deductions = _get_monthly_deductions(employee, year, month, lang=lang)
     bonuses_total, bonus_items = _get_bonuses(employee, year, month, lang=lang)
@@ -1296,7 +1314,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         + insurance_deduction
         + installments_total
         + penalties_total
-        + extra_deductions_total,
+        + extra_deductions_total
+        + flex_shortage_deduction,
         2
     )
 
@@ -1322,6 +1341,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'night_allowance': round(night_allowance, 2),
         'weekend_allowance': round(weekend_allowance, 2),
         'policy_name': active_policy.name if active_policy else None,
+        'flex_shortage_deduction': round(flex_shortage_deduction, 2),
         'late_deduction': round(late_deduction, 2),
         'absence_deduction': round(absence_deduction, 2),
         'insurance_deduction': round(insurance_deduction, 2),
