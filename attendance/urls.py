@@ -156,6 +156,10 @@ from .api_payroll import (
     payroll_summary,
     payroll_employee_detail,
     payroll_settings,
+    payroll_runs_list,
+    payroll_run_create,
+    payroll_run_approve,
+    payroll_run_detail,
 )
 
 urlpatterns += [
@@ -167,6 +171,10 @@ urlpatterns += [
     path('api/mobile/manager/payroll/summary/', payroll_summary, name='payroll-summary'),
     path('api/mobile/manager/payroll/employee/', payroll_employee_detail, name='payroll-employee'),
     path('api/mobile/manager/payroll/settings/', payroll_settings, name='payroll-settings'),
+    path('api/mobile/manager/payroll/runs/', payroll_runs_list, name='payroll-runs-list'),
+    path('api/mobile/manager/payroll/run/create/', payroll_run_create, name='payroll-run-create'),
+    path('api/mobile/manager/payroll/runs/<int:run_id>/', payroll_run_detail, name='payroll-run-detail'),
+    path('api/mobile/manager/payroll/runs/<int:run_id>/approve/', payroll_run_approve, name='payroll-run-approve'),
 
     # ─── المرحلة 7: التذكيرات ───
     path("api/mobile/manager/reminders/trigger/", api_reminders.trigger_reminder),
