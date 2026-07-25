@@ -1393,6 +1393,141 @@ def shift_change_request_action(request, request_id):
         return Response({"success": False, "error": str(e)}, status=500)
 
 
+
+
+# ══════════════════════════════════════════════════════
+# FLEX DAY ADJUSTMENT APIs
+# ══════════════════════════════════════════════════════
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def flex_adjustments_list(request):
+    """قايمة تسويات الشيفت المرن — HR فقط"""
+    try:
+        company = _get_company(request)
+        user_role = _get_user_role(request)
+        if user_role not in HR_ROLES and not request.user.is_superuser:
+            return Response({"success": False, "error": "غير مصرح - HR فقط"}, status=403)
+
+        from attendance.models import FlexDayAdjustment
+        status_filter = request.query_params.get('status', 'pending')
+        emp_id = request.query_params.get('employee_id')
+
+        qs = FlexDayAdjustment._base_manager.filter(company=company)
+        if status_filter != 'all':
+            qs = qs.filter(status=status_filter)
+        if emp_id:
+            qs = qs.filter(employee_id=emp_id)
+
+        qs = qs.select_related('employee', 'shift', 'reviewed_by').order_by('-date')[:100]
+
+        data = []
+        for adj in qs:
+            data.append({
+                "id": adj.id,
+                "employee_id": adj.employee_id,
+                "employee_name": getattr(adj.employee, 'full_name_ar', str(adj.employee)),
+                "date": str(adj.date),
+                "shift_name": adj.shift.name if adj.shift else "",
+                "required_hours": float(adj.required_hours),
+                "actual_hours": float(adj.actual_hours),
+                "delta_hours": float(adj.delta_hours),
+                "adjustment_type": adj.adjustment_type,
+                "adjustment_type_label": "ساعات إضافية" if adj.adjustment_type == "overtime" else "نقص ساعات",
+                "status": adj.status,
+                "status_label": {"pending": "قيد المراجعة", "approved": "معتمد", "rejected": "مرفوض"}.get(adj.status, adj.status),
+                "reviewed_by": adj.reviewed_by.get_full_name() if adj.reviewed_by else None,
+                "reviewed_at": str(adj.reviewed_at)[:16] if adj.reviewed_at else None,
+                "review_notes": adj.review_notes,
+            })
+
+        return Response({"success": True, "adjustments": data, "count": len(data)})
+    except Exception as e:
+        logger.exception("flex_adjustments_list error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def flex_adjustment_review(request, adjustment_id):
+    """HR يوافق أو يرفض تسوية شيفت مرن"""
+    try:
+        company = _get_company(request)
+        user_role = _get_user_role(request)
+        if user_role not in HR_ROLES and not request.user.is_superuser:
+            return Response({"success": False, "error": "غير مصرح - HR فقط"}, status=403)
+
+        from attendance.models import FlexDayAdjustment
+        from django.utils import timezone as tz
+
+        try:
+            adj = FlexDayAdjustment._base_manager.get(id=adjustment_id, company=company)
+        except FlexDayAdjustment.DoesNotExist:
+            return Response({"success": False, "error": "التسوية غير موجودة"}, status=404)
+
+        if adj.status != 'pending':
+            return Response({"success": False, "error": "التسوية تم البت فيها مسبقاً"}, status=400)
+
+        action = request.data.get('action')
+        if action not in ('approve', 'reject'):
+            return Response({"success": False, "error": "action لازم يكون approve أو reject"}, status=400)
+
+        notes = request.data.get('notes', '')
+        adj.status = 'approved' if action == 'approve' else 'rejected'
+        adj.reviewed_by = request.user
+        adj.reviewed_at = tz.now()
+        adj.review_notes = notes
+        adj.save()
+
+        msg = "تمت الموافقة على التسوية وستُحتسب في المرتب" if action == 'approve' else "تم رفض التسوية"
+        return Response({"success": True, "message": msg, "status": adj.status})
+
+    except Exception as e:
+        logger.exception("flex_adjustment_review error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def employee_flex_adjustments(request, emp_id):
+    """طلبات تسوية الشيفت المرن لموظف معين — HR أو المدير"""
+    try:
+        company = _get_company(request)
+        user_role = _get_user_role(request)
+        if user_role not in HR_ROLES and not request.user.is_superuser:
+            return Response({"success": False, "error": "غير مصرح"}, status=403)
+
+        from attendance.models import FlexDayAdjustment
+        qs = FlexDayAdjustment._base_manager.filter(
+            company=company,
+            employee_id=emp_id,
+        ).select_related('shift', 'reviewed_by').order_by('-date')[:60]
+
+        data = [{
+            "id": adj.id,
+            "date": str(adj.date),
+            "shift_name": adj.shift.name if adj.shift else "",
+            "required_hours": float(adj.required_hours),
+            "actual_hours": float(adj.actual_hours),
+            "delta_hours": float(adj.delta_hours),
+            "adjustment_type": adj.adjustment_type,
+            "adjustment_type_label": "ساعات إضافية" if adj.adjustment_type == "overtime" else "نقص ساعات",
+            "status": adj.status,
+            "status_label": {"pending": "قيد المراجعة", "approved": "معتمد", "rejected": "مرفوض"}.get(adj.status, adj.status),
+            "reviewed_by": adj.reviewed_by.get_full_name() if adj.reviewed_by else None,
+            "reviewed_at": str(adj.reviewed_at)[:16] if adj.reviewed_at else None,
+            "review_notes": adj.review_notes,
+        } for adj in qs]
+
+        return Response({"success": True, "adjustments": data, "count": len(data)})
+    except Exception as e:
+        logger.exception("employee_flex_adjustments error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
 # ── SHIFT OVERRIDE ──
 
 @api_view(["GET"])

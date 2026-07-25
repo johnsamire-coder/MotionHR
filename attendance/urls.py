@@ -451,3 +451,15 @@ urlpatterns += [
     path('api/mobile/manager/employees/<int:employee_id>/permission-grant/', grant_extra_permission),
     path('api/mobile/manager/employees/<int:employee_id>/permission-rollback/', rollback_late),
 ]
+
+from .api_shifts import (
+    flex_adjustments_list,
+    flex_adjustment_review,
+    employee_flex_adjustments,
+)
+
+urlpatterns += [
+    path('api/mobile/manager/flex-adjustments/', flex_adjustments_list, name='flex-adjustments-list'),
+    path('api/mobile/manager/flex-adjustments/<int:adjustment_id>/review/', flex_adjustment_review, name='flex-adjustment-review'),
+    path('api/mobile/manager/employees/<int:emp_id>/flex-adjustments/', employee_flex_adjustments, name='employee-flex-adjustments'),
+]
