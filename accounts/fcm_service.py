@@ -45,13 +45,24 @@ def _log_notification(user, title, body, data=None):
 
 
 def _get_user_lang(user):
-    """جلب لغة المستخدم من FCM token"""
+    """
+    جلب لغة المستخدم.
+    الأولوية: Employee.language → FCMDeviceToken.preferred_language → ar
+    """
+    try:
+        from employees.models import Employee
+        emp = Employee._base_manager.filter(user=user).first()
+        if emp and getattr(emp, 'language', None):
+            return emp.language
+    except Exception:
+        pass
     try:
         from accounts.fcm_models import FCMDeviceToken
         token = FCMDeviceToken.objects.filter(user=user, is_active=True).first()
         return getattr(token, 'preferred_language', 'ar') or 'ar'
     except Exception:
-        return 'ar'
+        pass
+    return 'ar'
 
 
 def send_notification_to_user(user, title, body, data=None, title_en=None, body_en=None):
@@ -85,7 +96,9 @@ def send_notification_to_user(user, title, body, data=None, title_en=None, body_
             localized_title = title
             localized_body = body
 
-            if getattr(token_obj, 'preferred_language', 'ar') == 'en':
+            # لغة الإشعار = Employee.language (أولوية) أو preferred_language
+            _user_lang = _get_user_lang(token_obj.user)
+            if _user_lang == 'en':
                 if title_en is not None:
                     localized_title = title_en
                 if body_en is not None:

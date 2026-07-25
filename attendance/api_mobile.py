@@ -1445,6 +1445,18 @@ def mobile_fcm_token_register(request):
         device_info = request.data.get('device_info', '')
         preferred_language = request.data.get('preferred_language', 'ar')
 
+        # تحديث Employee.language عشان تبقى مصدر الحقيقة للإشعارات
+        try:
+            from employees.models import Employee
+            emp = Employee._base_manager.filter(user=user).first()
+            if emp and preferred_language in ('ar', 'en'):
+                if emp.language != preferred_language:
+                    emp.language = preferred_language
+                    emp.save(update_fields=['language'])
+        except Exception as _lang_err:
+            import logging
+            logging.getLogger(__name__).warning(f'Employee.language update error: {_lang_err}')
+
         if not fcm_token:
             return Response({
                 'success': False,
