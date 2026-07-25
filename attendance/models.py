@@ -210,6 +210,18 @@ class Shift(TenantModel):
         }
         return day_map.get(date.weekday(), False)
 
+    def get_shift_periods(self, day):
+        """
+        بترجع فترات الشيفت لليوم ده
+        method wrapper لـ get_shift_periods في api_mobile
+        بتفعّل _calc_split_shift_metrics في payroll_rules
+        """
+        try:
+            from attendance.api_mobile import get_shift_periods as _get_periods
+            return _get_periods(self, day)
+        except Exception:
+            return []
+
 
 
 class AttendanceSession(TenantModel):

@@ -208,7 +208,7 @@ def get_effective_shift(employee, target_date):
         return company_assignment.shift, 'company_assignment'
 
     # 6) تناوب الشيفتات (ShiftRotation)
-    from attendance.models import ShiftRotation, ShiftRotationSlot, ShiftRotationSlot, ShiftRotationAssignment
+    from attendance.models import ShiftRotation, ShiftRotationSlot, ShiftRotationAssignment
     active_rotation_filter = Q(end_date__isnull=True) | Q(end_date__gte=target_date)
 
     def _get_shift_from_rotation(rotation):

@@ -81,23 +81,15 @@ def _calc_split_shift_metrics(shift, att, sessions, target_date):
         periods_attended = 0
 
         for idx, period in enumerate(periods):
-            period_start_time = period.get('start_time')
-            period_end_time = period.get('end_time')
-            if not period_start_time or not period_end_time:
+            # F2: الدالة بترجع 'start' و 'end' كـ datetime aware
+            period_start_dt_aware = period.get('start')
+            period_end_dt_aware = period.get('end')
+            if not period_start_dt_aware or not period_end_dt_aware:
                 continue
 
-            # حول وقت الفترة لـ datetime
-            if isinstance(period_start_time, str):
-                from datetime import time
-                h, m = period_start_time.split(':')[:2]
-                period_start_time = time(int(h), int(m))
-            if isinstance(period_end_time, str):
-                from datetime import time
-                h, m = period_end_time.split(':')[:2]
-                period_end_time = time(int(h), int(m))
-
-            period_start_dt = datetime.combine(target_date, period_start_time)
-            period_end_dt = datetime.combine(target_date, period_end_time)
+            # حول لـ naive datetime بتوقيت محلي للمقارنة
+            period_start_dt = timezone.localtime(period_start_dt_aware).replace(tzinfo=None)
+            period_end_dt = timezone.localtime(period_end_dt_aware).replace(tzinfo=None)
             period_minutes = int((period_end_dt - period_start_dt).total_seconds() / 60)
 
             # دور على الـ session المقابلة للفترة دي
