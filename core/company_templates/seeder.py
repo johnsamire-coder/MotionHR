@@ -33,6 +33,7 @@ def seed_company_defaults(company, user=None):
         'leave_types': 0,
         'request_categories': 0,
         'request_types': 0,
+        'permission_policy': 0,
         'errors': [],
     }
 
@@ -64,6 +65,13 @@ def seed_company_defaults(company, user=None):
             # ═══════════════════════════════════════════════════
             stats['request_types'] = _seed_request_types(
                 company, user, DEFAULT_REQUEST_TYPES, categories_map, stats
+            )
+
+            # ═══════════════════════════════════════════════════
+            # 5. Permission Policy
+            # ═══════════════════════════════════════════════════
+            stats['permission_policy'] = _seed_permission_policy(
+                company, user, stats
             )
 
     except Exception as e:
@@ -189,7 +197,6 @@ def _seed_request_types(company, user, defaults, categories_map, stats):
 
     for item in defaults:
         try:
-            # نجيب الفئة المربوطة
             category = categories_map.get(item['category_key'])
             if not category:
                 stats['errors'].append(
@@ -215,7 +222,8 @@ def _seed_request_types(company, user, defaults, categories_map, stats):
                     requires_amount=item['requires_amount'],
                     requires_document=item['requires_document'],
                     requires_approval=item['requires_approval'],
-                    permission_kind=item.get('permission_kind'),
+                    permission_kind=item.get('permission_kind', 'none') or 'none',
+                    form_schema=item.get('form_schema', {}),
                     order=item['order'],
                     is_active=item['is_active'],
                 )
@@ -228,3 +236,28 @@ def _seed_request_types(company, user, defaults, categories_map, stats):
             stats['errors'].append(f"RequestType '{item['name']}': {str(e)}")
 
     return count
+
+
+def _seed_permission_policy(company, user, stats):
+    """إنشاء سياسة الأذونات الافتراضية للشركة"""
+    try:
+        from requests_app.models import PermissionPolicy
+        exists = PermissionPolicy._base_manager.filter(
+            company=company
+        ).exists()
+
+        if not exists:
+            policy = PermissionPolicy(
+                company=company,
+                max_hours_per_month=4.0,
+                max_times_per_month=4,
+                is_active=True,
+            )
+            if user:
+                policy.created_by = user
+                policy.updated_by = user
+            policy.save()
+            return 1
+    except Exception as e:
+        stats['errors'].append(f"PermissionPolicy: {str(e)}")
+    return 0

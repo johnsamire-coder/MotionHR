@@ -71,6 +71,12 @@ class RequestType(TenantModel):
     requires_approval = models.BooleanField(
         default=True, verbose_name="يحتاج موافقة"
     )
+    form_schema = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="مخطط الفورمة",
+        help_text="الحقول الديناميكية المطلوبة لهذا النوع من الطلبات"
+    )
     is_active = models.BooleanField(default=True, verbose_name="نشط")
     order = models.PositiveSmallIntegerField(default=0, verbose_name="الترتيب")
 
@@ -119,6 +125,11 @@ class EmployeeRequest(TenantModel):
     )
     details = models.TextField(
         verbose_name="التفاصيل"
+    )
+    form_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="بيانات الفورمة الديناميكية"
     )
     priority = models.CharField(
         max_length=10, choices=PRIORITY_CHOICES,

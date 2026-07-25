@@ -241,6 +241,7 @@ def mobile_request_types(request):
                 'requires_amount': rt.requires_amount,
                 'requires_document': rt.requires_document,
                 'requires_approval': rt.requires_approval,
+                'form_schema': rt.form_schema or {},
             })
 
         result.append({
@@ -288,6 +289,64 @@ def mobile_submit_request(request):
         return Response({'success': False, 'message': 'نوع الطلب غير موجود'}, status=404)
 
     is_permission_request = request_type.permission_kind in ['late_arrival', 'early_leave']
+
+    # ── Dynamic Form Data ─────────────────────────────
+    form_schema = request_type.form_schema or {}
+    schema_fields = form_schema.get('fields', []) if isinstance(form_schema, dict) else []
+    raw_form_data = request.data.get('form_data', {})
+    if not isinstance(raw_form_data, dict):
+        raw_form_data = {}
+
+    dynamic_form_data = {}
+    for field in schema_fields:
+        if not isinstance(field, dict):
+            continue
+
+        key = (field.get('key') or '').strip()
+        if not key:
+            continue
+
+        value = raw_form_data.get(key, request.data.get(key))
+        required = bool(field.get('required', False))
+        field_type = (field.get('type') or 'text').strip().lower()
+
+        is_empty = value in [None, '']
+        if isinstance(value, str):
+            is_empty = value.strip() == ''
+
+        if required and is_empty:
+            label_ar = field.get('label_ar') or key
+            label_en = field.get('label_en') or key
+            language = getattr(employee, 'language', 'ar') or 'ar'
+            message_ar = f'حقل "{label_ar}" مطلوب'
+            message_en = f'Field "{label_en}" is required'
+            return Response({
+                'success': False,
+                'message': message_en if language == 'en' else message_ar,
+                'message_ar': message_ar,
+                'message_en': message_en,
+                'field': key,
+            }, status=400)
+
+        if not is_empty:
+            if field_type == 'number':
+                try:
+                    value = float(value)
+                except (ValueError, TypeError):
+                    label_ar = field.get('label_ar') or key
+                    label_en = field.get('label_en') or key
+                    language = getattr(employee, 'language', 'ar') or 'ar'
+                    message_ar = f'قيمة "{label_ar}" غير صحيحة'
+                    message_en = f'Invalid value for "{label_en}"'
+                    return Response({
+                        'success': False,
+                        'message': message_en if language == 'en' else message_ar,
+                        'message_ar': message_ar,
+                        'message_en': message_en,
+                        'field': key,
+                    }, status=400)
+
+        dynamic_form_data[key] = value
 
     if is_permission_request:
         permission_date = permission_date or start_date
@@ -423,6 +482,7 @@ def mobile_submit_request(request):
         request_type=request_type,
         subject=subject,
         details=details,
+        form_data=dynamic_form_data,
         priority=priority,
         start_date=parsed_start,
         end_date=parsed_end,
