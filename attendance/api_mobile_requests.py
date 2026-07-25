@@ -589,6 +589,7 @@ def mobile_manager_pending(request):
     if company:
         pending_leaves = pending_leaves.filter(company=company)
 
+    search = request.query_params.get('search', '').strip()
     if search:
         pending_leaves = pending_leaves.filter(
             Q(employee__first_name_ar__icontains=search) |
