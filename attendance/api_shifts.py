@@ -302,6 +302,71 @@ def get_effective_shift(employee, target_date):
     return None, None
 
 
+VALID_SHIFT_MODES = (
+    'fixed', 'flex_fixed', 'flex_split',
+    'variable_daily', 'variable_weekly', 'variable_weekly_flex',
+    'split_fixed',
+)
+
+VALID_SHIFT_TYPES = ('fixed', 'flexible', 'rotating', 'morning', 'evening', 'night', 'split')
+
+VALID_TIME_PRESETS = ('custom', 'morning', 'evening', 'night')
+
+VALID_VARIABLE_SCHEDULE_TYPES = ('none', 'daily', 'weekly', 'weekly_flex')
+
+
+def _validate_schedule_config(shift_mode, schedule_config):
+    """
+    بترجع (is_valid, error_message)
+    - split_fixed / flex_split: لازم يبقى فيه periods بصيغة صحيحة ومش متداخلة
+    - variable_*: لازم يبقى فيه days
+    """
+    if shift_mode not in ('split_fixed', 'flex_split', 'variable_daily', 'variable_weekly', 'variable_weekly_flex'):
+        return True, None
+
+    if not isinstance(schedule_config, dict):
+        return False, "schedule_config لازم يكون object"
+
+    # فترات (split_fixed / flex_split)
+    if shift_mode in ('split_fixed', 'flex_split'):
+        periods = schedule_config.get('periods', [])
+        if not isinstance(periods, list) or len(periods) < 2:
+            return False, "شيفت مقسم لازم يحتوي على فترتين على الأقل"
+
+        parsed_periods = []
+        for idx, p in enumerate(periods, start=1):
+            if not isinstance(p, dict):
+                return False, f"فترة رقم {idx}: صيغة غير صحيحة"
+            start = p.get('start')
+            end = p.get('end')
+            if not start or not end:
+                return False, f"فترة رقم {idx}: بداية ونهاية مطلوبة"
+            try:
+                start_t = datetime.strptime(str(start), "%H:%M").time()
+                end_t = datetime.strptime(str(end), "%H:%M").time()
+            except (ValueError, TypeError):
+                return False, f"فترة رقم {idx}: صيغة الوقت لازم تكون HH:MM"
+            if start_t >= end_t:
+                return False, f"فترة رقم {idx}: البداية لازم تكون قبل النهاية"
+            parsed_periods.append((start_t, end_t, idx))
+
+        # نتأكد إن الفترات مش متداخلة
+        sorted_periods = sorted(parsed_periods, key=lambda x: x[0])
+        for i in range(len(sorted_periods) - 1):
+            if sorted_periods[i][1] > sorted_periods[i + 1][0]:
+                return False, (
+                    f"الفترة {sorted_periods[i][2]} متداخلة مع الفترة {sorted_periods[i + 1][2]}"
+                )
+
+    # variable_*
+    if shift_mode.startswith('variable'):
+        days = schedule_config.get('days', {})
+        if not isinstance(days, dict) or not days:
+            return False, "الجدول المتغير لازم يحتوي على أيام"
+
+    return True, None
+
+
 # ── LIST SHIFTS ──
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
@@ -353,10 +418,29 @@ def manager_shift_create(request):
         except ValueError:
             return Response({"success": False, "error": "صيغة الوقت لازم تكون HH:MM"}, status=400)
 
-        valid_types = ("fixed", "flexible", "rotating", "morning", "evening", "night", "split")
         shift_type = str(data.get("shift_type", "fixed")).strip()
-        if shift_type not in valid_types:
+        if shift_type not in VALID_SHIFT_TYPES:
             shift_type = "fixed"
+
+        shift_mode = str(data.get("shift_mode", "fixed")).strip()
+        if shift_mode not in VALID_SHIFT_MODES:
+            return Response({
+                "success": False,
+                "error": f"shift_mode غير صحيح. المسموح: {', '.join(VALID_SHIFT_MODES)}"
+            }, status=400)
+
+        schedule_config = data.get("schedule_config", {})
+        is_valid, err_msg = _validate_schedule_config(shift_mode, schedule_config)
+        if not is_valid:
+            return Response({"success": False, "error": err_msg}, status=400)
+
+        time_preset = str(data.get("time_preset", "custom")).strip()
+        if time_preset not in VALID_TIME_PRESETS:
+            time_preset = "custom"
+
+        variable_schedule_type = str(data.get("variable_schedule_type", "none")).strip()
+        if variable_schedule_type not in VALID_VARIABLE_SCHEDULE_TYPES:
+            variable_schedule_type = "none"
 
         is_default = bool(data.get("is_default", False))
 
@@ -386,13 +470,13 @@ def manager_shift_create(request):
             is_default=is_default,
             is_active=True,
             created_by=request.user,
-            shift_mode=str(data.get("shift_mode", "fixed")).strip(),
-            time_preset=str(data.get("time_preset", "custom")).strip(),
+            shift_mode=shift_mode,
+            time_preset=time_preset,
             required_daily_hours=float(data.get("required_daily_hours", 8)),
             allow_partial_checkout=bool(data.get("allow_partial_checkout", False)),
             max_sessions_per_day=int(data.get("max_sessions_per_day", 1)),
-            variable_schedule_type=str(data.get("variable_schedule_type", "none")).strip(),
-            schedule_config=data.get("schedule_config", {}),
+            variable_schedule_type=variable_schedule_type,
+            schedule_config=schedule_config,
         )
         lang = data.get("lang", "ar")
         return Response({
@@ -497,17 +581,59 @@ def manager_shift_delete(request, shift_id):
         return err
     try:
         company = _get_company(request)
-        from attendance.models import Shift
+        from attendance.models import (
+            Shift, EmployeeShift, ShiftAssignment,
+            ShiftOverride, ShiftRotationSlot, Attendance
+        )
         try:
             shift = Shift._base_manager.get(id=shift_id, company=company)
         except Shift.DoesNotExist:
             return Response({"success": False, "error": "الشيفت غير موجود"}, status=404)
-        if shift.employees.filter(is_active=True).count() > 0:
+
+        # نجمع كل الاستخدامات النشطة
+        active_employee_shifts = EmployeeShift._base_manager.filter(shift=shift, is_active=True).count()
+        active_assignments = ShiftAssignment._base_manager.filter(shift=shift, is_active=True).count()
+        active_overrides = ShiftOverride._base_manager.filter(shift=shift, override_date__gte=timezone.now().date()).count()
+        rotation_slots = ShiftRotationSlot._base_manager.filter(shift=shift).count()
+        attendance_count = Attendance._base_manager.filter(shift=shift).count()
+
+        total_usage = active_employee_shifts + active_assignments + active_overrides + rotation_slots
+
+        if total_usage > 0 or attendance_count > 0:
+            # فيه ارتباطات → soft delete (إلغاء تفعيل)
             shift.is_active = False
             shift.save()
-            return Response({"success": True, "message": "تم إلغاء تفعيل الشيفت (يوجد موظفون مرتبطون)"})
+
+            details = []
+            if active_employee_shifts > 0:
+                details.append(f"{active_employee_shifts} تعيين قديم")
+            if active_assignments > 0:
+                details.append(f"{active_assignments} تعيين نشط")
+            if active_overrides > 0:
+                details.append(f"{active_overrides} استثناء قادم")
+            if rotation_slots > 0:
+                details.append(f"{rotation_slots} فترة تناوب")
+            if attendance_count > 0:
+                details.append(f"{attendance_count} سجل حضور")
+
+            details_text = " / ".join(details) if details else ""
+
+            return Response({
+                "success": True,
+                "soft_deleted": True,
+                "message": f"تم إلغاء تفعيل الشيفت (لا يمكن حذفه لوجود: {details_text})",
+                "usage": {
+                    "employee_shifts": active_employee_shifts,
+                    "assignments": active_assignments,
+                    "overrides": active_overrides,
+                    "rotation_slots": rotation_slots,
+                    "attendance_records": attendance_count,
+                }
+            })
+
+        # مفيش أي ارتباطات → hard delete آمن
         shift.delete()
-        return Response({"success": True, "message": "تم حذف الشيفت بنجاح"})
+        return Response({"success": True, "soft_deleted": False, "message": "تم حذف الشيفت بنجاح"})
     except Exception as e:
         logger.exception("manager_shift_delete error")
         return Response({"success": False, "error": str(e)}, status=500)
@@ -1968,6 +2094,22 @@ def rotation_assign(request, rotation_id):
             return Response({"success": False, "error": "branch_id مطلوب"}, status=400)
         kwargs["branch"] = Branch.objects.get(id=branch_id, company=company)
 
+    # نلغي أي تناوب نشط قديم من نفس النوع لنفس الهدف قبل ما نضيف الجديد
+    dedup_filter = {
+        "company": company,
+        "assignment_type": assignment_type,
+        "is_active": True,
+    }
+
+    if assignment_type == "employee":
+        dedup_filter["employee"] = kwargs.get("employee")
+    elif assignment_type == "department":
+        dedup_filter["department"] = kwargs.get("department")
+    elif assignment_type == "branch":
+        dedup_filter["branch"] = kwargs.get("branch")
+
+    ShiftRotationAssignment._base_manager.filter(**dedup_filter).update(is_active=False)
+
     ShiftRotationAssignment._base_manager.create(**kwargs)
 
     return Response({"success": True, "message": f"تم تعيين التناوب '{rotation.name}' بنجاح"}, status=201)
@@ -2013,3 +2155,38 @@ def rotation_assignments_list(request, rotation_id):
         data.append(item)
 
     return Response({"success": True, "assignments": data, "rotation_name": rotation.name})
+
+
+@api_view(["DELETE"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def rotation_assignment_delete(request, assignment_id):
+    """حذف (إلغاء تفعيل) تعيين تناوب"""
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        company = _get_company(request)
+        from attendance.models import ShiftRotationAssignment
+        try:
+            assignment = ShiftRotationAssignment._base_manager.get(
+                id=assignment_id, company=company, is_active=True
+            )
+        except ShiftRotationAssignment.DoesNotExist:
+            return Response(
+                {"success": False, "error": "تعيين التناوب غير موجود أو اتحذف قبل كده"},
+                status=404,
+            )
+
+        assignment.is_active = False
+        assignment.save()
+
+        return Response({
+            "success": True,
+            "message": "تم إلغاء تعيين التناوب بنجاح",
+            "assignment_id": assignment_id,
+        })
+    except Exception as e:
+        logger.exception("rotation_assignment_delete error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
