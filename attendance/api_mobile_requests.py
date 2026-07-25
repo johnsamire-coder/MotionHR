@@ -770,6 +770,81 @@ def mobile_manager_action(request):
 
             if action == 'approve':
                 item.status = 'approved'
+                # لو طلب تعديل حضور → نطبق التعديل تلقائياً
+                try:
+                    _type_name = (item.request_type.name if item.request_type else '') or ''
+                    if 'تعديل سجل حضور' in _type_name or 'Attendance Correction' in _type_name:
+                        _form_data = item.form_data or {}
+                        _att_date_str = _form_data.get('attendance_date') or (str(item.start_date) if item.start_date else None)
+                        _correction_type = _form_data.get('correction_type', 'both')
+                        _check_in_str = _form_data.get('correct_check_in')
+                        _check_out_str = _form_data.get('correct_check_out')
+
+                        if _att_date_str:
+                            from datetime import datetime as _dt, date as _date_cls, time as _time_cls
+                            from django.utils import timezone as _tz
+                            from attendance.models import Attendance, AttendanceActionLog
+
+                            try:
+                                _att_date = _date_cls.fromisoformat(_att_date_str)
+                                _att = Attendance._base_manager.filter(
+                                    employee=item.employee,
+                                    date=_att_date,
+                                ).first()
+
+                                if _att:
+                                    _old_data = {
+                                        'check_in_time': str(_att.check_in_time),
+                                        'check_out_time': str(_att.check_out_time),
+                                    }
+
+                                    _tz_local = _tz.get_current_timezone()
+
+                                    if _check_in_str and _correction_type in ('check_in', 'both', 'full_day'):
+                                        try:
+                                            _t = _dt.strptime(_check_in_str, '%H:%M').time()
+                                            _att.check_in_time = _tz.make_aware(
+                                                _dt.combine(_att_date, _t), _tz_local
+                                            )
+                                        except Exception:
+                                            pass
+
+                                    if _check_out_str and _correction_type in ('check_out', 'both', 'full_day'):
+                                        try:
+                                            _t = _dt.strptime(_check_out_str, '%H:%M').time()
+                                            _att.check_out_time = _tz.make_aware(
+                                                _dt.combine(_att_date, _t), _tz_local
+                                            )
+                                        except Exception:
+                                            pass
+
+                                    _att.is_manually_edited = True
+                                    _att.admin_notes = f'[تعديل بموافقة HR] طلب #{item.id}'
+                                    _att.calculate_work_hours()
+                                    _att.save()
+
+                                    AttendanceActionLog._base_manager.create(
+                                        company=_att.company,
+                                        attendance=_att,
+                                        action_type='edit',
+                                        performed_by=user,
+                                        reason=f'تعديل بموافقة HR على طلب #{item.id}',
+                                        old_data=_old_data,
+                                        new_data={
+                                            'check_in_time': str(_att.check_in_time),
+                                            'check_out_time': str(_att.check_out_time),
+                                        },
+                                    )
+
+                                    from attendance.models import DailyAttendanceSummary
+                                    DailyAttendanceSummary.compute_for_day(item.employee, _att_date)
+
+                            except Exception as _err:
+                                import logging
+                                logging.getLogger(__name__).warning(f'attendance correction error: {_err}')
+                except Exception as _ce:
+                    import logging
+                    logging.getLogger(__name__).warning(f'correction hook error: {_ce}')
             else:
                 item.status = 'rejected'
             item.reviewed_by = user
