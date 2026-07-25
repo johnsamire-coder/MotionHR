@@ -1089,6 +1089,26 @@ def mobile_attendance_status(request):
                     remaining = (end_time_dt - now).total_seconds()
                     remaining_seconds = max(0, int(remaining))
                     can_check_out = remaining_seconds <= 0
+                    
+                    # تحسين للشيفت المقسم: السماح بالانصراف لو خلص أي فترة
+                    shift_mode = getattr(shift, 'shift_mode', '') or getattr(shift, 'shift_type', '')
+                    if not can_check_out and shift_mode == 'split_fixed' and hasattr(shift, 'get_shift_periods'):
+                        periods = get_shift_periods(shift, today)
+                        now_time = timezone.localtime(timezone.now()).time()
+                        for p in periods:
+                            p_end = p.get('end_time')
+                            if p_end:
+                                if isinstance(p_end, str):
+                                    from datetime import time
+                                    h, m = p_end.split(':')[:2]
+                                    p_end = time(int(h), int(m))
+                                
+                                # لو الموظف في ميعاد نهاية الفترة (أو بعدها بـ 5 دقايق مثلاً)
+                                # بنقارن الساعات والدقائق
+                                if now_time >= p_end:
+                                    can_check_out = True
+                                    remaining_seconds = 0
+                                    break
     except Exception as e:
         pass
 
