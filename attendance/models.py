@@ -632,6 +632,7 @@ class LateRepeatPenalty(models.Model):
         verbose_name_plural = 'جزاءات تكرار التأخير'
         ordering = ['occurrences']
 
+
 class ShiftAssignment(TenantModel):
     """تعيين الشيفت على مستوى شركة / فرع / قسم / موظف"""
 
@@ -2034,6 +2035,69 @@ class LateNotification(TenantModel):
         return f"{self.employee} - {self.title}"
 
 
+class DisciplinaryRule(models.Model):
+    """قواعد الجزاءات التأديبية في السياسة"""
+
+    VIOLATION_TYPE_CHOICES = [
+        ("late_repeat", "تكرار التأخير"),
+        ("absence_repeat", "تكرار الغياب"),
+        ("early_leave_repeat", "تكرار الانصراف المبكر"),
+        ("policy_violation", "مخالفة لائحة"),
+        ("misconduct", "سوء سلوك"),
+        ("negligence", "إهمال"),
+        ("other", "أخرى"),
+    ]
+
+    PENALTY_TYPE_CHOICES = [
+        ("verbal_warning", "إنذار شفهي"),
+        ("written_warning", "إنذار كتابي"),
+        ("deduction_days", "خصم أيام"),
+        ("deduction_amount", "خصم مبلغ"),
+        ("suspension", "إيقاف عن العمل"),
+    ]
+
+    policy = models.ForeignKey(
+        AttendancePolicy, on_delete=models.CASCADE,
+        related_name="disciplinary_rules",
+        verbose_name="السياسة"
+    )
+    violation_type = models.CharField(
+        max_length=30, choices=VIOLATION_TYPE_CHOICES,
+        default="policy_violation", verbose_name="نوع المخالفة"
+    )
+    occurrence_from = models.IntegerField(
+        default=1, verbose_name="من المرة"
+    )
+    occurrence_to = models.IntegerField(
+        default=1, verbose_name="إلى المرة"
+    )
+    penalty_type = models.CharField(
+        max_length=30, choices=PENALTY_TYPE_CHOICES,
+        default="verbal_warning", verbose_name="نوع الجزاء"
+    )
+    deduction_days = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        verbose_name="أيام الخصم",
+        help_text="0.25=ربع يوم / 0.5=نص يوم / 1=يوم كامل"
+    )
+    deduction_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        verbose_name="مبلغ الخصم الثابت"
+    )
+    description = models.TextField(
+        blank=True, verbose_name="وصف القاعدة"
+    )
+    display_order = models.IntegerField(default=0)
+
+    class Meta:
+        verbose_name = "قاعدة جزاء تأديبي"
+        verbose_name_plural = "قواعد الجزاءات التأديبية"
+        ordering = ["violation_type", "occurrence_from"]
+
+    def __str__(self):
+        return f"{self.get_violation_type_display()} ({self.occurrence_from}-{self.occurrence_to}): {self.get_penalty_type_display()}"
+
+
 class DisciplinaryAction(TenantModel):
     """إجراء تأديبي"""
 
@@ -2082,6 +2146,37 @@ class DisciplinaryAction(TenantModel):
     deduction_created = models.BooleanField(
         default=False,
         verbose_name="تم إنشاء خصم فعلي"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", "معلق"),
+            ("approved", "معتمد"),
+            ("rejected", "مرفوض"),
+            ("cancelled", "ملغي"),
+        ],
+        default="pending",
+        verbose_name="الحالة"
+    )
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="approved_disciplinary_actions",
+        verbose_name="وافق بواسطة"
+    )
+    approved_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name="تاريخ الاعتماد"
+    )
+    payroll_month = models.CharField(
+        max_length=7, blank=True,
+        verbose_name="شهر المرتب",
+        help_text="YYYY-MM"
+    )
+    payroll_applied = models.BooleanField(
+        default=False,
+        verbose_name="تم تطبيقه على المرتب"
     )
     performed_by = models.ForeignKey(
         "accounts.User",

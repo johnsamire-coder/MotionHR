@@ -625,6 +625,8 @@ def _get_bonuses(employee, year, month, lang='ar'):
 def _get_penalties(employee, year, month, lang='ar'):
     total = 0.0
     items = []
+
+    # PayrollPenalty (يدوي من HR)
     try:
         from .payroll_pro_models import PayrollPenalty
         for item in PayrollPenalty.objects.filter(employee=employee, year=year, month=month):
@@ -639,6 +641,35 @@ def _get_penalties(employee, year, month, lang='ar'):
             })
     except Exception:
         pass
+
+    # DisciplinaryAction (جزاءات تأديبية معتمدة)
+    try:
+        from .models import DisciplinaryAction
+        payroll_month_str = f"{year}-{month:02d}"
+        disc_actions = DisciplinaryAction._base_manager.filter(
+            employee=employee,
+            status="approved",
+            payroll_month=payroll_month_str,
+            payroll_applied=False,
+        )
+        for action in disc_actions:
+            amount = _safe_float(action.deduction_amount)
+            if amount > 0:
+                total += amount
+                name_ar = f"جزاء تأديبي - {action.get_action_type_display()}"
+                name_en = f"Disciplinary - {action.get_action_type_display()}"
+                items.append({
+                    'name_ar': name_ar,
+                    'name_en': name_en,
+                    'name': name_en if lang == 'en' else name_ar,
+                    'amount': round(amount, 2),
+                    'reason': action.reason or '',
+                })
+                action.payroll_applied = True
+                action.save(update_fields=["payroll_applied"])
+    except Exception:
+        pass
+
     return round(total, 2), items
 
 
