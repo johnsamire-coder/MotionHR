@@ -1356,6 +1356,48 @@ def policy_api_check_in(request):
         # ═══ Assignment post-processing ═══
         _handle_assignment_checkin(employee, assignment, policy, attendance_obj, now)
 
+        # ═══ Late Incident + HR Notification ═══
+        if late_mins and late_mins > 0:
+            try:
+                from attendance.models import LateIncident, LateNotification
+                from django.db.models import Q
+
+                # احسب رقم الحادثة في الشهر ده
+                incident_count = LateIncident._base_manager.filter(
+                    employee=employee,
+                    month=today.month,
+                    year=today.year,
+                ).count() + 1
+
+                # سجل حادثة التأخير
+                LateIncident._base_manager.create(
+                    company=employee.company,
+                    employee=employee,
+                    attendance=attendance_obj,
+                    date=today,
+                    late_minutes=late_mins,
+                    month=today.month,
+                    year=today.year,
+                    incident_number_in_month=incident_count,
+                    is_excused=False,
+                )
+
+                # ابعت إشعار للـ HR
+                LateNotification._base_manager.create(
+                    company=employee.company,
+                    employee=employee,
+                    notification_type='single_late',
+                    title=f'تأخير موظف - {employee.full_name_ar}',
+                    message=f'الموظف {employee.full_name_ar} تأخر {late_mins} دقيقة اليوم {today}',
+                    details=f'عدد مرات التأخير هذا الشهر: {incident_count}',
+                    suggested_action='مراجعة حالة الموظف واتخاذ الإجراء المناسب',
+                    incident_count=incident_count,
+                    month=today.month,
+                    year=today.year,
+                )
+            except Exception:
+                pass
+
         # لو exception
         if checkin_mode == "exception" and assignment is None:
             from attendance.models import DailyAssignment

@@ -1321,22 +1321,32 @@ def mobile_attendance_status(request):
 
     try:
         from requests_app.models import EmployeeRequest, RequestType
+        from django.db.models import Q
         early_leave_types = RequestType._base_manager.filter(
-            company=employee.company,
-            name__icontains='خروج مبكر'
+            Q(company=employee.company) &
+            (Q(name__icontains='خروج مبكر') | Q(name__icontains='إذن انصراف') | Q(name__icontains='اذن انصراف'))
         ).values_list('id', flat=True)
+        
         if early_leave_types:
-            has_early_leave = EmployeeRequest._base_manager.filter(
+            early_req = EmployeeRequest._base_manager.filter(
                 employee=employee,
                 request_type__id__in=list(early_leave_types),
-                created_at__date=today,
+                start_date=today,
                 status='approved'
-            ).exists()
+            ).order_by('start_time').first()
+            
+            if early_req:
+                has_early_leave = True
+                from django.utils import timezone
+                current_time = timezone.localtime(timezone.now()).time()
+                
+                if early_req.start_time:
+                    if current_time >= early_req.start_time:
+                        can_check_out = True
+                else:
+                    can_check_out = True
     except Exception:
         pass
-
-    if has_early_leave:
-        can_check_out = True
 
     # بيانات الخروج الجزئي
     allow_partial_checkout = False
