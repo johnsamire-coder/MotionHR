@@ -69,6 +69,7 @@ class Employee(TenantModel):
         ('training', 'تدريب'),
         ('freelance', 'حر'),
         ('part_time', 'دوام جزئي'),
+        ('consultant', 'استشاري'),
     ]
     
     STATUS_CHOICES = [
@@ -230,7 +231,27 @@ class Employee(TenantModel):
         verbose_name='تاريخ انتهاء العقد',
         help_text='في حالة العقد المؤقت'
     )
-    
+
+    contract_start_date = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name='تاريخ بداية العقد',
+        help_text='لو فاضي بيتحسب من تاريخ التعيين'
+    )
+
+    contract_duration_months = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name='مدة العقد بالشهور',
+        help_text='للعقود المؤقتة - بديل عن تاريخ الانتهاء'
+    )
+
+    probation_months = models.PositiveSmallIntegerField(
+        default=3,
+        verbose_name='مدة فترة التجربة بالشهور',
+        help_text='0 = لا توجد فترة تجربة'
+    )
+
     branch = models.ForeignKey(
         'companies.Branch',
         on_delete=models.PROTECT,
