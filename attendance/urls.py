@@ -148,6 +148,11 @@ urlpatterns += [
 # ═══════════════════════════════════════
 # Payroll APIs - Phase 3 (v2)
 # ═══════════════════════════════════════
+from .api_disciplinary import (
+    disciplinary_rules, disciplinary_rule_detail,
+    disciplinary_actions, disciplinary_action_review,
+)
+
 from .api_attendance_policy import (
     policy_list_create, policy_detail, policy_approve, policy_assign,
 )
@@ -167,6 +172,12 @@ urlpatterns += [
     path('api/mobile/manager/attendance-policy/<int:policy_id>/', policy_detail),
     path('api/mobile/manager/attendance-policy/<int:policy_id>/approve/', policy_approve),
     path('api/mobile/manager/attendance-policy/<int:policy_id>/assign/', policy_assign),
+
+    # Disciplinary
+    path('api/mobile/manager/disciplinary/actions/', disciplinary_actions),
+    path('api/mobile/manager/disciplinary/actions/<int:action_id>/review/', disciplinary_action_review),
+    path('api/mobile/manager/attendance-policy/<int:policy_id>/disciplinary-rules/', disciplinary_rules),
+    path('api/mobile/manager/attendance-policy/<int:policy_id>/disciplinary-rules/<int:rule_id>/', disciplinary_rule_detail),
 
     path('api/mobile/manager/payroll/summary/', payroll_summary, name='payroll-summary'),
     path('api/mobile/manager/payroll/employee/', payroll_employee_detail, name='payroll-employee'),
