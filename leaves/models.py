@@ -8,6 +8,265 @@ from django.utils import timezone
 from core.models import TenantModel
 
 
+
+class LeavePolicy(TenantModel):
+    """سياسة الإجازات للشركة"""
+
+    ACCRUAL_MODE_CHOICES = [
+        ("annual_lump", "دفعة واحدة أول السنة"),
+        ("monthly", "شهري"),
+    ]
+
+    STATUS_CHOICES = [
+        ("draft", "مسودة"),
+        ("active", "نشط"),
+        ("archived", "مؤرشف"),
+    ]
+
+    name = models.CharField(max_length=200, verbose_name="اسم السياسة")
+    effective_from = models.DateField(verbose_name="سارية من")
+    effective_to = models.DateField(blank=True, null=True, verbose_name="سارية لحد")
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES,
+        default="draft", verbose_name="الحالة"
+    )
+    probation_months = models.PositiveSmallIntegerField(
+        default=3,
+        verbose_name="فترة التجربة بالشهور",
+        help_text="0 = لا توجد فترة تجربة"
+    )
+    probation_leave_mode = models.CharField(
+        max_length=20,
+        choices=[
+            ("blocked", "ممنوع الإجازات"),
+            ("limited_types", "أنواع محددة فقط"),
+            ("accrue_no_use", "يتحسب بس مايتستخدمش"),
+            ("normal", "عادي"),
+        ],
+        default="blocked",
+        verbose_name="الإجازات في فترة التجربة"
+    )
+    accrual_mode = models.CharField(
+        max_length=20, choices=ACCRUAL_MODE_CHOICES,
+        default="annual_lump",
+        verbose_name="طريقة منح الرصيد"
+    )
+    notes = models.TextField(blank=True, verbose_name="ملاحظات")
+    approved_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="approved_leave_policies",
+        verbose_name="وافق بواسطة"
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "سياسة إجازات"
+        verbose_name_plural = "سياسات الإجازات"
+        ordering = ["-effective_from"]
+
+    def __str__(self):
+        return f"{self.name} ({self.effective_from})"
+
+
+class LeavePolicyTier(models.Model):
+    """شريحة مدة الخدمة"""
+
+    policy = models.ForeignKey(
+        LeavePolicy, on_delete=models.CASCADE,
+        related_name="tiers", verbose_name="السياسة"
+    )
+    from_months = models.PositiveSmallIntegerField(
+        default=0, verbose_name="من الشهر"
+    )
+    to_months = models.PositiveSmallIntegerField(
+        blank=True, null=True,
+        verbose_name="لحد الشهر",
+        help_text="فاضي = بلا حد أقصى"
+    )
+    annual_entitlement_days = models.DecimalField(
+        max_digits=5, decimal_places=1,
+        default=21, verbose_name="الاستحقاق السنوي بالأيام"
+    )
+    description = models.TextField(blank=True, verbose_name="وصف الشريحة")
+
+    class Meta:
+        verbose_name = "شريحة خدمة"
+        verbose_name_plural = "شرائح الخدمة"
+        ordering = ["from_months"]
+
+    def __str__(self):
+        to = f"{self.to_months}" if self.to_months else "فأكثر"
+        return f"{self.policy.name}: {self.from_months}-{to} شهر = {self.annual_entitlement_days} يوم"
+
+
+class LeavePolicyTypeRule(models.Model):
+    """قواعد كل نوع إجازة في السياسة"""
+
+    CARRY_MODE_CHOICES = [
+        ("none", "لا ترحيل"),
+        ("all", "ترحيل كامل"),
+        ("percentage", "نسبة فقط"),
+        ("percentage_with_cap", "نسبة بحد أقصى"),
+        ("cash_only", "مقابل نقدي بدون ترحيل"),
+        ("carry_and_cash_remainder", "جزء يترحل والباقي فلوس"),
+    ]
+
+    CASH_BASIS_CHOICES = [
+        ("basic_salary", "المرتب الأساسي"),
+        ("gross_fixed", "الأساسي + البدلات الثابتة"),
+        ("daily_rate", "المعدل اليومي"),
+    ]
+
+    ENTITLEMENT_MODE_CHOICES = [
+        ("from_service_tier", "من شريحة مدة الخدمة"),
+        ("fixed_days", "عدد ثابت"),
+        ("subset_of_parent", "جزء من نوع تاني"),
+    ]
+
+    policy = models.ForeignKey(
+        LeavePolicy, on_delete=models.CASCADE,
+        related_name="type_rules", verbose_name="السياسة"
+    )
+    leave_type = models.ForeignKey(
+        "LeaveType", on_delete=models.CASCADE,
+        related_name="policy_rules", verbose_name="نوع الإجازة"
+    )
+    enabled = models.BooleanField(default=True, verbose_name="مفعّل")
+
+    # مصدر الرصيد
+    entitlement_mode = models.CharField(
+        max_length=20, choices=ENTITLEMENT_MODE_CHOICES,
+        default="from_service_tier",
+        verbose_name="مصدر الرصيد"
+    )
+    fixed_days = models.DecimalField(
+        max_digits=5, decimal_places=1,
+        default=0, verbose_name="عدد أيام ثابت"
+    )
+    parent_leave_type = models.ForeignKey(
+        "LeaveType", on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="child_policy_rules",
+        verbose_name="النوع الأب",
+        help_text="لو الاستحقاق جزء من نوع تاني"
+    )
+    subset_limit_days = models.DecimalField(
+        max_digits=5, decimal_places=1,
+        default=0,
+        verbose_name="الحد الأقصى كجزء من الأب"
+    )
+
+    # قواعد الاستخدام
+    requires_balance = models.BooleanField(
+        default=True, verbose_name="يحتاج رصيد كافي"
+    )
+    allow_negative_balance = models.BooleanField(
+        default=False, verbose_name="مسموح بالسالب"
+    )
+    negative_limit_days = models.DecimalField(
+        max_digits=5, decimal_places=1,
+        default=0, verbose_name="حد الرصيد السالب"
+    )
+    allow_half_day = models.BooleanField(
+        default=True, verbose_name="مسموح بنص يوم"
+    )
+    allow_hourly = models.BooleanField(
+        default=False, verbose_name="مسموح بالساعة"
+    )
+    max_days_per_request = models.PositiveSmallIntegerField(
+        default=0, verbose_name="أقصى أيام في الطلب الواحد",
+        help_text="0 = بلا حد"
+    )
+    max_requests_per_year = models.PositiveSmallIntegerField(
+        default=0, verbose_name="أقصى طلبات في السنة",
+        help_text="0 = بلا حد"
+    )
+    can_use_during_probation = models.BooleanField(
+        default=False, verbose_name="مسموح في فترة التجربة"
+    )
+
+    # سياسة الترحيل
+    carry_mode = models.CharField(
+        max_length=30, choices=CARRY_MODE_CHOICES,
+        default="none", verbose_name="سياسة الترحيل"
+    )
+    carry_percentage = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        default=100, verbose_name="نسبة الترحيل %"
+    )
+    carry_max_days = models.DecimalField(
+        max_digits=5, decimal_places=1,
+        default=0,
+        verbose_name="أقصى أيام ترحيل",
+        help_text="0 = بلا حد"
+    )
+    cash_compensation_enabled = models.BooleanField(
+        default=False, verbose_name="مقابل نقدي مفعّل"
+    )
+    cash_compensation_basis = models.CharField(
+        max_length=20, choices=CASH_BASIS_CHOICES,
+        default="basic_salary",
+        verbose_name="أساس المقابل النقدي"
+    )
+
+    class Meta:
+        verbose_name = "قاعدة نوع إجازة"
+        verbose_name_plural = "قواعد أنواع الإجازات"
+        unique_together = [["policy", "leave_type"]]
+
+    def __str__(self):
+        return f"{self.policy.name} - {self.leave_type.name}"
+
+
+class LeaveBalanceAdjustment(TenantModel):
+    """تعديل يدوي على رصيد الإجازات"""
+
+    ADJUSTMENT_TYPE_CHOICES = [
+        ("opening_balance", "رصيد افتتاحي"),
+        ("manual_add", "إضافة يدوية"),
+        ("manual_deduct", "خصم يدوي"),
+        ("carry_forward", "ترحيل من السنة السابقة"),
+        ("cash_settlement", "تسوية نقدية"),
+        ("policy_reset", "إعادة ضبط من السياسة"),
+    ]
+
+    employee = models.ForeignKey(
+        "employees.Employee", on_delete=models.CASCADE,
+        related_name="leave_balance_adjustments",
+        verbose_name="الموظف"
+    )
+    leave_type = models.ForeignKey(
+        "LeaveType", on_delete=models.CASCADE,
+        related_name="balance_adjustments",
+        verbose_name="نوع الإجازة"
+    )
+    year = models.PositiveSmallIntegerField(verbose_name="السنة")
+    adjustment_type = models.CharField(
+        max_length=20, choices=ADJUSTMENT_TYPE_CHOICES,
+        verbose_name="نوع التعديل"
+    )
+    days = models.DecimalField(
+        max_digits=6, decimal_places=1,
+        verbose_name="عدد الأيام",
+        help_text="موجب = إضافة / سالب = خصم"
+    )
+    reason = models.TextField(blank=True, verbose_name="السبب")
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="leave_balance_adjustments_made",
+        verbose_name="تم بواسطة"
+    )
+
+    class Meta:
+        verbose_name = "تعديل رصيد إجازة"
+        verbose_name_plural = "تعديلات أرصدة الإجازات"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.employee} - {self.leave_type} ({self.year}): {self.days} يوم"
+
 class LeaveType(TenantModel):
     """أنواع الإجازات"""
 
