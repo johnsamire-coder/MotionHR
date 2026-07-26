@@ -193,6 +193,23 @@ def mobile_leave_request(request):
     else:
         days_count = (end - start).days + 1
 
+    # فحص الرصيد للإجازات المدفوعة فقط
+    if leave_type.is_paid:
+        year = start.year
+        balance = LeaveBalance._base_manager.filter(
+            company=employee.company,
+            employee=employee,
+            leave_type=leave_type,
+            year=year,
+        ).first()
+
+        remaining = float(balance.remaining_days) if balance else 0
+        if days_count > remaining:
+            return Response({
+                'success': False,
+                'message': f'رصيدك من {leave_type.name} غير كافي. المتاح: {remaining} يوم، المطلوب: {days_count} يوم'
+            }, status=400)
+
     _half_day_type_val = half_day_type if half_day and half_day_type in ('morning', 'afternoon') else ''
     _leave_hours = 4.0 if half_day else None
 
@@ -957,6 +974,32 @@ def mobile_manager_action(request):
             item.review_notes = notes
             item.save()
 
+            # لو الطلب إذن تأخير أو انصراف مبكر → خصم من رصيد الأذونات
+            if action == 'approve':
+                try:
+                    _kind = getattr(item.request_type, 'permission_kind', 'none')
+                    if _kind in ('late_arrival', 'early_leave'):
+                        from attendance.models import PermissionLedger
+                        _form_data = item.form_data or {}
+                        _duration_hours = float(_form_data.get('duration_hours', 0) or 0)
+                        _minutes = int(_duration_hours * 60)
+                        _ref_date = item.start_date or timezone.localdate()
+
+                        if _minutes > 0:
+                            _kind_label = 'إذن تأخير' if _kind == 'late_arrival' else 'إذن انصراف مبكر'
+                            PermissionLedger._base_manager.create(
+                                company=item.company,
+                                employee=item.employee,
+                                entry_type='manual_request',
+                                minutes_used=_minutes,
+                                count_used=1,
+                                reference_date=_ref_date,
+                                notes=f'{_kind_label} - طلب #{item.id} - {item.request_type.name}',
+                            )
+                except Exception as _le:
+                    import logging
+                    logging.getLogger(__name__).warning(f'PermissionLedger create error: {_le}')
+
             if employee_user:
                 try:
                     if action == 'approve':
@@ -1268,16 +1311,53 @@ def mobile_cancel_request(request, request_id):
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
 
-    if req.status in ('approved', 'hr_approved', 'cancelled', 'rejected'):
+    # فحص إمكانية الإلغاء
+    if req.status in ('cancelled', 'rejected'):
         return Response({
             'success': False,
             'message': f'لا يمكن إلغاء الطلب — حالته: {req.get_status_display()}'
         }, status=400)
 
+    # لو الطلب معتمد، لازم يكون قبل تاريخ التنفيذ
+    if req.status in ('approved', 'hr_approved'):
+        _ref_date = req.start_date or timezone.localdate()
+        _today = timezone.localdate()
+        if _ref_date <= _today:
+            return Response({
+                'success': False,
+                'message': 'لا يمكن إلغاء الإذن بعد تاريخ تنفيذه'
+            }, status=400)
+
     reason = request.data.get('reason', 'إلغاء بواسطة الموظف')
+    _was_approved = req.status in ('approved', 'hr_approved')
     req.status = 'cancelled'
     req.review_notes = f'[إلغاء الموظف] {reason}'
     req.save()
+
+    # لو كان معتمد وإذن (تأخير/انصراف مبكر) → نرجع الرصيد
+    if _was_approved:
+        try:
+            _kind = getattr(req.request_type, 'permission_kind', 'none')
+            if _kind in ('late_arrival', 'early_leave'):
+                from attendance.models import PermissionLedger
+                _form_data = req.form_data or {}
+                _duration_hours = float(_form_data.get('duration_hours', 0) or 0)
+                _minutes = int(_duration_hours * 60)
+                _ref_date = req.start_date or timezone.localdate()
+
+                if _minutes > 0:
+                    PermissionLedger._base_manager.create(
+                        company=req.company,
+                        employee=req.employee,
+                        entry_type='rollback',
+                        minutes_used=-_minutes,
+                        count_used=-1,
+                        reference_date=_ref_date,
+                        notes=f'إلغاء إذن - طلب #{req.id} - {req.request_type.name}',
+                    )
+        except Exception as _le:
+            import logging
+            logging.getLogger(__name__).warning(f'PermissionLedger rollback error: {_le}')
 
     return Response({
         'success': True,
