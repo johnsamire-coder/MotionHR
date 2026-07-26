@@ -1509,6 +1509,51 @@ def flex_adjustment_review(request, adjustment_id):
         adj.review_notes = notes
         adj.save()
 
+        # إشعار الموظف بنتيجة المراجعة
+        try:
+            from accounts.fcm_service import send_notification_to_user
+            employee = adj.employee
+            if hasattr(employee, 'user') and employee.user:
+                lang = getattr(employee, 'language', 'ar') or 'ar'
+                adj_type = getattr(adj, 'adjustment_type', '')
+                day_str = str(adj.date) if hasattr(adj, 'date') else ''
+
+                if action == 'approve':
+                    if lang == 'en':
+                        title = '✅ Flex Adjustment Approved'
+                        body  = f'Your flex day adjustment ({adj_type}) for {day_str} has been approved and will be included in your payroll.'
+                    else:
+                        title = '✅ تمت الموافقة على تسوية الشيفت'
+                        body  = f'تمت الموافقة على تسوية شيفتك ({adj_type}) ليوم {day_str} وستُحتسب في المرتب.'
+                else:
+                    if lang == 'en':
+                        title = '❌ Flex Adjustment Rejected'
+                        body  = f'Your flex day adjustment ({adj_type}) for {day_str} has been rejected.'
+                        if notes:
+                            body += f' Reason: {notes}'
+                    else:
+                        title = '❌ تم رفض تسوية الشيفت'
+                        body  = f'تم رفض تسوية شيفتك ({adj_type}) ليوم {day_str}.'
+                        if notes:
+                            body += f' السبب: {notes}'
+
+                send_notification_to_user(
+                    user=employee.user,
+                    title=title,
+                    body=body,
+                    data={
+                        'type': 'flex_adjustment_reviewed',
+                        'adjustment_id': str(adj.id),
+                        'action': action,
+                        'screen': 'flex_adjustments',
+                    },
+                    title_en=title if lang == 'en' else None,
+                    body_en=body if lang == 'en' else None,
+                )
+        except Exception as _notify_err:
+            import logging
+            logging.getLogger(__name__).warning(f'flex_adjustment notify error: {_notify_err}')
+
         msg = "تمت الموافقة على التسوية وستُحتسب في المرتب" if action == 'approve' else "تم رفض التسوية"
         return Response({"success": True, "message": msg, "status": adj.status})
 
@@ -1722,36 +1767,61 @@ def employee_effective_shift(request, employee_id):
 def _notify_employee_shift_changed(employee, shift, changed_by):
     try:
         from accounts.fcm_service import send_notification_to_user
-        if hasattr(employee, 'user') and employee.user:
-            send_notification_to_user(
-                user=employee.user,
-                title="🔄 تم تحديث شيفتك",
-                body=f"تم تغيير شيفتك إلى: {shift.name} ({shift.start_time} - {shift.end_time})",
-                data={
-                    'type': 'shift_changed',
-                    'shift_id': str(shift.id),
-                    'screen': 'my_shift',
-                }
-            )
+        if not (hasattr(employee, 'user') and employee.user):
+            return
+
+        lang = getattr(employee, 'language', 'ar') or 'ar'
+
+        # وقت الشيفت لو موجود
+        start_str = str(shift.start_time) if shift.start_time else ''
+        end_str   = str(shift.end_time)   if shift.end_time   else ''
+        time_part = f' ({start_str} - {end_str})' if start_str and end_str else ''
+
+        if lang == 'en':
+            title = '🔄 Shift Updated'
+            body  = f'Your shift has been changed to: {shift.name}{time_part}'
+        else:
+            title = '🔄 تم تحديث شيفتك'
+            body  = f'تم تغيير شيفتك إلى: {shift.name}{time_part}'
+
+        send_notification_to_user(
+            user=employee.user,
+            title=title,
+            body=body,
+            data={
+                'type': 'shift_changed',
+                'shift_id': str(shift.id),
+                'screen': 'my_shift',
+            }
+        )
     except Exception:
         pass
 
 
 def _notify_hr_shift_change(employee, shift, requested_by, company):
     try:
-        from accounts.fcm_service import send_notification_to_user
+        from accounts.fcm_service import send_notification_to_user, _get_user_lang
         from accounts.models import User
         emp_name = getattr(employee, "full_name_ar", str(employee))
         hr_users = User.objects.filter(company=company, role__in=['hr_manager', 'company_admin'])
         for hr_user in hr_users:
+            lang = _get_user_lang(hr_user)
+            if lang == 'en':
+                title = '📋 Shift Change Request'
+                body  = f'Employee {emp_name} requested a shift change to: {shift.name}'
+            else:
+                title = '📋 طلب تغيير شيفت'
+                body  = f'طلب تغيير شيفت الموظف {emp_name} إلى: {shift.name}'
             send_notification_to_user(
                 user=hr_user,
-                title="📋 طلب تغيير شيفت",
-                body=f"طلب تغيير شيفت الموظف {emp_name} إلى: {shift.name}",
+                title=title,
+                body=body,
                 data={
                     'type': 'shift_change_request',
                     'screen': 'shift_change_requests',
-                }
+                },
+                title_en='📋 Shift Change Request',
+                body_en=f'Employee {emp_name} requested a shift change to: {shift.name}',
             )
     except Exception:
         pass
@@ -1759,18 +1829,27 @@ def _notify_hr_shift_change(employee, shift, requested_by, company):
 
 def _notify_manager_shift_approved(change_req):
     try:
-        from accounts.fcm_service import send_notification_to_user
+        from accounts.fcm_service import send_notification_to_user, _get_user_lang
         if change_req.requested_by:
             emp_name = getattr(change_req.employee, "full_name_ar", str(change_req.employee))
+            lang = _get_user_lang(change_req.requested_by)
+            if lang == 'en':
+                title = '✅ Shift Change Approved'
+                body  = f'Shift change for {emp_name} to {change_req.new_shift.name} has been approved'
+            else:
+                title = '✅ تمت الموافقة على تغيير الشيفت'
+                body  = f'تمت الموافقة على تغيير شيفت {emp_name} إلى: {change_req.new_shift.name}'
             send_notification_to_user(
                 user=change_req.requested_by,
-                title="✅ تمت الموافقة على تغيير الشيفت",
-                body=f"تمت الموافقة على تغيير شيفت {emp_name} إلى: {change_req.new_shift.name}",
+                title=title,
+                body=body,
                 data={
                     'type': 'shift_change_approved',
                     'request_id': str(change_req.id),
                     'screen': 'shift_change_requests',
-                }
+                },
+                title_en='✅ Shift Change Approved',
+                body_en=f'Shift change for {emp_name} to {change_req.new_shift.name} has been approved',
             )
     except Exception:
         pass
@@ -1778,18 +1857,32 @@ def _notify_manager_shift_approved(change_req):
 
 def _notify_manager_shift_rejected(change_req):
     try:
-        from accounts.fcm_service import send_notification_to_user
+        from accounts.fcm_service import send_notification_to_user, _get_user_lang
         if change_req.requested_by:
             emp_name = getattr(change_req.employee, "full_name_ar", str(change_req.employee))
+            reason = getattr(change_req, 'rejection_reason', '') or ''
+            lang = _get_user_lang(change_req.requested_by)
+            if lang == 'en':
+                title = '❌ Shift Change Rejected'
+                body  = f'Shift change request for {emp_name} was rejected'
+                if reason:
+                    body += f'. Reason: {reason}'
+            else:
+                title = '❌ تم رفض طلب تغيير الشيفت'
+                body  = f'تم رفض طلب تغيير شيفت {emp_name}'
+                if reason:
+                    body += f'. السبب: {reason}'
             send_notification_to_user(
                 user=change_req.requested_by,
-                title="❌ تم رفض طلب تغيير الشيفت",
-                body=f"تم رفض طلب تغيير شيفت {emp_name}. السبب: {change_req.rejection_reason}",
+                title=title,
+                body=body,
                 data={
                     'type': 'shift_change_rejected',
                     'request_id': str(change_req.id),
                     'screen': 'shift_change_requests',
-                }
+                },
+                title_en='❌ Shift Change Rejected',
+                body_en=f'Shift change request for {emp_name} was rejected',
             )
     except Exception:
         pass
@@ -1798,17 +1891,27 @@ def _notify_manager_shift_rejected(change_req):
 def _notify_employee_shift_override(employee, shift, override_date):
     try:
         from accounts.fcm_service import send_notification_to_user
-        if hasattr(employee, 'user') and employee.user:
-            send_notification_to_user(
-                user=employee.user,
-                title="📅 تعديل شيفت استثنائي",
-                body=f"تم تحديد شيفت استثنائي لك في {override_date}: {shift.name}",
-                data={
-                    'type': 'shift_override',
-                    'date': str(override_date),
-                    'screen': 'my_shift',
-                }
-            )
+        if not (hasattr(employee, 'user') and employee.user):
+            return
+        lang = getattr(employee, 'language', 'ar') or 'ar'
+        if lang == 'en':
+            title = '📅 Exceptional Shift Override'
+            body  = f'An exceptional shift has been set for you on {override_date}: {shift.name}'
+        else:
+            title = '📅 تعديل شيفت استثنائي'
+            body  = f'تم تحديد شيفت استثنائي لك في {override_date}: {shift.name}'
+        send_notification_to_user(
+            user=employee.user,
+            title=title,
+            body=body,
+            data={
+                'type': 'shift_override',
+                'date': str(override_date),
+                'screen': 'my_shift',
+            },
+            title_en='📅 Exceptional Shift Override',
+            body_en=f'An exceptional shift has been set for you on {override_date}: {shift.name}',
+        )
     except Exception:
         pass
 

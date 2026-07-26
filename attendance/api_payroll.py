@@ -7,6 +7,7 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.http import HttpResponse
 
 from .payroll_rules import calculate_effective_payroll
 
@@ -318,22 +319,67 @@ def payroll_settings(request):
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
+
 def employee_payslip(request):
     """
     كشف راتب الموظف لنفسه
+    يدعم إرجاع JSON أو ملف PDF
     """
     user = request.user
     year, month = _parse_month(request)
     lang = _get_lang(request)
+    req_format = request.GET.get('format', 'json')
 
     try:
         from employees.models import Employee
-        emp = Employee.objects.get(user=user)
+        emp = Employee._base_manager.get(user=user)
     except Exception:
         return Response({'error': 'Employee not found'}, status=404)
 
     settings = _get_payroll_settings(user)
     payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+
+    if req_format == 'pdf':
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.units import mm
+            from io import BytesIO
+
+            buffer = BytesIO()
+            p = canvas.Canvas(buffer, pagesize=A4)
+            width, height = A4
+
+            # عنوان الكشف
+            p.setFont("Helvetica-Bold", 16)
+            p.drawCentredString(width/2.0, height - 20*mm, f"Payslip - {month}/{year}")
+
+            # بيانات الموظف
+            p.setFont("Helvetica", 12)
+            p.drawString(20*mm, height - 40*mm, f"Employee: {emp.first_name_en or emp.first_name_ar} {emp.last_name_en or emp.last_name_ar}")
+            p.drawString(20*mm, height - 48*mm, f"Department: {emp.department.name_en if emp.department else 'N/A'}")
+
+            # تفاصيل المرتب (مبسط للسرعة والأمان كنسخة أولى)
+            p.drawString(20*mm, height - 60*mm, "--------------------------------------------------")
+            p.drawString(20*mm, height - 70*mm, f"Basic Salary: {payroll.get('basic_salary', 0)}")
+            p.drawString(20*mm, height - 78*mm, f"Total Allowances: + {payroll.get('total_allowances', 0)}")
+            p.drawString(20*mm, height - 86*mm, f"Total Deductions: - {payroll.get('total_deductions', 0)}")
+            
+            p.setFont("Helvetica-Bold", 14)
+            p.drawString(20*mm, height - 100*mm, f"Net Salary: {payroll.get('net_salary', 0)}")
+
+            p.showPage()
+            p.save()
+
+            pdf_bytes = buffer.getvalue()
+            buffer.close()
+
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="payslip_{year}_{month}.pdf"'
+            return response
+        except Exception as e:
+            return Response({'error': f'PDF generation failed: {str(e)}'}, status=500)
+
     return Response({'year': year, 'month': month, 'lang': lang, **payroll})
 
 

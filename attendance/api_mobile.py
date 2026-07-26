@@ -763,6 +763,37 @@ def mobile_attendance_action(request):
     active_shift = get_active_shift(employee, today)
     shift_start, shift_end = get_shift_bounds(active_shift, today)
 
+    # ── تحقق من وقت الشيفت (للحضور فقط) ──
+    if action == 'check_in' and active_shift:
+        attendance_mode = getattr(employee, 'attendance_mode', 'fixed_shift')
+        shift_mode = getattr(active_shift, 'shift_mode', 'fixed') or 'fixed'
+
+        # الشيفت المرن والميداني: مسموح أي وقت
+        # split_fixed: عنده تحقق خاص أسفل
+        skip_time_check = (
+            attendance_mode in ('flexible_hours', 'field_worker')
+            or shift_mode in ('flex_fixed', 'flex_split', 'split_fixed')
+        )
+
+        if not skip_time_check and shift_start and shift_end:
+            from datetime import timedelta
+            allowed_from = shift_start - timedelta(minutes=30)
+
+            if now < allowed_from or now > shift_end:
+                shift_start_str = shift_start.strftime('%H:%M')
+                shift_end_str = shift_end.strftime('%H:%M')
+                return Response({
+                    'success': False,
+                    **bilingual_message(
+                        employee,
+                        f'لا يمكن تسجيل الحضور الآن. الشيفت من {shift_start_str} إلى {shift_end_str} (مسموح الحضور قبل الشيفت بـ 30 دقيقة).',
+                        f'Check-in is not allowed now. Shift is from {shift_start_str} to {shift_end_str} (check-in allowed 30 minutes before shift starts).'
+                    ),
+                    'outside_shift_time': True,
+                    'shift_start': shift_start_str,
+                    'shift_end': shift_end_str,
+                }, status=400)
+
     current_split_period = None
     if action == 'check_in':
         current_split_period = get_current_split_period(active_shift, now)
@@ -1572,12 +1603,19 @@ from accounts.fcm_models import FCMDeviceToken
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_fcm_token_register(request):
-    """حفظ FCM Token للمستخدم"""
+    """حفظ FCM Token للمستخدم — مع refresh تلقائي لو التوكن اتغير"""
     try:
+        user = request.user
         fcm_token = request.data.get('fcm_token', '').strip()
         platform = request.data.get('platform', 'android')
         device_info = request.data.get('device_info', '')
         preferred_language = request.data.get('preferred_language', 'ar')
+
+        if not fcm_token:
+            return Response({
+                'success': False,
+                'message': 'FCM token مطلوب'
+            }, status=400)
 
         # تحديث Employee.language عشان تبقى مصدر الحقيقة للإشعارات
         try:
@@ -1591,26 +1629,32 @@ def mobile_fcm_token_register(request):
             import logging
             logging.getLogger(__name__).warning(f'Employee.language update error: {_lang_err}')
 
-        if not fcm_token:
-            return Response({
-                'success': False,
-                'message': 'FCM token مطلوب'
-            }, status=400)
-
-        user = request.user
-
+        # لو نفس التوكن موجود لحد تاني، امسحه
         FCMDeviceToken.objects.filter(fcm_token=fcm_token).exclude(user=user).delete()
 
-        token_obj, created = FCMDeviceToken.objects.update_or_create(
-            fcm_token=fcm_token,
-            defaults={
-                'user': user,
-                'platform': platform,
-                'device_info': device_info,
-                'preferred_language': preferred_language,
-                'is_active': True,
-            }
-        )
+        # لو عندنا توكن قديم لنفس الـ user على نفس الجهاز، حدّثه
+        # لو التوكن نفسه موجود، update_or_create بالتوكن
+        # لو التوكن اتغير (refresh)، شيل القديم وحط الجديد
+        existing = FCMDeviceToken.objects.filter(user=user, platform=platform).first()
+        if existing and existing.fcm_token != fcm_token:
+            existing.fcm_token = fcm_token
+            existing.device_info = device_info
+            existing.preferred_language = preferred_language
+            existing.is_active = True
+            existing.save(update_fields=['fcm_token', 'device_info', 'preferred_language', 'is_active'])
+            created = False
+            token_obj = existing
+        else:
+            token_obj, created = FCMDeviceToken.objects.update_or_create(
+                fcm_token=fcm_token,
+                defaults={
+                    'user': user,
+                    'platform': platform,
+                    'device_info': device_info,
+                    'preferred_language': preferred_language,
+                    'is_active': True,
+                }
+            )
 
         return Response({
             'success': True,

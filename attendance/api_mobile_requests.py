@@ -25,6 +25,62 @@ def get_employee_for_user(user):
     return Employee._base_manager.filter(user=user).select_related('company').first()
 
 
+ROLE_LABELS_AR = {
+    'direct_manager': 'المدير المباشر',
+    'department_manager': 'مدير القسم',
+    'branch_manager': 'مدير الفرع',
+    'hr_manager': 'مدير الموارد البشرية',
+    'company_admin': 'صاحب الشركة',
+    'skip': '',
+}
+
+
+def get_current_approver_info(req):
+    """يرجع معلومات المسؤول الحالي عن الطلب"""
+    if req.status != 'pending':
+        return None
+
+    try:
+        from requests_app.models import ApprovalFlow
+        flow = ApprovalFlow._base_manager.filter(
+            company=req.company,
+            request_type=req.request_type
+        ).first()
+
+        if not flow:
+            return {
+                'step': 1,
+                'role': 'direct_manager',
+                'role_label': 'المدير المباشر',
+                'approver_name': None,
+            }
+
+        current_step = req.current_step or 1
+        role_field = f'step_{current_step}_role'
+        role = getattr(flow, role_field, 'direct_manager')
+
+        if role == 'skip':
+            return None
+
+        role_label = ROLE_LABELS_AR.get(role, role)
+        approver_name = None
+
+        # نحاول نجيب اسم المدير
+        if role == 'direct_manager':
+            emp = req.employee
+            if emp and emp.direct_manager:
+                approver_name = emp.direct_manager.full_name_ar or emp.direct_manager.user.username
+
+        return {
+            'step': current_step,
+            'role': role,
+            'role_label': role_label,
+            'approver_name': approver_name,
+        }
+    except Exception:
+        return None
+
+
 # ═══════════════════════════════════════════════════
 # الإجازات
 # ═══════════════════════════════════════════════════
@@ -116,6 +172,20 @@ def mobile_leave_request(request):
         return Response({
             'success': False,
             'message': 'تاريخ النهاية لازم يكون بعد تاريخ البداية'
+        }, status=400)
+
+    # فحص التداخل مع إجازات موجودة
+    overlap = LeaveRequest._base_manager.filter(
+        company=employee.company,
+        employee=employee,
+        status__in=['pending', 'approved'],
+        start_date__lte=end,
+        end_date__gte=start,
+    ).exists()
+    if overlap:
+        return Response({
+            'success': False,
+            'message': 'عندك إجازة موجودة بالفعل في نفس الفترة دي'
         }, status=400)
 
     if half_day and start_date == end_date:
@@ -216,9 +286,27 @@ def mobile_my_leaves(request):
             'status_display': lr.get_status_display(),
             'created_at': lr.created_at.strftime('%Y-%m-%d %H:%M') if lr.created_at else '',
             'review_notes': lr.review_notes or '',
+            'current_approver': _get_leave_approver_info(lr) if lr.status == 'pending' else None,
         })
 
     return Response({'success': True, 'items': items, 'leaves': items})
+
+
+def _get_leave_approver_info(leave):
+    """يرجع معلومات المسؤول عن الموافقة على الإجازة"""
+    try:
+        approver_name = None
+        if leave.employee and leave.employee.direct_manager:
+            approver_name = leave.employee.direct_manager.full_name_ar or leave.employee.direct_manager.user.username
+
+        return {
+            'step': 1,
+            'role': 'direct_manager',
+            'role_label': 'المدير المباشر',
+            'approver_name': approver_name,
+        }
+    except Exception:
+        return None
 
 
 # ═══════════════════════════════════════════════════
@@ -576,6 +664,7 @@ def mobile_my_requests(request):
             'status_display': req.get_status_display(),
             'created_at': req.created_at.strftime('%Y-%m-%d %H:%M') if req.created_at else '',
             'review_notes': req.review_notes or '',
+            'current_approver': get_current_approver_info(req),
         })
 
     return Response({'success': True, 'items': items, 'requests': items})
@@ -1118,13 +1207,13 @@ def mobile_edit_request(request, request_id):
     """الموظف يعدّل طلبه لو لسه pending"""
     try:
         from employees.models import Employee
-        employee = Employee.objects.get(user=request.user)
+        employee = Employee._base_manager.get(user=request.user)
     except Exception:
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     try:
         from requests_app.models import EmployeeRequest
-        req = EmployeeRequest.objects.get(id=request_id, employee=employee)
+        req = EmployeeRequest._base_manager.get(id=request_id, employee=employee)
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
 
@@ -1169,13 +1258,13 @@ def mobile_cancel_request(request, request_id):
     """الموظف يلغي طلبه لو لسه pending أو manager_approved"""
     try:
         from employees.models import Employee
-        employee = Employee.objects.get(user=request.user)
+        employee = Employee._base_manager.get(user=request.user)
     except Exception:
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     try:
         from requests_app.models import EmployeeRequest
-        req = EmployeeRequest.objects.get(id=request_id, employee=employee)
+        req = EmployeeRequest._base_manager.get(id=request_id, employee=employee)
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
 
@@ -1207,13 +1296,13 @@ def mobile_edit_leave(request, leave_id):
     """الموظف يعدّل طلب إجازته لو لسه pending"""
     try:
         from employees.models import Employee
-        employee = Employee.objects.get(user=request.user)
+        employee = Employee._base_manager.get(user=request.user)
     except Exception:
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     try:
-        from requests_app.models import LeaveRequest
-        leave = LeaveRequest.objects.get(id=leave_id, employee=employee)
+        from leaves.models import LeaveRequest
+        leave = LeaveRequest._base_manager.get(id=leave_id, employee=employee)
     except Exception:
         return Response({'success': False, 'message': 'طلب الإجازة غير موجود'}, status=404)
 
@@ -1249,13 +1338,13 @@ def mobile_cancel_leave(request, leave_id):
     """الموظف يلغي طلب إجازته لو لسه pending"""
     try:
         from employees.models import Employee
-        employee = Employee.objects.get(user=request.user)
+        employee = Employee._base_manager.get(user=request.user)
     except Exception:
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     try:
-        from requests_app.models import LeaveRequest
-        leave = LeaveRequest.objects.get(id=leave_id, employee=employee)
+        from leaves.models import LeaveRequest
+        leave = LeaveRequest._base_manager.get(id=leave_id, employee=employee)
     except Exception:
         return Response({'success': False, 'message': 'طلب الإجازة غير موجود'}, status=404)
 
@@ -1290,7 +1379,7 @@ def manager_edit_request(request, request_id):
 
     try:
         from requests_app.models import EmployeeRequest
-        req = EmployeeRequest.objects.get(id=request_id)
+        req = EmployeeRequest._base_manager.get(id=request_id)
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
 
@@ -1344,7 +1433,7 @@ def manager_cancel_request(request, request_id):
 
     try:
         from requests_app.models import EmployeeRequest
-        req = EmployeeRequest.objects.get(id=request_id)
+        req = EmployeeRequest._base_manager.get(id=request_id)
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
 
@@ -1380,7 +1469,7 @@ def manager_reopen_request(request, request_id):
 
     try:
         from requests_app.models import EmployeeRequest
-        req = EmployeeRequest.objects.get(id=request_id)
+        req = EmployeeRequest._base_manager.get(id=request_id)
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
 
@@ -1420,8 +1509,8 @@ def manager_edit_leave(request, leave_id):
         return Response({'success': False, 'message': 'غير مصرح'}, status=403)
 
     try:
-        from requests_app.models import LeaveRequest
-        leave = LeaveRequest.objects.get(id=leave_id)
+        from leaves.models import LeaveRequest
+        leave = LeaveRequest._base_manager.get(id=leave_id)
     except Exception:
         return Response({'success': False, 'message': 'طلب الإجازة غير موجود'}, status=404)
 
@@ -1460,8 +1549,8 @@ def manager_cancel_leave(request, leave_id):
         return Response({'success': False, 'message': 'غير مصرح'}, status=403)
 
     try:
-        from requests_app.models import LeaveRequest
-        leave = LeaveRequest.objects.get(id=leave_id)
+        from leaves.models import LeaveRequest
+        leave = LeaveRequest._base_manager.get(id=leave_id)
     except Exception:
         return Response({'success': False, 'message': 'طلب الإجازة غير موجود'}, status=404)
 

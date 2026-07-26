@@ -21,11 +21,16 @@ def _get_shift_for_date(employee, target_date):
 
 
 def _calc_late_minutes(shift, att):
-    """يحسب دقائق التأخير بناءً على الشيفت الفعلي"""
+    """يحسب دقائق التأخير بناءً على الشيفت الفعلي وطبيعة الموظف"""
     if not shift or not att or not att.check_in_time:
         return 0
 
-    # الشيفت المرن: مفيش تأخير بالوقت — المهم الساعات (بتتحسب في FlexDayAdjustment)
+    employee = getattr(att, 'employee', None)
+    if employee:
+        mode = getattr(employee, 'attendance_mode', 'fixed_shift')
+        if mode in ('flexible_hours', 'field_worker'):
+            return 0
+
     shift_mode = getattr(shift, 'shift_mode', '') or ''
     if shift_mode in ('flex_fixed', 'flex_split'):
         return 0
@@ -814,6 +819,7 @@ def _upsert_flex_adjustment(employee, att, day_shift, actual_hours):
                 adjustment_type=adj_type,
                 status='pending',
             )
+            _notify_hr_flex_pending(employee, adj_type, target_date, delta, company)
         else:
             FlexDayAdjustment._base_manager.create(
                 company=company,
@@ -827,10 +833,49 @@ def _upsert_flex_adjustment(employee, att, day_shift, actual_hours):
                 adjustment_type=adj_type,
                 status='pending',
             )
+            _notify_hr_flex_pending(employee, adj_type, target_date, delta, company)
 
     except Exception as _e:
         import logging
         logging.getLogger(__name__).warning(f'_upsert_flex_adjustment error: {_e}')
+
+
+def _notify_hr_flex_pending(employee, adj_type, target_date, delta, company):
+    """إشعار الـ HR/Manager لما يتعمل FlexDayAdjustment pending جديد"""
+    try:
+        from accounts.fcm_service import send_notification_to_managers
+        emp_name = f"{getattr(employee, 'first_name_ar', '')} {getattr(employee, 'last_name_ar', '')}".strip()
+        if not emp_name:
+            emp_name = str(employee)
+
+        delta_abs = abs(round(delta, 2))
+        day_str = str(target_date)
+
+        if adj_type == 'overtime':
+            title_ar = '⏰ طلب أوفر تايم مرن'
+            body_ar  = f'الموظف {emp_name} اشتغل {delta_abs} ساعة زيادة يوم {day_str} — في انتظار موافقتك'
+            title_en = '⏰ Flex Overtime Request'
+            body_en  = f'Employee {emp_name} worked {delta_abs} extra hours on {day_str} — awaiting your approval'
+        else:
+            title_ar = '⚠️ نقص ساعات مرن'
+            body_ar  = f'الموظف {emp_name} اشتغل {delta_abs} ساعة أقل يوم {day_str} — في انتظار موافقتك'
+            title_en = '⚠️ Flex Shortage Request'
+            body_en  = f'Employee {emp_name} worked {delta_abs} fewer hours on {day_str} — awaiting your approval'
+
+        send_notification_to_managers(
+            company=company,
+            title=title_ar,
+            body=body_ar,
+            data={
+                'type': 'flex_adjustment_pending',
+                'screen': 'flex_adjustments',
+            },
+            title_en=title_en,
+            body_en=body_en,
+        )
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).warning(f'_notify_hr_flex_pending error: {_e}')
 
 
 def _apply_permission_balance(employee, late_minutes, reference_date, policy):
@@ -1339,6 +1384,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 _no_policy_totals['night'] += 1
             if dd.get('is_weekend_work'):
                 _no_policy_totals['weekend'] += 1
+
+    _approved_late_min = 0
 
     # نجمع الناتج من كل السياسات
     late_deduction = 0.0

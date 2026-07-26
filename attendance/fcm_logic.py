@@ -3,59 +3,37 @@ from firebase_admin import credentials, messaging
 from accounts.fcm_models import FCMDeviceToken, NotificationLog
 
 def send_fcm_notification(user, title, body, data=None, title_en=None, body_en=None):
-    key_path = "/var/www/motionhr/firebase-key.json"
-
-    if not firebase_admin._apps:
-        cred = credentials.Certificate(key_path)
-        firebase_admin.initialize_app(cred)
-
-    # سجل الإشعار دائمًا عشان يظهر في شاشة الإشعارات والـ Badge
+    """Wrapper على الخدمة المركزية عشان اللغة تبقى من Employee.language"""
     try:
-        NotificationLog.objects.create(
+        from accounts.fcm_service import send_notification_to_user
+        result = send_notification_to_user(
             user=user,
             title=title,
             body=body,
-            notification_type=(data or {}).get('type', 'general'),
+            data=data,
+            title_en=title_en,
+            body_en=body_en,
         )
-    except Exception as e:
-        print(f"NotificationLog Error: {e}")
-
-    tokens = list(
-        FCMDeviceToken.objects.filter(user=user).values_list('fcm_token', flat=True)
-    )
-
-    if not tokens:
-        return False
-
-    messages = [
-        messaging.Message(
-            notification=messaging.Notification(title=title, body=body),
-            token=token,
-            data=data or {}
-        )
-        for token in tokens
-    ]
-
-    try:
-        messaging.send_each(messages)
-        return True
+        return bool(result.get('success'))
     except Exception as e:
         print(f"FCM Error: {e}")
         return False
 
 def notify_managers(title, body, data=None, company=None, title_en=None, body_en=None):
-    from accounts.models import User
-
-    managers = User.objects.filter(role__in=['super_admin', 'admin', 'company_admin', 'hr_manager', 'manager'], is_active=True)
-
-    if company is not None:
-        try:
-            managers = managers.filter(company=company)
-        except Exception:
-            pass
-
-    for manager in managers:
-        send_fcm_notification(manager, title, body, data, title_en, body_en)
+    """Wrapper على الخدمة المركزية للمديرين"""
+    try:
+        from accounts.fcm_service import send_notification_to_managers
+        return send_notification_to_managers(
+            company=company,
+            title=title,
+            body=body,
+            data=data,
+            title_en=title_en,
+            body_en=body_en,
+        )
+    except Exception as e:
+        print(f"Notify managers error: {e}")
+        return {"success": False, "sent": 0}
 
 # ========================
 # إشعارات الحضور والانصراف

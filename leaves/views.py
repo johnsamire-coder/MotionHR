@@ -170,7 +170,18 @@ def leave_request_add(request):
             else:
                 days = (end - start).days + 1
 
-                lr = LeaveRequest(company=company)
+                # فحص التداخل مع إجازات موجودة
+                overlap = LeaveRequest.objects.filter(
+                    company=company,
+                    employee=get_object_or_404(Employee, pk=employee_id, company=company),
+                    status__in=['pending', 'approved'],
+                    start_date__lte=end,
+                    end_date__gte=start,
+                ).exists()
+                if overlap:
+                    messages.error(request, "الموظف عنده إجازة موجودة بالفعل في نفس الفترة دي")
+                else:
+                    lr = LeaveRequest(company=company)
                 lr.employee    = get_object_or_404(Employee, pk=employee_id, company=company)
                 lr.leave_type  = get_object_or_404(LeaveType, pk=leave_type_id, company=company)
                 lr.start_date  = start

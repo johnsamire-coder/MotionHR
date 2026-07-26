@@ -4,3 +4,6 @@ class LeavesConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "leaves"
     verbose_name = "الإجازات"
+
+    def ready(self):
+        import leaves.signals  # noqa
