@@ -1337,7 +1337,6 @@ def mobile_attendance_status(request):
             
             if early_req:
                 has_early_leave = True
-                from django.utils import timezone
                 current_time = timezone.localtime(timezone.now()).time()
                 
                 if early_req.start_time:
