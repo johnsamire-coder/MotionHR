@@ -1470,3 +1470,53 @@ comprehensive_profile = employee_comprehensive_profile
 folder = employee_folder
 folder_upload = employee_folder_upload
 folder_delete = employee_folder_delete
+
+from django.core.management import call_command
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.conf import settings
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, parser_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.parsers import MultiPartParser
+from rest_framework.response import Response
+import os
+
+@api_view(['POST'])
+@parser_classes([MultiPartParser])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def import_employees_excel(request):
+    """استقبال ملف الإكسيل وتشغيل أمر الاستيراد"""
+    # التأكد إنه HR أو Admin
+    if request.user.role not in ['super_admin', 'company_admin', 'hr_manager'] and not request.user.is_superuser:
+        return Response({'success': False, 'message': 'غير مصرح لك بهذا الإجراء'}, status=403)
+
+    file_obj = request.FILES.get('file')
+    send_emails = request.data.get('send_emails') == 'true'
+
+    if not file_obj:
+        return Response({'success': False, 'message': 'لم يتم إرسال ملف'}, status=400)
+
+    # حفظ الملف مؤقتاً
+    path = default_storage.save('tmp/import_temp.xlsx', ContentFile(file_obj.read()))
+    full_path = os.path.join(settings.MEDIA_ROOT, path)
+
+    try:
+        # تشغيل الـ Command اللي عملناه
+        from io import StringIO
+        out = StringIO()
+        call_command('import_employees_bulk', file=full_path, send_emails=send_emails, stdout=out)
+        result = out.getvalue()
+
+        return Response({
+            'success': True,
+            'message': 'اكتملت عملية المعالجة',
+            'details': result
+        })
+    except Exception as e:
+        return Response({'success': False, 'message': f'حدث خطأ أثناء المعالجة: {str(e)}'})
+    finally:
+        # مسح الملف المؤقت
+        if os.path.exists(full_path):
+            os.remove(full_path)

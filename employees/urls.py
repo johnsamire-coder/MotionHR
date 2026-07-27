@@ -4,6 +4,7 @@ from . import views
 app_name = 'employees'
 
 urlpatterns = [
+    path('api/mobile/import-excel/', views.import_employees_excel, name='import-excel'),
     path('<int:pk>/folder/<int:doc_id>/delete/', views.employee_folder_delete, name='folder_delete'),
     path('<int:pk>/folder/upload/', views.employee_folder_upload, name='folder_upload'),
     path('<int:pk>/folder/', views.employee_folder, name='folder'),
@@ -36,6 +37,7 @@ urlpatterns = [
 # ═════════════════════════════════════════════════════════════
 
 legacy_employee_urlpatterns = [
+    path('api/mobile/import-excel/', views.import_employees_excel, name='import-excel'),
     path('', views.employee_list, name='employee_list'),
 
     path('add/', views.employee_add, name='employee_add'),
