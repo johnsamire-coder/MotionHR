@@ -5,6 +5,7 @@ app_name = 'employees'
 
 urlpatterns = [
     path('api/mobile/import-excel/', views.import_employees_excel, name='import-excel'),
+    path('api/mobile/import-template/', views.download_employee_template, name='import-template'),
     path('<int:pk>/folder/<int:doc_id>/delete/', views.employee_folder_delete, name='folder_delete'),
     path('<int:pk>/folder/upload/', views.employee_folder_upload, name='folder_upload'),
     path('<int:pk>/folder/', views.employee_folder, name='folder'),

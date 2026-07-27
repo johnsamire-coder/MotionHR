@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.utils.crypto import get_random_string
@@ -1481,6 +1481,31 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 import os
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def download_employee_template(request):
+    """تنزيل شيت استيراد الموظفين"""
+    if request.user.role not in ['super_admin', 'company_admin', 'hr_manager'] and not request.user.is_superuser:
+        return Response({'success': False, 'message': 'غير مصرح لك بهذا الإجراء'}, status=403)
+
+    from django.core.management import call_command
+    import os
+
+    template_path = os.path.join(settings.MEDIA_ROOT, 'employee_import_template.xlsx')
+
+    if not os.path.exists(template_path):
+        call_command('generate_employee_template', output=template_path)
+
+    response = FileResponse(
+        open(template_path, 'rb'),
+        as_attachment=True,
+        filename='employee_import_template.xlsx'
+    )
+    return response
+
 
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
