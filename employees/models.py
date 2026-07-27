@@ -1025,3 +1025,24 @@ class EmployeeFolder(models.Model):
                 pass
         super().save(*args, **kwargs)
 
+
+
+class ImportLog(TenantModel, TimeStampedModel):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='import_logs', verbose_name='المستخدم')
+    file = models.FileField(upload_to='import_logs/%Y/%m/', verbose_name='الملف المرفوع', max_length=500)
+    original_filename = models.CharField(max_length=255, verbose_name='اسم الملف الأصلي', blank=True, null=True)
+    status = models.CharField(max_length=20, default='completed', verbose_name='حالة الاستيراد')
+    
+    # النتائج
+    created_count = models.IntegerField(default=0, verbose_name='عدد الموظفين الجدد')
+    updated_count = models.IntegerField(default=0, verbose_name='عدد الموظفين المحدثين')
+    error_count = models.IntegerField(default=0, verbose_name='عدد الأخطاء')
+    details = models.JSONField(default=dict, blank=True, null=True, verbose_name='تفاصيل الاستيراد')
+
+    class Meta:
+        verbose_name = 'سجل الاستيراد'
+        verbose_name_plural = 'سجلات الاستيراد'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"استيراد {self.created_at.strftime('%Y-%m-%d %H:%M')} - {self.company.name}"

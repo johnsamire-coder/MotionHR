@@ -1530,11 +1530,15 @@ def import_employees_excel(request):
     try:
         from io import StringIO
         import re as _re
+        from datetime import timedelta
+        from django.utils import timezone as tz
+        from employees.models import ImportLog
+
         out = StringIO()
         call_command('import_employees_bulk', file=full_path, send_emails=send_emails, stdout=out)
         raw = out.getvalue()
 
-        # استخراج الأرقام من سطر "تم الانتهاء"
+        # استخراج الأرقام
         created  = 0
         updated  = 0
         errors   = 0
@@ -1544,15 +1548,51 @@ def import_employees_excel(request):
             updated = int(m.group(2))
             errors  = int(m.group(3))
 
-        # استخراج تفاصيل الأخطاء والنجاحات
         lines = [l.strip() for l in raw.splitlines() if l.strip()]
         success_lines = [l for l in lines if "تم إنشاء" in l or "تم تحديث" in l]
-        error_lines   = [l for l in lines if "فشل" in l or "خطأ" in l or "تحذير" in l or "لم يتم" in l or "ناقص" in l or "إجباري" in l]
+        error_lines   = [l for l in lines if "فشل" in l or "خطأ" in l or "لم يتم" in l or "إجباري" in l]
 
         has_zero_results = (created == 0 and updated == 0 and errors == 0)
 
+        # حفظ السجل في ImportLog
+        from companies.models import Company
+        company = Company.objects.filter(
+            id=request.user.company_id
+        ).first() if hasattr(request.user, 'company_id') else Company.objects.first()
+
+        import_log = ImportLog.objects.create(
+            company=company,
+            user=request.user,
+            file=path,
+            original_filename=file_obj.name,
+            status='completed',
+            created_count=created,
+            updated_count=updated,
+            error_count=errors,
+            details={
+                'success_lines': success_lines,
+                'error_lines':   error_lines,
+                'raw':           raw,
+            }
+        )
+
+        # حذف السجلات القديمة أكتر من 3 أيام
+        cutoff = tz.now() - timedelta(days=3)
+        old_logs = ImportLog.objects.filter(
+            company=company,
+            created_at__lt=cutoff
+        )
+        for log in old_logs:
+            try:
+                if log.file:
+                    log.file.delete(save=False)
+            except Exception:
+                pass
+            log.delete()
+
         return Response({
             'success': True,
+            'import_log_id': import_log.id,
             'created': created,
             'updated': updated,
             'errors':  errors,
@@ -1564,5 +1604,49 @@ def import_employees_excel(request):
     except Exception as e:
         return Response({'success': False, 'message': f'حدث خطأ أثناء المعالجة: {str(e)}'})
     finally:
-        if os.path.exists(full_path):
-            os.remove(full_path)
+        pass  # الملف محفوظ في ImportLog مش بيتحذف
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def import_logs_list(request):
+    """جلب سجلات الاستيراد لآخر 3 أيام"""
+    if request.user.role not in ['super_admin', 'company_admin', 'hr_manager'] and not request.user.is_superuser:
+        return Response({'success': False, 'message': 'غير مصرح'}, status=403)
+
+    from employees.models import ImportLog
+    from datetime import timedelta
+    from django.utils import timezone as tz
+    from companies.models import Company
+
+    company = Company.objects.filter(
+        id=request.user.company_id
+    ).first() if hasattr(request.user, 'company_id') else Company.objects.first()
+
+    cutoff = tz.now() - timedelta(days=3)
+    logs = ImportLog.objects.filter(
+        company=company,
+        created_at__gte=cutoff
+    ).order_by('-created_at')
+
+    data = []
+    for log in logs:
+        data.append({
+            'id': log.id,
+            'original_filename': log.original_filename,
+            'created_at': log.created_at.strftime('%Y-%m-%d %H:%M'),
+            'uploaded_by': log.user.get_full_name() if log.user else 'غير معروف',
+            'created_count': log.created_count,
+            'updated_count': log.updated_count,
+            'error_count': log.error_count,
+            'status': log.status,
+            'file_url': request.build_absolute_uri(log.file.url) if log.file else None,
+            'details': log.details,
+        })
+
+    return Response({
+        'success': True,
+        'logs': data,
+        'count': len(data),
+    })
