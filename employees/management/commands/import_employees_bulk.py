@@ -380,17 +380,30 @@ class Command(BaseCommand):
         dept_name   = _str(row, "department_name")
         job_name    = _str(row, "job_title_name")
 
-        branch = Branch.objects.filter(company=company, name_ar=branch_name).first()
-        if not branch:
-            raise ValueError(f"الفرع [{branch_name}] غير موجود في السيستم")
+        created_defs = []
 
-        dept = Department.objects.filter(company=company, branch=branch, name_ar=dept_name).first()
-        if not dept:
-            raise ValueError(f"القسم [{dept_name}] غير موجود في السيستم")
+        branch, branch_created = Branch.objects.get_or_create(
+            company=company,
+            name_ar=branch_name,
+        )
+        if branch_created:
+            created_defs.append(f"صف {idx}: تم إنشاء فرع جديد [{branch_name}]")
 
-        job = JobTitle.objects.filter(company=company, department=dept, name_ar=job_name).first()
-        if not job:
-            raise ValueError(f"المسمى الوظيفي [{job_name}] غير موجود في السيستم")
+        dept, dept_created = Department.objects.get_or_create(
+            company=company,
+            branch=branch,
+            name_ar=dept_name,
+        )
+        if dept_created:
+            created_defs.append(f"صف {idx}: تم إنشاء قسم جديد [{dept_name}] داخل الفرع [{branch_name}]")
+
+        job, job_created = JobTitle.objects.get_or_create(
+            company=company,
+            department=dept,
+            name_ar=job_name,
+        )
+        if job_created:
+            created_defs.append(f"صف {idx}: تم إنشاء مسمى وظيفي جديد [{job_name}] داخل القسم [{dept_name}]")
 
         manager = self._resolve_manager(company, _str(row, "direct_manager_name"), _str(row, "direct_manager_department"))
 
@@ -492,6 +505,9 @@ class Command(BaseCommand):
                 used_days=used,
                 pending_days=0,
             )
+
+        for msg in created_defs:
+            self.stdout.write(self.style.SUCCESS(msg))
 
         self.stdout.write(self.style.SUCCESS(f"صف {idx}: تم إنشاء الموظف [{fname_ar} {lname_ar}] بنجاح"))
 
