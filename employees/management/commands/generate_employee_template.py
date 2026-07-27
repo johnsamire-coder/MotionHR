@@ -8,6 +8,7 @@ from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter
+from openpyxl.formatting.rule import FormulaRule
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -294,6 +295,73 @@ class Command(BaseCommand):
         ws.row_dimensions[2].height = 45
         ws.row_dimensions[3].height = 20
         ws.freeze_panes = "A4"
+
+        # ─────────────────────────────────────────
+        # Conditional Formatting — مطلوب / غير مطلوب
+        # ─────────────────────────────────────────
+        # بنحدد أعمدة الـ keys المهمة من COLUMNS
+        col_map = {col[0]: idx for idx, col in enumerate(COLUMNS, start=1)}
+
+        # طريقة القبض
+        pay_col = get_column_letter(col_map.get("salary_payment_method", 0))
+
+        # لون برتقالي للحقول المطلوبة حسب طريقة القبض
+        orange_fill = PatternFill(start_color="FFE0B2", end_color="FFE0B2", fill_type="solid")
+        # لون رمادي للحقول غير المطلوبة
+        grey_fill   = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
+
+        bank_cols  = ["bank_name", "bank_account", "bank_account_holder_name", "iban"]
+        insta_cols = ["instapay_transfer_id"]
+        wallet_cols = ["wallet_transfer_number", "wallet_provider"]
+
+        for key_list, condition in [
+            (bank_cols,   f'{pay_col}4="bank"'),
+            (insta_cols,  f'{pay_col}4="instapay"'),
+            (wallet_cols, f'{pay_col}4="wallet"'),
+        ]:
+            for key in key_list:
+                c_idx = col_map.get(key)
+                if not c_idx:
+                    continue
+                cl = get_column_letter(c_idx)
+                rng = f"{cl}4:{cl}10000"
+                # مطلوب = برتقالي
+                ws.conditional_formatting.add(
+                    rng,
+                    FormulaRule(
+                        formula=[f"${pay_col}4={condition.split(chr(61))[1]}"],
+                        fill=orange_fill,
+                    )
+                )
+                # غير مطلوب = رمادي
+                ws.conditional_formatting.add(
+                    rng,
+                    FormulaRule(
+                        formula=[f"NOT(${pay_col}4={condition.split(chr(61))[1]})"],
+                        fill=grey_fill,
+                    )
+                )
+
+        # التأمين
+        ins_col = get_column_letter(col_map.get("has_insurance", 0))
+        ins_num_col = col_map.get("insurance_number")
+        if ins_num_col:
+            cl = get_column_letter(ins_num_col)
+            rng = f"{cl}4:{cl}10000"
+            ws.conditional_formatting.add(
+                rng,
+                FormulaRule(
+                    formula=[f'${ins_col}4="نعم"'],
+                    fill=orange_fill,
+                )
+            )
+            ws.conditional_formatting.add(
+                rng,
+                FormulaRule(
+                    formula=[f'NOT(${ins_col}4="نعم")'],
+                    fill=grey_fill,
+                )
+            )
 
     # ─────────────────────────────────────────
     def _create_definitions_sheet(self, wb):
