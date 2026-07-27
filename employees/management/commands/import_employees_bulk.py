@@ -24,73 +24,74 @@ from django.conf import settings
 # خريطة الأعمدة الثابتة — index يبدأ من 0
 # ═══════════════════════════════════════════════════════
 C = {
-    "operation_type":             0,
-    "employee_code":              1,
-    "temporary_password":         2,
-    "first_name_ar":              3,
-    "middle_name_ar":             4,
-    "last_name_ar":               5,
-    "first_name_en":              6,
-    "last_name_en":               7,
-    "national_id":                8,
-    "passport_number":            9,
-    "birth_date":                 10,
-    "gender":                     11,
-    "marital_status":             12,
-    "religion":                   13,
-    "nationality":                14,
-    "language":                   15,
-    "country_code":               16,
-    "phone":                      17,
-    "phone2":                     18,
-    "email":                      19,
-    "address":                    20,
-    "city":                       21,
-    "emergency_contact_name":     22,
+    "operation_type": 0,
+    "employee_code": 1,
+    "temporary_password": 2,
+    "first_name_ar": 3,
+    "middle_name_ar": 4,
+    "last_name_ar": 5,
+    "first_name_en": 6,
+    "last_name_en": 7,
+    "national_id": 8,
+    "passport_number": 9,
+    "birth_date": 10,
+    "gender": 11,
+    "marital_status": 12,
+    "religion": 13,
+    "nationality": 14,
+    "language": 15,
+    "country_code": 16,
+    "phone": 17,
+    "phone2": 18,
+    "email": 19,
+    "address": 20,
+    "city": 21,
+    "emergency_contact_name": 22,
     "emergency_contact_relation": 23,
-    "emergency_contact_phone":    24,
-    "branch_name":                25,
-    "department_name":            26,
-    "job_title_name":             27,
-    "direct_manager_name":        28,
-    "hire_date":                  29,
-    "attendance_mode":            30,
-    "status":                     31,
-    "contract_type":              32,
-    "contract_start_date":        33,
-    "contract_end_date":          34,
-    "contract_duration_months":   35,
-    "probation_months":           36,
-    "has_insurance":              37,
-    "insurance_number":           38,
-    "basic_salary":               39,
-    "currency":                   40,
-    "salary_payment_method":      41,
-    "bank_name":                  42,
-    "bank_account":               43,
-    "bank_account_holder_name":   44,
-    "iban":                       45,
-    "instapay_transfer_id":       46,
-    "wallet_transfer_number":     47,
-    "wallet_provider":            48,
-    "annual_entitled":            49,
-    "annual_used_before_system":  50,
-    "annual_carry_forward":       51,
-    "sick_entitled":              52,
-    "sick_used_before_system":    53,
-    "sick_carry_forward":         54,
-    "emergency_entitled":         55,
-    "emergency_used_before_system": 56,
-    "emergency_carry_forward":    57,
-    "maternity_entitled":         58,
-    "maternity_used_before_system": 59,
-    "maternity_carry_forward":    60,
-    "paternity_entitled":         61,
-    "paternity_used_before_system": 62,
-    "paternity_carry_forward":    63,
-    "unpaid_entitled":            64,
-    "unpaid_used_before_system":  65,
-    "unpaid_carry_forward":       66,
+    "emergency_contact_phone": 24,
+    "branch_name": 25,
+    "department_name": 26,
+    "job_title_name": 27,
+    "direct_manager_department": 28,
+    "direct_manager_name": 29,
+    "hire_date": 30,
+    "attendance_mode": 31,
+    "status": 32,
+    "contract_type": 33,
+    "contract_start_date": 34,
+    "contract_end_date": 35,
+    "contract_duration_months": 36,
+    "probation_months": 37,
+    "has_insurance": 38,
+    "insurance_number": 39,
+    "basic_salary": 40,
+    "currency": 41,
+    "salary_payment_method": 42,
+    "bank_name": 43,
+    "bank_account": 44,
+    "bank_account_holder_name": 45,
+    "iban": 46,
+    "instapay_transfer_id": 47,
+    "wallet_transfer_number": 48,
+    "wallet_provider": 49,
+    "annual_entitled": 50,
+    "annual_used_before_system": 51,
+    "annual_carry_forward": 52,
+    "sick_entitled": 53,
+    "sick_used_before_system": 54,
+    "sick_carry_forward": 55,
+    "emergency_entitled": 56,
+    "emergency_used_before_system": 57,
+    "emergency_carry_forward": 58,
+    "maternity_entitled": 59,
+    "maternity_used_before_system": 60,
+    "maternity_carry_forward": 61,
+    "paternity_entitled": 62,
+    "paternity_used_before_system": 63,
+    "paternity_carry_forward": 64,
+    "unpaid_entitled": 65,
+    "unpaid_used_before_system": 66,
+    "unpaid_carry_forward": 67,
 }
 
 LEAVE_COLS = {
@@ -314,9 +315,41 @@ class Command(BaseCommand):
         return errors
 
     # ─────────────────────────────────────────
-    def _resolve_manager(self, company, manager_name):
+    def _resolve_manager(self, company, manager_name, manager_department=None):
         if not manager_name:
             return None
+
+        employees = Employee._base_manager.filter(company=company).select_related("department")
+
+        full_matches = [
+            e for e in employees
+            if f"{e.first_name_ar} {e.last_name_ar}".strip() == manager_name
+        ]
+
+        if manager_department:
+            full_matches = [
+                e for e in full_matches
+                if getattr(e.department, "name_ar", None) == manager_department
+            ]
+
+        if len(full_matches) == 1:
+            return full_matches[0]
+
+        if len(full_matches) > 1:
+            if manager_department:
+                raise ValueError(
+                    f"اسم المدير [{manager_name}] متكرر داخل القسم [{manager_department}] — يرجى المراجعة"
+                )
+            raise ValueError(
+                f"اسم المدير [{manager_name}] متكرر — اكتب قسم المدير المباشر لتحديده"
+            )
+
+        if manager_department:
+            raise ValueError(
+                f"لم يتم العثور على مدير باسم [{manager_name}] داخل القسم [{manager_department}]"
+            )
+
+        raise ValueError(f"لم يتم العثور على مدير باسم [{manager_name}]")
         matches = Employee._base_manager.filter(
             company=company,
             first_name_ar__icontains=manager_name.split()[0] if manager_name.split() else manager_name,
@@ -359,7 +392,7 @@ class Command(BaseCommand):
         if not job:
             raise ValueError(f"المسمى الوظيفي [{job_name}] غير موجود في السيستم")
 
-        manager = self._resolve_manager(company, _str(row, "direct_manager_name"))
+        manager = self._resolve_manager(company, _str(row, "direct_manager_name"), _str(row, "direct_manager_department"))
 
         contract_type = _str(row, "contract_type") or "permanent"
         contract_start = _date(row, "contract_start_date") or hire_date
@@ -535,7 +568,7 @@ class Command(BaseCommand):
         if pay_method:
             emp.salary_payment_method = pay_method
 
-        manager = self._resolve_manager(company, _str(row, "direct_manager_name"))
+        manager = self._resolve_manager(company, _str(row, "direct_manager_name"), _str(row, "direct_manager_department"))
         if manager:
             emp.direct_manager = manager
 

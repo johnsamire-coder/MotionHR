@@ -1528,20 +1528,41 @@ def import_employees_excel(request):
     full_path = os.path.join(settings.MEDIA_ROOT, path)
 
     try:
-        # تشغيل الـ Command اللي عملناه
         from io import StringIO
+        import re as _re
         out = StringIO()
         call_command('import_employees_bulk', file=full_path, send_emails=send_emails, stdout=out)
-        result = out.getvalue()
+        raw = out.getvalue()
+
+        # استخراج الأرقام من سطر "تم الانتهاء"
+        created  = 0
+        updated  = 0
+        errors   = 0
+        m = _re.search(r"جديد[:\s]+(\d+).*?تحديث[:\s]+(\d+).*?أخطاء[:\s]+(\d+)", raw)
+        if m:
+            created = int(m.group(1))
+            updated = int(m.group(2))
+            errors  = int(m.group(3))
+
+        # استخراج تفاصيل الأخطاء والنجاحات
+        lines = [l.strip() for l in raw.splitlines() if l.strip()]
+        success_lines = [l for l in lines if "تم إنشاء" in l or "تم تحديث" in l]
+        error_lines   = [l for l in lines if "فشل" in l or "خطأ" in l or "تحذير" in l or "لم يتم" in l or "ناقص" in l or "إجباري" in l]
+
+        has_zero_results = (created == 0 and updated == 0 and errors == 0)
 
         return Response({
             'success': True,
-            'message': 'اكتملت عملية المعالجة',
-            'details': result
+            'created': created,
+            'updated': updated,
+            'errors':  errors,
+            'has_zero_results': has_zero_results,
+            'success_details': success_lines,
+            'error_details':   error_lines,
+            'raw': raw,
         })
     except Exception as e:
         return Response({'success': False, 'message': f'حدث خطأ أثناء المعالجة: {str(e)}'})
     finally:
-        # مسح الملف المؤقت
         if os.path.exists(full_path):
             os.remove(full_path)

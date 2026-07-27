@@ -47,7 +47,8 @@ COLUMNS = [
     ("branch_name", "الفرع *", True, "list", "التعريفات!$A$2:$A$200", 20, False, "بيانات الوظيفة"),
     ("department_name", "القسم *", True, "list", "التعريفات!$B$2:$B$200", 20, False, "بيانات الوظيفة"),
     ("job_title_name", "المسمى الوظيفي *", True, "list", "التعريفات!$C$2:$C$200", 22, False, "بيانات الوظيفة"),
-    ("direct_manager_name", "اسم المدير المباشر (يدوي مؤقتًا)", False, None, None, 28, False, "بيانات الوظيفة"),
+    ("direct_manager_department", "قسم المدير المباشر", False, "list", "التعريفات!$B$2:$B$200", 22, False, "بيانات الوظيفة"),
+    ("direct_manager_name", "اسم المدير المباشر", False, None, None, 28, False, "بيانات الوظيفة"),
     ("hire_date",                 "تاريخ التعيين * (YYYY-MM-DD)",    True,  None,   None,                     25, False, "بيانات الوظيفة"),
     ("attendance_mode",           "نمط الحضور *",                    True,  "list", "القوائم!$I$2:$I$6",      18, False, "بيانات الوظيفة"),
     ("status",                    "الحالة الوظيفية *",               True,  "list", "القوائم!$O$2:$O$6",      18, False, "بيانات الوظيفة"),
@@ -286,6 +287,8 @@ class Command(BaseCommand):
             if key in ("contract_duration_months", "probation_months"):
                 for row in range(4, 10001):
                     ws.cell(row=row, column=col_idx).number_format = "0"
+
+
 
         ws.row_dimensions[1].height = 30
         ws.row_dimensions[2].height = 45
