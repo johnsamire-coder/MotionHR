@@ -44,10 +44,10 @@ COLUMNS = [
     ("emergency_contact_relation","صلة القرابة",                     False, None,   None,                     15, False, "التواصل"),
     ("emergency_contact_phone",   "موبايل الطوارئ (Text)",           False, None,   None,                     20, True,  "التواصل"),
     # --- الوظيفة ---
-    ("branch_name",               "الفرع *",                         True,  "list", "القوائم!$F$2:$F$200",    20, False, "بيانات الوظيفة"),
-    ("department_name",           "القسم *",                         True,  "list", "القوائم!$G$2:$G$200",    20, False, "بيانات الوظيفة"),
-    ("job_title_name",            "المسمى الوظيفي *",                True,  "list", "القوائم!$H$2:$H$200",    22, False, "بيانات الوظيفة"),
-    ("direct_manager_name",       "اسم المدير المباشر",              False, "list", "القوائم!$N$2:$N$200",    28, False, "بيانات الوظيفة"),
+    ("branch_name", "الفرع *", True, "list", "التعريفات!$A$2:$A$200", 20, False, "بيانات الوظيفة"),
+    ("department_name", "القسم *", True, "list", "التعريفات!$B$2:$B$200", 20, False, "بيانات الوظيفة"),
+    ("job_title_name", "المسمى الوظيفي *", True, "list", "التعريفات!$C$2:$C$200", 22, False, "بيانات الوظيفة"),
+    ("direct_manager_name", "اسم المدير المباشر (يدوي مؤقتًا)", False, None, None, 28, False, "بيانات الوظيفة"),
     ("hire_date",                 "تاريخ التعيين * (YYYY-MM-DD)",    True,  None,   None,                     25, False, "بيانات الوظيفة"),
     ("attendance_mode",           "نمط الحضور *",                    True,  "list", "القوائم!$I$2:$I$6",      18, False, "بيانات الوظيفة"),
     ("status",                    "الحالة الوظيفية *",               True,  "list", "القوائم!$O$2:$O$6",      18, False, "بيانات الوظيفة"),
@@ -121,6 +121,7 @@ class Command(BaseCommand):
         wb = Workbook()
         self._create_instructions_sheet(wb)
         self._create_employees_sheet(wb)
+        self._create_definitions_sheet(wb)
         self._create_lists_sheet(wb)
         wb.save(output_path)
         self.stdout.write(self.style.SUCCESS(f"تم إنشاء الشيت بنجاح: {output_path}"))
@@ -261,7 +262,7 @@ class Command(BaseCommand):
 
             # Data Validation مقفولة بـ showErrorMessage
             if val_type == "list" and val_formula:
-                if val_formula.startswith("القوائم"):
+                if val_formula.startswith("القوائم") or val_formula.startswith("التعريفات"):
                     formula = f"={val_formula}"
                 else:
                     formula = f'"{val_formula}"'
@@ -290,6 +291,55 @@ class Command(BaseCommand):
         ws.row_dimensions[2].height = 45
         ws.row_dimensions[3].height = 20
         ws.freeze_panes = "A4"
+
+    # ─────────────────────────────────────────
+    def _create_definitions_sheet(self, wb):
+        ws = wb.create_sheet('التعريفات')
+
+        from companies.models import Branch, Department
+        from employees.models import JobTitle
+
+        header_fill = PatternFill(start_color='6A1B9A', end_color='6A1B9A', fill_type='solid')
+        header_font = Font(color='FFFFFF', bold=True)
+        center = Alignment(horizontal='center', vertical='center')
+
+        headers = [
+            ('A', 'الفروع الحالية / الجديدة'),
+            ('B', 'الأقسام الحالية / الجديدة'),
+            ('C', 'المسميات الوظيفية الحالية / الجديدة'),
+        ]
+
+        for col_letter, title in headers:
+            ws.column_dimensions[col_letter].width = 35
+            cell = ws[f'{col_letter}1']
+            cell.value = title
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center
+
+        try:
+            branches = list(Branch.objects.values_list('name_ar', flat=True).distinct())
+        except Exception:
+            branches = []
+
+        try:
+            departments = list(Department.objects.values_list('name_ar', flat=True).distinct())
+        except Exception:
+            departments = []
+
+        try:
+            job_titles = list(JobTitle.objects.values_list('name_ar', flat=True).distinct())
+        except Exception:
+            job_titles = []
+
+        max_len = max(len(branches), len(departments), len(job_titles), 1)
+
+        for i in range(max_len):
+            ws.cell(row=i + 2, column=1, value=branches[i] if i < len(branches) else None)
+            ws.cell(row=i + 2, column=2, value=departments[i] if i < len(departments) else None)
+            ws.cell(row=i + 2, column=3, value=job_titles[i] if i < len(job_titles) else None)
+
+        ws.freeze_panes = 'A2'
 
     # ─────────────────────────────────────────
     def _create_lists_sheet(self, wb):
