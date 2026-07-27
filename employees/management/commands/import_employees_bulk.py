@@ -391,19 +391,17 @@ class Command(BaseCommand):
 
         dept, dept_created = Department.objects.get_or_create(
             company=company,
-            branch=branch,
             name_ar=dept_name,
         )
         if dept_created:
-            created_defs.append(f"صف {idx}: تم إنشاء قسم جديد [{dept_name}] داخل الفرع [{branch_name}]")
+            created_defs.append(f"صف {idx}: تم إنشاء قسم جديد [{dept_name}]")
 
         job, job_created = JobTitle.objects.get_or_create(
             company=company,
-            department=dept,
             name_ar=job_name,
         )
         if job_created:
-            created_defs.append(f"صف {idx}: تم إنشاء مسمى وظيفي جديد [{job_name}] داخل القسم [{dept_name}]")
+            created_defs.append(f"صف {idx}: تم إنشاء مسمى وظيفي جديد [{job_name}]")
 
         manager = self._resolve_manager(company, _str(row, "direct_manager_name"), _str(row, "direct_manager_department"))
 
