@@ -156,6 +156,7 @@ from .api_disciplinary import (
 from leaves.api_leave_policy import (
     leave_policy_list_create, leave_policy_detail,
     leave_policy_approve, leave_balance_adjustments,
+    apply_leave_policy_to_existing_employees,
 )
 
 from .api_attendance_policy import (
@@ -183,6 +184,7 @@ urlpatterns += [
     path('api/mobile/manager/leave-policy/<int:policy_id>/', leave_policy_detail),
     path('api/mobile/manager/leave-policy/<int:policy_id>/approve/', leave_policy_approve),
     path('api/mobile/manager/leave-balance-adjustments/', leave_balance_adjustments),
+    path('api/mobile/manager/leave-policy/apply-to-existing/', apply_leave_policy_to_existing_employees),
 
     # Disciplinary
     path('api/mobile/manager/disciplinary/actions/', disciplinary_actions),

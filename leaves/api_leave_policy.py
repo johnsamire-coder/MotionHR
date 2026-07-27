@@ -298,6 +298,108 @@ def leave_balance_adjustments(request):
         return Response({"success": False, "error": str(e)}, status=500)
 
 
+
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def apply_leave_policy_to_existing_employees(request):
+    """
+    يطبق السياسة النشطة على كل الموظفين الحاليين
+    وينشئ / يحدث أرصدة الإجازات حسب السياسة
+    """
+    err = _check_hr(request)
+    if err:
+        return err
+    company = _get_company(request)
+
+    from leaves.models import LeavePolicy, LeaveBalance, LeaveBalanceAdjustment, LeaveType
+    from employees.models import Employee
+    from leaves.signals import _get_entitlement_days
+
+    year = int(request.data.get("year") or timezone.localdate().year)
+
+    policy = LeavePolicy._base_manager.filter(
+        company=company,
+        status="active"
+    ).order_by("-effective_from").first()
+
+    if not policy:
+        return Response({"success": False, "error": "لا توجد سياسة إجازات نشطة"}, status=400)
+
+    employees = Employee._base_manager.filter(company=company)
+    leave_types = LeaveType._base_manager.filter(company=company, is_active=True)
+
+    processed = 0
+    created_balances = 0
+    updated_balances = 0
+    adjustments_created = 0
+
+    for employee in employees:
+        for leave_type in leave_types:
+            entitled_days = _get_entitlement_days(company, employee, leave_type, year)
+
+            balance, created = LeaveBalance._base_manager.get_or_create(
+                company=company,
+                employee=employee,
+                leave_type=leave_type,
+                year=year,
+                defaults={
+                    "total_days": entitled_days,
+                    "used_days": 0,
+                    "pending_days": 0,
+                },
+            )
+
+            if created:
+                created_balances += 1
+                LeaveBalanceAdjustment._base_manager.create(
+                    company=company,
+                    employee=employee,
+                    leave_type=leave_type,
+                    year=year,
+                    adjustment_type="policy_reset",
+                    days=entitled_days,
+                    reason=f"تسوية جماعية من سياسة الإجازات النشطة: {policy.name}",
+                    created_by=request.user,
+                )
+                adjustments_created += 1
+            else:
+                old_total = float(balance.total_days)
+                new_total = float(entitled_days)
+
+                if old_total != new_total:
+                    diff = new_total - old_total
+                    balance.total_days = new_total
+                    balance.save(update_fields=["total_days"])
+                    updated_balances += 1
+
+                    LeaveBalanceAdjustment._base_manager.create(
+                        company=company,
+                        employee=employee,
+                        leave_type=leave_type,
+                        year=year,
+                        adjustment_type="policy_reset",
+                        days=diff,
+                        reason=f"تحديث جماعي من سياسة الإجازات النشطة: {policy.name}",
+                        created_by=request.user,
+                    )
+                    adjustments_created += 1
+
+            processed += 1
+
+    return Response({
+        "success": True,
+        "message": "تم تطبيق سياسة الإجازات على الموظفين الحاليين بنجاح",
+        "year": year,
+        "policy_name": policy.name,
+        "employees_count": employees.count(),
+        "leave_types_count": leave_types.count(),
+        "processed_pairs": processed,
+        "created_balances": created_balances,
+        "updated_balances": updated_balances,
+        "adjustments_created": adjustments_created,
+    })
+
 def _save_policy_details(policy, data):
     from leaves.models import LeavePolicyTier, LeavePolicyTypeRule
 
