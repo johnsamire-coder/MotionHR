@@ -1530,9 +1530,83 @@ def mobile_attendance_status(request):
         'has_open_session': has_open_session,
         'can_partial_checkout': can_partial_checkout,
         'can_resume': can_resume,
+        'worker_type': getattr(employee, 'worker_type', 'office') or 'office',
+        'current_approved_location': _get_current_approved_location(employee, request),
+        'active_field_visit': _get_active_field_visit(employee),
         'today': today_dict,
     }
     return Response(response_data)
+
+
+def _get_current_approved_location(employee, request):
+    try:
+        worker_type = getattr(employee, 'worker_type', 'office')
+        if worker_type != 'field_assigned':
+            return None
+        
+        try:
+            lat = float(request.GET.get('latitude', 0) or 0)
+            lng = float(request.GET.get('longitude', 0) or 0)
+        except (ValueError, TypeError):
+            return None
+        
+        if lat == 0 or lng == 0:
+            return None
+        
+        from attendance.models import EmployeeWorkLocation
+        from attendance.location_utils import is_within_radius
+        from django.db.models import Q
+        
+        locations = EmployeeWorkLocation._base_manager.filter(
+            company=employee.company,
+            status='approved',
+            is_active=True,
+        ).filter(
+            Q(employee=employee) |
+            Q(is_shared=True, shared_with_branch=None, shared_with_department=None) |
+            Q(is_shared=True, shared_with_branch=employee.branch) |
+            Q(is_shared=True, shared_with_department=employee.department)
+        ).distinct()
+        
+        for loc in locations:
+            check = is_within_radius(
+                lat, lng,
+                float(loc.latitude), float(loc.longitude),
+                loc.radius or 500,
+            )
+            if check['is_within']:
+                return {
+                    'id': loc.id,
+                    'name': loc.name,
+                    'type': loc.location_type,
+                    'type_display': loc.get_location_type_display(),
+                    'distance_meters': check['distance_meters'],
+                }
+    except Exception:
+        pass
+    
+    return None
+
+
+def _get_active_field_visit(employee):
+    try:
+        from attendance.models import LocationCheckIn
+        active = LocationCheckIn._base_manager.filter(
+            employee=employee,
+            status__in=['arrived', 'in_progress'],
+        ).first()
+        
+        if active:
+            return {
+                'id': active.id,
+                'location_name': active.location_name,
+                'purpose': active.purpose or '',
+                'arrival_time': timezone.localtime(active.arrival_time).strftime('%I:%M %p') if active.arrival_time else None,
+            }
+    except Exception:
+        pass
+    
+    return None
 
 
 @api_view(['GET'])
