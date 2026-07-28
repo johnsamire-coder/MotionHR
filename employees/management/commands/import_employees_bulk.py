@@ -56,40 +56,41 @@ C = {
     "hire_date": 29,
     "attendance_mode": 30,
     "status": 31,
-    "contract_type": 32,
-    "contract_start_date": 33,
-    "contract_end_date": 34,
-    "contract_duration_months": 35,
-    "probation_months": 36,
-    "has_insurance": 37,
-    "insurance_number": 38,
-    "basic_salary": 39,
-    "currency": 40,
-    "salary_payment_method": 41,
-    "bank_name": 42,
-    "bank_account": 43,
+    "worker_type": 32,
+    "contract_type": 33,
+    "contract_start_date": 34,
+    "contract_end_date": 35,
+    "contract_duration_months": 36,
+    "probation_months": 37,
+    "has_insurance": 38,
+    "insurance_number": 39,
+    "basic_salary": 40,
+    "currency": 41,
+    "salary_payment_method": 42,
+    "bank_name": 43,
+    "bank_account": 44,
     "iban": 45,
-    "instapay_transfer_id": 45,
-    "wallet_transfer_number": 46,
-    "wallet_provider": 47,
-    "annual_entitled": 48,
-    "annual_used_before_system": 49,
-    "annual_carry_forward": 50,
-    "sick_entitled": 51,
-    "sick_used_before_system": 52,
-    "sick_carry_forward": 53,
-    "emergency_entitled": 54,
-    "emergency_used_before_system": 55,
-    "emergency_carry_forward": 56,
-    "maternity_entitled": 57,
-    "maternity_used_before_system": 58,
-    "maternity_carry_forward": 59,
-    "paternity_entitled": 60,
-    "paternity_used_before_system": 61,
-    "paternity_carry_forward": 62,
-    "unpaid_entitled": 63,
-    "unpaid_used_before_system": 64,
-    "unpaid_carry_forward": 65,
+    "instapay_transfer_id": 46,
+    "wallet_transfer_number": 47,
+    "wallet_provider": 48,
+    "annual_entitled": 49,
+    "annual_used_before_system": 50,
+    "annual_carry_forward": 51,
+    "sick_entitled": 52,
+    "sick_used_before_system": 53,
+    "sick_carry_forward": 54,
+    "emergency_entitled": 55,
+    "emergency_used_before_system": 56,
+    "emergency_carry_forward": 57,
+    "maternity_entitled": 58,
+    "maternity_used_before_system": 59,
+    "maternity_carry_forward": 60,
+    "paternity_entitled": 61,
+    "paternity_used_before_system": 62,
+    "paternity_carry_forward": 63,
+    "unpaid_entitled": 64,
+    "unpaid_used_before_system": 65,
+    "unpaid_carry_forward": 66,
 }
 
 LEAVE_COLS = {
@@ -269,10 +270,19 @@ class Command(BaseCommand):
                 "hire_date", "branch_name",
                 "department_name", "job_title_name",
                 "salary_payment_method",
+                "worker_type",
             ]
             for field in required:
                 if not _str(row, field):
                     errors.append(f"{prefix}: الحقل [{field}] إجباري للموظف الجديد")
+
+            worker_type = _str(row, "worker_type")
+            if worker_type and worker_type not in ("office", "field_free", "field_assigned"):
+                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: office / field_free / field_assigned")
+
+            att_mode = _str(row, "attendance_mode")
+            if att_mode and att_mode not in ("fixed_shift", "flexible_hours", "field_worker", "multi_site", "rotating"):
+                errors.append(f"{prefix}: قيمة [attendance_mode] غير صحيحة")
 
             # التأمين
             has_ins = _str(row, "has_insurance")
@@ -308,6 +318,14 @@ class Command(BaseCommand):
         elif op_type == "update":
             if not _str(row, "employee_code") and not _str(row, "national_id"):
                 errors.append(f"{prefix}: كود الموظف أو الرقم القومي مطلوب للتحديث")
+
+            worker_type = _str(row, "worker_type")
+            if worker_type and worker_type not in ("office", "field_free", "field_assigned"):
+                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: office / field_free / field_assigned")
+
+            att_mode = _str(row, "attendance_mode")
+            if att_mode and att_mode not in ("fixed_shift", "flexible_hours", "field_worker", "multi_site", "rotating"):
+                errors.append(f"{prefix}: قيمة [attendance_mode] غير صحيحة")
 
         return errors
 
@@ -416,7 +434,10 @@ class Command(BaseCommand):
         gender_val = _str(row, "gender")
 
         att_mode = _str(row, "attendance_mode") or "fixed_shift"
-        status   = _str(row, "status") or "active"
+        worker_type_val = _str(row, "worker_type")
+        if worker_type_val not in ("office", "field_free", "field_assigned"):
+            raise ValueError("قيمة worker_type غير صحيحة أو غير موجودة")
+        status   = "active"  # دايمًا نشط - مش بنقرأ من الإكسيل
 
         username = f"emp{nat_id[-6:]}{random.randint(10, 99)}"
         user = User.objects.create_user(
@@ -441,8 +462,8 @@ class Command(BaseCommand):
             national_id=nat_id,
             birth_date=_date(row, "birth_date"),
             gender="female" if gender_val in ("female", "أنثى") else "male",
-            marital_status=_str(row, "marital_status") or None,
-            religion=_str(row, "religion") or None,
+            marital_status=_str(row, "marital_status") or "single",
+            religion=_str(row, "religion") or "muslim",
             nationality=_str(row, "nationality") or "مصري",
             language="en" if _str(row, "language") == "en" else "ar",
             phone=phone,
@@ -460,6 +481,7 @@ class Command(BaseCommand):
             hire_date=hire_date,
             attendance_mode=att_mode,
             status=status,
+            worker_type=worker_type_val,
             contract_type=contract_type,
             contract_start_date=contract_start,
             contract_end_date=contract_end,
@@ -467,7 +489,7 @@ class Command(BaseCommand):
             probation_months=_int(row, "probation_months", 3),
             has_insurance=has_insurance,
             insurance_number=_str(row, "insurance_number") or None,
-            basic_salary=_dec(row, "basic_salary") or None,
+            basic_salary=_dec(row, "basic_salary"),
             currency=_str(row, "currency") or "EGP",
             salary_payment_method=_str(row, "salary_payment_method") or "cash",
             bank_name=_str(row, "bank_name") or None,
@@ -587,13 +609,16 @@ class Command(BaseCommand):
         if contract_type:
             emp.contract_type = contract_type
 
-        status = _str(row, "status")
-        if status:
-            emp.status = status
+        # الحالة الوظيفية لا تتحدث من الإكسيل
+        # الموظف يفضل نشط إلا بتغيير إداري مباشر
 
         att_mode = _str(row, "attendance_mode")
         if att_mode:
             emp.attendance_mode = att_mode
+
+        worker_type_val = _str(row, "worker_type")
+        if worker_type_val in ("office", "field_free", "field_assigned"):
+            emp.worker_type = worker_type_val
 
         contract_start = _date(row, "contract_start_date")
         if contract_start:
