@@ -7,6 +7,13 @@ from attendance.api_mobile import mobile_geofence_get, mobile_geofence_set, mobi
 from django.urls import path
 from .api_employee_management import manager_reset_employee_password, employee_save_location, manager_get_location_report, manager_update_company_info, manager_upload_company_logo, manager_update_employee, manager_company_info, manager_transfer_employee, manager_organization_tree
 from . import views
+from .api_field_visits import (
+    field_visit_start,
+    field_visit_end,
+    field_visits_list,
+    field_visit_detail,
+    field_visit_types,
+)
 from . import api_mobile
 from . import api_mobile_requests
 
@@ -516,4 +523,14 @@ from .api_reports import (
 urlpatterns += [
     path('api/mobile/manager/reports/leaves-enhanced/', leaves_report_enhanced, name='reports-leaves-enhanced'),
     path('api/mobile/manager/reports/shifts/', shifts_report, name='reports-shifts'),
+
+    # ═══════════════════════════════════════════════════
+    # Field Visits Mobile APIs (زيارات ميدانية بدون موافقات)
+    # ═══════════════════════════════════════════════════
+    path('api/mobile/field-visits/', field_visits_list, name='field_visits_list'),
+    path('api/mobile/field-visits/types/', field_visit_types, name='field_visit_types'),
+    path('api/mobile/field-visits/start/', field_visit_start, name='field_visit_start'),
+    path('api/mobile/field-visits/<int:visit_id>/', field_visit_detail, name='field_visit_detail'),
+    path('api/mobile/field-visits/end/<int:visit_id>/', field_visit_end, name='field_visit_end'),
+
 ]
