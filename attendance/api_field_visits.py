@@ -66,8 +66,19 @@ def auto_close_previous_visit(employee, new_latitude, new_longitude, new_time):
         new_time,
     )
     
-    # لو الحركة غير منطقية، بنسيبها للتحقق اليدوي
+    # لو الحركة غير منطقية، بنسيبها للتحقق اليدوي + إشعار للمدير
     if not realistic_check['is_realistic']:
+        try:
+            from accounts.fcm_service import notify_fraud_attempt
+            notify_fraud_attempt(
+                user=employee.user,
+                previous_visit_name=active_visit.location_name,
+                reason=realistic_check['reason'],
+                company=employee.company,
+            )
+        except Exception:
+            pass
+        
         return {
             'closed': False,
             'fraud_alert': True,
@@ -144,6 +155,20 @@ def auto_close_previous_visit(employee, new_latitude, new_longitude, new_time):
         )
     except Exception as e:
         pass  # لو حصل خطأ، ما تكسرش الـ flow
+    
+    # نبعت إشعار للموظف والمدير إن الزيارة اتقفلت تلقائياً
+    try:
+        from accounts.fcm_service import notify_visit_auto_closed
+        notify_visit_auto_closed(
+            user=employee.user,
+            previous_visit_name=active_visit.location_name,
+            auto_checkout_time=timezone.localtime(auto_checkout_time).strftime('%I:%M %p'),
+            travel_minutes=auto_close_data['travel_time_minutes'],
+            distance_km=auto_close_data['distance_km'],
+            company=employee.company,
+        )
+    except Exception:
+        pass
     
     return {
         'closed': True,

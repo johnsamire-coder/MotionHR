@@ -172,7 +172,17 @@ def propose_work_location(request):
         proposed_by=request.user,
     )
     
-    # TODO: إشعار للمدير/HR
+    # نبعت إشعار للمدير/HR
+    try:
+        from accounts.fcm_service import notify_work_location_proposed
+        emp_name = f"{employee.first_name_ar} {employee.last_name_ar}"
+        notify_work_location_proposed(
+            company=employee.company,
+            employee_name=emp_name,
+            location_name=name,
+        )
+    except Exception:
+        pass
     
     return Response({
         'success': True,
@@ -455,7 +465,18 @@ def approve_work_location(request, location_id):
     location.approval_notes = request.data.get('notes', '').strip() or None
     location.save()
     
-    # TODO: إشعار للموظف
+    # نبعت إشعار للموظف صاحب الاقتراح
+    try:
+        from accounts.fcm_service import notify_work_location_approved
+        if location.employee and location.employee.user:
+            approver_name = request.user.get_full_name() or request.user.username
+            notify_work_location_approved(
+                user=location.employee.user,
+                location_name=location.name,
+                approved_by_name=approver_name,
+            )
+    except Exception:
+        pass
     
     return Response({
         'success': True,
@@ -506,7 +527,17 @@ def reject_work_location(request, location_id):
     location.rejection_reason = reason
     location.save()
     
-    # TODO: إشعار للموظف
+    # نبعت إشعار للموظف صاحب الاقتراح
+    try:
+        from accounts.fcm_service import notify_work_location_rejected
+        if location.employee and location.employee.user:
+            notify_work_location_rejected(
+                user=location.employee.user,
+                location_name=location.name,
+                reason=reason,
+            )
+    except Exception:
+        pass
     
     return Response({
         'success': True,

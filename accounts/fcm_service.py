@@ -363,3 +363,139 @@ def notify_manager_checkout(company, employee_name, time_str, hours_worked=''):
         title_en='Employee Check-out 🏁',
         body_en=body_en,
     )
+
+
+# ═══════════════════════════════════════════════════
+# Field Visits & Multi-Site Notifications
+# ═══════════════════════════════════════════════════
+
+def notify_visit_auto_closed(user, previous_visit_name, auto_checkout_time,
+                             travel_minutes, distance_km, company=None):
+    """
+    إشعار للموظف إن السيستم قفل زيارته السابقة تلقائياً
+    """
+    title = "تم إنهاء زيارتك السابقة تلقائياً"
+    body = (
+        f"تم إنهاء زيارتك في [{previous_visit_name}] الساعة {auto_checkout_time}. "
+        f"المسافة {distance_km} كم، وقت التنقل المتوقع {travel_minutes} دقيقة."
+    )
+    
+    send_notification_to_user(
+        user, title, body,
+        data={
+            'type': 'visit_auto_closed',
+            'previous_visit_name': previous_visit_name,
+            'auto_checkout_time': auto_checkout_time,
+            'travel_minutes': str(travel_minutes),
+            'distance_km': str(distance_km),
+        },
+        title_en="Previous Visit Auto-Closed",
+        body_en=f"Your visit at [{previous_visit_name}] was closed at {auto_checkout_time}. Distance {distance_km}km, estimated travel {travel_minutes} min.",
+    )
+    
+    # إشعار للمدير أيضاً
+    if company:
+        emp_name = user.get_full_name() or user.username
+        mgr_title = "إغلاق تلقائي لزيارة موظف"
+        mgr_body = (
+            f"[{emp_name}] تم إغلاق زيارته في [{previous_visit_name}] "
+            f"الساعة {auto_checkout_time} تلقائياً (تنقل {travel_minutes} دقيقة)."
+        )
+        send_notification_to_managers(
+            company, mgr_title, mgr_body,
+            data={
+                'type': 'visit_auto_closed',
+                'employee_name': emp_name,
+                'previous_visit_name': previous_visit_name,
+            },
+            title_en="Employee Visit Auto-Closed",
+            body_en=f"[{emp_name}] visit at [{previous_visit_name}] was auto-closed at {auto_checkout_time}.",
+        )
+
+
+def notify_fraud_attempt(user, previous_visit_name, reason, company=None):
+    """
+    تنبيه للمدير + HR إن الموظف حاول يعمل استهبال
+    """
+    emp_name = user.get_full_name() or user.username
+    
+    # إشعار عاجل للمدير و HR
+    if company:
+        title = "🚨 تنبيه: محاولة تسجيل بصمة غير منطقية"
+        body = (
+            f"[{emp_name}] حاول تسجيل زيارة جديدة قبل إنهاء [{previous_visit_name}]. "
+            f"السبب: {reason[:100]}"
+        )
+        send_notification_to_managers(
+            company, title, body,
+            data={
+                'type': 'fraud_attempt',
+                'severity': 'high',
+                'employee_name': emp_name,
+                'previous_visit_name': previous_visit_name,
+                'reason': reason,
+            },
+            title_en="🚨 Alert: Suspicious Check-in Attempt",
+            body_en=f"[{emp_name}] attempted a check-in that appears fraudulent. Reason: {reason[:100]}",
+        )
+
+
+def notify_work_location_proposed(company, employee_name, location_name):
+    """
+    إشعار للمدير/HR إن الموظف اقترح موقع جديد
+    """
+    title = "اقتراح موقع عمل جديد"
+    body = f"[{employee_name}] اقترح موقع عمل جديد: [{location_name}]. يحتاج مراجعة واعتماد."
+    
+    send_notification_to_managers(
+        company, title, body,
+        data={
+            'type': 'work_location_proposed',
+            'employee_name': employee_name,
+            'location_name': location_name,
+        },
+        title_en="New Work Location Proposed",
+        body_en=f"[{employee_name}] proposed a new work location: [{location_name}]. Requires review.",
+    )
+
+
+def notify_work_location_approved(user, location_name, approved_by_name=''):
+    """
+    إشعار للموظف إن موقعه اتوافق عليه
+    """
+    title = "✅ تم اعتماد موقع العمل"
+    body = f"تم اعتماد الموقع [{location_name}]. تقدر تبصم منه الآن."
+    if approved_by_name:
+        body += f" (تم الاعتماد بواسطة {approved_by_name})"
+    
+    send_notification_to_user(
+        user, title, body,
+        data={
+            'type': 'work_location_approved',
+            'location_name': location_name,
+        },
+        title_en="✅ Work Location Approved",
+        body_en=f"Location [{location_name}] has been approved. You can check-in from there now.",
+    )
+
+
+def notify_work_location_rejected(user, location_name, reason=''):
+    """
+    إشعار للموظف إن موقعه اترفض
+    """
+    title = "❌ تم رفض موقع العمل"
+    body = f"تم رفض الموقع [{location_name}]"
+    if reason:
+        body += f". السبب: {reason}"
+    
+    send_notification_to_user(
+        user, title, body,
+        data={
+            'type': 'work_location_rejected',
+            'location_name': location_name,
+            'reason': reason,
+        },
+        title_en="❌ Work Location Rejected",
+        body_en=f"Location [{location_name}] has been rejected. Reason: {reason}",
+    )
+
