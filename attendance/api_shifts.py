@@ -1488,7 +1488,6 @@ def flex_adjustment_review(request, adjustment_id):
             return Response({"success": False, "error": "غير مصرح - HR فقط"}, status=403)
 
         from attendance.models import FlexDayAdjustment
-        from django.utils import timezone as tz
 
         try:
             adj = FlexDayAdjustment._base_manager.get(id=adjustment_id, company=company)
@@ -1551,7 +1550,6 @@ def flex_adjustment_review(request, adjustment_id):
                     body_en=body if lang == 'en' else None,
                 )
         except Exception as _notify_err:
-            import logging
             logging.getLogger(__name__).warning(f'flex_adjustment notify error: {_notify_err}')
 
         msg = "تمت الموافقة على التسوية وستُحتسب في المرتب" if action == 'approve' else "تم رفض التسوية"
@@ -1614,7 +1612,6 @@ def shift_override_list(request):
     try:
         company = _get_company(request)
         from attendance.models import ShiftOverride
-        from datetime import timedelta
 
         show_past = request.GET.get('show_past', 'false').lower() == 'true'
         employee_id = request.GET.get('employee_id')
@@ -1737,7 +1734,6 @@ def employee_effective_shift(request, employee_id):
 
         target_date_str = request.GET.get('date', str(date.today()))
         try:
-            from datetime import datetime
             target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
         except ValueError:
             target_date = date.today()
@@ -1928,7 +1924,6 @@ def partial_checkout(request):
     try:
         from employees.models import Employee
         from attendance.models import Attendance, AttendanceSession
-        from django.utils import timezone
 
         employee = Employee._base_manager.filter(user=request.user).first()
         if not employee:
@@ -1993,7 +1988,6 @@ def resume_checkin(request):
     try:
         from employees.models import Employee
         from attendance.models import Attendance, AttendanceSession
-        from django.utils import timezone
 
         employee = Employee._base_manager.filter(user=request.user).first()
         if not employee:
@@ -2096,7 +2090,6 @@ def today_sessions(request):
     try:
         from employees.models import Employee
         from attendance.models import Attendance, AttendanceSession
-        from django.utils import timezone
 
         employee = Employee._base_manager.filter(user=request.user).first()
         if not employee:
@@ -2406,7 +2399,6 @@ def rotation_list_create(request):
         return Response({"success": False, "error": "cycle_length_days لازم يكون أكبر من صفر"}, status=400)
 
     try:
-        from datetime import datetime as dt
         start_date = dt.strptime(str(start_date), "%Y-%m-%d").date()
     except ValueError:
         return Response({"success": False, "error": "صيغة التاريخ لازم تكون YYYY-MM-DD"}, status=400)
@@ -2553,7 +2545,6 @@ def rotation_detail(request, rotation_id):
 
     if "start_date" in d:
         try:
-            from datetime import datetime as dt
             rotation.start_date = dt.strptime(str(d["start_date"]), "%Y-%m-%d").date()
         except ValueError:
             return Response({"success": False, "error": "صيغة التاريخ لازم تكون YYYY-MM-DD"}, status=400)
@@ -2640,7 +2631,6 @@ def rotation_assign(request, rotation_id):
     if not start_date_raw:
         return Response({"success": False, "error": "start_date مطلوب"}, status=400)
 
-    from datetime import datetime as dt
     start_date = dt.strptime(str(start_date_raw), "%Y-%m-%d").date()
     end_date = dt.strptime(str(end_date_raw), "%Y-%m-%d").date() if end_date_raw else None
 

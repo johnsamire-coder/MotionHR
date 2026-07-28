@@ -252,7 +252,6 @@ def manager_update_announcement(request, pk):
     resent_count = 0
     if resend:
         try:
-            from accounts.fcm_service import send_notification_to_user
             targets = ann.get_target_employees()
             for emp in targets:
                 if hasattr(emp, 'user') and emp.user:
@@ -300,7 +299,6 @@ def manager_delete_announcement(request, pk):
     send_deletion_notice = bool(request.data.get('send_deletion_notice', True))
     if send_deletion_notice:
         try:
-            from accounts.fcm_service import send_notification_to_user
             targets = ann.get_target_employees()
             for emp in targets:
                 if hasattr(emp, 'user') and emp.user:

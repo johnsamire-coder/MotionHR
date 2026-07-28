@@ -19,7 +19,6 @@ def _is_allowed(user, permission_code):
     if user.is_superuser or user.role in ['super_admin', 'company_admin']:
         return True
     # شيك على الصلاحيات المخصصة
-    from accounts.permissions_models import UserRole, RolePermission, UserPermissionOverride
     # شيك استثناء شخصي
     override = UserPermissionOverride.objects.filter(
         user=user, permission=permission_code

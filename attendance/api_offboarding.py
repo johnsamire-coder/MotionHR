@@ -15,7 +15,6 @@ from accounts.permissions_models import UserRole
 def _is_allowed(user, permission_code):
     if user.is_superuser or user.role in ['super_admin', 'company_admin']:
         return True
-    from accounts.permissions_models import UserRole, RolePermission, UserPermissionOverride
     override = UserPermissionOverride.objects.filter(
         user=user, permission=permission_code
     ).first()

@@ -39,7 +39,6 @@ def notify_managers(title, body, data=None, company=None, title_en=None, body_en
 # إشعارات الحضور والانصراف
 # ========================
 def notify_employee_checkin(user, time_str, location=''):
-    from accounts.fcm_models import FCMDeviceToken
     lang = getattr(FCMDeviceToken.objects.filter(user=user).first(), 'preferred_language', 'ar')
     if lang == 'en':
         body = f'Check-in recorded at {time_str}'
@@ -67,7 +66,6 @@ def notify_employee_checkin(user, time_str, location=''):
         )
 
 def notify_employee_checkout(user, time_str, hours_worked=''):
-    from accounts.fcm_models import FCMDeviceToken
     lang = getattr(FCMDeviceToken.objects.filter(user=user).first(), 'preferred_language', 'ar')
     if lang == 'en':
         body = f'Check-out recorded at {time_str}'
@@ -95,7 +93,6 @@ def notify_employee_checkout(user, time_str, hours_worked=''):
         )
 
 def notify_manager_checkin(company, employee_name, time_str):
-    from accounts.fcm_models import FCMDeviceToken
     # افتراض إن المديرين في الشركة العربية
     body = f'{employee_name} سجّل حضوره الساعة {time_str}'
     body_en = f'{employee_name} checked in at {time_str}'
@@ -109,7 +106,6 @@ def notify_manager_checkin(company, employee_name, time_str):
     )
 
 def notify_manager_checkout(company, employee_name, time_str, hours_worked=''):
-    from accounts.fcm_models import FCMDeviceToken
     body = f'{employee_name} سجّل انصرافه الساعة {time_str}'
     body_en = f'{employee_name} checked out at {time_str}'
     if hours_worked:

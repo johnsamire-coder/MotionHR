@@ -215,7 +215,6 @@ def leave_request_add(request):
     # لو موظف عادي - يشوف نفسه بس
     if request.user.role == 'employee':
         try:
-            from employees.models import Employee as Emp
             current_emp = Emp.objects.filter(user=request.user).first()
             if current_emp:
                 employees = [current_emp]

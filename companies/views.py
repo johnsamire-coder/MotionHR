@@ -947,9 +947,7 @@ def departments_list(request):
     Patch 49e:
     صفحة الإدارات بشكل شجري + إدارة الربط بين الإدارة الأم والأقسام التابعة
     """
-    from django.contrib import messages
     from django.core.exceptions import PermissionDenied
-    from .models import Department, DepartmentHierarchy
 
     role = getattr(request.user, 'role', '') or ''
     if role not in ['company_admin', 'hr_manager', 'manager']:

@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 def _generate_username_from_names(first_name_en, last_name_en, company, phone=""):
     """توليد يوزر من الاسم الإنجليزي + فحص التكرار"""
     from django.contrib.auth.models import User
-    import re
 
     first = re.sub(r'[^a-z]', '', (first_name_en or '').lower().strip())
     last = re.sub(r'[^a-z]', '', (last_name_en or '').lower().strip())
@@ -43,7 +42,6 @@ def _generate_username_from_names(first_name_en, last_name_en, company, phone=""
         username = f"{base}{counter}"
         counter += 1
         if counter > 999:
-            import random
             username = f"{base}{random.randint(1000, 9999)}"
             break
 
@@ -627,7 +625,6 @@ def manager_reset_employee_password(request, employee_id):
             )
 
         # توليد رابط تفعيل جديد بدل إعادة تعيين كلمة السر
-        import random, string
         digits = ''.join(random.choices(string.digits, k=6))
         suffix = ''.join(random.choices(string.ascii_uppercase, k=2))
         temp_pass = f"Rx@{digits}{suffix}"

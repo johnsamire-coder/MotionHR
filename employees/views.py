@@ -1149,7 +1149,6 @@ def my_deductions(request):
 def employee_comprehensive_profile(request, pk):
     """ملف شامل للموظف — كل البيانات في صفحة واحدة"""
     from datetime import date, timedelta
-    from django.db.models import Sum, Count, Q
 
     employee = _get_employee_or_404_for_user(request.user, pk)
     company = _get_current_company(request.user)
@@ -1531,11 +1530,10 @@ def import_employees_excel(request):
         from io import StringIO
         import re as _re
         from datetime import timedelta
-        from django.utils import timezone as tz
         from employees.models import ImportLog
 
         out = StringIO()
-        call_command('import_employees_bulk', file=full_path, send_emails=send_emails, stdout=out)
+        call_command('import_employees_bulk', file=full_path, send_emails=send_emails, company_id=getattr(request.user, 'company_id', None), stdout=out)
         raw = out.getvalue()
 
         # استخراج الأرقام
@@ -1560,7 +1558,7 @@ def import_employees_excel(request):
             id=request.user.company_id
         ).first() if hasattr(request.user, 'company_id') else Company.objects.first()
 
-        import_log = ImportLog.objects.create(
+        import_log = ImportLog._base_manager.create(
             company=company,
             user=request.user,
             file=path,
@@ -1578,7 +1576,7 @@ def import_employees_excel(request):
 
         # حذف السجلات القديمة أكتر من 3 أيام
         cutoff = tz.now() - timedelta(days=3)
-        old_logs = ImportLog.objects.filter(
+        old_logs = ImportLog._base_manager.filter(
             company=company,
             created_at__lt=cutoff
         )
@@ -1617,7 +1615,6 @@ def import_logs_list(request):
 
     from employees.models import ImportLog
     from datetime import timedelta
-    from django.utils import timezone as tz
     from companies.models import Company
 
     company = Company.objects.filter(
@@ -1625,7 +1622,7 @@ def import_logs_list(request):
     ).first() if hasattr(request.user, 'company_id') else Company.objects.first()
 
     cutoff = tz.now() - timedelta(days=3)
-    logs = ImportLog.objects.filter(
+    logs = ImportLog._base_manager.filter(
         company=company,
         created_at__gte=cutoff
     ).order_by('-created_at')

@@ -123,7 +123,6 @@ def _notify_missing_period(employee, period, shift, after_grace=False):
     try:
         from accounts.fcm_service import send_notification_to_user, send_notification_to_managers
         from accounts.models import EmployeeNotification
-        from employees.models import Employee
 
         period_name = period.get('name', 'فترة')
         period_start = period.get('start_str', '')
@@ -425,7 +424,6 @@ def get_missing_periods(shift, day, employee):
     """
     بترجع الفترات اللي الموظف ما حضرهاش لـ split_fixed
     """
-    from attendance.models import Attendance, AttendanceSession
 
     if not shift or getattr(shift, 'shift_mode', 'fixed') != 'split_fixed':
         return []
@@ -1491,7 +1489,6 @@ def mobile_change_password(request):
     user.must_change_password = False
     user.save()
 
-    from rest_framework.authtoken.models import Token
     Token.objects.filter(user=user).delete()
     new_token = Token.objects.create(user=user)
 
@@ -1628,7 +1625,6 @@ def mobile_fcm_token_register(request):
 
         # تحديث Employee.language عشان تبقى مصدر الحقيقة للإشعارات
         try:
-            from employees.models import Employee
             emp = Employee._base_manager.filter(user=user).first()
             if emp and preferred_language in ('ar', 'en'):
                 if emp.language != preferred_language:
@@ -1766,7 +1762,6 @@ def mobile_notifications_mark_read(request):
 def mobile_charter_get(request):
     """جلب اللائحة الحالية للموظف أو المدير"""
     from companies.models import WorkCharter, CharterAcceptance
-    from employees.models import Employee
 
     user = request.user
     employee = Employee._base_manager.filter(user=user).first()
@@ -1823,7 +1818,6 @@ def mobile_charter_get(request):
 def mobile_charter_accept(request):
     """الموظف يوافق على اللائحة"""
     from companies.models import WorkCharter, CharterAcceptance
-    from employees.models import Employee
 
     user = request.user
     company = getattr(user, 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None) or getattr(Employee._base_manager.filter(user=user).first(), 'company', None)
@@ -1880,7 +1874,6 @@ def mobile_charter_accept(request):
 def mobile_charter_acceptances(request):
     """المدير يشوف مين وافق ومين لسه - للطباعة"""
     from companies.models import WorkCharter, CharterAcceptance
-    from employees.models import Employee
 
     user = request.user
     role = getattr(user, 'role', '')
@@ -1946,7 +1939,6 @@ def mobile_charter_update(request):
     """المدير يعدل اللائحة + يرفع ملف مرفق"""
     import os
     from companies.models import WorkCharter, CharterAcceptance
-    from employees.models import Employee
 
     user = request.user
     role = getattr(user, 'role', '')

@@ -15,7 +15,6 @@ from django.utils import timezone as tz
 @login_required
 def dashboard(request):
     """لوحة التحكم الرئيسية"""
-    from datetime import date
 
     company = request.user.company
     today   = date.today()
@@ -55,7 +54,6 @@ def dashboard(request):
 
     try:
         from attendance.models import LocationLog
-        from datetime import timedelta
         cutoff = tz.now() - timedelta(minutes=5)
         live_field = LocationLog.objects.filter(
             company=company,
@@ -375,7 +373,6 @@ def profile_update(request):
 @login_required
 def global_search(request):
     """البحث الشامل"""
-    from django.db.models import Q
 
     query     = request.GET.get("q", "").strip()
     employees = []
@@ -1108,3 +1105,55 @@ def trigger_push_for_employee_notification(notification_obj):
         )
     except Exception:
         pass
+
+
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from employees.models import Employee
+from django.contrib.auth import get_user_model
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def activate_employee_account(request):
+    """تفعيل حساب الموظف لأول مرة باستخدام الموبايل والقومي"""
+    phone = request.data.get('phone', '').strip()
+    national_id_suffix = request.data.get('national_id_suffix', '').strip()
+    new_password = request.data.get('new_password', '').strip()
+
+    if not phone or not national_id_suffix:
+        return Response({'success': False, 'message': 'رقم الموبايل وآخر 4 أرقام من القومي مطلوبين'}, status=400)
+
+    # البحث عن الموظف (بالموبايل والـ 4 أرقام الأخيرة من القومي)
+    # بنعمل filter للموظفين اللي لسه ما دخلوش قبل كده (last_login is null) أو حسابهم عليه علامة "تغيير باسورد إجباري"
+    emp = Employee._base_manager.filter(
+        phone=phone,
+        national_id__endswith=national_id_suffix
+    ).select_related('user').first()
+
+    if not emp or not emp.user:
+        return Response({'success': False, 'message': 'بيانات غير مطابقة. تأكد من إدخال البيانات كما في شيت الشركة'}, status=404)
+
+    user = emp.user
+
+    # لو العميل باعت باسورد جديدة، نغيرها ونفعل الحساب
+    if new_password:
+        if len(new_password) < 8:
+             return Response({'success': False, 'message': 'كلمة السر يجب أن تكون 8 رموز على الأقل'}, status=400)
+        
+        user.set_password(new_password)
+        user.is_active = True
+        user.save()
+        return Response({
+            'success': True, 
+            'message': 'تم تفعيل حسابك بنجاح. يمكنك الآن تسجيل الدخول',
+            'username': user.username
+        })
+
+    # لو لسه ما بعتش باسورد، نأكدله إننا لقيناه ونرجعله الـ username
+    return Response({
+        'success': True,
+        'message': f'أهلاً {emp.first_name_ar}. يرجى تعيين كلمة سر جديدة لحسابك',
+        'username': user.username
+    })

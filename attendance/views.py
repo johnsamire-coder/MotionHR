@@ -450,10 +450,6 @@ def api_live_locations(request):
 @login_required
 def api_employee_route(request, employee_id):
     """API لخط سير موظف اليوم"""
-    from datetime import date as _date
-    from django.http import JsonResponse
-    from attendance.models import LocationLog
-    from employees.models import Employee
 
     try:
         emp = Employee._base_manager.get(id=employee_id)
@@ -791,7 +787,6 @@ def api_monitor_data(request):
 def employee_tracking_detail(request, employee_id):
     """عرض تتبع موظف معين (للمدير)"""
     
-    from datetime import datetime as dt
     
     employee = get_object_or_404(Employee, pk=employee_id)
     
@@ -829,8 +824,6 @@ def employee_tracking_detail(request, employee_id):
 @login_required
 def smart_check_in_page(request):
     """صفحة تسجيل الحضور الذكية"""
-    from datetime import date as dt_date
-    from employees.models import Employee
 
     employee = None
     today_attendance = None
@@ -871,9 +864,6 @@ def field_visit_add_page(request):
     الموظف الميداني فقط هو اللي يقدر يفتحها
     المديرين / HR / company admin يقدروا يفتحوها
     """
-    from django.contrib import messages
-    from django.shortcuts import redirect
-    from employees.models import Employee
 
     # الموظف العادي
     if getattr(request.user, "role", "") == "employee":
@@ -901,11 +891,6 @@ def smart_api_check_in(request):
     - لازم يكون في نطاق الفرع
     - بيسجل المسافة والعنوان
     """
-    import json
-    from datetime import date as dt_date, datetime as dt_datetime
-    from django.http import JsonResponse
-    from employees.models import Employee
-    from decimal import Decimal
 
     if request.method != "POST":
         return JsonResponse({"success": False, "message": "Method not allowed"}, status=405)
@@ -989,7 +974,6 @@ def smart_api_check_in(request):
     if "late_minutes" in att_fields:
         late_mins = 0
         try:
-            from attendance.models import EmployeeShift
             emp_shift = EmployeeShift.objects.filter(
                 employee=employee, is_active=True
             ).select_related("shift").first()
@@ -1010,7 +994,6 @@ def smart_api_check_in(request):
 
     if "shift" in att_fields:
         try:
-            from attendance.models import EmployeeShift
             emp_shift = EmployeeShift.objects.filter(
                 employee=employee, is_active=True
             ).select_related("shift").first()
@@ -1042,11 +1025,6 @@ def smart_api_check_out(request):
     - من أي مكان (بدون geofencing)
     - بيحسب ساعات العمل
     """
-    import json
-    from datetime import date as dt_date, datetime as dt_datetime
-    from django.http import JsonResponse
-    from employees.models import Employee
-    from decimal import Decimal
 
     if request.method != "POST":
         return JsonResponse({"success": False, "message": "Method not allowed"}, status=405)
@@ -1173,7 +1151,6 @@ def _get_grace_period_minutes(employee, policy):
             pass
 
     try:
-        from attendance.models import EmployeeShift
         emp_shift = EmployeeShift.objects.filter(
             employee=employee, is_active=True
         ).select_related("shift").first()
@@ -1227,11 +1204,6 @@ def _attendance_snapshot(attendance):
 # ════════════════════════════════════════════════════════════
 @login_required
 def policy_api_check_in(request):
-    import json
-    from datetime import date as dt_date, datetime as dt_datetime
-    from django.http import JsonResponse
-    from employees.models import Employee
-    from decimal import Decimal
 
     if request.method != "POST":
         return JsonResponse({"success": False, "message": "Method not allowed"}, status=405)
@@ -1318,7 +1290,6 @@ def policy_api_check_in(request):
     # الشيفت
     if "shift" in att_fields:
         try:
-            from attendance.models import EmployeeShift
             emp_shift = EmployeeShift.objects.filter(
                 employee=employee, is_active=True
             ).select_related("shift").first()
@@ -1331,7 +1302,6 @@ def policy_api_check_in(request):
     if "late_minutes" in att_fields:
         late_mins = 0
         try:
-            from attendance.models import EmployeeShift
             emp_shift = EmployeeShift.objects.filter(
                 employee=employee, is_active=True
             ).select_related("shift").first()
@@ -1360,7 +1330,6 @@ def policy_api_check_in(request):
         if late_mins and late_mins > 0:
             try:
                 from attendance.models import LateIncident, LateNotification
-                from django.db.models import Q
 
                 # احسب رقم الحادثة في الشهر ده
                 incident_count = LateIncident._base_manager.filter(
@@ -1446,11 +1415,6 @@ def policy_api_check_in(request):
 # ════════════════════════════════════════════════════════════
 @login_required
 def policy_api_check_out(request):
-    import json
-    from datetime import date as dt_date, datetime as dt_datetime
-    from django.http import JsonResponse
-    from employees.models import Employee
-    from decimal import Decimal
 
     if request.method != "POST":
         return JsonResponse({"success": False, "message": "Method not allowed"}, status=405)
@@ -1538,9 +1502,6 @@ def policy_api_check_out(request):
 # ════════════════════════════════════════════════════════════
 @login_required
 def attendance_override(request, pk):
-    from django.shortcuts import get_object_or_404
-    from django.contrib import messages
-    from attendance.models import Attendance, AttendanceActionLog
 
     attendance = get_object_or_404(
         Attendance.all_objects if hasattr(Attendance, "all_objects") else Attendance.objects,
@@ -1777,7 +1738,6 @@ def _record_late_incident(employee, attendance_obj, late_minutes):
     """
     try:
         from attendance.models import LateIncident
-        from django.utils import timezone
         today = timezone.now().date()
         policy = _get_company_policy(employee.company)
 
@@ -1852,7 +1812,6 @@ def late_notification_detail(request, pk):
     """تفاصيل إشعار التأخير + اتخاذ الإجراء"""
     from attendance.models import LateNotification, DisciplinaryAction
     from employees.models import Deduction
-    from django.utils import timezone
 
     role = getattr(request.user, "role", "")
     if role not in ["super_admin", "company_admin", "hr_manager", "manager"]:
@@ -1971,7 +1930,6 @@ def late_notification_detail(request, pk):
 def my_warnings_view(request):
     """إنذاراتي / إجراءاتي التأديبية للموظف"""
     from attendance.models import DisciplinaryAction
-    from employees.models import Employee
 
     role = getattr(request.user, "role", "")
     current_employee = Employee.all_objects.filter(user=request.user).first()
@@ -2008,7 +1966,6 @@ def my_warnings_view(request):
 def _get_today_assignment(employee):
     """جلب تكليف اليوم للموظف"""
     from attendance.models import DailyAssignment
-    from django.utils import timezone
     today = timezone.now().date()
     return DailyAssignment.objects.filter(
         company=employee.company,
@@ -2074,7 +2031,6 @@ def _get_late_logic_for_assignment(assignment, employee, policy, now):
     تحديد التأخير حسب نوع التكليف
     Returns: (is_late, late_minutes)
     """
-    import datetime as dt
 
     # الأنواع اللي ما فيهاش late
     if not assignment:
@@ -2142,9 +2098,6 @@ def _handle_assignment_checkin(employee, assignment, policy, attendance_obj, now
 def schedule_week_view(request):
     """عرض جدول الأسبوع لكل الموظفين"""
     from attendance.models import DailyAssignment
-    from employees.models import Employee
-    from datetime import timedelta
-    from django.utils import timezone
 
     role = getattr(request.user, "role", "")
     if role not in ["super_admin", "company_admin", "hr_manager", "manager"]:
@@ -2229,8 +2182,6 @@ def schedule_week_view(request):
 @login_required
 def assignment_add(request):
     """إضافة تكليف يومي"""
-    from attendance.models import DailyAssignment, Shift
-    from employees.models import Employee
 
     role = getattr(request.user, "role", "")
     if role not in ["super_admin", "company_admin", "hr_manager", "manager"]:
@@ -2250,7 +2201,6 @@ def assignment_add(request):
         if not emp_id or not date_str:
             messages.error(request, "الموظف والتاريخ مطلوبين")
         else:
-            from datetime import date as dt_date
             emp = get_object_or_404(Employee.all_objects, pk=emp_id, company=company)
             d = dt_date.fromisoformat(date_str)
 
@@ -2386,7 +2336,6 @@ def _send_employee_notification_for_action(employee, action, sent_by=None):
 def stealth_tracking_manage(request):
     """إدارة التتبع الصامت — Patch 49a Fix5"""
     from companies.models import CompanyPolicy
-    from employees.models import Employee
 
     company = getattr(request.user, "company", None)
     if not company:
@@ -2464,7 +2413,6 @@ def stealth_tracking_alerts(request):
     قائمة تنبيهات التتبع الصامت
     """
     from attendance.models import TrackingAlert
-    from employees.models import Employee
 
     role = getattr(request.user, "role", "")
     if role not in ["super_admin", "company_admin", "hr_manager", "manager"]:
@@ -2510,7 +2458,6 @@ def _is_stealth_tracking_active_for_employee(employee):
         if not policy or not getattr(policy, "stealth_tracking_enabled", False):
             return False
 
-        from datetime import date as dt_date
         today = dt_date.today()
         today_att = Attendance.objects.filter(
             employee=employee,
@@ -2535,9 +2482,6 @@ def _check_and_create_tracking_alert(employee, lat, lng, address):
     """
     try:
         from attendance.models import TrackingAlert
-        from django.utils import timezone as tz
-        from datetime import timedelta
-        from decimal import Decimal
 
         now = tz.now()
         today = now.date()
@@ -2625,7 +2569,6 @@ def _send_stealth_alert_notifications(employee, alert, policy):
     """
     try:
         from accounts.models import EmployeeNotification, User
-        from employees.models import Employee
 
         title = f"تنبيه تتبع: {employee.full_name_ar}"
         message = (
@@ -2681,7 +2624,6 @@ def _send_stealth_alert_notifications(employee, alert, policy):
 def _create_mgmt_notification(user, title, message):
     """إنشاء إشعار لمستخدم إداري"""
     try:
-        from employees.models import Employee
         from accounts.models import EmployeeNotification
 
         mgr_emp = Employee.all_objects.filter(user=user).first()
@@ -2708,10 +2650,6 @@ def api_stealth_location(request):
     الـ JS بتبعته في الخلفية بدون ما الموظف يعرف
     بس لو stealth_tracking مفعّل للموظف
     """
-    import json
-    from django.http import JsonResponse
-    from employees.models import Employee
-    from decimal import Decimal
 
     if request.method != "POST":
         return JsonResponse({"ok": True})
@@ -2743,8 +2681,6 @@ def api_stealth_location(request):
 
     # حفظ في LocationLog بصمت
     try:
-        from attendance.models import LocationLog
-        from django.utils import timezone as tz
         LocationLog.objects.create(
             company=employee.company,
             employee=employee,

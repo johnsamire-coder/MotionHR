@@ -224,7 +224,6 @@ def _get_active_delegation(company, role):
     """
     try:
         from requests_app.models import ApprovalDelegation
-        from django.utils import timezone
         today = timezone.now().date()
 
         delegation = ApprovalDelegation.objects.filter(
@@ -321,7 +320,6 @@ def _notify_approver_for_step(req_obj, step_num, role):
     """إشعار المسؤول عن خطوة معينة"""
     try:
         from accounts.models import EmployeeNotification
-        from employees.models import Employee
 
         approver = _get_approver_for_role(role, req_obj.employee, req_obj.company)
         if not approver:
@@ -389,7 +387,6 @@ def _process_step_action(req_obj, step_num, action, by_user, notes=""):
     """
     معالجة action (approve/reject) على خطوة معينة
     """
-    from django.utils import timezone
 
     now = timezone.now()
     flow = _get_approval_flow(req_obj.company, req_obj.request_type)

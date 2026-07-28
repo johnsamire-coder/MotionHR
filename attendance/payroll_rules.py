@@ -102,7 +102,6 @@ def _calc_split_shift_metrics(shift, att, sessions, target_date):
     """
     try:
         from django.utils import timezone
-        from datetime import datetime, timedelta
 
         # جيب فترات الشيفت
         periods = shift.get_shift_periods(target_date) if hasattr(shift, 'get_shift_periods') else []
@@ -703,7 +702,6 @@ def _get_active_policy(company, target_date, department=None, branch=None):
     """
     try:
         from attendance.models import AttendancePolicy, AttendancePolicyAssignment
-        from django.db.models import Q
 
         date_filter = Q(policy__effective_from__lte=target_date) & (
             Q(policy__effective_to__isnull=True) | Q(policy__effective_to__gte=target_date)
@@ -811,7 +809,6 @@ def _upsert_flex_adjustment(employee, att, day_shift, actual_hours):
             return
 
         from attendance.models import FlexDayAdjustment
-        from django.db.models import Q
 
         company = getattr(employee, 'company', None)
 
@@ -921,7 +918,6 @@ def _apply_permission_balance(employee, late_minutes, reference_date, policy):
         return 0, 0
 
     from attendance.models import PermissionLedger
-    from datetime import date
 
     today = reference_date or date.today()
 
@@ -1140,7 +1136,6 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     # Hybrid: جلب الملخصات اليومية المتاحة (لو موجودة تسرّع الحساب)
     try:
         from attendance.models import DailyAttendanceSummary
-        from datetime import date as _date_cls
         _today = _date_cls.today()
         _summaries = {
             s.date: s
@@ -1384,7 +1379,6 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     for dd in daily_details:
         _d_date = None
         try:
-            from datetime import date as _date_cls
             _d_date = _date_cls.fromisoformat(dd['date'])
         except Exception:
             pass
