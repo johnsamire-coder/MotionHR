@@ -2825,3 +2825,108 @@ class EmployeeWorkLocation(TenantModel):
         emp_name = self.employee.first_name_ar if self.employee else 'مشترك'
         return f"{self.name} ({emp_name})"
 
+
+# ═══════════════════════════════════════════════════════════════
+# RouteHistory - تاريخ رحلات الموظفين (Machine Learning)
+# السيستم بيتعلم عادات كل موظف من نقطة لأخرى
+# ═══════════════════════════════════════════════════════════════
+class RouteHistory(TenantModel):
+    """
+    تاريخ الرحلات المتكررة للموظف بين نقطتين
+    السيستم بيستخدمها عشان يحسب الوقت المتوقع بدقة أعلى
+    """
+    
+    TIME_PERIOD_CHOICES = [
+        ('morning', 'صباحاً (6ص-12ظ)'),
+        ('noon', 'ظهراً (12ظ-4ع)'),
+        ('evening', 'مساءً (4ع-8م)'),
+        ('night', 'ليلاً (8م-6ص)'),
+    ]
+    
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='route_history',
+        verbose_name='الموظف'
+    )
+    
+    # نقطة البداية
+    from_latitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        verbose_name='خط عرض البداية'
+    )
+    from_longitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        verbose_name='خط طول البداية'
+    )
+    from_location_name = models.CharField(
+        max_length=300,
+        blank=True, null=True,
+        verbose_name='اسم موقع البداية'
+    )
+    
+    # نقطة النهاية
+    to_latitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        verbose_name='خط عرض النهاية'
+    )
+    to_longitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        verbose_name='خط طول النهاية'
+    )
+    to_location_name = models.CharField(
+        max_length=300,
+        blank=True, null=True,
+        verbose_name='اسم موقع النهاية'
+    )
+    
+    # القياسات
+    distance_km = models.DecimalField(
+        max_digits=8, decimal_places=2,
+        verbose_name='المسافة (كم)'
+    )
+    travel_time_minutes = models.PositiveIntegerField(
+        verbose_name='وقت التنقل (دقائق)'
+    )
+    
+    # التوقيت
+    departed_at = models.DateTimeField(
+        verbose_name='تاريخ ووقت المغادرة'
+    )
+    arrived_at = models.DateTimeField(
+        verbose_name='تاريخ ووقت الوصول'
+    )
+    
+    # للتحليل
+    time_period = models.CharField(
+        max_length=20,
+        choices=TIME_PERIOD_CHOICES,
+        verbose_name='فترة اليوم'
+    )
+    day_of_week = models.PositiveSmallIntegerField(
+        verbose_name='يوم الأسبوع (0=الأحد, 6=السبت)'
+    )
+    
+    # ملاحظات
+    notes = models.TextField(
+        blank=True, null=True,
+        verbose_name='ملاحظات'
+    )
+    is_verified = models.BooleanField(
+        default=True,
+        verbose_name='رحلة موثوقة',
+        help_text='لو false، مش هتُستخدم في حساب المتوسط'
+    )
+    
+    class Meta:
+        verbose_name = 'سجل رحلة'
+        verbose_name_plural = 'سجلات الرحلات'
+        ordering = ['-arrived_at']
+        indexes = [
+            models.Index(fields=['employee', 'time_period']),
+            models.Index(fields=['employee', 'from_latitude', 'from_longitude']),
+        ]
+    
+    def __str__(self):
+        return f"{self.employee}: {self.from_location_name or 'موقع'} → {self.to_location_name or 'موقع'} ({self.travel_time_minutes} د)"
+

@@ -74,14 +74,33 @@ def auto_close_previous_visit(employee, new_latitude, new_longitude, new_time):
             'previous_visit_name': active_visit.location_name,
         }
     
-    # نحسب وقت الخروج التلقائي (بناءً على الحسبة الذكية)
-    auto_close_data = calculate_auto_checkout_time(
+    # نحسب وقت الخروج التلقائي (بالحسبة الذكية + Route History)
+    from attendance.location_utils import get_smart_travel_time, save_route_to_history
+    from datetime import timedelta
+    
+    # نستخدم Smart Travel Time (يستخدم التاريخ لو موجود)
+    smart_time = get_smart_travel_time(
+        employee,
         float(active_visit.arrival_latitude),
         float(active_visit.arrival_longitude),
         new_latitude,
         new_longitude,
         new_time,
     )
+    
+    travel_minutes = smart_time['travel_time_minutes']
+    auto_close_data = {
+        'auto_checkout_time': new_time - timedelta(minutes=travel_minutes),
+        'travel_time_minutes': travel_minutes,
+        'distance_km': round(haversine_distance(
+            float(active_visit.arrival_latitude),
+            float(active_visit.arrival_longitude),
+            new_latitude,
+            new_longitude,
+        ), 2),
+        'source': smart_time['source'],
+        'sample_size': smart_time['sample_size'],
+    }
     
     auto_checkout_time = auto_close_data['auto_checkout_time']
     
@@ -104,6 +123,22 @@ def auto_close_previous_visit(employee, new_latitude, new_longitude, new_time):
     active_visit.notes = (active_visit.notes or '') + auto_note
     active_visit.save()
     
+    # نحفظ الرحلة في التاريخ (Route History) للتعلم منها
+    try:
+        save_route_to_history(
+            employee=employee,
+            from_lat=float(active_visit.arrival_latitude),
+            from_lng=float(active_visit.arrival_longitude),
+            from_name=active_visit.location_name,
+            to_lat=new_latitude,
+            to_lng=new_longitude,
+            to_name=None,
+            departed_at=auto_checkout_time,
+            arrived_at=new_time,
+        )
+    except Exception as e:
+        pass  # لو حصل خطأ، ما تكسرش الـ flow
+    
     return {
         'closed': True,
         'fraud_alert': False,
@@ -112,6 +147,8 @@ def auto_close_previous_visit(employee, new_latitude, new_longitude, new_time):
         'auto_checkout_time': timezone.localtime(auto_checkout_time).strftime('%I:%M %p'),
         'travel_time_minutes': auto_close_data['travel_time_minutes'],
         'distance_km': auto_close_data['distance_km'],
+        'time_source': auto_close_data.get('source', 'general_estimate'),
+        'sample_size': auto_close_data.get('sample_size', 0),
     }
 
 
