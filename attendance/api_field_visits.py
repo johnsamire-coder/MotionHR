@@ -31,6 +31,90 @@ def reverse_geocode_safe(lat, lng):
         return ''
 
 
+def auto_close_previous_visit(employee, new_latitude, new_longitude, new_time):
+    """
+    Auto-Close الزيارة القديمة لو الموظف بدأ زيارة جديدة بدون إنهاء
+    يستخدم الحسبة الذكية للمسافة والوقت
+    
+    Returns: dict فيه معلومات الإغلاق التلقائي، أو None لو مفيش زيارة نشطة
+    """
+    from attendance.location_utils import (
+        calculate_auto_checkout_time,
+        is_realistic_travel,
+        haversine_distance,
+    )
+    
+    # نبحث عن الزيارة النشطة القديمة
+    active_visit = LocationCheckIn._base_manager.filter(
+        employee=employee,
+        status__in=['arrived', 'in_progress'],
+    ).order_by('-arrival_time').first()
+    
+    if not active_visit:
+        return None  # مفيش زيارة نشطة
+    
+    # نحسب لو الحركة منطقية (Anti-fraud)
+    time_diff_minutes = int((new_time - active_visit.arrival_time).total_seconds() / 60)
+    
+    realistic_check = is_realistic_travel(
+        float(active_visit.arrival_latitude),
+        float(active_visit.arrival_longitude),
+        new_latitude,
+        new_longitude,
+        time_diff_minutes,
+    )
+    
+    # لو الحركة غير منطقية، بنسيبها للتحقق اليدوي
+    if not realistic_check['is_realistic']:
+        return {
+            'closed': False,
+            'fraud_alert': True,
+            'reason': realistic_check['reason'],
+            'previous_visit_id': active_visit.id,
+            'previous_visit_name': active_visit.location_name,
+        }
+    
+    # نحسب وقت الخروج التلقائي (بناءً على الحسبة الذكية)
+    auto_close_data = calculate_auto_checkout_time(
+        float(active_visit.arrival_latitude),
+        float(active_visit.arrival_longitude),
+        new_latitude,
+        new_longitude,
+        new_time,
+    )
+    
+    auto_checkout_time = auto_close_data['auto_checkout_time']
+    
+    # نتأكد إن الوقت التلقائي مش قبل وقت الوصول (يبقى وقت الوصول)
+    if auto_checkout_time < active_visit.arrival_time:
+        auto_checkout_time = active_visit.arrival_time
+    
+    # نقفل الزيارة القديمة
+    active_visit.departure_time = auto_checkout_time
+    active_visit.departure_latitude = new_latitude  # آخر موقع معروف
+    active_visit.departure_longitude = new_longitude
+    active_visit.status = 'completed'
+    
+    # نضيف ملاحظة إن الإغلاق كان تلقائي
+    auto_note = (
+        f'\n\n[إغلاق تلقائي في {timezone.localtime(new_time).strftime("%I:%M %p")}]'
+        f' - تم حساب وقت الخروج بناءً على المسافة ({auto_close_data["distance_km"]} كم) '
+        f'ووقت التنقل المتوقع ({auto_close_data["travel_time_minutes"]} دقيقة)'
+    )
+    active_visit.notes = (active_visit.notes or '') + auto_note
+    active_visit.save()
+    
+    return {
+        'closed': True,
+        'fraud_alert': False,
+        'previous_visit_id': active_visit.id,
+        'previous_visit_name': active_visit.location_name,
+        'auto_checkout_time': timezone.localtime(auto_checkout_time).strftime('%I:%M %p'),
+        'travel_time_minutes': auto_close_data['travel_time_minutes'],
+        'distance_km': auto_close_data['distance_km'],
+    }
+
+
 def visit_to_dict(visit, include_tracking=False):
     """تحويل الزيارة لـ dict للـ API response"""
     data = {
@@ -118,17 +202,24 @@ def field_visit_start(request):
             'message': f'نوع زيارة غير معروف. الأنواع المسموحة: {valid_types}'
         }, status=400)
     
-    # نتحقق من إن مفيش زيارة نشطة حالياً
-    active_visit = LocationCheckIn._base_manager.filter(
-        employee=employee,
-        status__in=['arrived', 'in_progress'],
-    ).first()
+    # ═══════════════════════════════════════════════════
+    # Auto-Close: نقفل الزيارة القديمة أوتوماتيك لو موجودة
+    # ═══════════════════════════════════════════════════
+    now = timezone.now()
+    auto_close_info = auto_close_previous_visit(
+        employee, latitude, longitude, now
+    )
     
-    if active_visit:
+    # لو فيه حالة استهبال (fraud) → نرفض
+    if auto_close_info and auto_close_info.get('fraud_alert'):
         return Response({
             'success': False,
-            'message': f'يوجد زيارة نشطة بالفعل في: {active_visit.location_name}. يجب إنهاؤها أولاً.',
-            'active_visit': visit_to_dict(active_visit),
+            'message': (
+                f'حركة غير منطقية! {auto_close_info["reason"]}. '
+                f'يرجى إنهاء زيارة [{auto_close_info["previous_visit_name"]}] يدوياً أولاً.'
+            ),
+            'fraud_alert': True,
+            'previous_visit_id': auto_close_info['previous_visit_id'],
         }, status=400)
     
     # نجيب اسم الموقع (address)
