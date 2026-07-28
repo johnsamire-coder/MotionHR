@@ -414,6 +414,7 @@ class Employee(TenantModel):
         ("fixed_shift", "شيفت ثابت"),
         ("flexible_hours", "ساعات مرنة"),
         ("field_worker", "موظف ميداني"),
+        ("multi_site", "مواقع متعددة"),
         ("rotating", "شيفت متناوب"),
     ]
 

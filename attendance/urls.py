@@ -14,6 +14,17 @@ from .api_field_visits import (
     field_visit_detail,
     field_visit_types,
 )
+from .api_work_locations import (
+    propose_work_location,
+    my_work_locations,
+    work_location_detail,
+    cancel_pending_location,
+    work_location_types,
+    manager_pending_locations,
+    manager_all_locations,
+    approve_work_location,
+    reject_work_location,
+)
 from . import api_mobile
 from . import api_mobile_requests
 
@@ -532,5 +543,22 @@ urlpatterns += [
     path('api/mobile/field-visits/start/', field_visit_start, name='field_visit_start'),
     path('api/mobile/field-visits/<int:visit_id>/', field_visit_detail, name='field_visit_detail'),
     path('api/mobile/field-visits/end/<int:visit_id>/', field_visit_end, name='field_visit_end'),
+
+
+    # ═══════════════════════════════════════════════════
+    # Work Locations APIs (Multi-Site System)
+    # ═══════════════════════════════════════════════════
+    # Employee endpoints
+    path('api/mobile/work-locations/', my_work_locations, name='my_work_locations'),
+    path('api/mobile/work-locations/types/', work_location_types, name='work_location_types'),
+    path('api/mobile/work-locations/propose/', propose_work_location, name='propose_work_location'),
+    path('api/mobile/work-locations/<int:location_id>/', work_location_detail, name='work_location_detail'),
+    path('api/mobile/work-locations/<int:location_id>/cancel/', cancel_pending_location, name='cancel_pending_location'),
+    
+    # Manager/HR endpoints
+    path('api/mobile/manager/work-locations/', manager_all_locations, name='manager_all_locations'),
+    path('api/mobile/manager/work-locations/pending/', manager_pending_locations, name='manager_pending_locations'),
+    path('api/mobile/manager/work-locations/<int:location_id>/approve/', approve_work_location, name='approve_work_location'),
+    path('api/mobile/manager/work-locations/<int:location_id>/reject/', reject_work_location, name='reject_work_location'),
 
 ]

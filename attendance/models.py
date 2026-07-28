@@ -2584,3 +2584,244 @@ class PermissionLedger(TenantModel):
 
     def __str__(self):
         return f"{self.employee} - {self.entry_type} - {self.minutes_used} min"
+
+
+# ═══════════════════════════════════════════════════════════════
+# EmployeeWorkLocation - مواقع العمل المتعددة للموظفين
+# للمهندسين والمندوبين اللي بيشتغلوا من مواقع متعددة
+# ═══════════════════════════════════════════════════════════════
+class EmployeeWorkLocation(TenantModel):
+    """
+    مواقع العمل المعتمدة للموظفين (Multi-Site System)
+    الموظف يقترح موقع → المدير/HR يوافق → الموظف يقدر يبصم منه
+    """
+    
+    LOCATION_TYPE_CHOICES = [
+        ('project', 'موقع مشروع'),
+        ('client', 'موقع عميل'),
+        ('warehouse', 'مخزن'),
+        ('office', 'مكتب فرعي'),
+        ('factory', 'مصنع'),
+        ('site', 'موقع بناء'),
+        ('remote', 'عمل عن بعد'),
+        ('other', 'أخرى'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'قيد الموافقة'),
+        ('approved', 'معتمد'),
+        ('rejected', 'مرفوض'),
+        ('expired', 'منتهي'),
+        ('suspended', 'موقف مؤقتاً'),
+    ]
+    
+    # ═══ معلومات أساسية ═══
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='work_locations',
+        null=True, blank=True,
+        verbose_name='الموظف',
+        help_text='فارغ لو الموقع مشترك بين موظفين'
+    )
+    name = models.CharField(max_length=200, verbose_name='اسم الموقع')
+    description = models.TextField(blank=True, null=True, verbose_name='الوصف')
+    location_type = models.CharField(
+        max_length=20,
+        choices=LOCATION_TYPE_CHOICES,
+        default='project',
+        verbose_name='نوع الموقع'
+    )
+    
+    # ═══ الإحداثيات ═══
+    latitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        verbose_name='خط العرض'
+    )
+    longitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        verbose_name='خط الطول'
+    )
+    radius = models.PositiveIntegerField(
+        default=500,
+        verbose_name='نصف قطر السماح (متر)',
+        help_text='المسافة المسموحة حول الموقع للبصمة'
+    )
+    address = models.TextField(blank=True, null=True, verbose_name='العنوان')
+    city = models.CharField(max_length=100, blank=True, null=True, verbose_name='المدينة')
+    country = models.CharField(max_length=10, default='EG', verbose_name='الدولة')
+    
+    # ═══ معلومات المشروع/العميل ═══
+    project_code = models.CharField(
+        max_length=50, blank=True, null=True,
+        verbose_name='كود المشروع'
+    )
+    client_name = models.CharField(
+        max_length=200, blank=True, null=True,
+        verbose_name='اسم العميل'
+    )
+    contact_person = models.CharField(
+        max_length=200, blank=True, null=True,
+        verbose_name='الشخص المسئول'
+    )
+    contact_phone = models.CharField(
+        max_length=20, blank=True, null=True,
+        verbose_name='رقم التواصل'
+    )
+    
+    # ═══ الصلاحيات والمشاركة ═══
+    is_shared = models.BooleanField(
+        default=False,
+        verbose_name='موقع مشترك',
+        help_text='متاح لكل موظفين الشركة/الفرع/القسم'
+    )
+    shared_with_branch = models.ForeignKey(
+        'companies.Branch',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='shared_work_locations',
+        verbose_name='مشترك مع فرع'
+    )
+    shared_with_department = models.ForeignKey(
+        'companies.Department',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='shared_work_locations',
+        verbose_name='مشترك مع قسم'
+    )
+    requires_checkin_photo = models.BooleanField(
+        default=False,
+        verbose_name='يطلب صورة عند الحضور'
+    )
+    allow_checkout_only = models.BooleanField(
+        default=False,
+        verbose_name='مسموح الانصراف فقط'
+    )
+    
+    # ═══ الجدولة الزمنية ═══
+    valid_from = models.DateField(
+        null=True, blank=True,
+        verbose_name='صالح من تاريخ'
+    )
+    valid_until = models.DateField(
+        null=True, blank=True,
+        verbose_name='صالح حتى تاريخ',
+        help_text='للمشاريع المؤقتة'
+    )
+    working_days = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='أيام العمل',
+        help_text='مثال: {"sun": true, "mon": true, ...}'
+    )
+    working_hours_start = models.TimeField(
+        null=True, blank=True,
+        verbose_name='بداية العمل'
+    )
+    working_hours_end = models.TimeField(
+        null=True, blank=True,
+        verbose_name='نهاية العمل'
+    )
+    
+    # ═══ الموافقات (Workflow) ═══
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='الحالة'
+    )
+    proposed_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='proposed_work_locations',
+        verbose_name='مقترح بواسطة'
+    )
+    proposed_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='تاريخ الاقتراح'
+    )
+    approved_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='approved_work_locations',
+        verbose_name='معتمد بواسطة'
+    )
+    approved_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='تاريخ الاعتماد'
+    )
+    rejection_reason = models.TextField(
+        blank=True, null=True,
+        verbose_name='سبب الرفض'
+    )
+    approval_notes = models.TextField(
+        blank=True, null=True,
+        verbose_name='ملاحظات الاعتماد'
+    )
+    
+    # ═══ الإحصائيات ═══
+    total_visits_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='إجمالي الزيارات'
+    )
+    last_visited_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='آخر زيارة'
+    )
+    average_visit_duration = models.PositiveIntegerField(
+        default=0,
+        verbose_name='متوسط مدة الزيارة (دقائق)'
+    )
+    
+    # ═══ حالة الموقع ═══
+    is_active = models.BooleanField(default=True, verbose_name='مفعل')
+    suspended_reason = models.TextField(
+        blank=True, null=True,
+        verbose_name='سبب الإيقاف'
+    )
+    priority = models.PositiveIntegerField(
+        default=0,
+        verbose_name='الأولوية',
+        help_text='الأعلى رقم = الأعلى أولوية'
+    )
+    color_code = models.CharField(
+        max_length=7, default='#3498db',
+        verbose_name='لون التمييز',
+        help_text='مثال: #FF5733'
+    )
+    icon = models.CharField(
+        max_length=50, default='location',
+        verbose_name='الأيقونة'
+    )
+    
+    # ═══ معلومات إضافية ═══
+    notes = models.TextField(blank=True, null=True, verbose_name='ملاحظات')
+    tags = models.JSONField(
+        default=list, blank=True,
+        verbose_name='Tags',
+        help_text='مثال: ["remote", "high-priority"]'
+    )
+    photo = models.ImageField(
+        upload_to='work_locations/photos/',
+        blank=True, null=True,
+        verbose_name='صورة الموقع'
+    )
+    metadata = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='بيانات إضافية'
+    )
+    
+    class Meta:
+        verbose_name = 'موقع عمل'
+        verbose_name_plural = 'مواقع العمل'
+        ordering = ['-priority', '-created_at']
+        indexes = [
+            models.Index(fields=['company', 'employee', 'status']),
+            models.Index(fields=['company', 'status', 'is_active']),
+        ]
+    
+    def __str__(self):
+        emp_name = self.employee.first_name_ar if self.employee else 'مشترك'
+        return f"{self.name} ({emp_name})"
+
