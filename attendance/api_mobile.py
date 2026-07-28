@@ -758,14 +758,34 @@ def mobile_attendance_action(request):
             "can_request_recall": True,
         }, status=400)
 
-    # ── تحقق أن الموظف مربوط فعلياً بشيفت في EmployeeShift ──
+    # ── تحقق أن الموظف مربوط فعلياً بشيفت (EmployeeShift أو ShiftAssignment) ──
     if action == 'check_in':
         from attendance.models import EmployeeShift as _EmpShift
-        has_real_assignment = _EmpShift._base_manager.filter(
+        from attendance.models import ShiftAssignment as _ShiftAssign
+        from django.db.models import Q
+
+        # فحص 1: EmployeeShift (ربط مباشر)
+        has_emp_shift = _EmpShift._base_manager.filter(
             employee=employee,
             is_active=True,
         ).exists()
-        if not has_real_assignment:
+
+        # فحص 2: ShiftAssignment (ربط بالموظف مباشرة أو بالقسم/الفرع)
+        emp_dept_id = getattr(employee, 'department_id', None)
+        emp_branch_id = getattr(employee, 'branch_id', None)
+
+        assignment_q = Q(employee=employee)
+        if emp_dept_id:
+            assignment_q |= Q(assignment_type='department', department_id=emp_dept_id)
+        if emp_branch_id:
+            assignment_q |= Q(assignment_type='branch', branch_id=emp_branch_id)
+
+        has_shift_assignment = _ShiftAssign._base_manager.filter(
+            company=employee.company,
+            is_active=True,
+        ).filter(assignment_q).exists()
+
+        if not has_emp_shift and not has_shift_assignment:
             return Response({
                 'success': False,
                 **bilingual_message(
