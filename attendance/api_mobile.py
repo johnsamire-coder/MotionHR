@@ -798,6 +798,84 @@ def mobile_attendance_action(request):
 
     active_shift = get_active_shift(employee, today)
     shift_start, shift_end = get_shift_bounds(active_shift, today)
+    
+    # ═══════════════════════════════════════════════════
+    # Worker Type Check - فحص نوع الموظف
+    # ═══════════════════════════════════════════════════
+    if action == 'check_in':
+        worker_type = getattr(employee, 'worker_type', 'office') or 'office'
+        company = employee.company
+        
+        # لو مكتبي - لازم من موقع الشركة
+        if worker_type == 'office':
+            if company and company.geofence_enabled and company.office_latitude and company.office_longitude:
+                from attendance.location_utils import is_within_radius
+                radius_check = is_within_radius(
+                    latitude, longitude,
+                    float(company.office_latitude),
+                    float(company.office_longitude),
+                    company.geofence_radius or 500,
+                )
+                if not radius_check['is_within']:
+                    return Response({
+                        'success': False,
+                        **bilingual_message(
+                            employee,
+                            f'لا يمكن تسجيل الحضور من هنا. الموظف المكتبي يجب أن يبصم من موقع الشركة (أنت على بعد {radius_check["distance_meters"]:.0f} متر).',
+                            f'You must check-in from the company location (you are {radius_check["distance_meters"]:.0f}m away).'
+                        ),
+                        'outside_office': True,
+                        'distance_meters': radius_check['distance_meters'],
+                    }, status=400)
+        
+        # لو ميداني محدد - لازم من موقع معتمد
+        elif worker_type == 'field_assigned':
+            from attendance.models import EmployeeWorkLocation
+            from attendance.location_utils import is_within_radius
+            from django.db.models import Q
+            
+            # نجيب المواقع المعتمدة للموظف
+            approved_locations = EmployeeWorkLocation._base_manager.filter(
+                company=company,
+                status='approved',
+                is_active=True,
+            ).filter(
+                Q(employee=employee) |
+                Q(is_shared=True, shared_with_branch=None, shared_with_department=None) |
+                Q(is_shared=True, shared_with_branch=employee.branch) |
+                Q(is_shared=True, shared_with_department=employee.department)
+            ).distinct()
+            
+            # نفحص لو الموظف داخل أي موقع معتمد
+            current_location = None
+            for loc in approved_locations:
+                check = is_within_radius(
+                    latitude, longitude,
+                    float(loc.latitude), float(loc.longitude),
+                    loc.radius or 500,
+                )
+                if check['is_within']:
+                    current_location = loc
+                    break
+            
+            if not current_location:
+                # مش داخل أي موقع معتمد
+                available_names = [loc.name for loc in approved_locations[:5]]
+                return Response({
+                    'success': False,
+                    **bilingual_message(
+                        employee,
+                        'الموقع الحالي غير معتمد. المواقع المتاحة: ' + ', '.join(available_names) if available_names else 'لا توجد مواقع معتمدة لك. يرجى اقتراح موقع.',
+                        'Current location is not approved.'
+                    ),
+                    'outside_approved_locations': True,
+                    'approved_locations': available_names,
+                }, status=400)
+        
+        # لو ميداني حر - أي مكان مسموح
+        # (مفيش فحص للموقع)
+    
+    
 
     # ── تحقق من وقت الشيفت (للحضور فقط) ──
     if action == 'check_in' and active_shift:
@@ -900,29 +978,13 @@ def mobile_attendance_action(request):
     elif late_permission and late_minutes > 0:
         check_in_note = "مدة التأخير أكبر من مدة الإذن المعتمد"
 
+    # ═══════════════════════════════════════════════════
+    # الكود ده القديم اتنقل للـ Worker Type Check (فوق)
+    # اللي بيفحص حسب نوع الموظف (office/field_free/field_assigned)
+    # سيبناه Empty عشان لا نكسر التسلسل
+    # ═══════════════════════════════════════════════════
     if action == 'check_in':
-        try:
-            company = employee.company
-            is_field = getattr(employee, 'is_field_worker', False)
-
-            if not is_field and company and company.geofence_enabled:
-                if company.office_latitude and company.office_longitude:
-                    distance = calculate_distance(
-                        latitude, longitude,
-                        company.office_latitude, company.office_longitude
-                    )
-                    allowed_radius = company.geofence_radius or 100
-
-                    if distance > allowed_radius:
-                        return Response({
-                            'success': False,
-                            'message': f'أنت خارج نطاق الشركة!\nالمسافة الحالية: {int(distance)} متر\nالنطاق المسموح: {allowed_radius} متر',
-                            'out_of_range': True,
-                            'distance': int(distance),
-                            'allowed_radius': allowed_radius,
-                        }, status=400)
-        except Exception as e:
-            pass
+        pass  # Handled by worker_type check above
 
     if action == 'check_in':
         if attendance and getattr(attendance, 'check_in_time', None):

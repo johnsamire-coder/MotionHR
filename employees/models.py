@@ -424,6 +424,22 @@ class Employee(TenantModel):
         default="fixed_shift",
         verbose_name="نظام الحضور"
     )
+
+    # ═══════════════════════════════════════════════════
+    # Worker Type - نوع الموظف (يحدد سلوك البصمة)
+    # ═══════════════════════════════════════════════════
+    WORKER_TYPES = [
+        ("office", "مكتبي"),
+        ("field_free", "ميداني حر"),
+        ("field_assigned", "ميداني محدد"),
+    ]
+    worker_type = models.CharField(
+        max_length=20,
+        choices=WORKER_TYPES,
+        default="office",
+        verbose_name='نوع الموظف',
+        help_text='مكتبي (بصمة من الشركة فقط)، ميداني حر (أي مكان)، ميداني محدد (مواقع معتمدة)'
+    )
     required_daily_hours = models.DecimalField(
         max_digits=4,
         decimal_places=1,
