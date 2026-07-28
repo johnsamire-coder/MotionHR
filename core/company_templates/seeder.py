@@ -514,6 +514,10 @@ def _seed_company_policy(company, user, stats):
                 stealth_tracking_notify_hr=True,
                 stealth_tracking_notify_company_admin=True,
                 
+                # ═══ فترات التتبع ═══
+                tracking_interval_normal_minutes=60,
+                tracking_interval_field_visit_minutes=15,
+                
                 # ═══ الإجازات ═══
                 leave_requires_substitute=True,
                 substitute_same_department_only=True,

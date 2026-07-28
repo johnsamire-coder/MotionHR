@@ -717,6 +717,20 @@ class CompanyPolicy(models.Model):
         default=False,
         verbose_name="تنبيه صاحب الشركة"
     )
+
+    # ═══════════════════════════════════════════════════
+    # فترات التتبع (كل قد إيه يبعت التطبيق الموقع)
+    # ═══════════════════════════════════════════════════
+    tracking_interval_normal_minutes = models.PositiveSmallIntegerField(
+        default=60,
+        verbose_name='فترة التتبع العادي (دقائق)',
+        help_text='كل كام دقيقة يتم إرسال موقع الموظف أثناء الحضور العادي'
+    )
+    tracking_interval_field_visit_minutes = models.PositiveSmallIntegerField(
+        default=15,
+        verbose_name='فترة التتبع أثناء الزيارة الميدانية (دقائق)',
+        help_text='كل كام دقيقة يتم إرسال موقع الموظف أثناء الزيارة الميدانية النشطة'
+    )
     stealth_tracking_requires_charter_clause = models.BooleanField(
         default=True,
         verbose_name="إلزام بند المراقبة في الميثاق"
@@ -1033,4 +1047,3 @@ class CharterNotificationLog(models.Model):
 
     def __str__(self):
         return f"{self.get_notification_type_display()} — {self.employee}"
-
