@@ -758,6 +758,24 @@ def mobile_attendance_action(request):
             "can_request_recall": True,
         }, status=400)
 
+    # ── تحقق أن الموظف مربوط فعلياً بشيفت في EmployeeShift ──
+    if action == 'check_in':
+        from attendance.models import EmployeeShift as _EmpShift
+        has_real_assignment = _EmpShift._base_manager.filter(
+            employee=employee,
+            is_active=True,
+        ).exists()
+        if not has_real_assignment:
+            return Response({
+                'success': False,
+                **bilingual_message(
+                    employee,
+                    'لا يمكن تسجيل الحضور. لم يتم ربطك بأي شيفت حتى الآن. يرجى التواصل مع الموارد البشرية.',
+                    'Check-in is not allowed. You are not assigned to any shift yet. Please contact HR.'
+                ),
+                'no_shift_assigned': True,
+            }, status=400)
+
     active_shift = get_active_shift(employee, today)
     shift_start, shift_end = get_shift_bounds(active_shift, today)
 
@@ -775,7 +793,9 @@ def mobile_attendance_action(request):
 
         if not skip_time_check and shift_start and shift_end:
             from datetime import timedelta
-            allowed_from = shift_start - timedelta(minutes=30)
+            # نقرأ فترة السماح للحضور المبكر من الشيفت نفسه
+            early_minutes = int(getattr(active_shift, 'early_checkin_minutes', 30) or 30)
+            allowed_from = shift_start - timedelta(minutes=early_minutes)
 
             if now < allowed_from or now > shift_end:
                 shift_start_str = shift_start.strftime('%H:%M')
@@ -784,8 +804,8 @@ def mobile_attendance_action(request):
                     'success': False,
                     **bilingual_message(
                         employee,
-                        f'لا يمكن تسجيل الحضور الآن. الشيفت من {shift_start_str} إلى {shift_end_str} (مسموح الحضور قبل الشيفت بـ 30 دقيقة).',
-                        f'Check-in is not allowed now. Shift is from {shift_start_str} to {shift_end_str} (check-in allowed 30 minutes before shift starts).'
+                        f'لا يمكن تسجيل الحضور الآن. الشيفت من {shift_start_str} إلى {shift_end_str} (مسموح الحضور قبل الشيفت بـ {early_minutes} دقيقة).',
+                        f'Check-in is not allowed now. Shift is from {shift_start_str} to {shift_end_str} (check-in allowed {early_minutes} minutes before shift starts).'
                     ),
                     'outside_shift_time': True,
                     'shift_start': shift_start_str,
