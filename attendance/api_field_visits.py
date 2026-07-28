@@ -40,7 +40,7 @@ def auto_close_previous_visit(employee, new_latitude, new_longitude, new_time):
     """
     from attendance.location_utils import (
         calculate_auto_checkout_time,
-        is_realistic_travel,
+        is_realistic_travel_smart,
         haversine_distance,
     )
     
@@ -53,15 +53,17 @@ def auto_close_previous_visit(employee, new_latitude, new_longitude, new_time):
     if not active_visit:
         return None  # مفيش زيارة نشطة
     
-    # نحسب لو الحركة منطقية (Anti-fraud)
+    # نحسب لو الحركة منطقية (Smart Anti-fraud بيستخدم Route History)
     time_diff_minutes = int((new_time - active_visit.arrival_time).total_seconds() / 60)
     
-    realistic_check = is_realistic_travel(
+    realistic_check = is_realistic_travel_smart(
+        employee,
         float(active_visit.arrival_latitude),
         float(active_visit.arrival_longitude),
         new_latitude,
         new_longitude,
         time_diff_minutes,
+        new_time,
     )
     
     # لو الحركة غير منطقية، بنسيبها للتحقق اليدوي
@@ -72,6 +74,10 @@ def auto_close_previous_visit(employee, new_latitude, new_longitude, new_time):
             'reason': realistic_check['reason'],
             'previous_visit_id': active_visit.id,
             'previous_visit_name': active_visit.location_name,
+            'fraud_source': realistic_check.get('source', 'general_estimate'),
+            'fraud_sample_size': realistic_check.get('sample_size', 0),
+            'min_acceptable_minutes': realistic_check.get('min_acceptable_minutes', 0),
+            'actual_minutes': realistic_check.get('actual_minutes', 0),
         }
     
     # نحسب وقت الخروج التلقائي (بالحسبة الذكية + Route History)

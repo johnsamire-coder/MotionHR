@@ -287,3 +287,117 @@ def save_route_to_history(employee, from_lat, from_lng, from_name,
         print(f"Error saving route history: {e}")
         return None
 
+
+# ═══════════════════════════════════════════════════
+# Smart Anti-Fraud - يستخدم Route History للدقة
+# ═══════════════════════════════════════════════════
+def is_realistic_travel_smart(employee, from_lat, from_lng, to_lat, to_lng, 
+                              actual_time_minutes, current_time=None,
+                              tolerance_percent=20):
+    """
+    Anti-Fraud محسّن يستخدم تاريخ الموظف
+    
+    Logic:
+    - لو عندنا 3+ رحلات مشابهة → نستخدم أسرع رحلة (Minimum)
+    - أقل من 3 رحلات → نستخدم الحسبة العامة (Highway Speed)
+    
+    Args:
+        employee: الموظف
+        from_lat, from_lng: نقطة البداية
+        to_lat, to_lng: نقطة النهاية
+        actual_time_minutes: الوقت الفعلي
+        current_time: الوقت الحالي
+        tolerance_percent: نسبة السماح (20% default)
+    
+    Returns:
+        dict: {
+            'is_realistic': bool,
+            'distance_km': float,
+            'actual_minutes': int,
+            'min_acceptable_minutes': int,
+            'source': 'personal_min' | 'general_estimate',
+            'sample_size': int,
+            'reason': str,
+        }
+    """
+    from django.utils import timezone as tz
+    from decimal import Decimal
+    
+    if current_time is None:
+        current_time = tz.now()
+    
+    distance = haversine_distance(from_lat, from_lng, to_lat, to_lng)
+    time_period = get_time_period(current_time)
+    
+    # نبحث في تاريخ الرحلات المشابهة
+    min_acceptable = None
+    source = 'general_estimate'
+    sample_size = 0
+    
+    try:
+        from attendance.models import RouteHistory
+        from django.db.models import Min
+        
+        lat_tolerance = Decimal('0.005')
+        lng_tolerance = Decimal('0.005')
+        
+        history = RouteHistory._base_manager.filter(
+            employee=employee,
+            from_latitude__gte=Decimal(str(from_lat)) - lat_tolerance,
+            from_latitude__lte=Decimal(str(from_lat)) + lat_tolerance,
+            from_longitude__gte=Decimal(str(from_lng)) - lng_tolerance,
+            from_longitude__lte=Decimal(str(from_lng)) + lng_tolerance,
+            to_latitude__gte=Decimal(str(to_lat)) - lat_tolerance,
+            to_latitude__lte=Decimal(str(to_lat)) + lat_tolerance,
+            to_longitude__gte=Decimal(str(to_lng)) - lng_tolerance,
+            to_longitude__lte=Decimal(str(to_lng)) + lng_tolerance,
+            time_period=time_period,
+            is_verified=True,
+        )
+        
+        sample_size = history.count()
+        
+        if sample_size >= 3:
+            # عندنا بيانات كافية → نستخدم أسرع رحلة
+            min_data = history.aggregate(min_time=Min('travel_time_minutes'))
+            fastest = min_data['min_time']
+            
+            # نسبة السماح 20% أقل من أسرع رحلة
+            min_acceptable = max(1, int(fastest * (1 - tolerance_percent / 100)))
+            source = 'personal_min'
+    
+    except Exception:
+        pass
+    
+    # لو مفيش تاريخ، نستخدم الحسبة العامة
+    if min_acceptable is None:
+        fastest_time_hours = distance / SPEED_HIGHWAY
+        min_acceptable = max(1, round(fastest_time_hours * 60 * (1 - tolerance_percent / 100)))
+    
+    is_realistic = actual_time_minutes >= min_acceptable
+    
+    reason = ''
+    if not is_realistic:
+        if source == 'personal_min':
+            reason = (
+                f'المسافة {distance:.1f} كم — بناءً على تاريخك، '
+                f'أسرع مرة عملت الرحلة دي كانت {int(min_acceptable / (1 - tolerance_percent / 100))} دقيقة، '
+                f'الحد الأدنى المقبول {min_acceptable} دقيقة، '
+                f'ولكن الفارق الفعلي {actual_time_minutes} دقيقة فقط'
+            )
+        else:
+            reason = (
+                f'المسافة {distance:.1f} كم تحتاج على الأقل {min_acceptable} دقيقة، '
+                f'ولكن الفارق الفعلي {actual_time_minutes} دقيقة فقط'
+            )
+    
+    return {
+        'is_realistic': is_realistic,
+        'distance_km': round(distance, 2),
+        'actual_minutes': actual_time_minutes,
+        'min_acceptable_minutes': min_acceptable,
+        'source': source,
+        'sample_size': sample_size,
+        'reason': reason,
+    }
+
