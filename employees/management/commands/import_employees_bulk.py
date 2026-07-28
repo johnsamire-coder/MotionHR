@@ -33,65 +33,63 @@ C = {
     "first_name_en": 6,
     "last_name_en": 7,
     "national_id": 8,
-    "passport_number": 9,
-    "birth_date": 10,
-    "gender": 11,
-    "marital_status": 12,
-    "religion": 13,
-    "nationality": 14,
-    "language": 15,
-    "country_code": 16,
-    "phone": 17,
-    "phone2": 18,
-    "email": 19,
-    "address": 20,
-    "city": 21,
-    "emergency_contact_name": 22,
-    "emergency_contact_relation": 23,
-    "emergency_contact_phone": 24,
-    "branch_name": 25,
-    "department_name": 26,
-    "job_title_name": 27,
-    "direct_manager_department": 28,
-    "direct_manager_name": 29,
-    "hire_date": 30,
-    "attendance_mode": 31,
-    "status": 32,
-    "contract_type": 33,
-    "contract_start_date": 34,
-    "contract_end_date": 35,
-    "contract_duration_months": 36,
-    "probation_months": 37,
-    "has_insurance": 38,
-    "insurance_number": 39,
-    "basic_salary": 40,
-    "currency": 41,
-    "salary_payment_method": 42,
-    "bank_name": 43,
-    "bank_account": 44,
-    "bank_account_holder_name": 45,
-    "iban": 46,
-    "instapay_transfer_id": 47,
-    "wallet_transfer_number": 48,
-    "wallet_provider": 49,
-    "annual_entitled": 50,
-    "annual_used_before_system": 51,
-    "annual_carry_forward": 52,
-    "sick_entitled": 53,
-    "sick_used_before_system": 54,
-    "sick_carry_forward": 55,
-    "emergency_entitled": 56,
-    "emergency_used_before_system": 57,
-    "emergency_carry_forward": 58,
-    "maternity_entitled": 59,
-    "maternity_used_before_system": 60,
-    "maternity_carry_forward": 61,
-    "paternity_entitled": 62,
-    "paternity_used_before_system": 63,
-    "paternity_carry_forward": 64,
-    "unpaid_entitled": 65,
-    "unpaid_used_before_system": 66,
-    "unpaid_carry_forward": 67,
+    "birth_date": 9,
+    "gender": 10,
+    "marital_status": 11,
+    "religion": 12,
+    "nationality": 13,
+    "language": 14,
+    "country_code": 15,
+    "phone": 16,
+    "phone2": 17,
+    "email": 18,
+    "address": 19,
+    "city": 20,
+    "emergency_contact_name": 21,
+    "emergency_contact_relation": 22,
+    "emergency_contact_phone": 23,
+    "branch_name": 24,
+    "department_name": 25,
+    "job_title_name": 26,
+    "direct_manager_department": 27,
+    "direct_manager_name": 28,
+    "hire_date": 29,
+    "attendance_mode": 30,
+    "status": 31,
+    "contract_type": 32,
+    "contract_start_date": 33,
+    "contract_end_date": 34,
+    "contract_duration_months": 35,
+    "probation_months": 36,
+    "has_insurance": 37,
+    "insurance_number": 38,
+    "basic_salary": 39,
+    "currency": 40,
+    "salary_payment_method": 41,
+    "bank_name": 42,
+    "bank_account": 43,
+    "iban": 45,
+    "instapay_transfer_id": 45,
+    "wallet_transfer_number": 46,
+    "wallet_provider": 47,
+    "annual_entitled": 48,
+    "annual_used_before_system": 49,
+    "annual_carry_forward": 50,
+    "sick_entitled": 51,
+    "sick_used_before_system": 52,
+    "sick_carry_forward": 53,
+    "emergency_entitled": 54,
+    "emergency_used_before_system": 55,
+    "emergency_carry_forward": 56,
+    "maternity_entitled": 57,
+    "maternity_used_before_system": 58,
+    "maternity_carry_forward": 59,
+    "paternity_entitled": 60,
+    "paternity_used_before_system": 61,
+    "paternity_carry_forward": 62,
+    "unpaid_entitled": 63,
+    "unpaid_used_before_system": 64,
+    "unpaid_carry_forward": 65,
 }
 
 LEAVE_COLS = {
@@ -297,8 +295,7 @@ class Command(BaseCommand):
                     errors.append(f"{prefix}: اسم البنك إجباري لطريقة القبض [bank]")
                 if not _str(row, "bank_account"):
                     errors.append(f"{prefix}: رقم الحساب إجباري لطريقة القبض [bank]")
-                if not _str(row, "bank_account_holder_name"):
-                    errors.append(f"{prefix}: اسم صاحب الحساب إجباري لطريقة القبض [bank]")
+
             elif pay_method == "instapay":
                 if not _str(row, "instapay_transfer_id"):
                     errors.append(f"{prefix}: رقم إنستا باي إجباري لطريقة القبض [instapay]")
@@ -501,6 +498,44 @@ class Command(BaseCommand):
                 used_days=used,
                 pending_days=0,
             )
+
+        # ═══════════════════════════════════════════════════
+        # ربط الموظف بالشيفت الافتراضي للشركة (Auto-link)
+        # ═══════════════════════════════════════════════════
+        try:
+            from attendance.models import Shift, EmployeeShift
+
+            default_shift = Shift._base_manager.filter(
+                company=company,
+                is_default=True,
+                is_active=True,
+            ).first()
+
+            if default_shift:
+                already_linked = EmployeeShift._base_manager.filter(
+                    company=company,
+                    employee=emp,
+                    shift=default_shift,
+                    is_active=True,
+                ).exists()
+
+                if not already_linked:
+                    EmployeeShift._base_manager.create(
+                        company=company,
+                        employee=emp,
+                        shift=default_shift,
+                        assignment_type="individual",
+                        start_date=timezone.now().date(),
+                        is_active=True,
+                        priority=1,
+                    )
+                    created_defs.append(
+                        f"صف {idx}: تم ربط الموظف بالشيفت الافتراضي [{default_shift.name}]"
+                    )
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(
+                f"صف {idx}: تعذر ربط الشيفت الافتراضي: {e}"
+            ))
 
         for msg in created_defs:
             self.stdout.write(self.style.SUCCESS(msg))
