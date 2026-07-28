@@ -436,9 +436,10 @@ class Employee(TenantModel):
     worker_type = models.CharField(
         max_length=20,
         choices=WORKER_TYPES,
-        default="office",
+        null=True,
+        blank=True,
         verbose_name='نوع الموظف',
-        help_text='مكتبي (بصمة من الشركة فقط)، ميداني حر (أي مكان)، ميداني محدد (مواقع معتمدة)'
+        help_text='مكتبي (بصمة من الشركة فقط)، ميداني حر (أي مكان)، ميداني محدد (مواقع معتمدة) - إجباري لتفعيل التطبيق'
     )
     required_daily_hours = models.DecimalField(
         max_digits=4,

@@ -1354,6 +1354,63 @@ def mobile_attendance_status(request):
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     today = timezone.localdate()
+    
+    # ═══════════════════════════════════════════════════
+    # Validation: worker_type and shift must be set
+    # ═══════════════════════════════════════════════════
+    worker_type = getattr(employee, 'worker_type', None)
+    
+    from attendance.models import EmployeeShift as _EmpShift
+    from attendance.models import ShiftAssignment as _ShiftAssign
+    from django.db.models import Q as _Q
+    
+    has_emp_shift = _EmpShift._base_manager.filter(
+        employee=employee, is_active=True
+    ).exists()
+    
+    emp_dept_id = getattr(employee, 'department_id', None)
+    emp_branch_id = getattr(employee, 'branch_id', None)
+    assignment_q = _Q(employee=employee)
+    if emp_dept_id:
+        assignment_q |= _Q(assignment_type='department', department_id=emp_dept_id)
+    if emp_branch_id:
+        assignment_q |= _Q(assignment_type='branch', branch_id=emp_branch_id)
+    
+    has_shift = has_emp_shift or _ShiftAssign._base_manager.filter(
+        company=employee.company, is_active=True
+    ).filter(assignment_q).exists()
+    
+    missing = []
+    if not worker_type:
+        missing.append('worker_type')
+    if not has_shift:
+        missing.append('shift')
+    
+    if missing:
+        messages_ar = []
+        messages_en = []
+        if 'worker_type' in missing:
+            messages_ar.append('لم يتم تحديد نوع الموظف (مكتبي / ميداني حر / ميداني محدد)')
+            messages_en.append('Worker type not specified (office / field_free / field_assigned)')
+        if 'shift' in missing:
+            messages_ar.append('لم يتم ربطك بأي شيفت')
+            messages_en.append('You are not assigned to any shift')
+        
+        # Send notification to HR (once per day)
+        try:
+            _notify_hr_incomplete_data(employee, missing)
+        except Exception:
+            pass
+        
+        return Response({
+            'success': False,
+            'account_incomplete': True,
+            'missing': missing,
+            'message': ' | '.join(messages_ar),
+            'message_en': ' | '.join(messages_en),
+            'action_required': 'تواصل مع الموارد البشرية' if getattr(employee, 'language', 'ar') == 'ar' else 'Contact HR',
+        }, status=200)
+    
     attendance = Attendance._base_manager.filter(employee=employee, date=today).first()
     today_dict = attendance_to_dict(attendance)
 
@@ -2248,4 +2305,48 @@ def mobile_charter_update(request):
         "attachment_url": attachment_url,
         "attachment_name": attachment_name,
     })
+
+
+def _notify_hr_incomplete_data(employee, missing):
+    """
+    Send notification to HR when employee has incomplete data
+    (only once per day per employee)
+    """
+    try:
+        from django.core.cache import cache
+        cache_key = f'notify_hr_incomplete_{employee.id}_{timezone.localdate()}'
+        if cache.get(cache_key):
+            return
+        cache.set(cache_key, True, 86400)  # 24 hours
+        
+        from accounts.fcm_service import send_notification_to_managers
+        
+        emp_name = f"{getattr(employee, 'first_name_ar', '')} {getattr(employee, 'last_name_ar', '')}".strip()
+        
+        missing_labels_ar = []
+        missing_labels_en = []
+        if 'worker_type' in missing:
+            missing_labels_ar.append('نوع الموظف')
+            missing_labels_en.append('worker type')
+        if 'shift' in missing:
+            missing_labels_ar.append('الشيفت')
+            missing_labels_en.append('shift')
+        
+        title = 'موظف بيانات ناقصة'
+        body = f'[{emp_name}] لم يستطع استخدام التطبيق - ناقص: {", ".join(missing_labels_ar)}'
+        
+        send_notification_to_managers(
+            employee.company,
+            title, body,
+            data={
+                'type': 'employee_incomplete_data',
+                'employee_id': str(employee.id),
+                'employee_name': emp_name,
+                'missing': ','.join(missing),
+            },
+            title_en='Employee Data Incomplete',
+            body_en=f'[{emp_name}] cannot use the app - missing: {", ".join(missing_labels_en)}',
+        )
+    except Exception:
+        pass
 
