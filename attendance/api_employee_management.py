@@ -1272,7 +1272,7 @@ def manager_get_location_report(request):
                 'latitude': float(loc.latitude),
                 'longitude': float(loc.longitude),
                 'accuracy': loc.accuracy,
-                'recorded_at': loc.recorded_at.strftime('%H:%M') if loc.recorded_at else '',
+                'recorded_at': loc.recorded_at.strftime('%I:%M %p') if loc.recorded_at else '',
                 'point_index': loc.point_index,
                 'address': loc.address,
             })

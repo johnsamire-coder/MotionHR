@@ -54,7 +54,7 @@ def _format_time(value):
     if not value:
         return None
     try:
-        return value.strftime('%H:%M')
+        return value.strftime('%I:%M %p')
     except Exception:
         return str(value)
 
@@ -1086,8 +1086,8 @@ def daily_attendance_report(request):
                 'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
                 'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
                 'status': status,
-                'check_in': att.check_in_time.strftime('%H:%M') if att and att.check_in_time else None,
-                'check_out': att.check_out_time.strftime('%H:%M') if att and att.check_out_time else None,
+                'check_in': att.check_in_time.strftime('%I:%M %p') if att and att.check_in_time else None,
+                'check_out': att.check_out_time.strftime('%I:%M %p') if att and att.check_out_time else None,
                 'work_hours': float(summary.work_hours or 0),
                 'late_minutes': summary.late_minutes or 0,
                 'early_leave_minutes': summary.early_leave_minutes or 0,
@@ -1104,8 +1104,8 @@ def daily_attendance_report(request):
                 'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
                 'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
                 'status': status,
-                'check_in': att.check_in_time.strftime('%H:%M') if att.check_in_time else None,
-                'check_out': att.check_out_time.strftime('%H:%M') if att and att.check_out_time else None,
+                'check_in': att.check_in_time.strftime('%I:%M %p') if att.check_in_time else None,
+                'check_out': att.check_out_time.strftime('%I:%M %p') if att and att.check_out_time else None,
                 'work_hours': float(att.work_hours or 0),
                 'late_minutes': att.late_minutes or 0,
                 'early_leave_minutes': att.early_leave_minutes or 0,

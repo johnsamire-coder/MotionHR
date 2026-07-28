@@ -277,7 +277,7 @@ def auto_check_in(request):
         return Response({
             'status': 'already_checked_in',
             'message': _msg('already_checked_in', lang),
-            'check_in': existing.check_in_time.strftime('%H:%M') if existing.check_in_time else None,
+            'check_in': existing.check_in_time.strftime('%I:%M %p') if existing.check_in_time else None,
         })
 
     # تحقق من الـ Geofence
@@ -306,7 +306,7 @@ def auto_check_in(request):
     check_in_time = now.time().replace(microsecond=0)
     late_minutes = _calculate_late_minutes(shift, check_in_time)
     status_val = 'late' if late_minutes > 0 else 'present'
-    check_in_str = check_in_time.strftime('%H:%M')
+    check_in_str = check_in_time.strftime('%I:%M %p')
 
     # إنشاء أو تحديث سجل الحضور
     att, created = Attendance.objects.get_or_create(
@@ -417,7 +417,7 @@ def auto_check_out(request):
     check_out_dt = datetime.combine(today, check_out_time)
     work_duration = check_out_dt - check_in_dt
     work_hours = round(work_duration.total_seconds() / 3600, 2)
-    check_out_str = check_out_time.strftime('%H:%M')
+    check_out_str = check_out_time.strftime('%I:%M %p')
 
     # حساب الأوفرتايم
     shift = _get_employee_shift(emp)
@@ -451,7 +451,7 @@ def auto_check_out(request):
     return Response({
         'status': 'checked_out',
         'message': _msg('checked_out', lang),
-        'check_in': att.check_in_time.strftime('%H:%M'),
+        'check_in': att.check_in_time.strftime('%I:%M %p'),
         'check_out': check_out_str,
         'work_hours': work_hours,
         'overtime_hours': overtime_hours,
@@ -486,8 +486,8 @@ def auto_checkin_status(request):
         'status': att.status,
         'has_check_in': att.check_in_time is not None,
         'has_check_out': att.check_out_time is not None,
-        'check_in': att.check_in_time.strftime('%H:%M') if att.check_in_time else None,
-        'check_out': att.check_out_time.strftime('%H:%M') if att.check_out_time else None,
+        'check_in': att.check_in_time.strftime('%I:%M %p') if att.check_in_time else None,
+        'check_out': att.check_out_time.strftime('%I:%M %p') if att.check_out_time else None,
         'work_hours': float(att.work_hours or 0),
         'late_minutes': int(att.late_minutes or 0),
         'overtime_hours': float(att.overtime_hours or 0),

@@ -302,8 +302,8 @@ def get_shift_periods(shift, day):
                 'period_number': 1,
                 'start': timezone.make_aware(start_dt, tz),
                 'end': timezone.make_aware(end_dt, tz),
-                'start_str': shift.start_time.strftime('%H:%M'),
-                'end_str': shift.end_time.strftime('%H:%M'),
+                'start_str': shift.start_time.strftime('%I:%M %p'),
+                'end_str': shift.end_time.strftime('%I:%M %p'),
                 'name': 'فترة العمل',
             })
 
@@ -351,8 +351,8 @@ def get_shift_periods(shift, day):
                 'period_number': 1,
                 'start': timezone.make_aware(start_dt, tz),
                 'end': timezone.make_aware(end_dt, tz),
-                'start_str': shift.start_time.strftime('%H:%M'),
-                'end_str': shift.end_time.strftime('%H:%M'),
+                'start_str': shift.start_time.strftime('%I:%M %p'),
+                'end_str': shift.end_time.strftime('%I:%M %p'),
                 'name': 'فترة العمل',
             })
 
@@ -396,8 +396,8 @@ def get_shift_periods(shift, day):
                 'period_number': 1,
                 'start': timezone.make_aware(start_dt, tz),
                 'end': timezone.make_aware(end_dt, tz),
-                'start_str': shift.start_time.strftime('%H:%M'),
-                'end_str': shift.end_time.strftime('%H:%M'),
+                'start_str': shift.start_time.strftime('%I:%M %p'),
+                'end_str': shift.end_time.strftime('%I:%M %p'),
                 'name': 'فترة 1',
             })
     else:
@@ -412,8 +412,8 @@ def get_shift_periods(shift, day):
                 'period_number': 1,
                 'start': timezone.make_aware(start_dt, tz),
                 'end': timezone.make_aware(end_dt, tz),
-                'start_str': shift.start_time.strftime('%H:%M'),
-                'end_str': shift.end_time.strftime('%H:%M'),
+                'start_str': shift.start_time.strftime('%I:%M %p'),
+                'end_str': shift.end_time.strftime('%I:%M %p'),
                 'name': 'الفترة الأساسية',
             })
 
@@ -818,8 +818,8 @@ def mobile_attendance_action(request):
             allowed_from = shift_start - timedelta(minutes=early_minutes)
 
             if now < allowed_from or now > shift_end:
-                shift_start_str = shift_start.strftime('%H:%M')
-                shift_end_str = shift_end.strftime('%H:%M')
+                shift_start_str = shift_start.strftime('%I:%M %p')
+                shift_end_str = shift_end.strftime('%I:%M %p')
                 return Response({
                     'success': False,
                     **bilingual_message(
@@ -1310,9 +1310,9 @@ def mobile_attendance_status(request):
         if shift:
             shift_name = shift.name
             if shift.start_time:
-                shift_start_str = shift.start_time.strftime('%H:%M')
+                shift_start_str = shift.start_time.strftime('%I:%M %p')
             if shift.end_time:
-                shift_end_str = shift.end_time.strftime('%H:%M')
+                shift_end_str = shift.end_time.strftime('%I:%M %p')
 
             if shift.start_time and shift.end_time:
                 start_dt = datetime.combine(today, shift.start_time)

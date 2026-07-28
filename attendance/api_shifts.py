@@ -1969,7 +1969,7 @@ def partial_checkout(request):
             "message": "تم تسجيل الخروج الجزئي",
             "session_number": open_session.session_number,
             "worked_minutes": open_session.worked_minutes,
-            "check_out_time": now.strftime('%H:%M'),
+            "check_out_time": now.strftime('%I:%M %p'),
         })
 
     except Exception as e:
@@ -2072,7 +2072,7 @@ def resume_checkin(request):
             "success": True,
             "message": "تم تسجيل العودة للعمل",
             "session_number": new_session.session_number,
-            "check_in_time": now.strftime('%H:%M'),
+            "check_in_time": now.strftime('%I:%M %p'),
         })
 
     except Exception as e:
@@ -2115,8 +2115,8 @@ def today_sessions(request):
             total_minutes += worked
             data.append({
                 "session_number": s.session_number,
-                "check_in": s.check_in_time.strftime('%H:%M') if s.check_in_time else None,
-                "check_out": s.check_out_time.strftime('%H:%M') if s.check_out_time else None,
+                "check_in": s.check_in_time.strftime('%I:%M %p') if s.check_in_time else None,
+                "check_out": s.check_out_time.strftime('%I:%M %p') if s.check_out_time else None,
                 "is_partial": s.is_partial,
                 "is_complete": s.is_complete,
                 "worked_minutes": worked,

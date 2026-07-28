@@ -152,7 +152,7 @@ def api_check_in(request):
         if existing and existing.check_in_time:
             return JsonResponse({
                 'success': False,
-                'message': f'تم تسجيل الحضور مسبقاً في {existing.check_in_time.strftime("%H:%M")}'
+                'message': f'تم تسجيل الحضور مسبقاً في {existing.check_in_time.strftime("%I:%M %p")}'
             })
         
         within_range = False
@@ -252,7 +252,7 @@ def api_check_out(request):
         if attendance.check_out_time:
             return JsonResponse({
                 'success': False,
-                'message': f'تم تسجيل الانصراف مسبقاً في {attendance.check_out_time.strftime("%H:%M")}'
+                'message': f'تم تسجيل الانصراف مسبقاً في {attendance.check_out_time.strftime("%I:%M %p")}'
             })
         
         within_range = False
@@ -470,7 +470,7 @@ def api_employee_route(request, employee_id):
         'lat': float(l.latitude),
         'lng': float(l.longitude),
         'address': l.address or '',
-        'timestamp': timezone.localtime(l.timestamp).strftime('%H:%M'),
+        'timestamp': timezone.localtime(l.timestamp).strftime('%I:%M %p'),
     } for l in logs]
 
     return JsonResponse({
@@ -1668,7 +1668,7 @@ def _build_late_details(employee, month, year):
         for inc in incidents:
             lines.append(
                 f"• {inc.date.strftime('%d/%m/%Y')} — "
-                f"{inc.actual_checkin_time.strftime('%H:%M') if inc.actual_checkin_time else '—'} — "
+                f"{inc.actual_checkin_time.strftime('%I:%M %p') if inc.actual_checkin_time else '—'} — "
                 f"{inc.late_minutes} دقيقة"
             )
         return "\n".join(lines)
@@ -1694,7 +1694,7 @@ def _create_late_notification(employee, incident, policy):
             )
             details = (
                 f"التاريخ: {incident.date.strftime('%d/%m/%Y')}\n"
-                f"وقت الحضور: {incident.actual_checkin_time.strftime('%H:%M') if incident.actual_checkin_time else '—'}\n"
+                f"وقت الحضور: {incident.actual_checkin_time.strftime('%I:%M %p') if incident.actual_checkin_time else '—'}\n"
                 f"عدد مرات التأخير هذا الشهر: {incident.incident_number_in_month}"
             )
             suggested_action = ""
