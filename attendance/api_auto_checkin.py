@@ -112,7 +112,7 @@ def _haversine_distance(lat1, lon1, lat2, lon2):
 def _get_employee(user):
     try:
         from employees.models import Employee
-        return Employee.objects.get(user=user)
+        return Employee._base_manager.filter(user=user).first()
     except Exception:
         return None
 
@@ -280,49 +280,90 @@ def auto_check_in(request):
             'check_in': existing.check_in_time.strftime('%I:%M %p') if existing.check_in_time else None,
         })
 
-    # تحقق من الـ Geofence
-    geofence = _get_active_geofence(emp)
-    is_within = True
-    distance = None
-
-    if geofence and geofence.latitude and geofence.longitude:
-        distance = _haversine_distance(
-            lat, lon,
-            float(geofence.latitude),
-            float(geofence.longitude),
-        )
-        radius = float(getattr(geofence, 'radius', 100) or 100)
-        is_within = distance <= radius
-
-    if not is_within:
-        return Response({
-            'status': 'out_of_range',
-            'message': _msg('out_of_range', lang),
-            'distance_meters': round(distance, 1) if distance else None,
-        }, status=400)
+    # ═══════════════════════════════════════════════════
+    # Worker Type Check - فحص نوع الموظف
+    # ═══════════════════════════════════════════════════
+    worker_type = getattr(emp, 'worker_type', 'office') or 'office'
+    company = emp.company
+    
+    # لو مكتبي - لازم من موقع الشركة
+    if worker_type == 'office':
+        if company and company.geofence_enabled and company.office_latitude and company.office_longitude:
+            from attendance.location_utils import is_within_radius
+            radius_check = is_within_radius(
+                lat, lon,
+                float(company.office_latitude),
+                float(company.office_longitude),
+                company.geofence_radius or 500,
+            )
+            if not radius_check['is_within']:
+                return Response({
+                    'status': 'out_of_range',
+                    'message': f'لا يمكن تسجيل الحضور من هنا. الموظف المكتبي يجب أن يبصم من موقع الشركة (أنت على بعد {radius_check["distance_meters"]:.0f} متر).',
+                    'distance_meters': radius_check['distance_meters'],
+                }, status=400)
+    
+    # لو ميداني محدد - لازم من موقع معتمد
+    elif worker_type == 'field_assigned':
+        from attendance.models import EmployeeWorkLocation
+        from attendance.location_utils import is_within_radius
+        from django.db.models import Q
+        
+        approved_locations = EmployeeWorkLocation._base_manager.filter(
+            company=company,
+            status='approved',
+            is_active=True,
+        ).filter(
+            Q(employee=emp) |
+            Q(is_shared=True, shared_with_branch=None, shared_with_department=None) |
+            Q(is_shared=True, shared_with_branch=emp.branch) |
+            Q(is_shared=True, shared_with_department=emp.department)
+        ).distinct()
+        
+        current_location = None
+        for loc in approved_locations:
+            check = is_within_radius(
+                lat, lon,
+                float(loc.latitude), float(loc.longitude),
+                loc.radius or 500,
+            )
+            if check['is_within']:
+                current_location = loc
+                break
+        
+        if not current_location:
+            available_names = [loc.name for loc in approved_locations[:5]]
+            return Response({
+                'status': 'outside_approved_locations',
+                'message': 'الموقع الحالي غير معتمد. المواقع المتاحة: ' + ', '.join(available_names) if available_names else 'لا توجد مواقع معتمدة لك.',
+                'approved_locations': available_names,
+            }, status=400)
+    
+    # لو ميداني حر - أي مكان مسموح (بدون فحص)
 
     # حساب التأخير
     shift = _get_employee_shift(emp)
-    check_in_time = now.time().replace(microsecond=0)
-    late_minutes = _calculate_late_minutes(shift, check_in_time)
+    check_in_time_only = now.time().replace(microsecond=0)
+    late_minutes = _calculate_late_minutes(shift, check_in_time_only)
     status_val = 'late' if late_minutes > 0 else 'present'
-    check_in_str = check_in_time.strftime('%I:%M %p')
+    check_in_str = check_in_time_only.strftime('%I:%M %p')
 
-    # إنشاء أو تحديث سجل الحضور
-    att, created = Attendance.objects.get_or_create(
+    # إنشاء أو تحديث سجل الحضور (نستخدم now الكامل مش الوقت فقط)
+    att, created = Attendance._base_manager.get_or_create(
         employee=emp,
         date=today,
         defaults={
-            'check_in_time': check_in_time,
+            'check_in_time': now,
             'status': status_val,
             'late_minutes': late_minutes,
             'check_in_latitude': lat,
             'check_in_longitude': lon,
+            'company': emp.company,
         }
     )
 
     if not created and att.check_in_time is None:
-        att.check_in_time = check_in_time
+        att.check_in_time = now
         att.status = status_val
         att.late_minutes = late_minutes
         att.check_in_latitude = lat
@@ -392,24 +433,30 @@ def auto_check_out(request):
             'message': _msg('no_checkin', lang),
         }, status=400)
 
-    # تحقق إن الموظف خرج من النطاق
-    geofence = _get_active_geofence(emp)
-    is_outside = True
-
-    if geofence and geofence.latitude and geofence.longitude:
-        distance = _haversine_distance(
-            lat, lon,
-            float(geofence.latitude),
-            float(geofence.longitude),
-        )
-        radius = float(getattr(geofence, 'radius', 100) or 100)
-        is_outside = distance > radius
-
-    if not is_outside:
-        return Response({
-            'status': 'still_inside',
-            'message': _msg('still_inside', lang),
-        }, status=400)
+    # ═══════════════════════════════════════════════════
+    # للانصراف: الميداني الحر والمحدد مسموحلهم من أي مكان
+    # المكتبي: فقط لو خرج من نطاق الشركة
+    # ═══════════════════════════════════════════════════
+    worker_type = getattr(emp, 'worker_type', 'office') or 'office'
+    
+    if worker_type == 'office':
+        company = emp.company
+        if company and company.geofence_enabled and company.office_latitude and company.office_longitude:
+            from attendance.location_utils import is_within_radius
+            radius_check = is_within_radius(
+                lat, lon,
+                float(company.office_latitude),
+                float(company.office_longitude),
+                company.geofence_radius or 500,
+            )
+            # المكتبي - يقدر ينصرف بس لو خرج من نطاق الشركة
+            if radius_check['is_within']:
+                return Response({
+                    'status': 'still_inside',
+                    'message': 'ما زلت داخل نطاق الشركة',
+                }, status=400)
+    
+    # الميداني الحر والمحدد: مفيش فحص للانصراف (ممكن من أي مكان)
 
     # حساب ساعات العمل
     check_out_time = now.time().replace(microsecond=0)
