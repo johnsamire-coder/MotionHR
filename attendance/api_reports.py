@@ -7,6 +7,7 @@ from calendar import monthrange
 
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -90,7 +91,7 @@ def _employee_username(emp):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def attendance_monthly_report(request):
     """
@@ -146,7 +147,7 @@ def attendance_monthly_report(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def late_report(request):
     """
@@ -211,7 +212,7 @@ def late_report(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def absence_report(request):
     """
@@ -284,7 +285,7 @@ def absence_report(request):
 # 4) تقرير الطلبات
 # ═══════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def requests_report(request):
     user = request.user
@@ -343,7 +344,7 @@ def requests_report(request):
 # 5) تقرير الإجازات
 # ═══════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def leaves_report(request):
     user = request.user
@@ -420,7 +421,7 @@ def leaves_report(request):
 # 6) تقرير ساعات العمل الفعلية
 # ═══════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def work_hours_report(request):
     user = request.user
@@ -485,7 +486,7 @@ from django.http import HttpResponse
 from io import BytesIO
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def export_report_pdf(request):
     user = request.user
@@ -580,7 +581,7 @@ def export_report_pdf(request):
 # 8) تصدير Excel
 # ═══════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def export_report_excel(request):
     user = request.user
@@ -655,7 +656,7 @@ def export_report_excel(request):
 # ═══════════════════════════════════════
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def requests_report(request):
     user = request.user
@@ -718,7 +719,7 @@ def requests_report(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def leaves_report(request):
     user = request.user
@@ -805,7 +806,7 @@ def leaves_report(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def work_hours_report(request):
     user = request.user
@@ -872,7 +873,7 @@ def work_hours_report(request):
 # 5.1 تقرير الرواتب الشهري
 # ══════════════════════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def payroll_report(request):
     """تقرير الرواتب الشهري لكل الموظفين"""
@@ -970,7 +971,7 @@ def payroll_report(request):
 # 5.3 تقرير الأذونات
 # ══════════════════════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def permissions_report(request):
     """تقرير رصيد الأذونات والحركات"""
@@ -1040,7 +1041,7 @@ def permissions_report(request):
 # 5.5 تقرير يومي للحضور
 # ══════════════════════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def daily_attendance_report(request):
     """تقرير حالة الحضور لكل الموظفين في يوم معين"""
@@ -1148,7 +1149,7 @@ def daily_attendance_report(request):
 # 5.4 تقرير الإجازات المحسّن (مع أرصدة + unpaid + نص يوم)
 # ══════════════════════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def leaves_report_enhanced(request):
     """تقرير الإجازات الشامل مع الأرصدة"""
@@ -1241,7 +1242,7 @@ def leaves_report_enhanced(request):
 # 5.2 تقرير الشيفتات
 # ══════════════════════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def shifts_report(request):
     """تقرير توزيع الموظفين على الشيفتات"""

@@ -4,10 +4,12 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.authtoken.models import Token
 
 from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
 from employees.models import Employee
 from attendance.models import Attendance, LocationLog
 
@@ -551,6 +553,15 @@ def mobile_login(request):
         return Response({'success': False, 'message': 'بيانات الدخول غير صحيحة'}, status=401)
 
     token, _ = Token.objects.get_or_create(user=user)
+
+    # JWT tokens
+    try:
+        _refresh = RefreshToken.for_user(user)
+        _jwt_access = str(_refresh.access_token)
+        _jwt_refresh = str(_refresh)
+    except Exception:
+        _jwt_access = ''
+        _jwt_refresh = ''
     must_change_password = getattr(user, 'must_change_password', False)
     role = getattr(user, 'role', 'employee') or 'employee'
     manager_roles = ['super_admin', 'company_admin', 'hr_manager', 'manager']
@@ -575,6 +586,8 @@ def mobile_login(request):
             'success': True,
             'message': 'تم الدخول بنجاح',
             'token': token.key,
+            'access': _jwt_access,
+            'refresh': _jwt_refresh,
             'must_change_password': must_change_password,
             'role': role,
             'app_mode': 'manager',
@@ -610,6 +623,8 @@ def mobile_login(request):
         'success': True,
         'message': 'تم الدخول بنجاح',
         'token': token.key,
+        'access': _jwt_access,
+        'refresh': _jwt_refresh,
         'must_change_password': must_change_password,
         'role': role,
         'app_mode': app_mode,
@@ -632,7 +647,7 @@ def mobile_login(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_send_location(request):
     employee = get_employee_for_user(request.user)
@@ -699,7 +714,7 @@ def get_current_split_period(shift, now_dt):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_attendance_action(request):
     employee = get_employee_for_user(request.user)
@@ -1345,7 +1360,7 @@ def mobile_attendance_action(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_attendance_status(request):
     from datetime import datetime, timedelta, time as dt_time
@@ -1667,7 +1682,7 @@ def _get_active_field_visit(employee):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_attendance_history(request):
     employee = get_employee_for_user(request.user)
@@ -1686,7 +1701,7 @@ def mobile_attendance_history(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_change_password(request):
     """تغيير كلمة المرور من تطبيق الموبايل"""
@@ -1735,7 +1750,7 @@ def mobile_change_password(request):
 # ==================== GEOFENCE APIs ====================
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_geofence_get(request):
     """جلب إعدادات النطاق الجغرافي للشركة"""
@@ -1764,7 +1779,7 @@ def mobile_geofence_get(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_geofence_set(request):
     """حفظ موقع الشركة من الموبايل (للمدير فقط)"""
@@ -1839,7 +1854,7 @@ from accounts.fcm_models import FCMDeviceToken
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_fcm_token_register(request):
     """حفظ FCM Token للمستخدم — مع refresh تلقائي لو التوكن اتغير"""
@@ -1908,7 +1923,7 @@ def mobile_fcm_token_register(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_fcm_token_delete(request):
     """حذف FCM Token عند تسجيل الخروج"""
@@ -1925,7 +1940,7 @@ def mobile_fcm_token_delete(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_notifications_list(request):
     """جلب إشعارات المستخدم الحالي"""
@@ -1954,7 +1969,7 @@ def mobile_notifications_list(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_notifications_mark_read(request):
     """تعليم إشعار كمقروء أو تعليم الكل"""
@@ -1990,7 +2005,7 @@ def mobile_notifications_mark_read(request):
 # ============================================================
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_charter_get(request):
     """جلب اللائحة الحالية للموظف أو المدير"""
@@ -2046,7 +2061,7 @@ def mobile_charter_get(request):
     })
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_charter_accept(request):
     """الموظف يوافق على اللائحة"""
@@ -2102,7 +2117,7 @@ def mobile_charter_accept(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_charter_acceptances(request):
     """المدير يشوف مين وافق ومين لسه - للطباعة"""
@@ -2165,7 +2180,7 @@ def mobile_charter_acceptances(request):
     })
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser, JSONParser])
 def mobile_charter_update(request):

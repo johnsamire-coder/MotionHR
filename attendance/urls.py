@@ -5,6 +5,11 @@ from attendance import api_attachments
 from attendance import api_employee_management
 from attendance.api_mobile import mobile_geofence_get, mobile_geofence_set, mobile_fcm_token_register, mobile_fcm_token_delete
 from django.urls import path
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+    TokenVerifyView,
+)
 from .api_employee_management import manager_reset_employee_password, employee_save_location, manager_get_location_report, manager_update_company_info, manager_upload_company_logo, manager_update_employee, manager_company_info, manager_transfer_employee, manager_organization_tree
 from . import views
 from .api_field_visits import (
@@ -90,6 +95,9 @@ urlpatterns = [
 
     # Mobile App APIs
     path('api/mobile/login/', api_mobile.mobile_login, name='mobile_login'),
+    path('api/mobile/jwt/token/', TokenObtainPairView.as_view(), name='mobile_jwt_token'),
+    path('api/mobile/jwt/refresh/', TokenRefreshView.as_view(), name='mobile_jwt_refresh'),
+    path('api/mobile/jwt/verify/', TokenVerifyView.as_view(), name='mobile_jwt_verify'),
     path('api/mobile/location/', api_mobile.mobile_send_location, name='mobile_location'),
     path('api/mobile/attendance/', api_mobile.mobile_attendance_action, name='mobile_attendance'),
     path('api/mobile/status/', api_mobile.mobile_attendance_status, name='mobile_attendance_status'),

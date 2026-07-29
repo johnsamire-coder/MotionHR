@@ -5,6 +5,7 @@ from datetime import datetime
 from django.contrib.auth import get_user_model
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.http import HttpResponse
@@ -152,7 +153,7 @@ def _serialize_summary_row(payroll):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def payroll_summary(request):
     user = request.user
@@ -202,7 +203,7 @@ def payroll_summary(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def payroll_employee_detail(request):
     user = request.user
@@ -303,7 +304,7 @@ def payroll_employee_detail(request):
 
 
 @api_view(['GET', 'POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def payroll_settings(request):
     user = request.user
@@ -413,7 +414,7 @@ def payroll_settings(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 
 def employee_payslip(request):
@@ -484,7 +485,7 @@ def employee_payslip(request):
 # ══════════════════════════════════════════════
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def payroll_runs_list(request):
     """قائمة تشغيلات المرتبات السابقة"""
@@ -530,7 +531,7 @@ def payroll_runs_list(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def payroll_run_create(request):
     """
@@ -663,7 +664,7 @@ def payroll_run_create(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def payroll_run_approve(request, run_id):
     """اعتماد تشغيل المرتبات — صاحب الشركة وHR فقط"""
@@ -707,7 +708,7 @@ def payroll_run_approve(request, run_id):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def payroll_run_detail(request, run_id):
     """تفاصيل تشغيل مرتبات محدد"""

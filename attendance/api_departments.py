@@ -4,6 +4,7 @@ APIs إدارة الأقسام - للموبايل
 """
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -37,7 +38,7 @@ def _is_allowed(user, permission_code):
 # 1. قايمة الأقسام
 # ══════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def list_departments(request):
     if not _is_allowed(request.user, 'departments.view'):
@@ -70,7 +71,7 @@ def list_departments(request):
 # 2. إضافة قسم جديد
 # ══════════════════════════════════════
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def add_department(request):
     if not _is_allowed(request.user, 'departments.add'):
@@ -122,7 +123,7 @@ def add_department(request):
 # 3. تعديل قسم
 # ══════════════════════════════════════
 @api_view(['PUT'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def edit_department(request, dept_id):
     if not _is_allowed(request.user, 'departments.edit'):
@@ -162,7 +163,7 @@ def edit_department(request, dept_id):
 # 4. حذف قسم (مع نقل الموظفين)
 # ══════════════════════════════════════
 @api_view(['DELETE'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def delete_department(request, dept_id):
     if not _is_allowed(request.user, 'departments.delete'):
@@ -213,7 +214,7 @@ def delete_department(request, dept_id):
 # 5. نقل موظفين من قسم لقسم
 # ══════════════════════════════════════
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def transfer_employees_between_departments(request):
     if not _is_allowed(request.user, 'departments.transfer_employees'):

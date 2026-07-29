@@ -7,6 +7,7 @@ from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework import status
@@ -139,7 +140,7 @@ def serialize_mission(mission, employee=None):
 # ─────────────────────────────────────────────────────────────
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_missions_list(request):
     """قائمة المهمات للمدير"""
@@ -170,7 +171,7 @@ def manager_missions_list(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_create_mission(request):
     """إنشاء مهمة جديدة"""
@@ -244,7 +245,7 @@ def manager_create_mission(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_mission_detail(request, mission_id):
     """تفاصيل مهمة للمدير"""
@@ -258,7 +259,7 @@ def manager_mission_detail(request, mission_id):
 
 
 @api_view(['PATCH', 'PUT'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_update_mission(request, mission_id):
     """تعديل مهمة"""
@@ -287,7 +288,7 @@ def manager_update_mission(request, mission_id):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_cancel_mission(request, mission_id):
     """إلغاء مهمة"""
@@ -306,7 +307,7 @@ def manager_cancel_mission(request, mission_id):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_pending_requests(request):
     """طلبات المهمات من الموظفين في انتظار الموافقة"""
@@ -335,7 +336,7 @@ def manager_pending_requests(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_approve_request(request, request_id):
     """موافقة/رفض طلب مهمة من موظف"""
@@ -389,7 +390,7 @@ def manager_approve_request(request, request_id):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_feedback_dashboard(request):
     """داشبورد الفيدباك للمدير"""
@@ -460,7 +461,7 @@ def manager_feedback_dashboard(request):
 # ─────────────────────────────────────────────────────────────
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_my_missions(request):
     """مهماتي - للموظف"""
@@ -518,7 +519,7 @@ def employee_my_missions(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_respond_mission(request, assignment_id):
     """قبول أو رفض مهمة"""
@@ -549,7 +550,7 @@ def employee_respond_mission(request, assignment_id):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_start_mission(request, assignment_id):
     """بدء المهمة + Auto Attendance"""
@@ -622,7 +623,7 @@ def employee_start_mission(request, assignment_id):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_end_mission(request, assignment_id):
     """إنهاء المهمة"""
@@ -676,7 +677,7 @@ def employee_end_mission(request, assignment_id):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_update_location(request, assignment_id):
     """تحديث الموقع أثناء المهمة (لو تحرك مع العميل)"""
@@ -753,7 +754,7 @@ def employee_upload_attachment(request, assignment_id):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_request_mission(request):
     """الموظف يطلب مهمة (رتب مع العميل مباشرة)"""
@@ -804,7 +805,7 @@ def employee_request_mission(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_submit_feedback(request, mission_id):
     """كتابة فيدباك بعد المهمة"""
@@ -873,7 +874,7 @@ def employee_submit_feedback(request, mission_id):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_add_feedback_note(request, mission_id):
     """مشارك آخر يضيف ملاحظة على الفيدباك"""
@@ -908,7 +909,7 @@ def employee_add_feedback_note(request, mission_id):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mission_feedback_detail(request, mission_id):
     """عرض الفيدباك الكامل لمهمة"""
@@ -957,7 +958,7 @@ def mission_feedback_detail(request, mission_id):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mission_locations_timeline(request, assignment_id):
     """Timeline الحركة لتعيين معين"""
@@ -988,7 +989,7 @@ def mission_locations_timeline(request, assignment_id):
 # ─────────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_reassign_employee(request, mission_id):
     """
@@ -1072,7 +1073,7 @@ def manager_reassign_employee(request, mission_id):
 # ─────────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_withdraw_request(request, assignment_id):
     """
@@ -1121,7 +1122,7 @@ def employee_withdraw_request(request, assignment_id):
 # ─────────────────────────────────────────────────────────────
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_withdraw_requests(request):
     """قائمة طلبات الانسحاب من المهمات"""
@@ -1157,7 +1158,7 @@ def manager_withdraw_requests(request):
 # ─────────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_respond_withdraw(request, assignment_id):
     """
@@ -1199,7 +1200,7 @@ def manager_respond_withdraw(request, assignment_id):
 # ─────────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_force_cancel_mission(request, mission_id):
     """

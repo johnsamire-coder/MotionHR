@@ -5,6 +5,7 @@ MotionHR - Shifts Management API
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import date, timedelta, datetime
@@ -369,7 +370,7 @@ def _validate_schedule_config(shift_mode, schedule_config):
 
 # ── LIST SHIFTS ──
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_shifts_list(request):
     err = _check_manager(request)
@@ -393,7 +394,7 @@ def manager_shifts_list(request):
 
 # ── CREATE SHIFT ──
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_shift_create(request):
     err = _check_manager(request)
@@ -491,7 +492,7 @@ def manager_shift_create(request):
 
 # ── UPDATE SHIFT ──
 @api_view(["PUT", "PATCH"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_shift_update(request, shift_id):
     err = _check_manager(request)
@@ -590,7 +591,7 @@ def manager_shift_update(request, shift_id):
 
 # ── DELETE SHIFT ──
 @api_view(["DELETE"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_shift_delete(request, shift_id):
     err = _check_manager(request)
@@ -658,7 +659,7 @@ def manager_shift_delete(request, shift_id):
 
 # ── ASSIGN SHIFT TO EMPLOYEE ──
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_shift_assign(request):
     err = _check_manager(request)
@@ -1124,7 +1125,7 @@ def manager_shift_assign(request):
 
 # ── LIST EMPLOYEE SHIFTS ──
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_employee_shifts(request, employee_id):
     err = _check_manager(request)
@@ -1160,7 +1161,7 @@ def manager_employee_shifts(request, employee_id):
 
 # ── SHIFT EMPLOYEES LIST ──
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_shift_employees(request, shift_id):
     err = _check_manager(request)
@@ -1192,7 +1193,7 @@ def manager_shift_employees(request, shift_id):
 
 # ── MY SHIFT (للموظف نفسه) ──
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def my_shift(request):
     try:
@@ -1279,7 +1280,7 @@ def my_shift(request):
 
 # ── SHIFT CHANGE REQUESTS (للـ HR) ──
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def shift_change_requests_list(request):
     err = _check_manager(request)
@@ -1325,7 +1326,7 @@ def shift_change_requests_list(request):
 
 # ── APPROVE/REJECT SHIFT CHANGE REQUEST ──
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def shift_change_request_action(request, request_id):
     try:
@@ -1428,7 +1429,7 @@ def shift_change_request_action(request, request_id):
 # ══════════════════════════════════════════════════════
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def flex_adjustments_list(request):
     """قايمة تسويات الشيفت المرن — HR فقط"""
@@ -1477,7 +1478,7 @@ def flex_adjustments_list(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def flex_adjustment_review(request, adjustment_id):
     """HR يوافق أو يرفض تسوية شيفت مرن"""
@@ -1561,7 +1562,7 @@ def flex_adjustment_review(request, adjustment_id):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_flex_adjustments(request, emp_id):
     """طلبات تسوية الشيفت المرن لموظف معين — HR أو المدير"""
@@ -1602,7 +1603,7 @@ def employee_flex_adjustments(request, emp_id):
 # ── SHIFT OVERRIDE ──
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def shift_override_list(request):
     """قائمة كل الاستثناءات الحالية والمستقبلية"""
@@ -1651,7 +1652,7 @@ def shift_override_list(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def shift_override_create(request):
     err = _check_manager(request)
@@ -1700,7 +1701,7 @@ def shift_override_create(request):
 
 
 @api_view(["DELETE"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def shift_override_delete(request, override_id):
     err = _check_manager(request)
@@ -1721,7 +1722,7 @@ def shift_override_delete(request, override_id):
 
 # ── GET EFFECTIVE SHIFT FOR EMPLOYEE (API) ──
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_effective_shift(request, employee_id):
     err = _check_manager(request)
@@ -1914,7 +1915,7 @@ def _notify_employee_shift_override(employee, shift, override_date):
 
 # ── PARTIAL CHECKOUT / SESSION APIs ──
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def partial_checkout(request):
     """
@@ -1978,7 +1979,7 @@ def partial_checkout(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def resume_checkin(request):
     """
@@ -2081,7 +2082,7 @@ def resume_checkin(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def today_sessions(request):
     """
@@ -2140,7 +2141,7 @@ def today_sessions(request):
 # ══════════════════════════════════════
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_shift_assignments_list(request):
     """قائمة كل التعيينات الحالية للشيفتات في الشركة"""
@@ -2226,7 +2227,7 @@ def manager_shift_assignments_list(request):
 
 
 @api_view(["PUT", "PATCH"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_shift_assignment_update(request, assignment_id):
     """تعديل تعيين شيفت موجود (تاريخ / ملاحظات)"""
@@ -2307,7 +2308,7 @@ def manager_shift_assignment_update(request, assignment_id):
 
 
 @api_view(["DELETE"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_shift_assignment_delete(request, assignment_id):
     """حذف (إلغاء تفعيل) تعيين شيفت"""
@@ -2346,7 +2347,7 @@ def manager_shift_assignment_delete(request, assignment_id):
 # ══════════════════════════════════════
 
 @api_view(["GET", "POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def rotation_list_create(request):
     err = _check_manager(request)
@@ -2511,7 +2512,7 @@ def rotation_list_create(request):
 
 
 @api_view(["PUT", "DELETE"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def rotation_detail(request, rotation_id):
     err = _check_manager(request)
@@ -2607,7 +2608,7 @@ def rotation_detail(request, rotation_id):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def rotation_assign(request, rotation_id):
     err = _check_manager(request)
@@ -2688,7 +2689,7 @@ def rotation_assign(request, rotation_id):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def rotation_assignments_list(request, rotation_id):
     err = _check_manager(request)
@@ -2730,7 +2731,7 @@ def rotation_assignments_list(request, rotation_id):
 
 
 @api_view(["DELETE"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def rotation_assignment_delete(request, assignment_id):
     """حذف (إلغاء تفعيل) تعيين تناوب"""

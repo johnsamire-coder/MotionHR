@@ -6,6 +6,7 @@ Phase 8: Employee Creation from Manager App
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import get_user_model
@@ -83,7 +84,7 @@ def _get_company(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_branches(request):
     err = _check_manager(request)
@@ -103,7 +104,7 @@ def manager_branches(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_departments(request):
     err = _check_manager(request)
@@ -123,7 +124,7 @@ def manager_departments(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_job_titles(request):
     err = _check_manager(request)
@@ -143,7 +144,7 @@ def manager_job_titles(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_employees_simple(request):
     """List employees with id + name for direct_manager dropdown"""
@@ -248,7 +249,7 @@ def _make_wa_link(clean_phone, first_name_ar, username, activation_link):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_create_employee(request):
     """
@@ -801,7 +802,7 @@ def manager_update_employee(request, employee_id):
         )
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_company_info(request):
     """جلب بيانات الشركة الكاملة + اللوجو"""
@@ -1047,7 +1048,7 @@ def manager_transfer_employee(request, employee_id):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_organization_tree(request):
     """الهيكل التنظيمي: فروع > أقسام > مديرون > موظفون"""
@@ -1162,7 +1163,7 @@ def manager_organization_tree(request):
         )
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_save_location(request):
     """يستقبل موقع الموظف ويخزنه (كل ساعة = 8 نقاط في الشيفت)"""
@@ -1238,7 +1239,7 @@ def employee_save_location(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_get_location_report(request):
     """المدير يشوف تقرير مواقع موظف في يوم معين"""
@@ -1294,7 +1295,7 @@ def manager_get_location_report(request):
 
 # ── UPDATE COMPANY INFO ──
 @api_view(['PATCH', 'PUT'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_update_company_info(request):
     """تعديل بيانات الشركة (company_admin / super_admin فقط)"""
@@ -1331,7 +1332,7 @@ def manager_update_company_info(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_upload_company_logo(request):
     """رفع لوجو الشركة"""

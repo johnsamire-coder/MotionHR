@@ -4,6 +4,7 @@ Phase 14: إعدادات أيام العمل لكل شركة - Bilingual AR/EN
 """
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -28,7 +29,7 @@ def _get_lang(user):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def get_work_policy(request):
     user = request.user
@@ -75,7 +76,7 @@ def get_work_policy(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def save_work_policy(request):
     user = request.user

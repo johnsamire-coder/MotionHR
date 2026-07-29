@@ -10,6 +10,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from attendance.models import LocationCheckIn, LocationLog
 from employees.models import Employee
@@ -219,7 +220,7 @@ def visit_to_dict(visit, include_tracking=False):
 # API 1: بدء زيارة جديدة
 # ═══════════════════════════════════════════════════
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def field_visit_start(request):
     """
@@ -319,7 +320,7 @@ def field_visit_start(request):
 # API 2: إنهاء زيارة
 # ═══════════════════════════════════════════════════
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def field_visit_end(request, visit_id):
     """
@@ -392,7 +393,7 @@ def field_visit_end(request, visit_id):
 # API 3: قائمة زياراتي
 # ═══════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def field_visits_list(request):
     """
@@ -437,7 +438,7 @@ def field_visits_list(request):
 # API 4: تفاصيل زيارة
 # ═══════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def field_visit_detail(request, visit_id):
     """
@@ -488,7 +489,7 @@ def field_visit_detail(request, visit_id):
 # API 5: أنواع الزيارات المتاحة (للتطبيق)
 # ═══════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def field_visit_types(request):
     """

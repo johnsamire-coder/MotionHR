@@ -4,6 +4,7 @@ APIs إنهاء الخدمة - Offboarding
 """
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db import transaction
@@ -37,7 +38,7 @@ STATUS_LABELS = {
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def offboard_employee(request, employee_id):
     """إنهاء خدمة موظف أو مدير"""
@@ -111,7 +112,7 @@ def offboard_employee(request, employee_id):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def reactivate_employee(request, employee_id):
     """إعادة تفعيل موظف"""
@@ -149,7 +150,7 @@ def reactivate_employee(request, employee_id):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def offboarded_employees(request):
     """قايمة الموظفين المنتهية خدمتهم"""

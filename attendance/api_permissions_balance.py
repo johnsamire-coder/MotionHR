@@ -4,6 +4,7 @@ MotionHR - Employee Permission (Leave Hours) API
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import date
@@ -84,7 +85,7 @@ def _get_period_range(policy, employee):
 
 # ── رصيد الأذونات للموظف ──
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def my_permission_balance(request):
     employee = _get_employee(request)
@@ -157,7 +158,7 @@ def my_permission_balance(request):
 
 # ── المدير يشوف رصيد موظف معين ──
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def employee_permission_balance(request, employee_id):
     role = getattr(request.user, "role", None)
@@ -215,7 +216,7 @@ def employee_permission_balance(request, employee_id):
 
 # ── المدير يمنح إذن إضافي ──
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def grant_extra_permission(request, employee_id):
     role = getattr(request.user, "role", None)
@@ -257,7 +258,7 @@ def grant_extra_permission(request, employee_id):
 
 # ── المدير يلغي تأخير (rollback) ──
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def rollback_late(request, employee_id):
     role = getattr(request.user, "role", None)

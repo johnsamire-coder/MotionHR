@@ -5,6 +5,7 @@ MotionHR - Attendance Policy API
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from django.utils import timezone
 import logging
@@ -141,7 +142,7 @@ def _policy_data(policy):
 
 # ── LIST + CREATE ──
 @api_view(["GET", "POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def policy_list_create(request):
     err = _check_hr(request)
@@ -207,7 +208,7 @@ def policy_list_create(request):
 
 # ── GET + UPDATE + DELETE ──
 @api_view(["GET", "PUT", "DELETE"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def policy_detail(request, policy_id):
     err = _check_hr(request)
@@ -270,7 +271,7 @@ def policy_detail(request, policy_id):
 
 # ── APPROVE ──
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def policy_approve(request, policy_id):
     role = getattr(request.user, "role", None)
@@ -306,7 +307,7 @@ def policy_approve(request, policy_id):
 
 # ── ASSIGN TO BRANCH/DEPT/COMPANY ──
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def policy_assign(request, policy_id):
     err = _check_hr(request)

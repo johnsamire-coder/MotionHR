@@ -8,6 +8,7 @@ from django.db import models
 from django.utils import timezone
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -237,7 +238,7 @@ def _send_auto_checkout_notification(user, employee, lang, check_out_str, work_h
 # ─────────────────────────────────────────
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def auto_check_in(request):
     """
@@ -390,7 +391,7 @@ def auto_check_in(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def auto_check_out(request):
     """
@@ -507,7 +508,7 @@ def auto_check_out(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def auto_checkin_status(request):
     """حالة الحضور اليوم للموظف"""

@@ -2,6 +2,7 @@ from employees.visibility import get_visible_employees_qs, can_view_employee
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from rest_framework import status
 from datetime import date, timedelta
@@ -201,7 +202,7 @@ def _build_summary(emp):
 # ═══════════════════════════════════════════
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def my_profile(request):
     try:
@@ -215,7 +216,7 @@ def my_profile(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def my_documents(request):
     try:
@@ -230,7 +231,7 @@ def my_documents(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def my_movements(request):
     try:
@@ -245,7 +246,7 @@ def my_movements(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def my_summary(request):
     try:
@@ -276,7 +277,7 @@ def _get_employee_scoped(request, emp_id):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_employees_list(request):
     err = _check_manager(request)
@@ -309,7 +310,7 @@ def manager_employees_list(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_employee_profile(request, emp_id):
     err = _check_manager(request)
@@ -326,7 +327,7 @@ def manager_employee_profile(request, emp_id):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_employee_documents(request, emp_id):
     err = _check_manager(request)
@@ -344,7 +345,7 @@ def manager_employee_documents(request, emp_id):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_employee_movements(request, emp_id):
     err = _check_manager(request)
@@ -362,7 +363,7 @@ def manager_employee_movements(request, emp_id):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_employee_summary(request, emp_id):
     err = _check_manager(request)

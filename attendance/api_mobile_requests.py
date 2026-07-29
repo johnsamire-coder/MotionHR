@@ -15,6 +15,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from employees.models import Employee
 from leaves.models import LeaveType, LeaveBalance, LeaveRequest
@@ -86,7 +87,7 @@ def get_current_approver_info(req):
 # ═══════════════════════════════════════════════════
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_leave_types(request):
     """أنواع الإجازات المتاحة مع الرصيد"""
@@ -130,7 +131,7 @@ def mobile_leave_types(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_leave_request(request):
     """تقديم طلب إجازة"""
@@ -264,7 +265,7 @@ def mobile_leave_request(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_my_leaves(request):
     """عرض طلبات الإجازات الخاصة بي"""
@@ -331,7 +332,7 @@ def _get_leave_approver_info(leave):
 # ═══════════════════════════════════════════════════
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_request_types(request):
     """أنواع الطلبات المتاحة"""
@@ -378,7 +379,7 @@ def mobile_request_types(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_submit_request(request):
     """تقديم طلب (إذن / سلفة / إداري)"""
@@ -637,7 +638,7 @@ def mobile_submit_request(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_my_requests(request):
     """عرض طلباتي"""
@@ -692,7 +693,7 @@ def mobile_my_requests(request):
 # ═══════════════════════════════════════════════════
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_manager_pending(request):
     """الطلبات المعلقة اللي محتاجة موافقة المدير"""
@@ -772,7 +773,7 @@ def mobile_manager_pending(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_manager_action(request):
     """موافقة أو رفض طلب"""
@@ -1057,7 +1058,7 @@ def mobile_manager_action(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_manager_employees_attendance(request):
     """سجل حضور الموظفين للمدير"""
@@ -1120,7 +1121,7 @@ def mobile_manager_employees_attendance(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_manager_live_locations(request):
     """مواقع الموظفين اللحظية للخريطة"""
@@ -1166,7 +1167,7 @@ def mobile_manager_live_locations(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_manager_employee_route(request):
     """خط سير موظف معين في يوم معين"""
@@ -1243,7 +1244,7 @@ def mobile_manager_employee_route(request):
 # تعديل طلب قبل الموافقة
 # ─────────────────────────────────────────────────────────────
 @api_view(['PATCH', 'PUT'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_edit_request(request, request_id):
     """الموظف يعدّل طلبه لو لسه pending"""
@@ -1292,7 +1293,7 @@ def mobile_edit_request(request, request_id):
 # إلغاء طلب قبل الموافقة
 # ─────────────────────────────────────────────────────────────
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_cancel_request(request, request_id):
     """الموظف يلغي طلبه لو لسه pending أو manager_approved"""
@@ -1365,7 +1366,7 @@ def mobile_cancel_request(request, request_id):
 # تعديل إجازة قبل الموافقة
 # ─────────────────────────────────────────────────────────────
 @api_view(['PATCH', 'PUT'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_edit_leave(request, leave_id):
     """الموظف يعدّل طلب إجازته لو لسه pending"""
@@ -1405,7 +1406,7 @@ def mobile_edit_leave(request, leave_id):
 # إلغاء إجازة قبل الموافقة
 # ─────────────────────────────────────────────────────────────
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_cancel_leave(request, leave_id):
     """الموظف يلغي طلب إجازته لو لسه pending"""
@@ -1440,7 +1441,7 @@ def mobile_cancel_leave(request, leave_id):
 # المدير/HR: تعديل أي طلب
 # ─────────────────────────────────────────────────────────────
 @api_view(['PATCH', 'PUT'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_edit_request(request, request_id):
     """المدير أو HR يعدّل أي طلب في أي مرحلة"""
@@ -1493,7 +1494,7 @@ def manager_edit_request(request, request_id):
 # المدير/HR: إلغاء أي طلب
 # ─────────────────────────────────────────────────────────────
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_cancel_request(request, request_id):
     """المدير أو HR يلغي أي طلب"""
@@ -1528,7 +1529,7 @@ def manager_cancel_request(request, request_id):
 # المدير/HR: إعادة فتح طلب مرفوض
 # ─────────────────────────────────────────────────────────────
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_reopen_request(request, request_id):
     """HR يعيد فتح طلب مرفوض أو ملغي"""
@@ -1568,7 +1569,7 @@ def manager_reopen_request(request, request_id):
 # المدير/HR: تعديل إجازة
 # ─────────────────────────────────────────────────────────────
 @api_view(['PATCH', 'PUT'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_edit_leave(request, leave_id):
     """المدير أو HR يعدّل طلب إجازة"""
@@ -1607,7 +1608,7 @@ def manager_edit_leave(request, leave_id):
 # المدير/HR: إلغاء إجازة
 # ─────────────────────────────────────────────────────────────
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_cancel_leave(request, leave_id):
     """المدير أو HR يلغي طلب إجازة"""
@@ -1643,7 +1644,7 @@ def manager_cancel_leave(request, leave_id):
 # ══════════════════════════════════════════════════════
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def create_leave_recall(request):
     """المدير أو صاحب الشركة يطلب استدعاء موظف من إجازته"""
@@ -1731,7 +1732,7 @@ def create_leave_recall(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def review_leave_recall(request, recall_id):
     """HR أو صاحب الشركة يوافق أو يرفض طلب الاستدعاء"""
@@ -1782,7 +1783,7 @@ def review_leave_recall(request, recall_id):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def list_leave_recalls(request):
     """قائمة طلبات الاستدعاء"""

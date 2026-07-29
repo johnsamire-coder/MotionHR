@@ -5,6 +5,7 @@ MotionHR - Disciplinary Actions API
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from django.utils import timezone
 import logging
@@ -73,7 +74,7 @@ def _rule_data(rule):
 
 # ── قواعد الجزاءات في السياسة ──
 @api_view(["GET", "POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def disciplinary_rules(request, policy_id):
     err = _check_hr(request)
@@ -117,7 +118,7 @@ def disciplinary_rules(request, policy_id):
 
 
 @api_view(["PUT", "DELETE"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def disciplinary_rule_detail(request, policy_id, rule_id):
     err = _check_hr(request)
@@ -157,7 +158,7 @@ def disciplinary_rule_detail(request, policy_id, rule_id):
 
 # ── جزاءات الموظفين ──
 @api_view(["GET", "POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def disciplinary_actions(request):
     err = _check_hr(request)
@@ -220,7 +221,7 @@ def disciplinary_actions(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def disciplinary_action_review(request, action_id):
     err = _check_hr(request)

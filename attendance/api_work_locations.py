@@ -11,6 +11,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from attendance.models import EmployeeWorkLocation
 from employees.models import Employee
@@ -81,7 +82,7 @@ def work_location_to_dict(loc):
 # API 1: اقتراح موقع جديد (Employee)
 # ═══════════════════════════════════════════════════
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def propose_work_location(request):
     """
@@ -195,7 +196,7 @@ def propose_work_location(request):
 # API 2: قائمة مواقعي
 # ═══════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def my_work_locations(request):
     """
@@ -242,7 +243,7 @@ def my_work_locations(request):
 # API 3: تفاصيل موقع
 # ═══════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def work_location_detail(request, location_id):
     """
@@ -270,7 +271,7 @@ def work_location_detail(request, location_id):
 # API 4: إلغاء طلب معلق (الموظف)
 # ═══════════════════════════════════════════════════
 @api_view(['DELETE'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def cancel_pending_location(request, location_id):
     """
@@ -307,7 +308,7 @@ def cancel_pending_location(request, location_id):
 # API 5: أنواع المواقع المتاحة
 # ═══════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def work_location_types(request):
     """
@@ -334,7 +335,7 @@ def _is_manager_or_hr(user):
 # API 6: قائمة الطلبات المعلقة (Manager/HR)
 # ═══════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_pending_locations(request):
     """
@@ -377,7 +378,7 @@ def manager_pending_locations(request):
 # API 7: كل مواقع الشركة (Manager/HR)
 # ═══════════════════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_all_locations(request):
     """
@@ -431,7 +432,7 @@ def manager_all_locations(request):
 # API 8: الموافقة على موقع (Manager/HR)
 # ═══════════════════════════════════════════════════
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def approve_work_location(request, location_id):
     """
@@ -489,7 +490,7 @@ def approve_work_location(request, location_id):
 # API 9: رفض موقع (Manager/HR)
 # ═══════════════════════════════════════════════════
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def reject_work_location(request, location_id):
     """

@@ -4,6 +4,7 @@ APIs إدارة الصلاحيات - للموبايل
 """
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -25,7 +26,7 @@ def is_company_admin(user):
 # 1. قايمة الصلاحيات المتاحة
 # ══════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def list_available_permissions(request):
     """كل الصلاحيات الممكنة في النظام"""
@@ -38,7 +39,7 @@ def list_available_permissions(request):
 # 2. الأدوار
 # ══════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def list_roles(request):
     """قايمة الأدوار بتاعة الشركة"""
@@ -70,7 +71,7 @@ def list_roles(request):
 
 
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def create_role(request):
     """إنشاء دور جديد"""
@@ -99,7 +100,7 @@ def create_role(request):
 
 
 @api_view(['PUT'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def update_role(request, role_id):
     """تعديل دور"""
@@ -130,7 +131,7 @@ def update_role(request, role_id):
 
 
 @api_view(['DELETE'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def delete_role(request, role_id):
     """حذف دور"""
@@ -150,7 +151,7 @@ def delete_role(request, role_id):
 # 3. تعيين دور لموظف
 # ══════════════════════════════════════
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def assign_role_to_user(request):
     """تعيين دور لمستخدم"""
@@ -177,7 +178,7 @@ def assign_role_to_user(request):
 
 
 @api_view(['DELETE'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def remove_role_from_user(request):
     """إلغاء دور من مستخدم"""
@@ -200,7 +201,7 @@ def remove_role_from_user(request):
 # 4. صلاحيات مستخدم معيّن
 # ══════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def user_permissions(request, user_id):
     """كل صلاحيات مستخدم معيّن"""
@@ -249,7 +250,7 @@ def user_permissions(request, user_id):
 # 5. استثناءات شخصية
 # ══════════════════════════════════════
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def set_user_override(request):
     """تعيين استثناء شخصي لمستخدم"""
@@ -283,7 +284,7 @@ def set_user_override(request):
 
 
 @api_view(['DELETE'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def remove_user_override(request):
     """إزالة استثناء شخصي"""
@@ -306,7 +307,7 @@ def remove_user_override(request):
 # 6. قايمة موظفي الشركة (للتعيين)
 # ══════════════════════════════════════
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def company_users_list(request):
     """قايمة المستخدمين في الشركة"""

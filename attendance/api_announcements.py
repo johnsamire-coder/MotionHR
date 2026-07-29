@@ -6,6 +6,7 @@ from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from accounts.company_announcements import CompanyAnnouncement, CompanyAnnouncementRead
 from accounts.fcm_service import send_notification_to_user
@@ -34,7 +35,7 @@ def is_manager(user):
 # GET /announcements/list/
 # ─────────────────────────────────────────────
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def announcements_list(request):
     user = request.user
@@ -98,7 +99,7 @@ def announcements_list(request):
 # POST /announcements/mark-read/
 # ─────────────────────────────────────────────
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def announcements_mark_read(request):
     user = request.user
@@ -135,7 +136,7 @@ def announcements_mark_read(request):
 # POST /manager/announcements/create/
 # ─────────────────────────────────────────────
 @api_view(['POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_create_announcement(request):
     user = request.user
@@ -197,7 +198,7 @@ def manager_create_announcement(request):
 # PUT/PATCH /manager/announcements/<id>/update/
 # ─────────────────────────────────────────────
 @api_view(['PUT', 'PATCH'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_update_announcement(request, pk):
     user = request.user
@@ -279,7 +280,7 @@ def manager_update_announcement(request, pk):
 # DELETE /manager/announcements/<id>/delete/
 # ─────────────────────────────────────────────
 @api_view(['DELETE'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_delete_announcement(request, pk):
     user = request.user
@@ -322,7 +323,7 @@ def manager_delete_announcement(request, pk):
 # GET /manager/announcements/<id>/stats/
 # ─────────────────────────────────────────────
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_announcement_stats(request, pk):
     user = request.user

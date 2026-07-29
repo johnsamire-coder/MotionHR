@@ -13,6 +13,7 @@ from django.http import JsonResponse
 from django.core.exceptions import PermissionDenied
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
 import json
 from datetime import date
@@ -81,7 +82,7 @@ def _deduction_to_dict(p):
 
 
 @api_view(['GET', 'POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def deduction_policies_list(request):
     try:
@@ -125,7 +126,7 @@ def deduction_policies_list(request):
 
 
 @api_view(['GET', 'PUT', 'DELETE'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def deduction_policy_detail(request, policy_id):
     try:
@@ -193,7 +194,7 @@ def _bonus_to_dict(p):
 
 
 @api_view(['GET', 'POST'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def bonus_policies_list(request):
     try:
@@ -237,7 +238,7 @@ def bonus_policies_list(request):
 
 
 @api_view(['GET', 'PUT', 'DELETE'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def bonus_policy_detail(request, policy_id):
     try:
