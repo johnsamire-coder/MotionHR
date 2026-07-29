@@ -45,3 +45,22 @@ seed_fix.py
 
 # Broken backup files (temporary)
 *.broken_backup
+
+# Temporary Debug & Test Files
+inspect_*.py
+inspect_*.txt
+patch_*.py
+patch_*.txt
+fix_*.py
+fix_*.txt
+check_*.py
+check_*.txt
+debug_*.py
+debug_*.txt
+scan_*.py
+scan_*.txt
+*_result.txt
+*.py.bak*
+build_*.txt
+verify_*.txt
+cleanup_*.txt

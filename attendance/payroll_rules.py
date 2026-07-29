@@ -482,6 +482,8 @@ def get_unpaid_leave_dates(employee, year, month):
 def _get_allowances(employee, first_day, last_day, lang='ar'):
     total = 0.0
     items = []
+
+    # 1) بدلات فردية للموظف
     try:
         from .company_policy_models import PayrollAllowance
         qs = PayrollAllowance.objects.filter(
@@ -500,9 +502,40 @@ def _get_allowances(employee, first_day, last_day, lang='ar'):
                 'name': item.name_en if lang == 'en' and item.name_en else item.name_ar,
                 'amount': round(amount, 2),
                 'is_monthly': bool(item.is_monthly),
+                'source': 'individual',
             })
     except Exception:
         pass
+
+    # 2) بدلات عامة (الشركة / فرع / إدارة / موظفين محددين)
+    try:
+        from .company_policy_models import CompanyAllowancePolicy
+        company = getattr(employee, 'company', None)
+        if company:
+            policies = CompanyAllowancePolicy._base_manager.filter(
+                company=company,
+                is_active=True,
+                start_date__lte=last_day,
+            ).filter(Q(end_date__isnull=True) | Q(end_date__gte=first_day))
+
+            for policy in policies:
+                if not policy.applies_to_employee(employee):
+                    continue
+                amount = _safe_float(policy.amount)
+                total += amount
+                items.append({
+                    'type': policy.allowance_type,
+                    'name_ar': policy.name_ar,
+                    'name_en': policy.name_en or policy.name_ar,
+                    'name': policy.name_en if lang == 'en' and policy.name_en else policy.name_ar,
+                    'amount': round(amount, 2),
+                    'is_monthly': bool(policy.is_monthly),
+                    'source': 'policy',
+                    'scope': policy.scope,
+                })
+    except Exception:
+        pass
+
     return round(total, 2), items
 
 
@@ -602,8 +635,11 @@ def _get_monthly_deductions(employee, year, month, lang='ar'):
 
 
 def _get_bonuses(employee, year, month, lang='ar'):
+    from datetime import date
     total = 0.0
     items = []
+
+    # 1) مكافآت فردية للموظف
     try:
         from .payroll_pro_models import PayrollBonus
         for item in PayrollBonus.objects.filter(employee=employee, year=year, month=month):
@@ -615,11 +651,84 @@ def _get_bonuses(employee, year, month, lang='ar'):
                 'name': item.name_en if lang == 'en' and item.name_en else item.name_ar,
                 'amount': round(amount, 2),
                 'reason': item.reason or '',
+                'source': 'individual',
             })
     except Exception:
         pass
+
+    # 2) مكافآت عامة (الشركة / فرع / إدارة / موظفين محددين)
+    try:
+        from .company_policy_models import CompanyBonusPolicy
+        from datetime import date
+        first_day = date(year, month, 1)
+        if month == 12:
+            last_day = date(year, 12, 31)
+        else:
+            last_day = date(year, month + 1, 1).__class__(year, month + 1, 1) - __import__('datetime').timedelta(days=1)
+
+        company = getattr(employee, 'company', None)
+        if company:
+            policies = CompanyBonusPolicy._base_manager.filter(
+                company=company,
+                is_active=True,
+                start_date__lte=last_day,
+            ).filter(Q(end_date__isnull=True) | Q(end_date__gte=first_day))
+
+            for policy in policies:
+                if not policy.applies_to_employee(employee):
+                    continue
+                amount = _safe_float(policy.amount)
+                total += amount
+                items.append({
+                    'name_ar': policy.name_ar,
+                    'name_en': policy.name_en or policy.name_ar,
+                    'name': policy.name_en if lang == 'en' and policy.name_en else policy.name_ar,
+                    'amount': round(amount, 2),
+                    'reason': policy.notes or '',
+                    'source': 'policy',
+                    'scope': policy.scope,
+                    'bonus_type': policy.bonus_type,
+                })
+    except Exception:
+        pass
+
     return round(total, 2), items
 
+
+
+
+def _get_general_deductions(employee, first_day, last_day, lang='ar'):
+    """خصومات عامة من CompanyDeductionPolicy"""
+    total = 0.0
+    items = []
+    try:
+        from .company_policy_models import CompanyDeductionPolicy
+        company = getattr(employee, 'company', None)
+        if company:
+            policies = CompanyDeductionPolicy._base_manager.filter(
+                company=company,
+                is_active=True,
+                start_date__lte=last_day,
+            ).filter(Q(end_date__isnull=True) | Q(end_date__gte=first_day))
+
+            for policy in policies:
+                if not policy.applies_to_employee(employee):
+                    continue
+                amount = _safe_float(policy.amount)
+                total += amount
+                items.append({
+                    'type': policy.deduction_type,
+                    'name_ar': policy.name_ar,
+                    'name_en': policy.name_en or policy.name_ar,
+                    'name': policy.name_en if lang == 'en' and policy.name_en else policy.name_ar,
+                    'amount': round(amount, 2),
+                    'notes': policy.notes or '',
+                    'source': 'policy',
+                    'scope': policy.scope,
+                })
+    except Exception:
+        pass
+    return round(total, 2), items
 
 def _get_penalties(employee, year, month, lang='ar'):
     total = 0.0
@@ -1479,11 +1588,33 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
     allowances_total, allowance_items = _get_allowances(employee, first_day, last_day, lang=lang)
     deductions = _get_monthly_deductions(employee, year, month, lang=lang)
+    general_deductions_total, general_deduction_items = _get_general_deductions(employee, first_day, last_day, lang=lang)
     bonuses_total, bonus_items = _get_bonuses(employee, year, month, lang=lang)
     penalties_total_new, penalty_items_new = _get_penalties(employee, year, month, lang=lang)
     installments_total_new, installment_items_new = _get_installments(employee, year, month)
 
-    insurance_deduction = deductions['insurance_total']
+    general_insurance_total = 0.0
+    general_installments_total = 0.0
+    general_extra_total = 0.0
+    general_insurance_items = []
+    general_installment_items = []
+    general_extra_items = []
+
+    for item in general_deduction_items:
+        dtype = (item.get('type') or '').lower()
+        amount = _safe_float(item.get('amount'))
+
+        if dtype in ('social_insurance', 'health_insurance'):
+            general_insurance_total += amount
+            general_insurance_items.append(item)
+        elif dtype in ('loan_recovery',):
+            general_installments_total += amount
+            general_installment_items.append(item)
+        else:
+            general_extra_total += amount
+            general_extra_items.append(item)
+
+    insurance_deduction = round(deductions['insurance_total'] + general_insurance_total, 2)
     if has_insurance:
         if insurance_mode == 'fixed':
             insurance_deduction += insurance_fixed_amount
@@ -1491,11 +1622,31 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             insurance_deduction += round((basic_salary * insurance_percent) / 100.0, 2)
     insurance_deduction = round(insurance_deduction, 2)
 
-    installments_total = round(deductions['installments_total'] + installments_total_new, 2)
-    penalties_total = round(deductions['penalties_total'] + penalties_total_new, 2)
-    extra_deductions_total = deductions['extra_total']
+    # بدل الانتقالات للموظفين الميدانيين
+    field_allowance = 0.0
+    try:
+        from attendance.payroll_settings_model import PayrollSettings
+        ps = PayrollSettings.objects.filter(company=company).first()
+        if ps and hasattr(employee, 'worker_type') and employee.worker_type in ('field_free', 'field_assigned'):
+            if ps.field_allowance_type == 'fixed':
+                field_allowance = float(ps.fixed_field_allowance or 0)
+            elif ps.field_allowance_type == 'per_visit':
+                from attendance.models import LocationCheckIn
+                visits_count = LocationCheckIn.objects.filter(
+                    employee=employee,
+                    arrival_time__year=year,
+                    arrival_time__month=month,
+                ).count()
+                field_allowance = visits_count * float(ps.per_visit_allowance or 0)
+    except Exception:
+        field_allowance = 0.0
+    field_allowance = round(field_allowance, 2)
 
-    gross_salary = round(basic_salary + allowances_total + overtime_bonus + bonuses_total + night_allowance + weekend_allowance, 2)
+    installments_total = round(deductions['installments_total'] + installments_total_new + general_installments_total, 2)
+    penalties_total = round(deductions['penalties_total'] + penalties_total_new, 2)
+    extra_deductions_total = round(deductions['extra_total'] + general_extra_total, 2)
+
+    gross_salary = round(basic_salary + allowances_total + overtime_bonus + bonuses_total + night_allowance + weekend_allowance + field_allowance, 2)
 
     total_deductions = round(
         late_deduction
@@ -1531,6 +1682,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
         'night_allowance': round(night_allowance, 2),
         'weekend_allowance': round(weekend_allowance, 2),
+        'field_allowance': round(field_allowance, 2),
+        'field_allowance_type': getattr(ps, 'field_allowance_type', 'none') if 'ps' in dir() else 'none',
         'policy_name': active_policy.name if active_policy else None,
         'flex_shortage_deduction': round(flex_shortage_deduction, 2),
         'early_leave_deduction': round(early_leave_deduction, 2),
@@ -1541,6 +1694,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'installments_total': round(installments_total, 2),
         'penalties_total': round(penalties_total, 2),
         'extra_deductions_total': round(extra_deductions_total, 2),
+        'general_deductions_total': round(general_deductions_total, 2),
         'total_deductions': round(total_deductions, 2),
         'net_salary': round(net_salary, 2),
 
@@ -1563,10 +1717,11 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
         'allowance_items': allowance_items,
         'bonus_items': bonus_items,
-        'insurance_items': deductions['insurance_items'],
-        'installment_items': deductions['installment_items'] + installment_items_new,
+        'insurance_items': deductions['insurance_items'] + general_insurance_items,
+        'installment_items': deductions['installment_items'] + general_installment_items + installment_items_new,
         'penalty_items': deductions['penalty_items'] + penalty_items_new,
-        'extra_deduction_items': deductions['extra_items'],
+        'extra_deduction_items': deductions['extra_items'] + general_extra_items,
+        'general_deduction_items': general_deduction_items,
         'legacy_deduction_items': deductions['legacy_items'],
 
         'daily_details': daily_details,

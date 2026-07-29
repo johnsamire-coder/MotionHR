@@ -680,3 +680,23 @@ def _seed_work_charter(company, user, stats):
         stats['errors'].append(f"WorkCharter: {str(e)}")
     return 0
 
+    # ── إعدادات المرتبات الافتراضية ──
+    try:
+        from attendance.payroll_settings_model import PayrollSettings
+        PayrollSettings.objects.get_or_create(
+            company=company,
+            defaults={
+                'late_deduction_per_minute': 1.0,
+                'absence_deduction_per_day': 200.0,
+                'overtime_rate_per_hour': 50.0,
+                'insurance_mode': 'none',
+                'insurance_fixed_amount': 0.0,
+                'insurance_percent': 0.0,
+                'field_allowance_type': 'none',
+                'fixed_field_allowance': 0.0,
+                'per_visit_allowance': 0.0,
+            }
+        )
+    except Exception:
+        pass
+

@@ -20,6 +20,7 @@ urlpatterns = [
 
     # JS Solutions
     path('js-solutions/', views.js_solutions_home, name='js_solutions'),
+path('download/', views.download_app, name='download'),
 
     # ═══════════════════════════════════════════
     # الأسعار: مؤجلة (سنستخدم عرض سعر مخصص)

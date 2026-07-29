@@ -4,6 +4,8 @@ from . import views
 app_name = 'accounts'
 
 urlpatterns = [
+    path('api/mobile/activate-account/', views.activate_employee_account, name='activate-account'),
+
     path('login-settings/', views.login_settings_view, name='login_settings'),
     path('profile/',        views.profile_view,         name='profile'),
     path('profile/update/', views.profile_update,       name='profile_update'),

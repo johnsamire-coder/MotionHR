@@ -20,6 +20,9 @@ DEFAULT_SETTINGS = {
     'insurance_mode': 'none',
     'insurance_fixed_amount': 0.0,
     'insurance_percent': 0.0,
+    'field_allowance_type': 'none',
+    'fixed_field_allowance': 0.0,
+    'per_visit_allowance': 0.0,
 }
 
 
@@ -88,6 +91,9 @@ def _get_payroll_settings(user):
                     'insurance_mode': getattr(s, 'insurance_mode', 'none'),
                     'insurance_fixed_amount': float(getattr(s, 'insurance_fixed_amount', 0) or 0),
                     'insurance_percent': float(getattr(s, 'insurance_percent', 0) or 0),
+                    'field_allowance_type': getattr(s, 'field_allowance_type', 'none') or 'none',
+                    'fixed_field_allowance': float(getattr(s, 'fixed_field_allowance', 0) or 0),
+                    'per_visit_allowance': float(getattr(s, 'per_visit_allowance', 0) or 0),
                 }
     except Exception:
         pass
@@ -110,6 +116,8 @@ def _serialize_summary_row(payroll):
         'bonuses_total': payroll.get('bonuses_total', 0),
         'night_allowance': payroll.get('night_allowance', 0),
         'weekend_allowance': payroll.get('weekend_allowance', 0),
+        'field_allowance': payroll.get('field_allowance', 0),
+        'field_allowance_type': payroll.get('field_allowance_type', 'none'),
         'gross_salary': payroll.get('gross_salary', 0),
         'policy_name': payroll.get('policy_name'),
 
@@ -267,6 +275,12 @@ def payroll_settings(request):
                 obj.insurance_fixed_amount = data['insurance_fixed_amount']
             if 'insurance_percent' in data:
                 obj.insurance_percent = data['insurance_percent']
+            if 'field_allowance_type' in data:
+                obj.field_allowance_type = data['field_allowance_type']
+            if 'fixed_field_allowance' in data:
+                obj.fixed_field_allowance = data['fixed_field_allowance']
+            if 'per_visit_allowance' in data:
+                obj.per_visit_allowance = data['per_visit_allowance']
             obj.save()
 
         try:
@@ -302,6 +316,9 @@ def payroll_settings(request):
             'insurance_mode': getattr(obj, 'insurance_mode', 'none'),
             'insurance_fixed_amount': float(getattr(obj, 'insurance_fixed_amount', 0) or 0),
             'insurance_percent': float(getattr(obj, 'insurance_percent', 0) or 0),
+            'field_allowance_type': getattr(obj, 'field_allowance_type', 'none') or 'none',
+            'fixed_field_allowance': float(getattr(obj, 'fixed_field_allowance', 0) or 0),
+            'per_visit_allowance': float(getattr(obj, 'per_visit_allowance', 0) or 0),
             'payroll_cycle_type': getattr(company, 'payroll_cycle_type', 'calendar_month') if company else 'calendar_month',
             'payroll_cutoff_day': getattr(company, 'payroll_cutoff_day', 1) if company else 1,
             'payroll_pay_day': getattr(company, 'payroll_pay_day', 1) if company else 1,

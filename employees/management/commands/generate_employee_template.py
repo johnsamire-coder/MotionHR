@@ -27,7 +27,6 @@ COLUMNS = [
     ("first_name_en",             "الاسم الأول إنجليزي *",           True,  None,   None,                     20, False, "البيانات الشخصية"),
     ("last_name_en",              "الاسم الأخير إنجليزي *",          True,  None,   None,                     20, False, "البيانات الشخصية"),
     ("national_id",               "الرقم القومي * (Text)",           True,  None,   None,                     20, True,  "البيانات الشخصية"),
-    ("passport_number",           "رقم الباسبور (Text)",             False, None,   None,                     18, True,  "البيانات الشخصية"),
     ("birth_date",                "تاريخ الميلاد * (YYYY-MM-DD)",    True,  None,   None,                     22, False, "البيانات الشخصية"),
     ("gender",                    "النوع *",                         True,  "list", "القوائم!$B$2:$B$3",      12, False, "البيانات الشخصية"),
     ("marital_status",            "الحالة الاجتماعية",               False, "list", "القوائم!$C$2:$C$5",      18, False, "البيانات الشخصية"),
@@ -52,7 +51,8 @@ COLUMNS = [
     ("direct_manager_name", "اسم المدير المباشر", False, None, None, 28, False, "بيانات الوظيفة"),
     ("hire_date",                 "تاريخ التعيين * (YYYY-MM-DD)",    True,  None,   None,                     25, False, "بيانات الوظيفة"),
     ("attendance_mode",           "نمط الحضور *",                    True,  "list", "القوائم!$I$2:$I$6",      18, False, "بيانات الوظيفة"),
-    ("status",                    "الحالة الوظيفية *",               True,  "list", "القوائم!$O$2:$O$6",      18, False, "بيانات الوظيفة"),
+    ("status",                    "الحالة الوظيفية (اختياري - سيتم الاستيراد نشط)", False, "list", "القوائم!$O$2:$O$6", 28, False, "بيانات الوظيفة"),
+    ("worker_type",               "نوع الموظف *",                    True,  "list", "القوائم!$P$2:$P$4",      18, False, "بيانات الوظيفة"),
     # --- العقد ---
     ("contract_type",             "نوع العقد *",                     True,  "list", "القوائم!$J$2:$J$7",      18, False, "العقد"),
     ("contract_start_date",       "بداية العقد (YYYY-MM-DD)",        False, None,   None,                     22, False, "العقد"),
@@ -68,7 +68,6 @@ COLUMNS = [
     ("salary_payment_method",     "طريقة القبض *",                   True,  "list", "القوائم!$L$2:$L$5",      18, False, "الماليات"),
     ("bank_name",                 "اسم البنك",                       False, None,   None,                     20, False, "الماليات"),
     ("bank_account",              "رقم الحساب (Text)",               False, None,   None,                     20, True,  "الماليات"),
-    ("bank_account_holder_name",  "اسم صاحب الحساب",                False, None,   None,                     22, False, "الماليات"),
     ("iban",                      "IBAN (Text - EG...)",             False, None,   None,                     30, True,  "الماليات"),
     ("instapay_transfer_id",      "رقم إنستا باي (Text)",            False, None,   None,                     22, True,  "الماليات"),
     ("wallet_transfer_number",    "رقم المحفظة (Text)",              False, None,   None,                     22, True,  "الماليات"),
@@ -310,7 +309,7 @@ class Command(BaseCommand):
         # لون رمادي للحقول غير المطلوبة
         grey_fill   = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
 
-        bank_cols  = ["bank_name", "bank_account", "bank_account_holder_name", "iban"]
+        bank_cols  = ["bank_name", "bank_account", "iban"]
         insta_cols = ["instapay_transfer_id"]
         wallet_cols = ["wallet_transfer_number", "wallet_provider"]
 
@@ -432,13 +431,14 @@ class Command(BaseCommand):
             "F": ("branch_name",        []),
             "G": ("department_name",    []),
             "H": ("job_title_name",     []),
-            "I": ("attendance_mode",    ["fixed_shift", "flexible_hours", "field_worker", "remote", "rotating"]),
+            "I": ("attendance_mode",    ["fixed_shift", "flexible_hours", "field_worker", "multi_site", "rotating"]),
             "J": ("contract_type",      ["permanent", "temporary", "training", "freelance", "part_time", "consultant"]),
             "K": ("currency",           ["EGP", "USD", "SAR", "AED", "KWD", "QAR"]),
             "L": ("salary_payment_method", ["cash", "bank", "instapay", "wallet"]),
             "M": ("wallet_provider",    ["vodafone_cash", "orange_money", "etisalat_cash", "we_pay", "fawry", "other"]),
             "N": ("direct_manager_name",[]),
             "O": ("status",             ["active", "inactive", "terminated", "resigned", "on_leave"]),
+            "P": ("worker_type",        ["office", "field_free", "field_assigned"]),
         }
 
         # Populate from DB

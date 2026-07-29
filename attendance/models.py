@@ -2930,3 +2930,5 @@ class RouteHistory(TenantModel):
     def __str__(self):
         return f"{self.employee}: {self.from_location_name or 'موقع'} → {self.to_location_name or 'موقع'} ({self.travel_time_minutes} د)"
 
+
+from .company_policy_models import CompanyAllowancePolicy, CompanyDeductionPolicy, CompanyBonusPolicy

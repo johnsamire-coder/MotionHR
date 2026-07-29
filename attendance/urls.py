@@ -27,6 +27,8 @@ from .api_work_locations import (
 )
 from . import api_mobile
 from . import api_mobile_requests
+from .api_company_allowance_policy import allowance_policies_list, allowance_policy_detail
+from .api_general_policies import deduction_policies_list, deduction_policy_detail, bonus_policies_list, bonus_policy_detail
 
 app_name = 'attendance'
 
@@ -560,5 +562,22 @@ urlpatterns += [
     path('api/mobile/manager/work-locations/pending/', manager_pending_locations, name='manager_pending_locations'),
     path('api/mobile/manager/work-locations/<int:location_id>/approve/', approve_work_location, name='approve_work_location'),
     path('api/mobile/manager/work-locations/<int:location_id>/reject/', reject_work_location, name='reject_work_location'),
+    # ═══════════════════════════════════════════════════
+    # Company Allowance Policies (بدلات عامة)
+    # ═══════════════════════════════════════════════════
+    path('api/mobile/manager/allowance-policies/', allowance_policies_list, name='allowance_policies_list'),
+    path('api/mobile/manager/allowance-policies/<int:policy_id>/', allowance_policy_detail, name='allowance_policy_detail'),
+
+    # ═══════════════════════════════════════════════════
+    # General Deduction Policies (خصومات عامة)
+    # ═══════════════════════════════════════════════════
+    path('api/mobile/manager/deduction-policies/', deduction_policies_list, name='deduction_policies_list'),
+    path('api/mobile/manager/deduction-policies/<int:policy_id>/', deduction_policy_detail, name='deduction_policy_detail'),
+
+    # ═══════════════════════════════════════════════════
+    # General Bonus Policies (مكافآت عامة)
+    # ═══════════════════════════════════════════════════
+    path('api/mobile/manager/bonus-policies/', bonus_policies_list, name='bonus_policies_list'),
+    path('api/mobile/manager/bonus-policies/<int:policy_id>/', bonus_policy_detail, name='bonus_policy_detail'),
 
 ]

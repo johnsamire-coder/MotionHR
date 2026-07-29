@@ -453,3 +453,5 @@ def smart_home(request):
     if host.startswith('motion.'):
         return landing_home(request)
     return js_solutions_home(request)
+def download_app(request):
+    return render(request, 'landing/download.html')
