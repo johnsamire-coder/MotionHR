@@ -1245,7 +1245,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     # Hybrid: جلب الملخصات اليومية المتاحة (لو موجودة تسرّع الحساب)
     try:
         from attendance.models import DailyAttendanceSummary
-        _today = _date_cls.today()
+        _today = date.today()
         _summaries = {
             s.date: s
             for s in DailyAttendanceSummary._base_manager.filter(
@@ -1468,6 +1468,53 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             'is_night_shift': False, 'is_weekend_work': False,
         })
 
+    # ── إضافة بيانات الزيارات الميدانية لكل يوم في daily_details ──
+    try:
+        from attendance.models import LocationCheckIn
+        from collections import defaultdict
+
+        _visits_qs = LocationCheckIn._base_manager.filter(
+            employee=employee,
+            arrival_time__year=year,
+            arrival_time__month=month,
+        ).values('arrival_time', 'departure_time', 'status')
+
+        _visits_by_date = defaultdict(list)
+        for _v in _visits_qs:
+            _vdate = _v['arrival_time'].date() if _v['arrival_time'] else None
+            if _vdate:
+                _visits_by_date[_vdate].append(_v)
+
+        for _dd in daily_details:
+            try:
+                _dd_date = date.fromisoformat(_dd['date'])
+            except Exception:
+                _dd['visit_count'] = 0
+                _dd['visit_total_minutes'] = 0
+                _dd['auto_closed_visits_count'] = 0
+                continue
+
+            _day_visits = _visits_by_date.get(_dd_date, [])
+            _visit_count = len(_day_visits)
+            _visit_total_minutes = 0
+            _auto_closed_count = 0
+
+            for _v in _day_visits:
+                if _v['departure_time'] and _v['arrival_time']:
+                    _dur = (_v['departure_time'] - _v['arrival_time']).total_seconds() / 60
+                    _visit_total_minutes += max(0, int(_dur))
+                if _v.get('status') == 'auto_closed':
+                    _auto_closed_count += 1
+
+            _dd['visit_count'] = _visit_count
+            _dd['visit_total_minutes'] = _visit_total_minutes
+            _dd['auto_closed_visits_count'] = _auto_closed_count
+    except Exception:
+        for _dd in daily_details:
+            _dd.setdefault('visit_count', 0)
+            _dd.setdefault('visit_total_minutes', 0)
+            _dd.setdefault('auto_closed_visits_count', 0)
+
     basic_salary = _safe_float(getattr(employee, 'basic_salary', 0))
     currency = getattr(employee, 'currency', None) or 'EGP'
     has_insurance = bool(getattr(employee, 'has_insurance', False))
@@ -1488,7 +1535,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     for dd in daily_details:
         _d_date = None
         try:
-            _d_date = _date_cls.fromisoformat(dd['date'])
+            _d_date = date.fromisoformat(dd['date'])
         except Exception:
             pass
 
