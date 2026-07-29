@@ -343,10 +343,17 @@ def get_mission_dates(employee, year, month):
             employee=employee,
             status__in=['accepted', 'in_progress', 'completed'],
         ):
-            if getattr(m, 'mission', None) and getattr(m.mission, 'start_date', None):
-                d = m.mission.start_date
-                if isinstance(d, date) and first_day <= d <= last_day:
-                    mission_dates.add(d)
+            if getattr(m, 'mission', None):
+                _start_dt = getattr(m.mission, 'planned_start_time', None)
+                _end_dt = getattr(m.mission, 'planned_end_time', None)
+                if _start_dt:
+                    _start_d = _start_dt.date() if hasattr(_start_dt, 'date') else _start_dt
+                    _end_d = _end_dt.date() if _end_dt and hasattr(_end_dt, 'date') else _start_d
+                    _cur = max(_start_d, first_day)
+                    _end_d = min(_end_d, last_day)
+                    while _cur <= _end_d:
+                        mission_dates.add(_cur)
+                        _cur += timedelta(days=1)
     except Exception:
         pass
 
@@ -486,7 +493,7 @@ def _get_allowances(employee, first_day, last_day, lang='ar'):
     # 1) بدلات فردية للموظف
     try:
         from .company_policy_models import PayrollAllowance
-        qs = PayrollAllowance.objects.filter(
+        qs = PayrollAllowance._base_manager.filter(
             employee=employee,
             is_active=True,
             start_date__lte=last_day,
@@ -642,7 +649,7 @@ def _get_bonuses(employee, year, month, lang='ar'):
     # 1) مكافآت فردية للموظف
     try:
         from .payroll_pro_models import PayrollBonus
-        for item in PayrollBonus.objects.filter(employee=employee, year=year, month=month):
+        for item in PayrollBonus._base_manager.filter(employee=employee, year=year, month=month):
             amount = _safe_float(item.amount)
             total += amount
             items.append({
@@ -737,7 +744,7 @@ def _get_penalties(employee, year, month, lang='ar'):
     # PayrollPenalty (يدوي من HR)
     try:
         from .payroll_pro_models import PayrollPenalty
-        for item in PayrollPenalty.objects.filter(employee=employee, year=year, month=month):
+        for item in PayrollPenalty._base_manager.filter(employee=employee, year=year, month=month):
             amount = _safe_float(item.amount)
             total += amount
             items.append({
@@ -786,7 +793,7 @@ def _get_installments(employee, year, month):
     items = []
     try:
         from .payroll_pro_models import PayrollInstallment
-        for item in PayrollInstallment.objects.filter(employee=employee, status='active'):
+        for item in PayrollInstallment._base_manager.filter(employee=employee, status='active'):
             if (item.start_year < year) or (item.start_year == year and item.start_month <= month):
                 remaining = _safe_float(item.remaining_amount())
                 if remaining <= 0:
@@ -1702,13 +1709,13 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     field_allowance = 0.0
     try:
         from attendance.payroll_settings_model import PayrollSettings
-        ps = PayrollSettings.objects.filter(company=company).first()
+        ps = PayrollSettings._base_manager.filter(company=company).first()
         if ps and hasattr(employee, 'worker_type') and employee.worker_type in ('field_free', 'field_assigned'):
             if ps.field_allowance_type == 'fixed':
                 field_allowance = float(ps.fixed_field_allowance or 0)
             elif ps.field_allowance_type == 'per_visit':
                 from attendance.models import LocationCheckIn
-                visits_count = LocationCheckIn.objects.filter(
+                visits_count = LocationCheckIn._base_manager.filter(
                     employee=employee,
                     arrival_time__year=year,
                     arrival_time__month=month,
