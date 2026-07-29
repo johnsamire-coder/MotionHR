@@ -48,10 +48,14 @@ def _get_company_employees(user):
         from employees.models import Employee
     except ImportError:
         return []
+
     company = getattr(user, 'company', None)
+    qs = Employee._base_manager.all().select_related('user', 'company')
+
     if company:
-        return Employee.objects.filter(company=company)
-    return Employee.objects.all()
+        qs = qs.filter(company=company)
+
+    return qs.order_by('id')
 
 
 def _parse_month(request):
@@ -207,6 +211,7 @@ def payroll_employee_detail(request):
 
     year, month = _parse_month(request)
     lang = _get_lang(request)
+    req_format = request.GET.get('export', 'json').lower()
     employee_id = request.GET.get('employee_id')
 
     if not employee_id:
@@ -214,12 +219,86 @@ def payroll_employee_detail(request):
 
     try:
         from employees.models import Employee
-        emp = Employee.objects.get(id=employee_id)
+
+        emp_qs = Employee._base_manager.all().select_related('user', 'company')
+        company = getattr(user, 'company', None)
+
+        if company:
+            emp_qs = emp_qs.filter(company=company)
+
+        emp = emp_qs.filter(id=employee_id).first()
+        if not emp:
+            return Response({'error': 'Employee not found'}, status=404)
     except Exception:
         return Response({'error': 'Employee not found'}, status=404)
 
     settings = _get_payroll_settings(user)
     payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+
+    if req_format == 'pdf':
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.units import mm
+            from io import BytesIO
+
+            buffer = BytesIO()
+            pdf = canvas.Canvas(buffer, pagesize=A4)
+            width, height = A4
+
+            employee_name = (
+                f"{emp.first_name_en or emp.first_name_ar or ''} "
+                f"{emp.last_name_en or emp.last_name_ar or ''}"
+            ).strip() or f"Employee {emp.id}"
+
+            department_obj = getattr(emp, 'department', None)
+            department_name = (
+                getattr(department_obj, 'name_en', None)
+                or getattr(department_obj, 'name_ar', None)
+                or 'N/A'
+            )
+
+            branch_obj = getattr(emp, 'branch', None)
+            branch_name = (
+                getattr(branch_obj, 'name_en', None)
+                or getattr(branch_obj, 'name_ar', None)
+                or 'N/A'
+            )
+
+            pdf.setFont("Helvetica-Bold", 16)
+            pdf.drawCentredString(width / 2.0, height - 20 * mm, f"Payroll Detail - {month}/{year}")
+
+            pdf.setFont("Helvetica", 12)
+            pdf.drawString(20 * mm, height - 40 * mm, f"Employee: {employee_name}")
+            pdf.drawString(20 * mm, height - 48 * mm, f"Employee ID: {emp.id}")
+            pdf.drawString(20 * mm, height - 56 * mm, f"Employee Code: {getattr(emp, 'employee_code', '') or '-'}")
+            pdf.drawString(20 * mm, height - 64 * mm, f"Department: {department_name}")
+            pdf.drawString(20 * mm, height - 72 * mm, f"Branch: {branch_name}")
+
+            pdf.drawString(20 * mm, height - 84 * mm, "--------------------------------------------------")
+            pdf.drawString(20 * mm, height - 94 * mm, f"Basic Salary: {payroll.get('basic_salary', 0)}")
+            pdf.drawString(20 * mm, height - 102 * mm, f"Allowances Total: + {payroll.get('allowances_total', 0)}")
+            pdf.drawString(20 * mm, height - 110 * mm, f"Overtime Bonus: + {payroll.get('overtime_bonus', 0)}")
+            pdf.drawString(20 * mm, height - 118 * mm, f"Bonuses Total: + {payroll.get('bonuses_total', 0)}")
+            pdf.drawString(20 * mm, height - 126 * mm, f"Total Deductions: - {payroll.get('total_deductions', 0)}")
+
+            pdf.setFont("Helvetica-Bold", 14)
+            pdf.drawString(20 * mm, height - 140 * mm, f"Net Salary: {payroll.get('net_salary', 0)}")
+
+            pdf.showPage()
+            pdf.save()
+
+            pdf_bytes = buffer.getvalue()
+            buffer.close()
+
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = (
+                f'attachment; filename="payroll_employee_{emp.id}_{year}_{month}.pdf"'
+            )
+            return response
+        except Exception as e:
+            return Response({'error': f'PDF generation failed: {str(e)}'}, status=500)
+
     return Response({'year': year, 'month': month, 'lang': lang, **payroll})
 
 
