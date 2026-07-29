@@ -1386,15 +1386,36 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 ).order_by('session_number'))
                 split_metrics = _calc_split_shift_metrics(day_shift, att, day_sessions, d)
                 if split_metrics['is_fully_absent']:
-                    absent_days += 1
-                    daily_details.append({
-                        'date': d.isoformat(), 'status': 'absent',
-                        'effective_status': 'absent', 'check_in': None,
-                        'check_out': None, 'work_hours': 0,
-                        'late_minutes': 0, 'overtime_hours': 0,
-                        'shift_name': day_shift.name if day_shift else '',
-                        'is_night_shift': False, 'is_weekend_work': False,
-                    })
+                    # لو فيه check-in ومفيش check-out على Attendance الأساسي
+                    # يبقى اليوم مش غياب كامل، ده checkout ناقص
+                    if att and att.check_in_time and not att.check_out_time:
+                        present_days += 1
+                        elm = int(getattr(att, 'early_leave_minutes', 0) or 0)
+                        total_early_leave_minutes += elm
+                        daily_details.append({
+                            'date': d.isoformat(),
+                            'status': getattr(att, 'status', 'present'),
+                            'effective_status': 'present',
+                            'check_in': att.check_in_time.strftime('%I:%M %p') if att.check_in_time else None,
+                            'check_out': None,
+                            'work_hours': 0,
+                            'late_minutes': 0,
+                            'early_leave_minutes': elm,
+                            'overtime_hours': 0,
+                            'shift_name': day_shift.name if day_shift else '',
+                            'is_night_shift': False,
+                            'is_weekend_work': False,
+                        })
+                    else:
+                        absent_days += 1
+                        daily_details.append({
+                            'date': d.isoformat(), 'status': 'absent',
+                            'effective_status': 'absent', 'check_in': None,
+                            'check_out': None, 'work_hours': 0,
+                            'late_minutes': 0, 'overtime_hours': 0,
+                            'shift_name': day_shift.name if day_shift else '',
+                            'is_night_shift': False, 'is_weekend_work': False,
+                        })
                     continue
                 work_h = round(split_metrics['worked_minutes'] / 60, 2)
                 late_min = split_metrics['late_minutes'] + split_metrics['shortage_minutes']
@@ -1514,6 +1535,14 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             _dd.setdefault('visit_count', 0)
             _dd.setdefault('visit_total_minutes', 0)
             _dd.setdefault('auto_closed_visits_count', 0)
+
+    # ── تعليم الأيام اللي فيها check-in بدون check-out ──
+    missing_checkout_days_count = 0
+    for _dd in daily_details:
+        _missing_checkout = bool(_dd.get('check_in')) and not bool(_dd.get('check_out'))
+        _dd['missing_checkout'] = _missing_checkout
+        if _missing_checkout:
+            missing_checkout_days_count += 1
 
     basic_salary = _safe_float(getattr(employee, 'basic_salary', 0))
     currency = getattr(employee, 'currency', None) or 'EGP'
@@ -1759,6 +1788,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'total_early_leave_minutes': total_early_leave_minutes,
         'total_work_hours': round(total_work_hours, 2),
         'overtime_hours': round(total_overtime_hours, 2),
+        'missing_checkout_days_count': missing_checkout_days_count,
         'night_shift_days': night_shift_days,
         'weekend_work_days': weekend_work_days,
 
