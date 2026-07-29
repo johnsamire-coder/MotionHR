@@ -137,7 +137,7 @@ class PayrollBonus(TenantModel):
     amount  = models.DecimalField(max_digits=12, decimal_places=2, verbose_name='المبلغ')
     month   = models.IntegerField(verbose_name='الشهر')
     year    = models.IntegerField(verbose_name='السنة')
-    reason  = models.TextField(blank=True, verbose_name='السبب')
+    reason  = models.TextField(blank=True, default='', verbose_name='السبب')
     is_visible_to_employee = models.BooleanField(default=True, verbose_name='مرئي للموظف')
 
     class Meta:
@@ -163,7 +163,7 @@ class PayrollPenalty(TenantModel):
     amount  = models.DecimalField(max_digits=12, decimal_places=2, verbose_name='المبلغ')
     month   = models.IntegerField(verbose_name='الشهر')
     year    = models.IntegerField(verbose_name='السنة')
-    reason  = models.TextField(blank=True, verbose_name='السبب')
+    reason  = models.TextField(blank=True, default='', verbose_name='السبب')
     is_visible_to_employee = models.BooleanField(default=True, verbose_name='مرئي للموظف')
 
     class Meta:
@@ -197,7 +197,7 @@ class PayrollInstallment(TenantModel):
     start_month   = models.IntegerField(verbose_name='شهر البدء')
     start_year    = models.IntegerField(verbose_name='سنة البدء')
     status        = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
-    notes         = models.TextField(blank=True)
+    notes         = models.TextField(blank=True, default='')
 
     class Meta:
         verbose_name = 'قسط / سلفة'

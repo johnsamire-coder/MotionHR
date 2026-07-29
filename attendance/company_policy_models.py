@@ -136,7 +136,7 @@ class PayrollAllowance(TenantModel):
         verbose_name='نوع البدل'
     )
     name_ar = models.CharField(max_length=100, verbose_name='الاسم بالعربي')
-    name_en = models.CharField(max_length=100, blank=True, verbose_name='الاسم بالإنجليزي')
+    name_en = models.CharField(max_length=100, blank=True, default='', verbose_name='الاسم بالإنجليزي')
     amount  = models.DecimalField(
         max_digits=10, decimal_places=2,
         verbose_name='المبلغ'
