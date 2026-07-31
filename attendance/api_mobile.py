@@ -441,6 +441,8 @@ def get_missing_periods(shift, day, employee):
     if not attendance:
         return periods  # كل الفترات فاتت
 
+    from attendance.models import AttendanceSession
+
     sessions = AttendanceSession._base_manager.filter(
         attendance=attendance,
         employee=employee,
@@ -1375,25 +1377,9 @@ def mobile_attendance_status(request):
     # ═══════════════════════════════════════════════════
     worker_type = getattr(employee, 'worker_type', None)
     
-    from attendance.models import EmployeeShift as _EmpShift
-    from attendance.models import ShiftAssignment as _ShiftAssign
-    from django.db.models import Q as _Q
-    
-    has_emp_shift = _EmpShift._base_manager.filter(
-        employee=employee, is_active=True
-    ).exists()
-    
-    emp_dept_id = getattr(employee, 'department_id', None)
-    emp_branch_id = getattr(employee, 'branch_id', None)
-    assignment_q = _Q(employee=employee)
-    if emp_dept_id:
-        assignment_q |= _Q(assignment_type='department', department_id=emp_dept_id)
-    if emp_branch_id:
-        assignment_q |= _Q(assignment_type='branch', branch_id=emp_branch_id)
-    
-    has_shift = has_emp_shift or _ShiftAssign._base_manager.filter(
-        company=employee.company, is_active=True
-    ).filter(assignment_q).exists()
+    effective_shift = get_active_shift(employee, today)
+    has_shift = effective_shift is not None
+
     
     missing = []
     if not worker_type:
