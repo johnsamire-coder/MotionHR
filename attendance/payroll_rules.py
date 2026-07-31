@@ -760,6 +760,77 @@ def _get_bonuses(employee, year, month, lang='ar'):
     except Exception:
         pass
 
+    # 3) مقابل إضافي للعمل في الإجازات الرسمية
+    try:
+        company = getattr(employee, 'company', None)
+        if company:
+            if hasattr(company, 'payroll_cycle_type'):
+                _first_day, _last_day = get_payroll_period_bounds(company, year, month)
+            else:
+                _first_day, _last_day = _period_bounds(year, month)
+
+            official_holiday_map = get_official_holiday_treatment(employee, year, month)
+
+            attended_dates = set(
+                Attendance._base_manager.filter(
+                    employee=employee,
+                    date__gte=_first_day,
+                    date__lte=_last_day,
+                    check_in_time__isnull=False,
+                ).values_list('date', flat=True)
+            )
+
+            working_days_count = max(len(get_company_working_days(company, year, month)), 1)
+            basic_salary_val = _safe_float(getattr(employee, 'basic_salary', 0))
+            daily_salary = round(basic_salary_val / working_days_count, 4)
+
+            grouped = {}
+
+            for d, holiday_info in official_holiday_map.items():
+                if holiday_info.get('treatment') != 'work_with_bonus':
+                    continue
+                if d not in attended_dates:
+                    continue
+
+                rule = holiday_info.get('rule')
+                if not rule:
+                    continue
+
+                day_bonus = _safe_float(rule.calculate_bonus(daily_salary, basic_salary_val))
+                if day_bonus <= 0:
+                    continue
+
+                holiday_name = holiday_info.get('holiday_name') or 'إجازة رسمية'
+                rule_id = getattr(rule, 'id', None)
+                key = (holiday_name, rule_id, round(day_bonus, 2))
+
+                if key not in grouped:
+                    grouped[key] = {
+                        'holiday_name': holiday_name,
+                        'bonus_days': 0,
+                        'day_bonus': round(day_bonus, 2),
+                        'amount': 0.0,
+                    }
+
+                grouped[key]['bonus_days'] += 1
+                grouped[key]['amount'] = round(grouped[key]['amount'] + day_bonus, 2)
+
+            for row in grouped.values():
+                total += row['amount']
+                items.append({
+                    'name_ar': f"مقابل عمل في إجازة رسمية: {row['holiday_name']}",
+                    'name_en': f"Official Holiday Work Bonus: {row['holiday_name']}",
+                    'name': f"مقابل عمل في إجازة رسمية: {row['holiday_name']}",
+                    'amount': round(row['amount'], 2),
+                    'reason': f"{row['bonus_days']} يوم × {row['day_bonus']} جنيه/يوم",
+                    'source': 'official_holiday_bonus',
+                    'holiday_name': row['holiday_name'],
+                    'bonus_days': row['bonus_days'],
+                    'day_bonus': row['day_bonus'],
+                })
+    except Exception:
+        pass
+
     return round(total, 2), items
 
 
