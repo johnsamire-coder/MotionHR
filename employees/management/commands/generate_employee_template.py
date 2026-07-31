@@ -52,7 +52,7 @@ COLUMNS = [
     ("hire_date",                 "تاريخ التعيين * (YYYY-MM-DD)",    True,  None,   None,                     25, False, "بيانات الوظيفة"),
     ("attendance_mode",           "نمط الحضور *",                    True,  "list", "القوائم!$I$2:$I$6",      18, False, "بيانات الوظيفة"),
     ("status",                    "الحالة الوظيفية (اختياري - سيتم الاستيراد نشط)", False, "list", "القوائم!$O$2:$O$6", 28, False, "بيانات الوظيفة"),
-    ("worker_type",               "نوع الموظف *",                    True,  "list", "القوائم!$P$2:$P$4",      18, False, "بيانات الوظيفة"),
+    ("worker_type",               "تصنيف الموظف * (مكتبي/ميداني حر/ميداني معين)", True, "list", "القوائم!$P$2:$P$4", 30, False, "بيانات الوظيفة"),
     # --- العقد ---
     ("contract_type",             "نوع العقد *",                     True,  "list", "القوائم!$J$2:$J$7",      18, False, "العقد"),
     ("contract_start_date",       "بداية العقد (YYYY-MM-DD)",        False, None,   None,                     22, False, "العقد"),
@@ -438,7 +438,7 @@ class Command(BaseCommand):
             "M": ("wallet_provider",    ["vodafone_cash", "orange_money", "etisalat_cash", "we_pay", "fawry", "other"]),
             "N": ("direct_manager_name",[]),
             "O": ("status",             ["active", "inactive", "terminated", "resigned", "on_leave"]),
-            "P": ("worker_type",        ["office", "field_free", "field_assigned"]),
+            "P": ("worker_type",        ["مكتبي", "ميداني حر", "ميداني معين"]),
         }
 
         # Populate from DB

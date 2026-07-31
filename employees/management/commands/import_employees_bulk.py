@@ -20,6 +20,17 @@ from employees.account_utils import send_mail
 from django.conf import settings
 
 
+
+# Mapping تصنيف الموظف من عربي لإنجليزي
+WORKER_TYPE_MAP = {
+    "مكتبي": "office",
+    "ميداني حر": "field_free",
+    "ميداني معين": "field_assigned",
+    "office": "office",
+    "field_free": "field_free",
+    "field_assigned": "field_assigned",
+}
+
 # ═══════════════════════════════════════════════════════
 # خريطة الأعمدة الثابتة — index يبدأ من 0
 # ═══════════════════════════════════════════════════════
@@ -276,9 +287,9 @@ class Command(BaseCommand):
                 if not _str(row, field):
                     errors.append(f"{prefix}: الحقل [{field}] إجباري للموظف الجديد")
 
-            worker_type = _str(row, "worker_type")
+            worker_type = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
             if worker_type and worker_type not in ("office", "field_free", "field_assigned"):
-                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: office / field_free / field_assigned")
+                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: مكتبي / ميداني حر / ميداني معين")
 
             att_mode = _str(row, "attendance_mode")
             if att_mode and att_mode not in ("fixed_shift", "flexible_hours", "field_worker", "multi_site", "rotating"):
@@ -319,9 +330,9 @@ class Command(BaseCommand):
             if not _str(row, "employee_code") and not _str(row, "national_id"):
                 errors.append(f"{prefix}: كود الموظف أو الرقم القومي مطلوب للتحديث")
 
-            worker_type = _str(row, "worker_type")
+            worker_type = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
             if worker_type and worker_type not in ("office", "field_free", "field_assigned"):
-                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: office / field_free / field_assigned")
+                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: مكتبي / ميداني حر / ميداني معين")
 
             att_mode = _str(row, "attendance_mode")
             if att_mode and att_mode not in ("fixed_shift", "flexible_hours", "field_worker", "multi_site", "rotating"):
@@ -434,9 +445,9 @@ class Command(BaseCommand):
         gender_val = _str(row, "gender")
 
         att_mode = _str(row, "attendance_mode") or "fixed_shift"
-        worker_type_val = _str(row, "worker_type")
+        worker_type_val = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
         if worker_type_val not in ("office", "field_free", "field_assigned"):
-            raise ValueError("قيمة worker_type غير صحيحة أو غير موجودة")
+            raise ValueError("قيمة worker_type غير صحيحة أو غير موجودة — المسموح: مكتبي / ميداني حر / ميداني معين")
         status   = "active"  # دايمًا نشط - مش بنقرأ من الإكسيل
 
         username = f"emp{nat_id[-6:]}{random.randint(10, 99)}"
@@ -616,7 +627,7 @@ class Command(BaseCommand):
         if att_mode:
             emp.attendance_mode = att_mode
 
-        worker_type_val = _str(row, "worker_type")
+        worker_type_val = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
         if worker_type_val in ("office", "field_free", "field_assigned"):
             emp.worker_type = worker_type_val
 
