@@ -379,3 +379,271 @@ def api_export_permissions(request):
         return export_company_pdf(company) if format_type == 'pdf' else export_company_excel(company)
 
     return Response({'error': 'invalid params'}, status=400)
+
+
+# ══════════════════════════════════════
+# 7. صلاحيات اليوزر الحالي
+# ══════════════════════════════════════
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def my_permissions(request):
+    """صلاحيات اليوزر الحالي"""
+    from accounts.permissions_models import get_user_permissions, PERMISSION_CHOICES
+    perms = get_user_permissions(request.user)
+    return Response({
+        'success': True,
+        'role': request.user.role,
+        'permissions': [
+            {
+                'code': code,
+                'label_ar': dict(PERMISSION_CHOICES).get(code, code),
+                'scope': scope,
+            }
+            for code, scope in perms.items()
+        ],
+        'permissions_map': perms,
+    })
+
+
+# ══════════════════════════════════════
+# 8. الصلاحيات الافتراضية لكل Role
+# ══════════════════════════════════════
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def default_role_permissions(request):
+    """الصلاحيات الافتراضية لكل Role"""
+    if not is_company_admin(request.user):
+        return Response({'error': 'غير مصرح'}, status=403)
+
+    from accounts.permissions_models import DEFAULT_ROLE_PERMISSIONS, PERMISSION_CHOICES
+
+    role = request.query_params.get('role')
+    perm_labels = dict(PERMISSION_CHOICES)
+
+    if role and role in DEFAULT_ROLE_PERMISSIONS:
+        return Response({
+            'success': True,
+            'role': role,
+            'permissions': [
+                {
+                    'code': code,
+                    'label_ar': perm_labels.get(code, code),
+                    'scope': scope,
+                }
+                for code, scope in DEFAULT_ROLE_PERMISSIONS[role]
+            ],
+        })
+
+    all_defaults = {}
+    for r, perms in DEFAULT_ROLE_PERMISSIONS.items():
+        all_defaults[r] = [
+            {'code': code, 'label_ar': perm_labels.get(code, code), 'scope': scope}
+            for code, scope in perms
+        ]
+
+    return Response({'success': True, 'defaults': all_defaults})
+
+
+# ══════════════════════════════════════
+# 9. تعديل صلاحيات Role الأساسي (override)
+# ══════════════════════════════════════
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def set_role_default_override(request):
+    """
+    تعديل صلاحيات Role أساسي لموظف معين عبر UserPermissionOverride
+    target_type: 'user' | 'department' | 'branch'
+    target_id: id
+    permissions: [{'code': ..., 'scope': ..., 'is_granted': True/False}]
+    """
+    if not is_company_admin(request.user):
+        return Response({'error': 'غير مصرح'}, status=403)
+
+    target_type = request.data.get('target_type', 'user')
+    target_id = request.data.get('target_id')
+    permissions = request.data.get('permissions', [])
+
+    if not target_id:
+        return Response({'error': 'target_id مطلوب'}, status=400)
+
+    valid_codes = [p[0] for p in PERMISSION_CHOICES]
+
+    if target_type == 'user':
+        target_user = User.objects.filter(
+            id=target_id, company=request.user.company
+        ).first()
+        if not target_user:
+            return Response({'error': 'المستخدم غير موجود'}, status=404)
+
+        users = [target_user]
+
+    elif target_type == 'department':
+        from employees.models import Employee
+        emps = Employee._base_manager.filter(
+            department_id=target_id,
+            company=request.user.company,
+        ).select_related('user')
+        users = [e.user for e in emps if e.user]
+
+    elif target_type == 'branch':
+        from employees.models import Employee
+        emps = Employee._base_manager.filter(
+            branch_id=target_id,
+            company=request.user.company,
+        ).select_related('user')
+        users = [e.user for e in emps if e.user]
+
+    else:
+        return Response({'error': 'target_type غير صحيح'}, status=400)
+
+    updated = 0
+    for user in users:
+        for perm in permissions:
+            code = perm.get('code')
+            scope = perm.get('scope', 'company')
+            is_granted = perm.get('is_granted', True)
+
+            if code not in valid_codes:
+                continue
+
+            UserPermissionOverride.objects.update_or_create(
+                user=user,
+                permission=code,
+                defaults={'scope': scope, 'is_granted': is_granted}
+            )
+            updated += 1
+
+    return Response({
+        'success': True,
+        'message': f'تم تحديث {updated} صلاحية لـ {len(users)} مستخدم',
+        'users_count': len(users),
+        'permissions_count': updated,
+    })
+
+
+# ══════════════════════════════════════
+# 10. صلاحيات قسم / فرع كامل
+# ══════════════════════════════════════
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def target_permissions_summary(request):
+    """
+    ملخص صلاحيات:
+    - موظف معين: ?type=user&id=X
+    - قسم: ?type=department&id=X
+    - فرع: ?type=branch&id=X
+    - role: ?type=role&role=manager
+    """
+    if not is_company_admin(request.user):
+        return Response({'error': 'غير مصرح'}, status=403)
+
+    from accounts.permissions_models import get_user_permissions, PERMISSION_CHOICES, DEFAULT_ROLE_PERMISSIONS
+
+    target_type = request.query_params.get('type', 'user')
+    target_id = request.query_params.get('id')
+    role_name = request.query_params.get('role')
+    perm_labels = dict(PERMISSION_CHOICES)
+
+    if target_type == 'role' and role_name:
+        perms = DEFAULT_ROLE_PERMISSIONS.get(role_name, [])
+        return Response({
+            'success': True,
+            'type': 'role',
+            'role': role_name,
+            'permissions': [
+                {'code': c, 'label_ar': perm_labels.get(c, c), 'scope': s}
+                for c, s in perms
+            ],
+        })
+
+    if not target_id:
+        return Response({'error': 'id مطلوب'}, status=400)
+
+    if target_type == 'user':
+        target_user = User.objects.filter(
+            id=target_id, company=request.user.company
+        ).first()
+        if not target_user:
+            return Response({'error': 'المستخدم غير موجود'}, status=404)
+
+        perms = get_user_permissions(target_user)
+        return Response({
+            'success': True,
+            'type': 'user',
+            'user_id': target_user.id,
+            'username': target_user.username,
+            'full_name': target_user.get_full_name(),
+            'role': target_user.role,
+            'permissions': [
+                {'code': c, 'label_ar': perm_labels.get(c, c), 'scope': s}
+                for c, s in perms.items()
+            ],
+        })
+
+    elif target_type == 'department':
+        from employees.models import Employee
+        emps = Employee._base_manager.filter(
+            department_id=target_id,
+            company=request.user.company,
+        ).select_related('user')
+
+        summary = {}
+        for emp in emps:
+            if emp.user:
+                for code, scope in get_user_permissions(emp.user).items():
+                    if code not in summary:
+                        summary[code] = {'count': 0, 'scope': scope}
+                    summary[code]['count'] += 1
+
+        return Response({
+            'success': True,
+            'type': 'department',
+            'department_id': target_id,
+            'employees_count': emps.count(),
+            'permissions_summary': [
+                {
+                    'code': c,
+                    'label_ar': perm_labels.get(c, c),
+                    'scope': v['scope'],
+                    'employees_with_perm': v['count'],
+                }
+                for c, v in summary.items()
+            ],
+        })
+
+    elif target_type == 'branch':
+        from employees.models import Employee
+        emps = Employee._base_manager.filter(
+            branch_id=target_id,
+            company=request.user.company,
+        ).select_related('user')
+
+        summary = {}
+        for emp in emps:
+            if emp.user:
+                for code, scope in get_user_permissions(emp.user).items():
+                    if code not in summary:
+                        summary[code] = {'count': 0, 'scope': scope}
+                    summary[code]['count'] += 1
+
+        return Response({
+            'success': True,
+            'type': 'branch',
+            'branch_id': target_id,
+            'employees_count': emps.count(),
+            'permissions_summary': [
+                {
+                    'code': c,
+                    'label_ar': perm_labels.get(c, c),
+                    'scope': v['scope'],
+                    'employees_with_perm': v['count'],
+                }
+                for c, v in summary.items()
+            ],
+        })
+
+    return Response({'error': 'type غير صحيح'}, status=400)

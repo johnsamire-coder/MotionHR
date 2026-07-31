@@ -255,6 +255,7 @@ urlpatterns += [
     path('api/mobile/manager/job-titles/', api_employee_management.manager_job_titles),
     path('api/mobile/manager/employees/simple/', api_employee_management.manager_employees_simple),
     path('api/mobile/manager/employees/create/', api_employee_management.manager_create_employee),
+    path('api/mobile/manager/employees/<int:employee_id>/update/', manager_update_employee),
 
     path('api/mobile/manager/employees/<int:employee_id>/reset-password/', manager_reset_employee_password),
     path('api/mobile/manager/company-info/', manager_company_info),
@@ -451,6 +452,10 @@ from attendance.api_permissions import (
     user_permissions, set_user_override, remove_user_override,
     api_export_permissions,
     company_users_list,
+    my_permissions,
+    default_role_permissions,
+    set_role_default_override,
+    target_permissions_summary,
 )
 
 urlpatterns += [
@@ -466,6 +471,10 @@ urlpatterns += [
     path('api/mobile/manager/permissions/override/set/', set_user_override),
     path('api/mobile/manager/permissions/override/remove/', remove_user_override),
     path('api/mobile/manager/permissions/export/', api_export_permissions, name='permissions-export'),
+    path('api/mobile/permissions/my/', my_permissions),
+    path('api/mobile/manager/permissions/defaults/', default_role_permissions),
+    path('api/mobile/manager/permissions/override/bulk/', set_role_default_override),
+    path('api/mobile/manager/permissions/summary/', target_permissions_summary),
 ]
 
 # ══════════════════════════════════════
