@@ -314,6 +314,67 @@ def get_company_working_days(company, year, month):
     return working_dates
 
 
+
+
+def get_official_holiday_treatment(employee, year, month):
+    """
+    بيرجع dict من التواريخ -> treatment
+    مثلاً: {date(2026, 8, 6): 'paid_leave', date(2026, 8, 7): 'work_with_bonus'}
+    بيأخذ الـ rule ذات الأولوية الأعلى (رقم أقل) اللي بتنطبق على الموظف
+    """
+    result = {}
+    try:
+        from leaves.official_holiday_models import OfficialHoliday, OfficialHolidayRule
+        from datetime import timedelta
+
+        company = getattr(employee, 'company', None)
+        if not company:
+            return result
+
+        if hasattr(company, 'payroll_cycle_type'):
+            first_day, last_day = get_payroll_period_bounds(company, year, month)
+        else:
+            first_day, last_day = _period_bounds(year, month)
+
+        holidays = OfficialHoliday._base_manager.filter(
+            company=company,
+            is_active=True,
+            start_date__lte=last_day,
+            end_date__gte=first_day,
+        ).prefetch_related("rules__employees")
+
+        for holiday in holidays:
+            rules = list(
+                OfficialHolidayRule._base_manager.filter(holiday=holiday)
+                .prefetch_related("employees")
+                .order_by("priority")
+            )
+
+            matched_rule = None
+            for rule in rules:
+                if rule.applies_to_employee(employee):
+                    matched_rule = rule
+                    break
+
+            if not matched_rule:
+                continue
+
+            current = max(holiday.start_date, first_day)
+            end = min(holiday.end_date, last_day)
+            while current <= end:
+                if current not in result:
+                    result[current] = {
+                        'treatment': matched_rule.treatment,
+                        'rule': matched_rule,
+                        'holiday_name': holiday.name,
+                    }
+                current += timedelta(days=1)
+
+    except Exception:
+        pass
+
+    return result
+
 def get_mission_dates(employee, year, month):
     mission_dates = set()
     _company = getattr(employee, 'company', None)
@@ -1235,6 +1296,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     mission_dates = get_mission_dates(employee, year, month)
     leave_dates, half_day_dates = get_leave_dates(employee, year, month)
     unpaid_leave_dates = get_unpaid_leave_dates(employee, year, month)
+    official_holiday_map = get_official_holiday_treatment(employee, year, month)
 
     attendances = list(
         Attendance._base_manager.filter(
@@ -1284,6 +1346,13 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     all_eval_dates = sorted(list(set(working_dates) | attended_dates))
     for d in all_eval_dates:
         att = attendance_by_date.get(d)
+
+        # إجازة رسمية مدفوعة → يتحسب on_leave مش absent
+        _official = official_holiday_map.get(d)
+        if _official and _official['treatment'] == 'paid_leave':
+            if d not in attended_dates:
+                on_leave_days += 1
+                continue
 
         # Hybrid: لو عندنا summary لليوم ده نستخدمها
         _summary = _summaries.get(d)

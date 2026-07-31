@@ -181,6 +181,10 @@ from .api_disciplinary import (
     disciplinary_actions, disciplinary_action_review,
 )
 
+from leaves.api_official_holidays import (
+    official_holiday_list_create,
+    official_holiday_detail,
+)
 from leaves.api_leave_policy import (
     leave_policy_list_create, leave_policy_detail,
     leave_policy_approve, leave_balance_adjustments,
@@ -587,5 +591,11 @@ urlpatterns += [
     # ═══════════════════════════════════════════════════
     path('api/mobile/manager/bonus-policies/', bonus_policies_list, name='bonus_policies_list'),
     path('api/mobile/manager/bonus-policies/<int:policy_id>/', bonus_policy_detail, name='bonus_policy_detail'),
+
+    # ═══════════════════════════════════════════════════
+    # Official Holidays (الإجازات الرسمية)
+    # ═══════════════════════════════════════════════════
+    path('api/mobile/manager/official-holidays/', official_holiday_list_create, name='official_holiday_list_create'),
+    path('api/mobile/manager/official-holidays/<int:holiday_id>/', official_holiday_detail, name='official_holiday_detail'),
 
 ]

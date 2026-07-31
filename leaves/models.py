@@ -635,3 +635,7 @@ class LeaveRecallRequest(TenantModel):
                 self.save(update_fields=['balance_restored'])
         except Exception:
             pass
+
+
+# ── الإجازات الرسمية ──
+from leaves.official_holiday_models import OfficialHoliday, OfficialHolidayRule

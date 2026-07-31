@@ -5,6 +5,7 @@ MotionHR - Leave Policy API
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from django.utils import timezone
 import logging
@@ -92,7 +93,7 @@ def _policy_data(policy):
 
 # ── قائمة السياسات + إنشاء ──
 @api_view(["GET", "POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def leave_policy_list_create(request):
     err = _check_hr(request)
@@ -143,7 +144,7 @@ def leave_policy_list_create(request):
 
 # ── تفاصيل سياسة + تعديل + حذف ──
 @api_view(["GET", "PUT", "DELETE"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def leave_policy_detail(request, policy_id):
     err = _check_hr(request)
@@ -184,7 +185,7 @@ def leave_policy_detail(request, policy_id):
 
 # ── اعتماد السياسة ──
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def leave_policy_approve(request, policy_id):
     role = getattr(request.user, "role", None)
@@ -213,7 +214,7 @@ def leave_policy_approve(request, policy_id):
 
 # ── تعديل أرصدة الإجازات (للموظفين القدامى) ──
 @api_view(["GET", "POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def leave_balance_adjustments(request):
     err = _check_hr(request)
@@ -300,7 +301,7 @@ def leave_balance_adjustments(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def apply_leave_policy_to_existing_employees(request):
     """
