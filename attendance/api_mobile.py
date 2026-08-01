@@ -1429,51 +1429,64 @@ def mobile_attendance_status(request):
 
         if shift:
             shift_name = shift.name
-            if shift.start_time:
-                shift_start_str = shift.start_time.strftime('%I:%M %p')
-            if shift.end_time:
-                shift_end_str = shift.end_time.strftime('%I:%M %p')
+            shift_mode = getattr(shift, 'shift_mode', '') or getattr(shift, 'shift_type', '')
+            periods = get_shift_periods(shift, today)
 
-            if shift.start_time and shift.end_time:
+            effective_start_dt = None
+            effective_end_dt = None
+
+            # لو الشيفت بيرجع فترات فعلية → نعرض أول فترة وآخر فترة
+            if periods:
+                first_period = periods[0]
+                last_period = periods[-1]
+
+                effective_start_dt = first_period.get('start')
+                effective_end_dt = last_period.get('end')
+
+                if first_period.get('start_str'):
+                    shift_start_str = first_period.get('start_str')
+                elif effective_start_dt:
+                    local_start = timezone.localtime(effective_start_dt) if timezone.is_aware(effective_start_dt) else effective_start_dt
+                    shift_start_str = local_start.strftime('%I:%M %p')
+
+                if last_period.get('end_str'):
+                    shift_end_str = last_period.get('end_str')
+                elif effective_end_dt:
+                    local_end = timezone.localtime(effective_end_dt) if timezone.is_aware(effective_end_dt) else effective_end_dt
+                    shift_end_str = local_end.strftime('%I:%M %p')
+
+            # fallback للشيفت العادي
+            elif shift.start_time and shift.end_time:
                 start_dt = datetime.combine(today, shift.start_time)
                 end_dt = datetime.combine(today, shift.end_time)
                 if end_dt <= start_dt:
                     end_dt += timedelta(days=1)
-                shift_duration_seconds = int((end_dt - start_dt).total_seconds())
+
+                tz = timezone.get_current_timezone()
+                effective_start_dt = timezone.make_aware(start_dt, tz) if timezone.is_naive(start_dt) else start_dt
+                effective_end_dt = timezone.make_aware(end_dt, tz) if timezone.is_naive(end_dt) else end_dt
+
+                shift_start_str = shift.start_time.strftime('%I:%M %p')
+                shift_end_str = shift.end_time.strftime('%I:%M %p')
+
+            if effective_start_dt and effective_end_dt:
+                shift_duration_seconds = int((effective_end_dt - effective_start_dt).total_seconds())
 
                 if attendance and attendance.check_in_time:
                     check_in_local = timezone.localtime(attendance.check_in_time)
                     mode = getattr(employee, 'attendance_mode', 'fixed_shift')
-                    if mode == 'flexible_hours':
+
+                    # المرن بدون فترات: نهاية الشيفت = وقت الدخول + المدة
+                    if mode == 'flexible_hours' and not periods:
                         end_time_dt = check_in_local + timedelta(seconds=shift_duration_seconds)
                     else:
-                        end_time_dt = timezone.make_aware(end_dt) if timezone.is_naive(end_dt) else end_dt
+                        end_time_dt = effective_end_dt
 
                     shift_end_timestamp = end_time_dt.isoformat()
                     now = timezone.now()
                     remaining = (end_time_dt - now).total_seconds()
                     remaining_seconds = max(0, int(remaining))
                     can_check_out = remaining_seconds <= 0
-                    
-                    # تحسين للشيفت المقسم: السماح بالانصراف لو خلص أي فترة
-                    shift_mode = getattr(shift, 'shift_mode', '') or getattr(shift, 'shift_type', '')
-                    if not can_check_out and shift_mode == 'split_fixed' and hasattr(shift, 'get_shift_periods'):
-                        periods = get_shift_periods(shift, today)
-                        now_time = timezone.localtime(timezone.now()).time()
-                        for p in periods:
-                            p_end = p.get('end_time')
-                            if p_end:
-                                if isinstance(p_end, str):
-                                    from datetime import time
-                                    h, m = p_end.split(':')[:2]
-                                    p_end = time(int(h), int(m))
-                                
-                                # لو الموظف في ميعاد نهاية الفترة (أو بعدها بـ 5 دقايق مثلاً)
-                                # بنقارن الساعات والدقائق
-                                if now_time >= p_end:
-                                    can_check_out = True
-                                    remaining_seconds = 0
-                                    break
     except Exception as e:
         pass
 

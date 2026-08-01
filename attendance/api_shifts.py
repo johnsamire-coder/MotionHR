@@ -16,7 +16,25 @@ logger = logging.getLogger(__name__)
 def _get_shift_assigned_employees(shift):
     from employees.models import Employee
     from attendance.models import ShiftAssignment
+
     affected = {}
+
+    # لو الشيفت افتراضي: بيطبق على كل الموظفين اللي مالهمش شيفت معيّن
+    if getattr(shift, 'is_default', False):
+        assigned_employee_ids = set(
+            ShiftAssignment._base_manager.filter(
+                company=shift.company,
+                assignment_type='employee',
+                is_active=True,
+            ).exclude(shift=shift).values_list('employee_id', flat=True)
+        )
+        for emp in Employee._base_manager.filter(
+            company=shift.company,
+            status='active',
+        ).exclude(id__in=assigned_employee_ids):
+            affected[emp.id] = emp
+        return list(affected.values())
+
     assignments = ShiftAssignment._base_manager.filter(
         company=shift.company, shift=shift, is_active=True,
     ).select_related('employee', 'department', 'branch').prefetch_related('excluded_employees')
