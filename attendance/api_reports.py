@@ -43,25 +43,39 @@ FULL_ACCESS_ROLES = ['company_admin', 'hr_manager', 'super_admin']
 
 def _get_manager_scope_employees(user):
     """
-    لو المدير العادي → يرجع موظفيه (subordinates) بس
+    لو المدير العادي → يرجع موظفيه فقط باستخدام _base_manager
     لو HR / company_admin / super_admin → يرجع كل موظفي الشركة
     """
     role = getattr(user, 'role', None)
 
-    # لو صلاحيات كاملة → كل الشركة
-    if user.is_superuser or user.is_staff or role in FULL_ACCESS_ROLES:
+    # صلاحيات كاملة
+    if user.is_superuser or role in FULL_ACCESS_ROLES:
         return _get_company_employees(user)
 
-    # لو مدير عادي → موظفيه بس
     try:
         manager_emp = Employee._base_manager.get(user=user)
-        all_sub_ids = manager_emp.get_all_subordinates_ids()
         company = getattr(user, 'company', None)
-        qs = Employee._base_manager.filter(
-            id__in=all_sub_ids
-        ).select_related('user', 'company')
+
+        collected_ids = set()
+        stack = [manager_emp.id]
+
+        while stack:
+            current_id = stack.pop()
+
+            sub_qs = Employee._base_manager.filter(direct_manager_id=current_id)
+            if company:
+                sub_qs = sub_qs.filter(company=company)
+
+            sub_ids = list(sub_qs.values_list('id', flat=True))
+            for sid in sub_ids:
+                if sid not in collected_ids:
+                    collected_ids.add(sid)
+                    stack.append(sid)
+
+        qs = Employee._base_manager.filter(id__in=collected_ids).select_related('user', 'company')
         if company:
             qs = qs.filter(company=company)
+
         return qs.order_by('id')
     except Exception:
         return _get_company_employees(user)
