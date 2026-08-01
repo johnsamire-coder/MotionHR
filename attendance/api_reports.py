@@ -38,6 +38,35 @@ def _get_company_employees(user):
     return qs.order_by('id')
 
 
+FULL_ACCESS_ROLES = ['company_admin', 'hr_manager', 'super_admin']
+
+
+def _get_manager_scope_employees(user):
+    """
+    لو المدير العادي → يرجع موظفيه (subordinates) بس
+    لو HR / company_admin / super_admin → يرجع كل موظفي الشركة
+    """
+    role = getattr(user, 'role', None)
+
+    # لو صلاحيات كاملة → كل الشركة
+    if user.is_superuser or user.is_staff or role in FULL_ACCESS_ROLES:
+        return _get_company_employees(user)
+
+    # لو مدير عادي → موظفيه بس
+    try:
+        manager_emp = Employee._base_manager.get(user=user)
+        all_sub_ids = manager_emp.get_all_subordinates_ids()
+        company = getattr(user, 'company', None)
+        qs = Employee._base_manager.filter(
+            id__in=all_sub_ids
+        ).select_related('user', 'company')
+        if company:
+            qs = qs.filter(company=company)
+        return qs.order_by('id')
+    except Exception:
+        return _get_company_employees(user)
+
+
 def _parse_month(request):
     now = datetime.now()
     try:
@@ -109,7 +138,7 @@ def attendance_monthly_report(request):
     last_day_num = monthrange(year, month)[1]
     last_day = date(year, month, last_day_num)
 
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
     if employee_id:
         employees = employees.filter(id=employee_id)
 
@@ -164,7 +193,7 @@ def late_report(request):
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
 
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
     if employee_id:
         employees = employees.filter(id=employee_id)
 
@@ -241,7 +270,7 @@ def absence_report(request):
             working_dates.append(current)
         current += timedelta(days=1)
 
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
     if employee_id:
         employees = employees.filter(id=employee_id)
 
@@ -300,7 +329,7 @@ def requests_report(request):
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
 
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
     emp_ids = list(employees.values_list('id', flat=True))
 
     reqs = EmployeeRequest._base_manager.filter(
@@ -358,7 +387,7 @@ def leaves_report(request):
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
 
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
     emp_ids = list(employees.values_list('id', flat=True))
 
     leaves = LeaveRequest._base_manager.filter(
@@ -433,7 +462,7 @@ def work_hours_report(request):
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
 
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
     results = []
 
     for emp in employees:
@@ -672,7 +701,7 @@ def requests_report(request):
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
 
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
     emp_ids = list(employees.values_list('id', flat=True))
 
     reqs = EmployeeRequest._base_manager.filter(
@@ -735,7 +764,7 @@ def leaves_report(request):
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
 
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
     emp_ids = list(employees.values_list('id', flat=True))
 
     leaves = LeaveRequest._base_manager.filter(
@@ -819,7 +848,7 @@ def work_hours_report(request):
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
 
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
     if employee_id:
         employees = employees.filter(id=employee_id)
 
@@ -883,7 +912,7 @@ def payroll_report(request):
 
     year, month = _parse_month(request)
     lang = request.GET.get('lang', 'ar')
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
 
     try:
         from attendance.payroll_rules import calculate_effective_payroll
@@ -980,7 +1009,7 @@ def permissions_report(request):
         return Response({'error': 'صلاحية غير كافية'}, status=403)
 
     year, month = _parse_month(request)
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
     company = getattr(user, 'company', None)
 
     from datetime import date
@@ -1056,7 +1085,7 @@ def daily_attendance_report(request):
     except ValueError:
         return Response({'error': 'صيغة التاريخ غير صحيحة (YYYY-MM-DD)'}, status=400)
 
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
 
     try:
         from attendance.models import DailyAttendanceSummary, Attendance
@@ -1160,7 +1189,7 @@ def leaves_report_enhanced(request):
     year, month = _parse_month(request)
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
 
     from leaves.models import LeaveRequest, LeaveBalance, LeaveType
 
@@ -1250,7 +1279,7 @@ def shifts_report(request):
     if not _check_manager(user):
         return Response({'error': 'صلاحية غير كافية'}, status=403)
 
-    employees = _get_company_employees(user)
+    employees = _get_manager_scope_employees(user)
     company = getattr(user, 'company', None)
 
     from attendance.models import Shift, ShiftAssignment, EmployeeShift
