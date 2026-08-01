@@ -469,7 +469,7 @@ def employee_my_missions(request):
     if not employee:
         return Response({'error': 'لم يتم العثور على بيانات الموظف'}, status=400)
 
-    assignments = MissionAssignment.objects.filter(
+    assignments = MissionAssignment._base_manager.filter(
         employee=employee
     ).select_related('mission').exclude(status='rejected')
 
