@@ -588,14 +588,14 @@ def manager_create_employee(request):
 def manager_reset_employee_password(request, employee_id):
     try:
         from employees.models import Employee
-        target_employee = Employee.objects.select_related("user", "company").filter(id=employee_id).first()
+        target_employee = Employee._base_manager.select_related("user", "company").filter(id=employee_id).first()
         if not target_employee:
             return Response(
                 {"success": False, "error": "الموظف غير موجود"},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        requester_employee = Employee.objects.select_related("company").filter(user=request.user).first()
+        requester_employee = Employee._base_manager.select_related("company").filter(user=request.user).first()
 
         allowed_groups = {"company_admin", "hr_manager", "super_admin"}
         is_allowed = request.user.is_superuser or (request.user.role in allowed_groups)
@@ -681,14 +681,14 @@ def manager_reset_employee_password(request, employee_id):
 def manager_update_employee(request, employee_id):
     try:
         from employees.models import Employee
-        target_employee = Employee.objects.select_related("user", "company").filter(id=employee_id).first()
+        target_employee = Employee._base_manager.select_related("user", "company").filter(id=employee_id).first()
         if not target_employee:
             return Response(
                 {"success": False, "error": "الموظف غير موجود"},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        requester_employee = Employee.objects.select_related("company").filter(user=request.user).first()
+        requester_employee = Employee._base_manager.select_related("company").filter(user=request.user).first()
 
         allowed_groups = {"company_admin", "hr_manager", "super_admin"}
         is_allowed = request.user.is_superuser or (request.user.role in allowed_groups)
@@ -718,6 +718,7 @@ def manager_update_employee(request, employee_id):
         bank_name = (request.data.get("bank_name") or "").strip()
         bank_account = (request.data.get("bank_account") or "").strip()
         iban = (request.data.get("iban") or "").strip()
+        worker_type = (request.data.get("worker_type") or "").strip()
 
         if phone:
             clean_phone = ''.join(ch for ch in phone if ch.isdigit())
@@ -727,7 +728,7 @@ def manager_update_employee(request, employee_id):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            phone_conflict = Employee.objects.filter(
+            phone_conflict = Employee._base_manager.filter(
                 company_id=target_employee.company_id,
                 phone=phone
             ).exclude(id=target_employee.id).exists()
@@ -764,6 +765,17 @@ def manager_update_employee(request, employee_id):
             target_employee.iban = iban
             update_fields.append("iban")
 
+        if worker_type:
+            allowed_worker_types = {"office", "field_free", "field_assigned"}
+            if worker_type not in allowed_worker_types:
+                return Response(
+                    {"success": False, "error": "قيمة نوع الموظف غير صحيحة"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if hasattr(target_employee, "worker_type"):
+                target_employee.worker_type = worker_type
+                update_fields.append("worker_type")
+
         if update_fields:
             target_employee.save(update_fields=update_fields)
 
@@ -791,6 +803,7 @@ def manager_update_employee(request, employee_id):
                 "bank_name": getattr(target_employee, "bank_name", ""),
                 "bank_account": getattr(target_employee, "bank_account", ""),
                 "iban": getattr(target_employee, "iban", ""),
+                "worker_type": getattr(target_employee, "worker_type", ""),
             }
         }, status=status.HTTP_200_OK)
 

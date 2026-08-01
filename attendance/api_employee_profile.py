@@ -59,6 +59,8 @@ def _serialize_employee_full(emp):
         "bank_account": emp.bank_account,
         "iban": emp.iban,
         "status": emp.get_status_display() if hasattr(emp, "get_status_display") else None,
+        "worker_type": getattr(emp, "worker_type", "office") or "office",
+        "worker_type_display": {"office": "مكتبي", "field_free": "ميداني حر", "field_assigned": "ميداني محدد"}.get(getattr(emp, "worker_type", "office") or "office", "مكتبي"),
     }
 
 

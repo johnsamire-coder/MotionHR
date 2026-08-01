@@ -202,6 +202,188 @@ def payroll_summary(request):
     })
 
 
+
+import os as _os
+
+def _generate_payslip_pdf(emp, payroll, year, month):
+    """توليد PDF احترافي لكشف راتب الموظف"""
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from io import BytesIO
+    import datetime
+
+    # تسجيل الخط العربي
+    font_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), 'core', 'fonts', 'Cairo-Regular.ttf')
+    try:
+        pdfmetrics.registerFont(TTFont('Cairo', font_path))
+        FONT = 'Cairo'
+    except Exception:
+        FONT = 'Helvetica'
+
+    def ar(text):
+        """تحويل النص العربي لعرض صحيح"""
+        if not text:
+            return ''
+        try:
+            reshaped = arabic_reshaper.reshape(str(text))
+            return get_display(reshaped)
+        except Exception:
+            return str(text)
+
+    def money(val):
+        try:
+            return f"{float(val):,.2f}"
+        except Exception:
+            return '0.00'
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    # ===== الألوان =====
+    COLOR_HEADER    = colors.HexColor('#4A148C')
+    COLOR_SUBHEADER = colors.HexColor('#6A1B9A')
+    COLOR_GREEN     = colors.HexColor('#1B5E20')
+    COLOR_RED       = colors.HexColor('#B71C1C')
+    COLOR_GRAY      = colors.HexColor('#F3F3F3')
+    COLOR_DARKGRAY  = colors.HexColor('#757575')
+    COLOR_WHITE     = colors.white
+    COLOR_BLACK     = colors.black
+
+    currency = payroll.get('currency', 'EGP')
+
+    # ===== HEADER =====
+    pdf.setFillColor(COLOR_HEADER)
+    pdf.rect(0, height - 28*mm, width, 28*mm, fill=1, stroke=0)
+
+    pdf.setFillColor(COLOR_WHITE)
+    pdf.setFont(FONT, 18)
+    pdf.drawCentredString(width/2, height - 12*mm, ar('كشف راتب'))
+
+    pdf.setFont(FONT, 11)
+    month_names = ['','يناير','فبراير','مارس','أبريل','مايو','يونيو',
+                   'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+    month_label = month_names[month] if 1 <= month <= 12 else str(month)
+    pdf.drawCentredString(width/2, height - 22*mm, ar(f'{month_label} {year}'))
+
+    # ===== اسم الشركة =====
+    company_name = payroll.get('company_name', '')
+    pdf.setFillColor(COLOR_SUBHEADER)
+    pdf.rect(0, height - 38*mm, width, 10*mm, fill=1, stroke=0)
+    pdf.setFillColor(COLOR_WHITE)
+    pdf.setFont(FONT, 11)
+    pdf.drawCentredString(width/2, height - 34*mm, ar(company_name))
+
+    y = height - 46*mm
+
+    # ===== بيانات الموظف =====
+    def draw_section_title(y, title, color=COLOR_SUBHEADER):
+        pdf.setFillColor(color)
+        pdf.rect(10*mm, y - 6*mm, width - 20*mm, 7*mm, fill=1, stroke=0)
+        pdf.setFillColor(COLOR_WHITE)
+        pdf.setFont(FONT, 11)
+        pdf.drawRightString(width - 14*mm, y - 4*mm, ar(title))
+        return y - 10*mm
+
+    def draw_row(y, label, value, val_color=COLOR_BLACK, bold=False, bg=None):
+        if bg:
+            pdf.setFillColor(bg)
+            pdf.rect(10*mm, y - 5*mm, width - 20*mm, 6*mm, fill=1, stroke=0)
+        pdf.setFillColor(val_color)
+        pdf.setFont(FONT, 10)
+        pdf.drawString(14*mm, y - 3.5*mm, str(value))
+        pdf.setFillColor(COLOR_BLACK)
+        pdf.setFont(FONT, 10)
+        pdf.drawRightString(width - 14*mm, y - 3.5*mm, ar(label))
+        pdf.setStrokeColor(colors.HexColor('#E0E0E0'))
+        pdf.line(10*mm, y - 5*mm, width - 10*mm, y - 5*mm)
+        return y - 6.5*mm
+
+    y = draw_section_title(y, 'بيانات الموظف')
+    y = draw_row(y, 'الاسم', ar(payroll.get('employee_name', '')), bg=COLOR_GRAY)
+    y = draw_row(y, 'الكود الوظيفي', payroll.get('employee_code', '-'))
+    y = draw_row(y, 'القسم', ar(payroll.get('department_name', '-')), bg=COLOR_GRAY)
+    y = draw_row(y, 'الفرع', ar(payroll.get('branch_name', '-')))
+    y = draw_row(y, 'المسمى الوظيفي', ar(payroll.get('job_title_name', '-')), bg=COLOR_GRAY)
+    y -= 4*mm
+
+    # ===== الملخص المالي =====
+    y = draw_section_title(y, 'الملخص المالي', color=colors.HexColor('#1B5E20'))
+
+    y = draw_row(y, 'الراتب الأساسي', f"{money(payroll.get('basic_salary',0))} {currency}", bg=COLOR_GRAY)
+    y = draw_row(y, 'إجمالي البدلات', f"+ {money(payroll.get('allowances_total',0))} {currency}", val_color=colors.HexColor('#1565C0'))
+    y = draw_row(y, 'أوفرتايم', f"+ {money(payroll.get('overtime_bonus',0))} {currency}", val_color=colors.HexColor('#1565C0'), bg=COLOR_GRAY)
+    y = draw_row(y, 'المكافآت', f"+ {money(payroll.get('bonuses_total',0))} {currency}", val_color=colors.HexColor('#1565C0'))
+
+    # فاصل
+    pdf.setStrokeColor(COLOR_DARKGRAY)
+    pdf.setLineWidth(0.5)
+    pdf.line(10*mm, y, width - 10*mm, y)
+    y -= 1*mm
+
+    y = draw_row(y, 'إجمالي الاستحقاقات', f"{money(payroll.get('gross_salary',0))} {currency}", val_color=COLOR_GREEN, bg=COLOR_GRAY)
+    y -= 2*mm
+
+    y = draw_row(y, 'خصم التأخير', f"- {money(payroll.get('late_deduction',0))} {currency}", val_color=COLOR_RED)
+    y = draw_row(y, 'خصم الغياب', f"- {money(payroll.get('absence_deduction',0))} {currency}", val_color=COLOR_RED, bg=COLOR_GRAY)
+    y = draw_row(y, 'خصم التأمينات', f"- {money(payroll.get('insurance_deduction',0))} {currency}", val_color=COLOR_RED)
+    y = draw_row(y, 'الأقساط / السلف', f"- {money(payroll.get('installments_total',0))} {currency}", val_color=COLOR_RED, bg=COLOR_GRAY)
+    y = draw_row(y, 'الجزاءات', f"- {money(payroll.get('penalties_total',0))} {currency}", val_color=COLOR_RED)
+    y = draw_row(y, 'خصومات إضافية', f"- {money(payroll.get('extra_deductions_total',0))} {currency}", val_color=COLOR_RED, bg=COLOR_GRAY)
+
+    pdf.setStrokeColor(COLOR_DARKGRAY)
+    pdf.line(10*mm, y, width - 10*mm, y)
+    y -= 1*mm
+
+    y = draw_row(y, 'إجمالي الخصومات', f"- {money(payroll.get('total_deductions',0))} {currency}", val_color=COLOR_RED)
+    y -= 2*mm
+
+    # صافي الراتب
+    pdf.setFillColor(COLOR_GREEN)
+    pdf.rect(10*mm, y - 8*mm, width - 20*mm, 9*mm, fill=1, stroke=0)
+    pdf.setFillColor(COLOR_WHITE)
+    pdf.setFont(FONT, 13)
+    pdf.drawString(14*mm, y - 5.5*mm, f"{money(payroll.get('net_salary',0))} {currency}")
+    pdf.drawRightString(width - 14*mm, y - 5.5*mm, ar('صافي الراتب'))
+    y -= 12*mm
+
+    # ===== ملخص الحضور =====
+    if y < 60*mm:
+        pdf.showPage()
+        y = height - 20*mm
+
+    y = draw_section_title(y, 'ملخص الحضور', color=colors.HexColor('#4527A0'))
+    y = draw_row(y, 'أيام العمل', str(payroll.get('total_working_days', 0)), bg=COLOR_GRAY)
+    y = draw_row(y, 'أيام الحضور', str(payroll.get('attended_days', 0)))
+    y = draw_row(y, 'أيام الغياب', str(payroll.get('absent_days', 0)), val_color=COLOR_RED, bg=COLOR_GRAY)
+    y = draw_row(y, 'أيام التأخير', str(payroll.get('late_days', 0)), val_color=colors.HexColor('#E65100'))
+    y = draw_row(y, 'دقائق التأخير', str(payroll.get('total_late_minutes', 0)), bg=COLOR_GRAY)
+    y = draw_row(y, 'ساعات العمل الفعلية', str(payroll.get('total_work_hours', 0)))
+    y = draw_row(y, 'ساعات الأوفرتايم', str(payroll.get('overtime_hours', 0)), bg=COLOR_GRAY)
+    missing = payroll.get('missing_checkout_days_count', 0)
+    if missing and int(missing) > 0:
+        y = draw_row(y, 'أيام بدون تسجيل خروج', str(missing), val_color=COLOR_RED)
+    y -= 4*mm
+
+    # ===== FOOTER =====
+    pdf.setFillColor(COLOR_GRAY)
+    pdf.rect(0, 0, width, 14*mm, fill=1, stroke=0)
+    pdf.setFillColor(COLOR_DARKGRAY)
+    pdf.setFont(FONT, 8)
+    now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+    pdf.drawCentredString(width/2, 9*mm, ar(f'تم الإنشاء بواسطة MotionHR  |  {now_str}'))
+    pdf.drawCentredString(width/2, 4*mm, ar('هذا المستند صادر آليًا ولا يحتاج توقيعًا'))
+
+    pdf.showPage()
+    pdf.save()
+    return buffer.getvalue()
+
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -238,60 +420,8 @@ def payroll_employee_detail(request):
 
     if req_format == 'pdf':
         try:
-            from reportlab.lib.pagesizes import A4
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.units import mm
             from io import BytesIO
-
-            buffer = BytesIO()
-            pdf = canvas.Canvas(buffer, pagesize=A4)
-            width, height = A4
-
-            employee_name = (
-                f"{emp.first_name_en or emp.first_name_ar or ''} "
-                f"{emp.last_name_en or emp.last_name_ar or ''}"
-            ).strip() or f"Employee {emp.id}"
-
-            department_obj = getattr(emp, 'department', None)
-            department_name = (
-                getattr(department_obj, 'name_en', None)
-                or getattr(department_obj, 'name_ar', None)
-                or 'N/A'
-            )
-
-            branch_obj = getattr(emp, 'branch', None)
-            branch_name = (
-                getattr(branch_obj, 'name_en', None)
-                or getattr(branch_obj, 'name_ar', None)
-                or 'N/A'
-            )
-
-            pdf.setFont("Helvetica-Bold", 16)
-            pdf.drawCentredString(width / 2.0, height - 20 * mm, f"Payroll Detail - {month}/{year}")
-
-            pdf.setFont("Helvetica", 12)
-            pdf.drawString(20 * mm, height - 40 * mm, f"Employee: {employee_name}")
-            pdf.drawString(20 * mm, height - 48 * mm, f"Employee ID: {emp.id}")
-            pdf.drawString(20 * mm, height - 56 * mm, f"Employee Code: {getattr(emp, 'employee_code', '') or '-'}")
-            pdf.drawString(20 * mm, height - 64 * mm, f"Department: {department_name}")
-            pdf.drawString(20 * mm, height - 72 * mm, f"Branch: {branch_name}")
-
-            pdf.drawString(20 * mm, height - 84 * mm, "--------------------------------------------------")
-            pdf.drawString(20 * mm, height - 94 * mm, f"Basic Salary: {payroll.get('basic_salary', 0)}")
-            pdf.drawString(20 * mm, height - 102 * mm, f"Allowances Total: + {payroll.get('allowances_total', 0)}")
-            pdf.drawString(20 * mm, height - 110 * mm, f"Overtime Bonus: + {payroll.get('overtime_bonus', 0)}")
-            pdf.drawString(20 * mm, height - 118 * mm, f"Bonuses Total: + {payroll.get('bonuses_total', 0)}")
-            pdf.drawString(20 * mm, height - 126 * mm, f"Total Deductions: - {payroll.get('total_deductions', 0)}")
-
-            pdf.setFont("Helvetica-Bold", 14)
-            pdf.drawString(20 * mm, height - 140 * mm, f"Net Salary: {payroll.get('net_salary', 0)}")
-
-            pdf.showPage()
-            pdf.save()
-
-            pdf_bytes = buffer.getvalue()
-            buffer.close()
-
+            pdf_bytes = _generate_payslip_pdf(emp, payroll, year, month)
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
             response['Content-Disposition'] = (
                 f'attachment; filename="payroll_employee_{emp.id}_{year}_{month}.pdf"'
@@ -425,7 +555,7 @@ def employee_payslip(request):
     user = request.user
     year, month = _parse_month(request)
     lang = _get_lang(request)
-    req_format = request.GET.get('format', 'json')
+    req_format = request.GET.get('export', 'json').lower()
 
     try:
         from employees.models import Employee
@@ -438,39 +568,7 @@ def employee_payslip(request):
 
     if req_format == 'pdf':
         try:
-            from reportlab.lib.pagesizes import A4
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.units import mm
-            from io import BytesIO
-
-            buffer = BytesIO()
-            p = canvas.Canvas(buffer, pagesize=A4)
-            width, height = A4
-
-            # عنوان الكشف
-            p.setFont("Helvetica-Bold", 16)
-            p.drawCentredString(width/2.0, height - 20*mm, f"Payslip - {month}/{year}")
-
-            # بيانات الموظف
-            p.setFont("Helvetica", 12)
-            p.drawString(20*mm, height - 40*mm, f"Employee: {emp.first_name_en or emp.first_name_ar} {emp.last_name_en or emp.last_name_ar}")
-            p.drawString(20*mm, height - 48*mm, f"Department: {emp.department.name_en if emp.department else 'N/A'}")
-
-            # تفاصيل المرتب (مبسط للسرعة والأمان كنسخة أولى)
-            p.drawString(20*mm, height - 60*mm, "--------------------------------------------------")
-            p.drawString(20*mm, height - 70*mm, f"Basic Salary: {payroll.get('basic_salary', 0)}")
-            p.drawString(20*mm, height - 78*mm, f"Total Allowances: + {payroll.get('total_allowances', 0)}")
-            p.drawString(20*mm, height - 86*mm, f"Total Deductions: - {payroll.get('total_deductions', 0)}")
-            
-            p.setFont("Helvetica-Bold", 14)
-            p.drawString(20*mm, height - 100*mm, f"Net Salary: {payroll.get('net_salary', 0)}")
-
-            p.showPage()
-            p.save()
-
-            pdf_bytes = buffer.getvalue()
-            buffer.close()
-
+            pdf_bytes = _generate_payslip_pdf(emp, payroll, year, month)
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="payslip_{year}_{month}.pdf"'
             return response
