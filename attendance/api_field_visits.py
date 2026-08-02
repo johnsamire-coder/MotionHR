@@ -309,6 +309,20 @@ def field_visit_start(request):
         status='arrived',
     )
     
+    # إشعار بدء الزيارة
+    try:
+        from attendance.fcm_logic import notify_employee_visit_start, notify_manager_visit_start
+        visit_time = visit.arrival_time.strftime('%I:%M %p')
+        notify_employee_visit_start(request.user, location_name, visit_time)
+        notify_manager_visit_start(
+            company=employee.company,
+            employee_name=f'{employee.first_name_ar} {employee.last_name_ar}'.strip(),
+            location_name=location_name,
+            time_str=visit_time,
+        )
+    except Exception:
+        pass
+
     return Response({
         'success': True,
         'message': 'تم بدء الزيارة بنجاح',
@@ -382,6 +396,25 @@ def field_visit_end(request, visit_id):
     
     visit.save()
     
+    # إشعار إنهاء الزيارة
+    try:
+        from attendance.fcm_logic import notify_employee_visit_end, notify_manager_visit_end
+        visit_time = visit.departure_time.strftime('%I:%M %p')
+        duration_minutes = int((visit.departure_time - visit.arrival_time).total_seconds() / 60)
+        duration_str = f'{duration_minutes // 60} ساعة {duration_minutes % 60} دقيقة' if duration_minutes >= 60 else f'{duration_minutes} دقيقة'
+        duration_en = f'{duration_minutes // 60}h {duration_minutes % 60}m' if duration_minutes >= 60 else f'{duration_minutes}m'
+        notify_employee_visit_end(request.user, visit.location_name, visit_time, duration_str)
+        notify_manager_visit_end(
+            company=employee.company,
+            employee_name=f'{employee.first_name_ar} {employee.last_name_ar}'.strip(),
+            location_name=visit.location_name,
+            time_str=visit_time,
+            duration_str=duration_str,
+            duration_en=duration_en,
+        )
+    except Exception:
+        pass
+
     return Response({
         'success': True,
         'message': 'تم إنهاء الزيارة بنجاح',

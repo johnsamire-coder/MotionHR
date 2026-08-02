@@ -162,3 +162,52 @@ def notify_manager_early_leave(company, employee_name, time_str, early_minutes, 
         title_en='Early Leave ⏰',
         body_en=body_en
     )
+
+
+# ========================
+# إشعارات الزيارات الميدانية
+# ========================
+
+def notify_employee_visit_start(user, location_name, time_str):
+    send_fcm_notification(
+        user,
+        'تم بدء الزيارة 📍',
+        f'بدأت زيارتك لـ {location_name} الساعة {time_str}',
+        data={'type': 'field_visit', 'action': 'start'},
+        title_en='Visit Started 📍',
+        body_en=f'Your visit to {location_name} started at {time_str}',
+    )
+
+
+def notify_employee_visit_end(user, location_name, time_str, duration_str):
+    send_fcm_notification(
+        user,
+        'تم إنهاء الزيارة ✅',
+        f'انتهت زيارتك لـ {location_name} الساعة {time_str} • مدة الزيارة: {duration_str}',
+        data={'type': 'field_visit', 'action': 'end'},
+        title_en='Visit Ended ✅',
+        body_en=f'Your visit to {location_name} ended at {time_str} • Duration: {duration_str}',
+    )
+
+
+def notify_manager_visit_start(company, employee_name, location_name, time_str):
+    notify_managers(
+        'زيارة ميدانية بدأت 📍',
+        f'{employee_name} بدأ زيارة لـ {location_name} الساعة {time_str}',
+        data={'type': 'field_visit', 'action': 'start'},
+        company=company,
+        title_en='Field Visit Started 📍',
+        body_en=f'{employee_name} started a visit to {location_name} at {time_str}',
+    )
+
+
+def notify_manager_visit_end(company, employee_name, location_name, time_str, duration_str, duration_en=''):
+    notify_managers(
+        'زيارة ميدانية انتهت ✅',
+        f'{employee_name} أنهى زيارة {location_name} الساعة {time_str} • مدة: {duration_str}',
+        data={'type': 'field_visit', 'action': 'end'},
+        company=company,
+        title_en='Field Visit Ended ✅',
+        body_en=f'{employee_name} ended visit to {location_name} at {time_str} • Duration: {duration_en or duration_str}',
+    )
+
