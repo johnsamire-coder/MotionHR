@@ -289,7 +289,7 @@ class Command(BaseCommand):
 
             worker_type = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
             if worker_type and worker_type not in ("office", "field_free", "field_assigned"):
-                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: مكتبي / ميداني حر / ميداني معين")
+                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: مكتبي / ميداني حر / ميداني محدد")
 
             att_mode = _str(row, "attendance_mode")
             if att_mode and att_mode not in ("fixed_shift", "flexible_hours", "field_worker", "multi_site", "rotating"):
@@ -332,7 +332,7 @@ class Command(BaseCommand):
 
             worker_type = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
             if worker_type and worker_type not in ("office", "field_free", "field_assigned"):
-                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: مكتبي / ميداني حر / ميداني معين")
+                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: مكتبي / ميداني حر / ميداني محدد")
 
             att_mode = _str(row, "attendance_mode")
             if att_mode and att_mode not in ("fixed_shift", "flexible_hours", "field_worker", "multi_site", "rotating"):
@@ -447,7 +447,7 @@ class Command(BaseCommand):
         att_mode = _str(row, "attendance_mode") or "fixed_shift"
         worker_type_val = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
         if worker_type_val not in ("office", "field_free", "field_assigned"):
-            raise ValueError("قيمة worker_type غير صحيحة أو غير موجودة — المسموح: مكتبي / ميداني حر / ميداني معين")
+            raise ValueError("قيمة worker_type غير صحيحة أو غير موجودة — المسموح: مكتبي / ميداني حر / ميداني محدد")
         status   = "active"  # دايمًا نشط - مش بنقرأ من الإكسيل
 
         username = f"emp{nat_id[-6:]}{random.randint(10, 99)}"
