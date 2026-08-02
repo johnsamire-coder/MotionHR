@@ -35,94 +35,108 @@ def notify_managers(title, body, data=None, company=None, title_en=None, body_en
         print(f"Notify managers error: {e}")
         return {"success": False, "sent": 0}
 
+ar_emp_checkin_title = 'تم تسجيل الحضور ✅'
+ar_emp_checkin_body = 'تم تسجيل حضورك الساعة'
+ar_emp_checkout_title = 'تم تسجيل الانصراف ✅'
+ar_emp_checkout_body = 'تم تسجيل انصرافك الساعة'
+
+ar_mgr_checkin_title = 'حضور موظف ✅'
+ar_mgr_checkin_body = 'سجل حضور الساعة'
+ar_mgr_checkout_title = 'انصراف موظف ✅'
+ar_mgr_checkout_body = 'سجل انصراف الساعة'
+ar_mgr_early_title = 'انصراف مبكر ⏰'
+ar_mgr_early_body = 'انصرف مبكرًا قبل الميعاد بـ'
+
 # ========================
 # إشعارات الحضور والانصراف
 # ========================
 def notify_employee_checkin(user, time_str, location=''):
     lang = getattr(FCMDeviceToken.objects.filter(user=user).first(), 'preferred_language', 'ar')
     if lang == 'en':
-        body = f'Check-in recorded at {time_str}'
+        body = f'Your check-in was recorded at {time_str}'
         if location:
-            body += f' — {location}'
+            body += f' • {location}'
         send_fcm_notification(
             user,
-            'Check-in ✅',
+            'Check-in recorded ✅',
             body,
             data={'type': 'attendance', 'action': 'checkin'},
-            title_en='Check-in ✅',
+            title_en='Check-in recorded ✅',
             body_en=body
         )
     else:
-        body = f'تم تسجيل حضورك الساعة {time_str}'
+        body = f'{ar_emp_checkin_body} {time_str}'
         if location:
-            body += f' — {location}'
+            body += f' • {location}'
         send_fcm_notification(
             user,
-            'تسجيل الحضور ✅',
+            ar_emp_checkin_title,
             body,
             data={'type': 'attendance', 'action': 'checkin'},
-            title_en='Check-in ✅',
-            body_en=f'Check-in recorded at {time_str}'
+            title_en='Check-in recorded ✅',
+            body_en=f'Your check-in was recorded at {time_str}'
         )
+
 
 def notify_employee_checkout(user, time_str, hours_worked=''):
     lang = getattr(FCMDeviceToken.objects.filter(user=user).first(), 'preferred_language', 'ar')
     if lang == 'en':
-        body = f'Check-out recorded at {time_str}'
+        body = f'Your check-out was recorded at {time_str}'
         if hours_worked:
-            body += f' — Hours worked: {hours_worked}'
+            body += f' • Worked hours: {hours_worked}'
         send_fcm_notification(
             user,
-            'Check-out 👋',
+            'Check-out recorded ✅',
             body,
             data={'type': 'attendance', 'action': 'checkout'},
-            title_en='Check-out 👋',
+            title_en='Check-out recorded ✅',
             body_en=body
         )
     else:
-        body = f'تم تسجيل انصرافك الساعة {time_str}'
+        body = f'{ar_emp_checkout_body} {time_str}'
         if hours_worked:
-            body += f' — عدد الساعات: {hours_worked}'
+            body += f' • عدد ساعات العمل: {hours_worked}'
         send_fcm_notification(
             user,
-            'تسجيل الانصراف 👋',
+            ar_emp_checkout_title,
             body,
             data={'type': 'attendance', 'action': 'checkout'},
-            title_en='Check-out 👋',
-            body_en=f'Check-out recorded at {time_str}'
+            title_en='Check-out recorded ✅',
+            body_en=f'Your check-out was recorded at {time_str}'
         )
 
+
 def notify_manager_checkin(company, employee_name, time_str):
-    # افتراض إن المديرين في الشركة العربية
-    body = f'{employee_name} سجّل حضوره الساعة {time_str}'
+    body = f'{employee_name} {ar_mgr_checkin_body} {time_str}'
     body_en = f'{employee_name} checked in at {time_str}'
     notify_managers(
-        'حضور موظف 📋',
+        ar_mgr_checkin_title,
         body,
         data={'type': 'manager_attendance', 'action': 'checkin'},
         company=company,
-        title_en='Employee Check-in 📋',
+        title_en='Employee Check-in ✅',
         body_en=body_en
     )
 
+
 def notify_manager_checkout(company, employee_name, time_str, hours_worked=''):
-    body = f'{employee_name} سجّل انصرافه الساعة {time_str}'
+    body = f'{employee_name} {ar_mgr_checkout_body} {time_str}'
     body_en = f'{employee_name} checked out at {time_str}'
     if hours_worked:
-        body += f' — {hours_worked} ساعة'
-        body_en += f' — {hours_worked} hours'
+        body += f' • ساعات العمل: {hours_worked}'
+        body_en += f' • Worked hours: {hours_worked}'
     notify_managers(
-        'انصراف موظف 🏁',
+        ar_mgr_checkout_title,
         body,
         data={'type': 'manager_attendance', 'action': 'checkout'},
         company=company,
-        title_en='Employee Check-out 🏁',
+        title_en='Employee Check-out ✅',
         body_en=body_en
     )
 
 
 def notify_manager_early_leave(company, employee_name, time_str, early_minutes, hours_worked=''):
-    """إشعار المدير لما موظف ينصرف مبكر"""
+    """إشعار المدير إن الموظف انصرف مبكرًا"""
     early_h = early_minutes // 60
     early_m = early_minutes % 60
 
@@ -133,18 +147,18 @@ def notify_manager_early_leave(company, employee_name, time_str, early_minutes, 
         duration_ar = f'{early_m} دقيقة'
         duration_en = f'{early_m}m early'
 
-    body = f'{employee_name} انصرف مبكراً بـ {duration_ar} الساعة {time_str}'
-    body_en = f'{employee_name} left {duration_en} at {time_str}'
+    body = f'{employee_name} انصرف مبكرًا قبل الميعاد بـ {duration_ar} الساعة {time_str}'
+    body_en = f'{employee_name} left early by {duration_en} at {time_str}'
 
     if hours_worked:
-        body += f' — عمل {hours_worked} ساعة'
-        body_en += f' — worked {hours_worked} hours'
+        body += f' • ساعات العمل: {hours_worked}'
+        body_en += f' • Worked hours: {hours_worked}'
 
     notify_managers(
-        'انصراف مبكر ⚠️',
+        'انصراف مبكر ⏰',
         body,
         data={'type': 'manager_attendance', 'action': 'early_leave'},
         company=company,
-        title_en='Early Leave ⚠️',
-        body_en=body_en,
+        title_en='Early Leave ⏰',
+        body_en=body_en
     )
