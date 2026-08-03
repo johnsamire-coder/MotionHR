@@ -26,6 +26,7 @@ WORKER_TYPE_MAP = {
     "مكتبي": "office",
     "ميداني حر": "field_free",
     "ميداني معين": "field_assigned",
+    "ميداني محدد": "field_assigned",
     "office": "office",
     "field_free": "field_free",
     "field_assigned": "field_assigned",
@@ -447,7 +448,7 @@ class Command(BaseCommand):
         att_mode = _str(row, "attendance_mode") or "fixed_shift"
         worker_type_val = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
         if worker_type_val not in ("office", "field_free", "field_assigned"):
-            raise ValueError("قيمة worker_type غير صحيحة أو غير موجودة — المسموح: مكتبي / ميداني حر / ميداني محدد")
+            raise ValueError("حقل [تصنيف الموظف] إجباري — اختر واحدة من: مكتبي / ميداني حر / ميداني محدد")
         status   = "active"  # دايمًا نشط - مش بنقرأ من الإكسيل
 
         username = f"emp{nat_id[-6:]}{random.randint(10, 99)}"

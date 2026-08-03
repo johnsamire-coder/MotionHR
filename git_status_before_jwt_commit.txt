@@ -1,0 +1,36 @@
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+	modified:   attendance/api_announcements.py
+	modified:   attendance/api_attachments.py
+	modified:   attendance/api_attendance_policy.py
+	modified:   attendance/api_auto_checkin.py
+	modified:   attendance/api_company_allowance_policy.py
+	modified:   attendance/api_company_policy.py
+	modified:   attendance/api_departments.py
+	modified:   attendance/api_disciplinary.py
+	modified:   attendance/api_employee_management.py
+	modified:   attendance/api_employee_profile.py
+	modified:   attendance/api_field_visits.py
+	modified:   attendance/api_general_policies.py
+	modified:   attendance/api_missions.py
+	modified:   attendance/api_mobile.py
+	modified:   attendance/api_mobile_requests.py
+	modified:   attendance/api_offboarding.py
+	modified:   attendance/api_payroll.py
+	modified:   attendance/api_permissions.py
+	modified:   attendance/api_permissions_balance.py
+	modified:   attendance/api_reminders.py
+	modified:   attendance/api_reports.py
+	modified:   attendance/api_shifts.py
+	modified:   attendance/api_work_locations.py
+	modified:   attendance/urls.py
+	modified:   motionhr/settings.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	git_status_before_jwt_commit.txt
+	verify_jwt_login_live.py
+
