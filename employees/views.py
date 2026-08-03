@@ -1523,10 +1523,10 @@ def import_employees_excel(request):
     if not file_obj:
         return Response({'success': False, 'message': 'لم يتم إرسال ملف'}, status=400)
 
-    # حفظ الملف مؤقتاً
+    # حفظ الملف مؤقتاً (اسم فريد لكل استيراد)
     import uuid as _uuid
-        unique_name = f'tmp/import_{_uuid.uuid4().hex[:12]}.xlsx'
-        path = default_storage.save(unique_name, ContentFile(file_obj.read()))
+    unique_name = f'tmp/import_{_uuid.uuid4().hex[:12]}.xlsx'
+    path = default_storage.save(unique_name, ContentFile(file_obj.read()))
     full_path = os.path.join(settings.MEDIA_ROOT, path)
 
     try:

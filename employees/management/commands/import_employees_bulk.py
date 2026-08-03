@@ -409,21 +409,21 @@ class Command(BaseCommand):
 
         created_defs = []
 
-        branch, branch_created = Branch.objects.get_or_create(
+        branch, branch_created = Branch._base_manager.get_or_create(
             company=company,
             name_ar=branch_name,
         )
         if branch_created:
             created_defs.append(f"صف {idx}: تم إنشاء فرع جديد [{branch_name}]")
 
-        dept, dept_created = Department.objects.get_or_create(
+        dept, dept_created = Department._base_manager.get_or_create(
             company=company,
             name_ar=dept_name,
         )
         if dept_created:
             created_defs.append(f"صف {idx}: تم إنشاء قسم جديد [{dept_name}]")
 
-        job, job_created = JobTitle.objects.get_or_create(
+        job, job_created = JobTitle._base_manager.get_or_create(
             company=company,
             name_ar=job_name,
         )
