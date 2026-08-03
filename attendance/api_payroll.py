@@ -3,6 +3,7 @@ MotionHR - Payroll API (v4 - Phase 15 Payroll Pro)
 """
 from datetime import datetime
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import TokenAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -162,6 +163,17 @@ def payroll_summary(request):
 
     year, month = _parse_month(request)
     lang = _get_lang(request)
+
+    # Cache Key: company + year + month + lang
+    company_id = getattr(getattr(user, 'employee_profile', None), 'company_id', None) or getattr(user, 'company_id', None)
+    cache_key = f"payroll_summary:{company_id}:{year}:{month}:{lang}"
+
+    # جرب الـ cache الأول
+    cached_result = cache.get(cache_key)
+    if cached_result is not None:
+        cached_result['_from_cache'] = True
+        return Response(cached_result)
+
     employees = _get_company_employees(user)
     settings = _get_payroll_settings(user)
 
@@ -184,7 +196,7 @@ def payroll_summary(request):
         grand_total_deductions += payroll['total_deductions']
         grand_total_net += payroll['net_salary']
 
-    return Response({
+    response_data = {
         'year': year,
         'month': month,
         'lang': lang,
@@ -199,7 +211,13 @@ def payroll_summary(request):
 
         'payroll_settings': settings,
         'employees': results,
-    })
+    }
+
+    # حفظ في الـ cache لمدة 30 دقيقة
+    cache.set(cache_key, response_data, timeout=1800)
+    response_data['_from_cache'] = False
+
+    return Response(response_data)
 
 
 
