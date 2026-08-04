@@ -10,7 +10,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenVerifyView,
 )
-from .api_employee_management import manager_reset_employee_password, employee_save_location, manager_get_location_report, manager_update_company_info, manager_upload_company_logo, manager_update_employee, manager_company_info, manager_transfer_employee, manager_organization_tree
+from .api_employee_management import manager_reset_employee_password, employee_save_location, manager_get_location_report, manager_update_company_info, manager_upload_company_logo, manager_update_employee, manager_company_info, manager_transfer_employee, manager_organization_tree, manager_hierarchy_tree
 from . import views
 from .api_field_visits import (
     field_visit_start,
@@ -261,6 +261,7 @@ urlpatterns += [
     path('api/mobile/manager/company-info/', manager_company_info),
     path('api/mobile/manager/employees/<int:employee_id>/transfer/', manager_transfer_employee),
     path('api/mobile/manager/organization-tree/', manager_organization_tree),
+    path('api/mobile/manager/hierarchy-tree/', manager_hierarchy_tree),
     path('api/mobile/manager/company-info/update/', manager_update_company_info),
     path('api/mobile/manager/company-info/upload-logo/', manager_upload_company_logo),
 ]

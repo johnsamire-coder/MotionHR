@@ -281,6 +281,7 @@ class LeaveType(TenantModel):
     ]
 
     name             = models.CharField(max_length=100, verbose_name="الاسم")
+    name_en          = models.CharField(max_length=100, blank=True, default="", verbose_name="Name (English)")
     category         = models.CharField(
         max_length=20, choices=LEAVE_CATEGORIES,
         default="other", verbose_name="الفئة"

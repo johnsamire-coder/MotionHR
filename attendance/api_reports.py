@@ -35,6 +35,9 @@ def _get_company_employees(user):
     if company:
         qs = qs.filter(company=company)
 
+    # استبعاد staff (المديرين الإداريين مش موظفين حقيقيين)
+    qs = qs.exclude(user__is_staff=True)
+
     return qs.order_by('id')
 
 
@@ -1236,6 +1239,7 @@ def leaves_report_enhanced(request):
             leave_items.append({
                 'id': lv.id,
                 'leave_type': lv.leave_type.name if lv.leave_type else '',
+                'leave_type_en': getattr(lv.leave_type, 'name_en', '') if lv.leave_type else '',
                 'is_paid': not is_unpaid,
                 'start_date': str(lv.start_date) if lv.start_date else '',
                 'end_date': str(lv.end_date) if lv.end_date else '',
@@ -1255,6 +1259,7 @@ def leaves_report_enhanced(request):
         for bal in balances:
             balance_items.append({
                 'leave_type': bal.leave_type.name if bal.leave_type else '',
+                'leave_type_en': getattr(bal.leave_type, 'name_en', '') if bal.leave_type else '',
                 'total_days': float(bal.total_days or 0),
                 'used_days': float(bal.used_days or 0),
                 'pending_days': float(bal.pending_days or 0),

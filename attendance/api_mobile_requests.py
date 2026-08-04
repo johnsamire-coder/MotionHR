@@ -112,6 +112,7 @@ def mobile_leave_types(request):
         result.append({
             'id': lt.id,
             'name': lt.name,
+            'name_en': getattr(lt, 'name_en', '') or '',
             'category': lt.category,
             'days_allowed': lt.days_allowed,
             'is_paid': lt.is_paid,

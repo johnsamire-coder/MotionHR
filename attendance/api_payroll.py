@@ -57,6 +57,9 @@ def _get_company_employees(user):
     if company:
         qs = qs.filter(company=company)
 
+    # استبعاد staff (المديرين الإداريين مش موظفين حقيقيين)
+    qs = qs.exclude(user__is_staff=True)
+
     return qs.order_by('id')
 
 

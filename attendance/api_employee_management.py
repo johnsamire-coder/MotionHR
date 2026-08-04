@@ -1386,3 +1386,119 @@ def manager_upload_company_logo(request):
 
     except Exception as e:
         return Response({'success': False, 'error': str(e)}, status=500)
+
+
+# ═══════════════════════════════════════════════════
+# Hierarchy Tree — الهيكل الهرمي (حسب direct_manager)
+# ═══════════════════════════════════════════════════
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_hierarchy_tree(request):
+    """
+    الهيكل الهرمي للشركة (حسب direct_manager)
+    
+    Returns:
+    {
+        "root": [
+            {
+                "id": 1,
+                "name": "صاحب الشركة",
+                "job_title": "CEO",
+                "employee_code": "EMP001",
+                "photo": null,
+                "children": [
+                    {
+                        "id": 2,
+                        "name": "مدير 1",
+                        "children": [ ... ]
+                    }
+                ]
+            }
+        ]
+    }
+    """
+    try:
+        from employees.models import Employee
+        
+        company = getattr(request.user, "company", None)
+        if not company:
+            return Response(
+                {"success": False, "error": "المستخدم غير مرتبط بشركة"},
+                status=400
+            )
+        
+        # كل الموظفين النشطين
+        all_emps = Employee._base_manager.filter(
+            company=company,
+            status="active"
+        ).select_related("user", "job_title", "department", "branch", "direct_manager")
+        
+        # نبني dict للسرعة
+        emp_dict = {e.id: e for e in all_emps}
+        
+        # نجمع الأبناء لكل مدير
+        children_map = {}
+        for e in all_emps:
+            if e.direct_manager_id:
+                children_map.setdefault(e.direct_manager_id, []).append(e)
+        
+        def serialize(emp):
+            children = children_map.get(emp.id, [])
+            # ترتيب: المديرين اللي عندهم فريق الأول
+            children_sorted = sorted(
+                children,
+                key=lambda x: (
+                    0 if children_map.get(x.id) else 1,
+                    x.first_name_ar or ""
+                )
+            )
+            
+            job_title_ar = ""
+            job_title_en = ""
+            try:
+                if emp.job_title:
+                    job_title_ar = emp.job_title.title or ""
+                    job_title_en = getattr(emp.job_title, 'title_en', '') or ""
+            except Exception:
+                pass
+            
+            return {
+                "id": emp.id,
+                "name_ar": f"{emp.first_name_ar or ''} {emp.last_name_ar or ''}".strip(),
+                "name_en": f"{emp.first_name_en or ''} {emp.last_name_en or ''}".strip(),
+                "employee_code": emp.employee_code or "",
+                "job_title_ar": job_title_ar,
+                "job_title_en": job_title_en,
+                "department": (getattr(emp.department, "name_ar", "") or getattr(emp.department, "name_en", "") or "") if emp.department else "",
+                "branch": (getattr(emp.branch, "name_ar", "") or getattr(emp.branch, "name_en", "") or "") if emp.branch else "",
+                "photo": None,
+                "role": getattr(emp.user, "role", "employee") if emp.user else "employee",
+                "team_size": len(children_map.get(emp.id, [])),
+                "children": [serialize(c) for c in children_sorted]
+            }
+        
+        # الجذور = اللي مالهمش direct_manager
+        roots = [e for e in all_emps if not e.direct_manager_id]
+        roots_sorted = sorted(
+            roots,
+            key=lambda x: (
+                0 if children_map.get(x.id) else 1,
+                x.first_name_ar or ""
+            )
+        )
+        
+        return Response({
+            "success": True,
+            "company_name": getattr(company, "name_ar", "") or getattr(company, "name_en", "") or str(company),
+            "total_employees": all_emps.count(),
+            "root": [serialize(r) for r in roots_sorted]
+        })
+    
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {"success": False, "error": str(e)},
+            status=500
+        )
