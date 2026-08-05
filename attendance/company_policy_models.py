@@ -7,6 +7,34 @@ from django.db import models
 from core.models import TenantModel
 
 
+def _policy_has_specific_employee(policy, employee_id):
+    try:
+        if not getattr(policy, "id", None) or not employee_id:
+            return False
+
+        through = policy.specific_employees.through
+        source_fk = None
+        employee_fk = None
+
+        for f in through._meta.fields:
+            remote_model = getattr(getattr(f, "remote_field", None), "model", None)
+            if remote_model == policy.__class__:
+                source_fk = f.attname
+            elif getattr(getattr(remote_model, "_meta", None), "label_lower", "") == "employees.employee":
+                employee_fk = f.attname
+
+        if not source_fk or not employee_fk:
+            return False
+
+        return through._base_manager.filter(**{
+            source_fk: policy.id,
+            employee_fk: employee_id,
+        }).exists()
+    except Exception:
+        return False
+
+
+
 class CompanyWorkPolicy(TenantModel):
     """
     سياسة أيام العمل لكل شركة
@@ -298,7 +326,7 @@ class CompanyAllowancePolicy(TenantModel):
         elif self.scope == 'department':
             return getattr(employee, 'department_id', None) == self.department_id
         elif self.scope == 'employees':
-            return self.specific_employees.filter(id=employee.id).exists()
+            return _policy_has_specific_employee(self, employee.id)
         return False
 
 
@@ -390,7 +418,7 @@ class CompanyDeductionPolicy(TenantModel):
         elif self.scope == 'department':
             return getattr(employee, 'department_id', None) == self.department_id
         elif self.scope == 'employees':
-            return self.specific_employees.filter(id=employee.id).exists()
+            return _policy_has_specific_employee(self, employee.id)
         return False
 
 
@@ -486,5 +514,5 @@ class CompanyBonusPolicy(TenantModel):
         elif self.scope == 'department':
             return getattr(employee, 'department_id', None) == self.department_id
         elif self.scope == 'employees':
-            return self.specific_employees.filter(id=employee.id).exists()
+            return _policy_has_specific_employee(self, employee.id)
         return False

@@ -1,10 +1,5 @@
 """
 APIs - سياسات البدلات العامة
-GET    /api/attendance/allowance-policies/
-POST   /api/attendance/allowance-policies/
-GET    /api/attendance/allowance-policies/<id>/
-PUT    /api/attendance/allowance-policies/<id>/
-DELETE /api/attendance/allowance-policies/<id>/
 """
 
 from django.http import JsonResponse
@@ -22,14 +17,51 @@ from employees.models import Employee
 
 
 def _check_hr_permission(user):
-    """لازم يكون HR أو أدمن"""
     role = getattr(user, 'role', None)
-    if not (
-        user.is_superuser
-        or user.is_staff
-        or role in ['company_admin', 'hr_manager']
-    ):
+    if not (user.is_superuser or user.is_staff or role in ['company_admin', 'hr_manager']):
         raise PermissionDenied('مش مسموح')
+
+
+# ── M2M helpers ────────────────────────────────────────────
+def _m2m_read_ids(policy):
+    """اقرأ specific_employees من through table مباشرة"""
+    try:
+        through = policy.specific_employees.through
+        src_fk = emp_fk = None
+        for f in through._meta.fields:
+            rm = getattr(getattr(f, 'remote_field', None), 'model', None)
+            if rm == policy.__class__:
+                src_fk = f.attname
+            elif getattr(getattr(rm, '_meta', None), 'label_lower', '') == 'employees.employee':
+                emp_fk = f.attname
+        if not src_fk or not emp_fk:
+            return []
+        return list(through._base_manager.filter(**{src_fk: policy.id}).values_list(emp_fk, flat=True))
+    except Exception:
+        return []
+
+
+def _m2m_set_ids(policy, company, employee_ids):
+    """اكتب specific_employees على through table مباشرة"""
+    try:
+        ids = [int(x) for x in (employee_ids or []) if str(x).isdigit()]
+        valid = list(Employee._base_manager.filter(company=company, id__in=ids).values_list('id', flat=True))
+        through = policy.specific_employees.through
+        src_fk = emp_fk = None
+        for f in through._meta.fields:
+            rm = getattr(getattr(f, 'remote_field', None), 'model', None)
+            if rm == policy.__class__:
+                src_fk = f.attname
+            elif getattr(getattr(rm, '_meta', None), 'label_lower', '') == 'employees.employee':
+                emp_fk = f.attname
+        if not src_fk or not emp_fk:
+            return
+        through._base_manager.filter(**{src_fk: policy.id}).delete()
+        rows = [through(**{src_fk: policy.id, emp_fk: eid}) for eid in valid]
+        if rows:
+            through._base_manager.bulk_create(rows, ignore_conflicts=True)
+    except Exception:
+        pass
 
 
 def _policy_to_dict(policy):
@@ -46,9 +78,7 @@ def _policy_to_dict(policy):
         'branch_name': policy.branch.name_ar if policy.branch else None,
         'department_id': policy.department_id,
         'department_name': policy.department.name_ar if policy.department else None,
-        'specific_employees': list(
-            policy.specific_employees.values_list('id', flat=True)
-        ),
+        'specific_employees': _m2m_read_ids(policy),
         'is_monthly': policy.is_monthly,
         'is_active': policy.is_active,
         'start_date': str(policy.start_date),
@@ -61,20 +91,12 @@ def _policy_to_dict(policy):
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def allowance_policies_list(request):
-    """GET: قائمة البدلات العامة | POST: إضافة بدل جديد"""
-
     if request.method == 'GET':
         try:
             _check_hr_permission(request.user)
             company = request.user.company
-            policies = CompanyAllowancePolicy._base_manager.filter(
-                company=company
-            ).order_by('-created_at')
-            return JsonResponse({
-                'success': True,
-                'count': policies.count(),
-                'results': [_policy_to_dict(p) for p in policies],
-            })
+            policies = CompanyAllowancePolicy._base_manager.filter(company=company).order_by('-created_at')
+            return JsonResponse({'success': True, 'count': policies.count(), 'results': [_policy_to_dict(p) for p in policies]})
         except PermissionDenied as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=403)
         except Exception as e:
@@ -86,33 +108,20 @@ def allowance_policies_list(request):
             data = json.loads(request.body)
             company = request.user.company
 
-            # validation
-            required = ['allowance_type', 'name_ar', 'amount', 'scope', 'start_date']
-            for field in required:
+            for field in ['allowance_type', 'name_ar', 'amount', 'scope', 'start_date']:
                 if not data.get(field):
-                    return JsonResponse(
-                        {'success': False, 'error': f'{field} مطلوب'},
-                        status=400
-                    )
+                    return JsonResponse({'success': False, 'error': f'{field} مطلوب'}, status=400)
 
             scope = data['scope']
-            branch = None
-            department = None
+            branch = department = None
 
             if scope == 'branch':
                 if not data.get('branch_id'):
-                    return JsonResponse(
-                        {'success': False, 'error': 'branch_id مطلوب لو scope=branch'},
-                        status=400
-                    )
+                    return JsonResponse({'success': False, 'error': 'branch_id مطلوب'}, status=400)
                 branch = Branch.objects.get(id=data['branch_id'], company=company)
-
             elif scope == 'department':
                 if not data.get('department_id'):
-                    return JsonResponse(
-                        {'success': False, 'error': 'department_id مطلوب لو scope=department'},
-                        status=400
-                    )
+                    return JsonResponse({'success': False, 'error': 'department_id مطلوب'}, status=400)
                 department = Department.objects.get(id=data['department_id'], company=company)
 
             policy = CompanyAllowancePolicy._base_manager.create(
@@ -130,19 +139,10 @@ def allowance_policies_list(request):
                 end_date=date.fromisoformat(data['end_date']) if data.get('end_date') else None,
             )
 
-            # لو scope=employees نضيف الموظفين المحددين
-            if scope == 'employees' and data.get('employee_ids'):
-                emps = Employee._base_manager.filter(
-                    id__in=data['employee_ids'],
-                    company=company,
-                )
-                policy.specific_employees.set(emps)
+            if scope == 'employees':
+                _m2m_set_ids(policy, company, data.get('employee_ids') or [])
 
-            return JsonResponse({
-                'success': True,
-                'message': 'تم إضافة البدل العام بنجاح',
-                'policy': _policy_to_dict(policy),
-            }, status=201)
+            return JsonResponse({'success': True, 'message': 'تم إضافة البدل العام بنجاح', 'policy': _policy_to_dict(policy)}, status=201)
 
         except PermissionDenied as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=403)
@@ -156,7 +156,6 @@ def allowance_policies_list(request):
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def allowance_policy_detail(request, policy_id):
-    """GET / PUT / DELETE لبدل محدد"""
     try:
         _check_hr_permission(request.user)
         company = request.user.company
@@ -174,18 +173,9 @@ def allowance_policy_detail(request, policy_id):
             data = json.loads(request.body)
             company = request.user.company
 
-            if 'allowance_type' in data:
-                policy.allowance_type = data['allowance_type']
-            if 'name_ar' in data:
-                policy.name_ar = data['name_ar']
-            if 'name_en' in data:
-                policy.name_en = data['name_en']
-            if 'amount' in data:
-                policy.amount = data['amount']
-            if 'is_monthly' in data:
-                policy.is_monthly = data['is_monthly']
-            if 'is_active' in data:
-                policy.is_active = data['is_active']
+            for field in ['allowance_type', 'name_ar', 'name_en', 'amount', 'is_monthly', 'is_active']:
+                if field in data:
+                    setattr(policy, field, data[field])
             if 'start_date' in data:
                 policy.start_date = date.fromisoformat(data['start_date'])
             if 'end_date' in data:
@@ -195,25 +185,17 @@ def allowance_policy_detail(request, policy_id):
                 policy.scope = data['scope']
                 policy.branch = None
                 policy.department = None
-                policy.specific_employees.clear()
+                _m2m_set_ids(policy, company, [])
 
                 if data['scope'] == 'branch' and data.get('branch_id'):
                     policy.branch = Branch.objects.get(id=data['branch_id'], company=company)
                 elif data['scope'] == 'department' and data.get('department_id'):
                     policy.department = Department.objects.get(id=data['department_id'], company=company)
-                elif data['scope'] == 'employees' and data.get('employee_ids'):
-                    emps = Employee._base_manager.filter(
-                        id__in=data['employee_ids'],
-                        company=company,
-                    )
-                    policy.specific_employees.set(emps)
+                elif data['scope'] == 'employees':
+                    _m2m_set_ids(policy, company, data.get('employee_ids') or [])
 
             policy.save()
-            return JsonResponse({
-                'success': True,
-                'message': 'تم التعديل بنجاح',
-                'policy': _policy_to_dict(policy),
-            })
+            return JsonResponse({'success': True, 'message': 'تم التعديل بنجاح', 'policy': _policy_to_dict(policy)})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
