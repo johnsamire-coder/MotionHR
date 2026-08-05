@@ -19,6 +19,7 @@ from attendance.missions_models import (
     MissionFeedback, MissionFeedbackAddendum, MissionFollowup
 )
 from employees.models import Employee
+from employees.visibility import get_visible_employees_qs
 
 
 # ─────────────────────────────────────────────────────────────
