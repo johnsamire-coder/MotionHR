@@ -106,6 +106,7 @@ urlpatterns = [
 
     # Leaves & Requests APIs
     path('api/mobile/leave-types/', api_mobile_requests.mobile_leave_types, name='mobile_leave_types'),
+    path('api/mobile/hr/leave-types/', api_mobile_requests.hr_leave_types, name='hr_leave_types'),
     path('api/mobile/leave-request/', api_mobile_requests.mobile_leave_request, name='mobile_leave_request'),
     path('api/mobile/leave-recall/create/', api_mobile_requests.create_leave_recall, name='create_leave_recall'),
     path('api/mobile/leave-recall/<int:recall_id>/review/', api_mobile_requests.review_leave_recall, name='review_leave_recall'),
@@ -255,6 +256,8 @@ urlpatterns += [
     path('api/mobile/manager/job-titles/', api_employee_management.manager_job_titles),
     path('api/mobile/manager/employees/simple/', api_employee_management.manager_employees_simple),
     path('api/mobile/manager/employees/create/', api_employee_management.manager_create_employee),
+    path('api/mobile/manager/employees/managers/', api_employee_management.manager_employee_managers),
+    path('api/mobile/manager/employees/<int:employee_id>/', api_employee_management.manager_employee_detail),
     path('api/mobile/manager/employees/<int:employee_id>/update/', manager_update_employee),
 
     path('api/mobile/manager/employees/<int:employee_id>/reset-password/', manager_reset_employee_password),

@@ -1826,3 +1826,44 @@ def list_leave_recalls(request):
 
     except Exception as e:
         return Response({'success': False, 'message': str(e)}, status=500)
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def hr_leave_types(request):
+    """أنواع الإجازات للـ HR/company_admin — بدون حاجة لـ employee profile"""
+    try:
+        company = getattr(request.user, "company", None)
+        if not company:
+            from employees.models import Employee
+            emp = Employee._base_manager.filter(user=request.user).first()
+            if emp:
+                company = emp.company
+
+        if not company:
+            return Response({"success": False, "message": "لا توجد شركة مرتبطة"}, status=400)
+
+        year = timezone.localdate().year
+        leave_types = LeaveType._base_manager.filter(
+            company=company, is_active=True
+        ).order_by("name")
+
+        result = []
+        for lt in leave_types:
+            result.append({
+                "id": lt.id,
+                "name": lt.name,
+                "name_en": getattr(lt, "name_en", "") or "",
+                "category": lt.category,
+                "days_allowed": lt.days_allowed,
+                "is_paid": lt.is_paid,
+                "requires_document": lt.requires_document,
+                "color": lt.color,
+            })
+
+        return Response({"success": True, "leave_types": result, "count": len(result)})
+
+    except Exception as e:
+        logger.exception("hr_leave_types error")
+        return Response({"success": False, "error": str(e)}, status=500)

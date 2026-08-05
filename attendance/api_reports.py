@@ -1144,7 +1144,12 @@ def daily_attendance_report(request):
                 'shift_name': summary.shift.name if summary.shift else '',
             }
         elif att and att.check_in_time:
-            status = 'present'
+            if getattr(att, 'status', None) in ('late', 'present', 'absent', 'on_leave', 'weekend', 'mission'):
+                status = att.status
+            elif (att.late_minutes or 0) > 0:
+                status = 'late'
+            else:
+                status = 'present'
             row = {
                 'employee_id': emp.id,
                 'employee_name': _employee_name(emp),
@@ -1162,13 +1167,13 @@ def daily_attendance_report(request):
                 'shift_name': att.shift.name if att.shift else '',
             }
         else:
-            status = 'no_data'
+            status = 'absent'
             row = {
                 'employee_id': emp.id,
                 'employee_name': _employee_name(emp),
                 'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
                 'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
-                'status': 'no_data',
+                'status': 'absent',
                 'check_in': None,
                 'check_out': None,
                 'work_hours': 0,
