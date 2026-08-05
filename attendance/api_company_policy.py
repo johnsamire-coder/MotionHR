@@ -91,7 +91,7 @@ def save_work_policy(request):
 
     try:
         from .company_policy_models import CompanyWorkPolicy
-        policy, created = CompanyWorkPolicy.objects.get_or_create(
+        policy, created = CompanyWorkPolicy._base_manager.get_or_create(
             company=company,
             defaults={
                 'work_sunday': d.get('work_sunday', True),

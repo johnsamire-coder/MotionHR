@@ -1543,9 +1543,12 @@ def import_employees_excel(request):
         created  = 0
         updated  = 0
         errors   = 0
-        m = _re.search(r"جديد[:\s]+(\d+)", raw)
-        m2 = _re.search(r"تحديث[:\s]+(\d+)", raw)
-        m3 = _re.search(r"أخطاء[:\s]+(\d+)", raw)
+        # Remove ANSI color codes first
+        import re as _re2
+        clean_raw = _re2.sub(r'\x1b\[[0-9;]*m', '', raw)
+        m = _re.search(r"جديد[:\s]+(\d+)", clean_raw)
+        m2 = _re.search(r"تحديث[:\s]+(\d+)", clean_raw)
+        m3 = _re.search(r"أخطاء[:\s]+(\d+)", clean_raw)
         if m:
             created = int(m.group(1))
         if m2:
