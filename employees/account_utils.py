@@ -1,3 +1,4 @@
+from core.username_generator import generate_employee_username
 """
 account_utils.py
 أدوات إنشاء وإدارة حسابات الموظفين
@@ -39,10 +40,14 @@ def generate_password(length=10):
 
 def generate_username(employee):
     """
-    توليد username من employee_code
-    مثال: EMP00001
+    توليد username ذكي: اسم + حرفين + آخر 4 من القومي
+    مثال: ahmedmo2345
     """
-    return employee.employee_code.lower()
+    full_name = f"{employee.first_name_ar or ''} {employee.last_name_ar or ''}".strip()
+    if not full_name:
+        full_name = employee.employee_code or "user"
+    nid = getattr(employee, 'national_id', '') or getattr(employee, 'phone', '') or "1234"
+    return generate_employee_username(full_name, nid)
 
 
 def create_employee_account(employee, created_by=None, send_email=True):

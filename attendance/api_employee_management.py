@@ -19,34 +19,17 @@ from employees.visibility import get_visible_employees_qs
 from .models import LocationHistory
 import random
 import string
+from core.username_generator import generate_employee_username
 
 logger = logging.getLogger(__name__)
 
-def _generate_username_from_names(first_name_en, last_name_en, company, phone=""):
-    """توليد يوزر من الاسم الإنجليزي + فحص التكرار"""
-    from django.contrib.auth.models import User
-
-    first = re.sub(r'[^a-z]', '', (first_name_en or '').lower().strip())
-    last = re.sub(r'[^a-z]', '', (last_name_en or '').lower().strip())
-
-    if first and last:
-        base = f"{first}{last}"
-    elif first:
-        base = first
-    else:
-        clean_phone = ''.join(ch for ch in (phone or '') if ch.isdigit())
-        base = f"emp{clean_phone[-7:]}" if clean_phone else "emp1"
-
-    username = base
-    counter = 1
-    while User.objects.filter(username=username).exists():
-        username = f"{base}{counter}"
-        counter += 1
-        if counter > 999:
-            username = f"{base}{random.randint(1000, 9999)}"
-            break
-
-    return username
+def _generate_username_from_names(first_name_en, last_name_en, company, phone="", national_id=""):
+    """توليد يوزر ذكي: اسم + حرفين + آخر 4 من القومي"""
+    full_name = f"{first_name_en or ''} {last_name_en or ''}".strip()
+    if not full_name:
+        full_name = "user"
+    nid = national_id or phone or "1234"
+    return generate_employee_username(full_name, nid)
 
 
 User = get_user_model()
@@ -183,27 +166,13 @@ def manager_employees_simple(request):
         return Response({"success": False, "error": str(e)}, status=500)
 
 
-def _generate_username(phone, first_name_ar, company_id):
-    """Generate unique username"""
-    base = None
-    # Try phone as username if not exists
-    if phone:
-        clean_phone = re.sub(r'\D', '', phone)
-        if clean_phone:
-            base = f"emp{clean_phone[-7:]}"
-    if not base:
-        # Fallback random
-        base = f"emp{random.randint(10000, 99999)}"
-    
-    username = base
-    counter = 1
-    while User.objects.filter(username=username).exists():
-        username = f"{base}{counter}"
-        counter += 1
-        if counter > 100:
-            username = f"emp{random.randint(100000, 999999)}"
-            break
-    return username
+def _generate_username(phone, first_name_ar, company_id, last_name_ar="", national_id=""):
+    """توليد يوزر ذكي: اسم + حرفين + آخر 4 من القومي"""
+    full_name = f"{first_name_ar or ''} {last_name_ar or ''}".strip()
+    if not full_name:
+        full_name = "user"
+    nid = national_id or phone or "1234"
+    return generate_employee_username(full_name, nid)
 
 
 def _generate_password(phone=None):
