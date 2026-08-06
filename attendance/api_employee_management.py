@@ -1765,6 +1765,8 @@ def manager_employee_managers(request):
         except Exception:
             pass
 
+        qs = qs.filter(user__role__in=["manager", "hr_manager", "company_admin"])
+
         try:
             visible_ids = list(get_visible_employees_qs(request.user).values_list("id", flat=True))
             qs = qs.filter(id__in=visible_ids)

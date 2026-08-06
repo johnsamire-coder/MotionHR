@@ -112,7 +112,43 @@ def trial_signup(request):
                 company=company,
             )
             
-            # 4. Create Subscription
+            # 4. Create Employee record for owner
+            branch = Branch._base_manager.filter(company=company, is_main=True).first() or Branch._base_manager.filter(company=company).first()
+            department = Department._base_manager.filter(company=company).first()
+            job_title = JobTitle._base_manager.filter(company=company).first()
+
+            owner_national_id = str(data.get("national_id", "")).strip() or f"00000000000{company.id:03d}"[-14:]
+            owner_birth_date = data.get("birth_date") or timezone.now().date().replace(year=timezone.now().year - 30)
+            owner_gender = str(data.get("gender", "male")).strip().lower()
+            if owner_gender not in ("male", "female"):
+                owner_gender = "male"
+
+            if branch and department and job_title:
+                Employee._base_manager.create(
+                    company=company,
+                    user=user,
+                    first_name_ar=first_name or owner_name,
+                    last_name_ar=last_name or "صاحب الشركة",
+                    first_name_en=first_name or owner_name,
+                    last_name_en=last_name or "Owner",
+                    national_id=owner_national_id,
+                    birth_date=owner_birth_date,
+                    gender=owner_gender,
+                    phone=phone,
+                    email=email,
+                    hire_date=start_date if False else timezone.now().date(),
+                    branch=branch,
+                    department=department,
+                    job_title=job_title,
+                    basic_salary=0,
+                    marital_status="single",
+                    contract_type="permanent",
+                    salary_payment_method="cash",
+                    worker_type="office",
+                    status="active",
+                )
+
+            # 5. Create Subscription
             start_date = timezone.now().date()
             end_date = start_date + timedelta(days=trial_plan.trial_days)
             
