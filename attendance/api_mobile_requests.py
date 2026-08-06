@@ -96,9 +96,15 @@ def mobile_leave_types(request):
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     year = timezone.localdate().year
-    leave_types = LeaveType._base_manager.filter(
+    leave_types_qs = LeaveType._base_manager.filter(
         company=employee.company, is_active=True
-    ).order_by('name')
+    )
+    emp_gender = (getattr(employee, "gender", "") or "").lower()
+    if emp_gender == "male":
+        leave_types_qs = leave_types_qs.exclude(gender_restriction="female")
+    elif emp_gender == "female":
+        leave_types_qs = leave_types_qs.exclude(gender_restriction="male")
+    leave_types = leave_types_qs.order_by('name')
 
     result = []
     for lt in leave_types:

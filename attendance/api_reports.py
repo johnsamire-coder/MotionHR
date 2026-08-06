@@ -1255,10 +1255,19 @@ def leaves_report_enhanced(request):
                 'reason': lv.reason or '',
             })
 
-        balances = LeaveBalance._base_manager.filter(
+        # Filter balances by employee gender (skip leave types restricted to opposite gender)
+        emp_gender = (getattr(emp, "gender", "") or "").lower()
+        balances_qs = LeaveBalance._base_manager.filter(
             employee=emp,
             year=year,
         ).select_related('leave_type')
+
+        if emp_gender == "male":
+            balances_qs = balances_qs.exclude(leave_type__gender_restriction="female")
+        elif emp_gender == "female":
+            balances_qs = balances_qs.exclude(leave_type__gender_restriction="male")
+
+        balances = balances_qs
 
         balance_items = []
         for bal in balances:

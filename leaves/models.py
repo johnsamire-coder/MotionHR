@@ -302,6 +302,12 @@ class LeaveType(TenantModel):
     )
     is_active        = models.BooleanField(default=True, verbose_name="نشط")
     description      = models.TextField(blank=True, verbose_name="الوصف")
+    gender_restriction = models.CharField(
+        max_length=10,
+        choices=[("all", "الجميع"), ("male", "ذكور فقط"), ("female", "إناث فقط")],
+        default="all",
+        verbose_name="مخصصة لـ"
+    )
 
     class Meta:
         verbose_name        = "نوع إجازة"
@@ -497,7 +503,7 @@ class LeaveRequest(TenantModel):
     def _update_balance(self, action):
         """تحديث رصيد الإجازات"""
         try:
-            balance = LeaveBalance.objects.get(
+            balance = LeaveBalance._base_manager.get(
                 employee=self.employee,
                 leave_type=self.leave_type,
                 year=self.start_date.year,
