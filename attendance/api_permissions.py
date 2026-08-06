@@ -1,3 +1,4 @@
+SOVEREIGN_PERMISSIONS = {'roles.manage', 'company.edit', 'offboarding.execute'}
 # -*- coding: utf-8 -*-
 """
 APIs إدارة الصلاحيات - للموبايل
@@ -94,6 +95,8 @@ def create_role(request):
         valid_codes = [p[0] for p in PERMISSION_CHOICES]
         valid_scopes = [s[0] for s in SCOPE_CHOICES]
         if code in valid_codes and scope in valid_scopes:
+            if code in SOVEREIGN_PERMISSIONS:
+                continue  # منع الصلاحيات السيادية في الأدوار المخصصة
             RolePermission.objects.create(role=role, permission=code, scope=scope)
 
     return Response({'success': True, 'role_id': role.id, 'message': 'تم إنشاء الدور بنجاح'})
@@ -267,6 +270,8 @@ def set_user_override(request):
 
     if permission not in valid_codes:
         return Response({'error': 'صلاحية غير صحيحة'}, status=400)
+    if is_granted and permission in SOVEREIGN_PERMISSIONS:
+        return Response({'error': 'لا يمكن منح الصلاحيات السيادية كاستثناء شخصي'}, status=400)
     if scope not in valid_scopes:
         return Response({'error': 'نطاق غير صحيح'}, status=400)
 
