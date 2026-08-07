@@ -1512,3 +1512,212 @@ class LeaveRule(TenantModel):
             return _policy_has_specific_employee(self, employee.id)
         return False
 
+
+# ═══════════════════════════════════════════════════════════════
+# الإدخالات اليدوية (Manual Entries) — الجزاءات / المكافآت / البدلات
+# Workflow: المدير المباشر يطلب → CEO يوافق → HR يعرف → ينطبق على مرتب شهر معين
+# ═══════════════════════════════════════════════════════════════
+
+class ManualEntryBase(TenantModel):
+    """Base abstract model - كل الحقول المشتركة بين الجزاء والمكافأة والبدل"""
+
+    STATUS_CHOICES = [
+        ('pending',  'قيد الموافقة'),
+        ('approved', 'تمت الموافقة'),
+        ('rejected', 'مرفوض'),
+        ('applied',  'مطبق في الرواتب'),
+        ('cancelled','ملغي'),
+    ]
+
+    AMOUNT_TYPES = [
+        ('fixed',         'مبلغ ثابت'),
+        ('quarter_day',   'ربع يوم'),
+        ('half_day',      'نصف يوم'),
+        ('full_day',      'يوم كامل'),
+        ('two_days',      'يومين'),
+        ('three_days',    '3 أيام'),
+        ('percent_basic', '% من الراتب الأساسي'),
+    ]
+
+    # ═══ Employee & Requester ═══
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='%(class)ss',
+        verbose_name='الموظف',
+    )
+    requested_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='%(class)ss_requested',
+        verbose_name='طلب من قبل (المدير)',
+    )
+    requested_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الطلب')
+
+    # ═══ Amount ═══
+    amount_type = models.CharField(
+        max_length=20, choices=AMOUNT_TYPES, default='fixed',
+        verbose_name='نوع المبلغ',
+    )
+    amount_value = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        verbose_name='القيمة (لو ثابت أو نسبة)',
+        help_text='لو ثابت: المبلغ. لو نسبة: من 0 لـ 100. لو ربع/نصف/يوم: يُهمل',
+    )
+
+    # ═══ Reason ═══
+    reason = models.TextField(verbose_name='السبب')
+    attachment = models.FileField(
+        upload_to='manual_entries/attachments/',
+        null=True, blank=True,
+        verbose_name='مرفق (اختياري)',
+    )
+
+    # ═══ Target Period ═══
+    target_year = models.PositiveSmallIntegerField(verbose_name='السنة')
+    target_month = models.PositiveSmallIntegerField(verbose_name='الشهر (1-12)')
+
+    # ═══ Workflow ═══
+    status = models.CharField(
+        max_length=15, choices=STATUS_CHOICES, default='pending',
+        verbose_name='الحالة',
+    )
+
+    approved_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='%(class)ss_approved',
+        verbose_name='اعتمد من قبل',
+    )
+    approved_at = models.DateTimeField(null=True, blank=True, verbose_name='تاريخ الاعتماد')
+    approval_notes = models.TextField(blank=True, default='', verbose_name='ملاحظات الاعتماد')
+
+    rejected_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='%(class)ss_rejected',
+        verbose_name='رفض من قبل',
+    )
+    rejected_at = models.DateTimeField(null=True, blank=True, verbose_name='تاريخ الرفض')
+    rejection_reason = models.TextField(blank=True, default='', verbose_name='سبب الرفض')
+
+    # ═══ HR Notification ═══
+    hr_notified = models.BooleanField(default=False, verbose_name='تم إبلاغ HR')
+    hr_notified_at = models.DateTimeField(null=True, blank=True, verbose_name='تاريخ إبلاغ HR')
+
+    # ═══ Application ═══
+    applied_in_payroll = models.BooleanField(default=False, verbose_name='تم تطبيقه في المرتب')
+    applied_at = models.DateTimeField(null=True, blank=True, verbose_name='تاريخ التطبيق')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+        ordering = ['-created_at']
+
+    def calculate_amount(self, basic_salary=0, days_in_month=30):
+        """يحسب المبلغ الفعلي بناءً على النوع"""
+        from decimal import Decimal
+        basic = Decimal(str(basic_salary or 0))
+        daily = basic / Decimal(str(days_in_month))
+
+        if self.amount_type == 'fixed':
+            return self.amount_value
+        elif self.amount_type == 'quarter_day':
+            return daily / Decimal('4')
+        elif self.amount_type == 'half_day':
+            return daily / Decimal('2')
+        elif self.amount_type == 'full_day':
+            return daily
+        elif self.amount_type == 'two_days':
+            return daily * Decimal('2')
+        elif self.amount_type == 'three_days':
+            return daily * Decimal('3')
+        elif self.amount_type == 'percent_basic':
+            return (basic * self.amount_value) / Decimal('100')
+        return Decimal('0')
+
+
+class ManualPenalty(ManualEntryBase):
+    """جزاء يدوي — المدير يطلب، CEO يوافق"""
+
+    PENALTY_CATEGORY = [
+        ('performance',    'قصور في الأداء'),
+        ('discipline',     'مخالفة سلوكية'),
+        ('attendance',     'مشكلة حضور'),
+        ('safety',         'مخالفة سلامة'),
+        ('quality',        'مشكلة جودة عمل'),
+        ('other',          'أخرى'),
+    ]
+
+    category = models.CharField(
+        max_length=20, choices=PENALTY_CATEGORY, default='performance',
+        verbose_name='نوع المخالفة',
+    )
+
+    class Meta:
+        verbose_name = 'جزاء يدوي'
+        verbose_name_plural = 'الجزاءات اليدوية'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'جزاء - {self.employee} - {self.target_year}/{self.target_month} - {self.status}'
+
+
+class ManualBonus(ManualEntryBase):
+    """مكافأة يدوية — المدير يطلب، CEO يوافق"""
+
+    BONUS_CATEGORY = [
+        ('performance',       'أداء متميز'),
+        ('goal_achievement',  'تحقيق هدف'),
+        ('project_completion','إتمام مشروع'),
+        ('extra_effort',      'مجهود إضافي'),
+        ('loyalty',           'ولاء وسنوات خدمة'),
+        ('referral',          'ترشيح موظف جديد'),
+        ('other',             'أخرى'),
+    ]
+
+    category = models.CharField(
+        max_length=25, choices=BONUS_CATEGORY, default='performance',
+        verbose_name='نوع المكافأة',
+    )
+
+    class Meta:
+        verbose_name = 'مكافأة يدوية'
+        verbose_name_plural = 'المكافآت اليدوية'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'مكافأة - {self.employee} - {self.target_year}/{self.target_month} - {self.status}'
+
+
+class ManualAllowance(ManualEntryBase):
+    """بدل يدوي — المدير يطلب، CEO يوافق"""
+
+    ALLOWANCE_CATEGORY = [
+        ('travel',           'بدل سفر'),
+        ('field_visit',      'بدل زيارة ميدانية'),
+        ('overtime_meal',    'بدل وجبة أوفرتايم'),
+        ('special_project',  'بدل مشروع خاص'),
+        ('training',         'بدل تدريب'),
+        ('conference',       'بدل مؤتمر/دورة'),
+        ('other',            'أخرى'),
+    ]
+
+    category = models.CharField(
+        max_length=25, choices=ALLOWANCE_CATEGORY, default='travel',
+        verbose_name='نوع البدل',
+    )
+
+    class Meta:
+        verbose_name = 'بدل يدوي'
+        verbose_name_plural = 'البدلات اليدوية'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'بدل - {self.employee} - {self.target_year}/{self.target_month} - {self.status}'
+

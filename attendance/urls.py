@@ -37,6 +37,12 @@ from .api_insurance import insurance_policies_list, insurance_policy_detail, emp
 from .api_payroll_cycle import payroll_cycle_list, payroll_cycle_detail
 from .api_rules import penalty_list, penalty_detail, bonus_list, bonus_detail, allowance_list, allowance_detail
 from .api_leave_rule import leave_rule_list, leave_rule_detail
+from .api_manual_entries import (
+    manual_penalty_list, manual_penalty_detail, manual_penalty_approve, manual_penalty_reject,
+    manual_bonus_list, manual_bonus_detail, manual_bonus_approve, manual_bonus_reject,
+    manual_allowance_list, manual_allowance_detail, manual_allowance_approve, manual_allowance_reject,
+    manual_entries_summary,
+)
 from .api_general_policies import deduction_policies_list, deduction_policy_detail, bonus_policies_list, bonus_policy_detail
 
 app_name = 'attendance'
@@ -620,6 +626,21 @@ urlpatterns += [
     # Leave Rules
     path('api/mobile/manager/rules/leave/', leave_rule_list, name='leave_rule_list'),
     path('api/mobile/manager/rules/leave/<int:rule_id>/', leave_rule_detail, name='leave_rule_detail'),
+    # Manual Entries
+    path('api/mobile/manager/entries/summary/', manual_entries_summary, name='manual_entries_summary'),
+    path('api/mobile/manager/entries/penalty/', manual_penalty_list, name='manual_penalty_list'),
+    path('api/mobile/manager/entries/penalty/<int:entry_id>/', manual_penalty_detail, name='manual_penalty_detail'),
+    path('api/mobile/manager/entries/penalty/<int:entry_id>/approve/', manual_penalty_approve, name='manual_penalty_approve'),
+    path('api/mobile/manager/entries/penalty/<int:entry_id>/reject/', manual_penalty_reject, name='manual_penalty_reject'),
+    path('api/mobile/manager/entries/bonus/', manual_bonus_list, name='manual_bonus_list'),
+    path('api/mobile/manager/entries/bonus/<int:entry_id>/', manual_bonus_detail, name='manual_bonus_detail'),
+    path('api/mobile/manager/entries/bonus/<int:entry_id>/approve/', manual_bonus_approve, name='manual_bonus_approve'),
+    path('api/mobile/manager/entries/bonus/<int:entry_id>/reject/', manual_bonus_reject, name='manual_bonus_reject'),
+    path('api/mobile/manager/entries/allowance/', manual_allowance_list, name='manual_allowance_list'),
+    path('api/mobile/manager/entries/allowance/<int:entry_id>/', manual_allowance_detail, name='manual_allowance_detail'),
+    path('api/mobile/manager/entries/allowance/<int:entry_id>/approve/', manual_allowance_approve, name='manual_allowance_approve'),
+    path('api/mobile/manager/entries/allowance/<int:entry_id>/reject/', manual_allowance_reject, name='manual_allowance_reject'),
+
 
 
 
