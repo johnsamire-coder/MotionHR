@@ -107,6 +107,7 @@ urlpatterns = [
     # Leaves & Requests APIs
     path('api/mobile/leave-types/', api_mobile_requests.mobile_leave_types, name='mobile_leave_types'),
     path('api/mobile/hr/leave-types/', api_mobile_requests.hr_leave_types, name='hr_leave_types'),
+    path('api/mobile/hr/create-leave/', api_mobile_requests.hr_create_leave, name='hr_create_leave'),
     path('api/mobile/leave-request/', api_mobile_requests.mobile_leave_request, name='mobile_leave_request'),
     path('api/mobile/leave-recall/create/', api_mobile_requests.create_leave_recall, name='create_leave_recall'),
     path('api/mobile/leave-recall/<int:recall_id>/review/', api_mobile_requests.review_leave_recall, name='review_leave_recall'),
@@ -124,6 +125,8 @@ urlpatterns = [
     path('api/mobile/manager/route/', api_mobile_requests.mobile_manager_employee_route, name='mobile_manager_employee_route'),
     path('api/mobile/geofence/', mobile_geofence_get, name='mobile_geofence_get'),
     path('api/mobile/geofence/set/', mobile_geofence_set, name='mobile_geofence_set'),
+    path('api/mobile/manager/geofence/', mobile_geofence_get, name='mobile_manager_geofence_get'),
+    path('api/mobile/manager/geofence/set/', mobile_geofence_set, name='mobile_manager_geofence_set'),
     path('api/mobile/fcm-token/', mobile_fcm_token_register, name='mobile_fcm_token_register'),
     path('api/mobile/fcm-token/delete/', mobile_fcm_token_delete, name='mobile_fcm_token_delete'),
     path('api/mobile/notifications/', api_mobile.mobile_notifications_list, name='mobile_notifications_list'),
@@ -556,11 +559,13 @@ urlpatterns += [
 from .api_reports import (
     leaves_report_enhanced,
     shifts_report,
+    location_tracking_report,
 )
 
 urlpatterns += [
     path('api/mobile/manager/reports/leaves-enhanced/', leaves_report_enhanced, name='reports-leaves-enhanced'),
     path('api/mobile/manager/reports/shifts/', shifts_report, name='reports-shifts'),
+    path('api/mobile/manager/reports/location-tracking/', location_tracking_report, name='location-tracking-report'),
 
     # ═══════════════════════════════════════════════════
     # Field Visits Mobile APIs (زيارات ميدانية بدون موافقات)

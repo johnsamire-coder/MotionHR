@@ -127,7 +127,7 @@ def update_role(request, role_id):
         for perm in permissions:
             code = perm.get('code')
             scope = perm.get('scope', 'company')
-            if code in valid_codes and scope in valid_scopes:
+            if code in valid_codes and scope in valid_scopes and code not in SOVEREIGN_PERMISSIONS:
                 RolePermission.objects.create(role=role, permission=code, scope=scope)
 
     return Response({'success': True, 'message': 'تم تحديث الدور'})
@@ -372,18 +372,25 @@ def api_export_permissions(request):
 
     if target_type == 'role':
         role = CustomRole.objects.filter(id=target_id, company=company).first()
-        if not role: return Response({'error': 'role not found'}, status=404)
+        if not role: return JsonResponse({'error': 'role not found'}, status=404)
         return export_role_pdf(role) if format_type == 'pdf' else export_role_excel(role)
 
     elif target_type == 'user':
+        # جرّب User ID أولاً، وإذا لم يوجد جرّب Employee ID
         target_user = User.objects.filter(id=target_id, company=company).first()
-        if not target_user: return Response({'error': 'user not found'}, status=404)
+        if not target_user:
+            from employees.models import Employee
+            emp = Employee._base_manager.filter(id=target_id, company=company).first()
+            if emp and emp.user_id:
+                target_user = User.objects.filter(id=emp.user_id, company=company).first()
+        if not target_user:
+            return JsonResponse({'error': 'user not found'}, status=404)
         return export_user_pdf(target_user) if format_type == 'pdf' else export_user_excel(target_user)
 
     elif target_type == 'company':
         return export_company_pdf(company) if format_type == 'pdf' else export_company_excel(company)
 
-    return Response({'error': 'invalid params'}, status=400)
+    return JsonResponse({'error': 'invalid params'}, status=400)
 
 
 # ══════════════════════════════════════

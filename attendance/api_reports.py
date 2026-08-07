@@ -1369,3 +1369,103 @@ def shifts_report(request):
         'shifts': all_shifts,
         'no_shift_employees': no_shift_employees,
     })
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def location_tracking_report(request):
+    """تقرير تتبع مواقع الموظفين لليوم"""
+    from datetime import date, datetime, timedelta
+    from django.utils import timezone
+    from django.db.models import Min, Max, Count
+    from attendance.models import Attendance, LocationLog
+
+    user = request.user
+    if not _check_manager(user):
+        return Response({'success': False, 'error': 'صلاحية غير كافية'}, status=403)
+
+    date_str = request.GET.get('date', str(date.today()))
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        return Response({'success': False, 'error': 'صيغة التاريخ غير صحيحة'}, status=400)
+
+    employees = _get_manager_scope_employees(user)
+
+    results = []
+    for emp in employees:
+        att = Attendance._base_manager.filter(employee=emp, date=target_date).first()
+
+        checkin_time = att.check_in_time if att and att.check_in_time else None
+        checkout_time = att.check_out_time if att and att.check_out_time else None
+
+        # location logs في نطاق الحضور
+        logs_qs = LocationLog._base_manager.filter(
+            employee=emp,
+            timestamp__date=target_date,
+        ).order_by('timestamp')
+
+        if checkin_time:
+            logs_qs = logs_qs.filter(timestamp__gte=checkin_time)
+        if checkout_time:
+            logs_qs = logs_qs.filter(timestamp__lte=checkout_time)
+
+        logs = list(logs_qs.values('timestamp', 'latitude', 'longitude', 'address', 'accuracy'))
+
+        first_log = logs[0] if logs else None
+        last_log = logs[-1] if logs else None
+
+        emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip() or emp.employee_code
+
+        results.append({
+            'employee_id': emp.id,
+            'employee_code': emp.employee_code or '',
+            'employee_name': emp_name,
+            'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+            'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
+            'worker_type': getattr(emp, 'worker_type', '') or '',
+            'checkin_time': checkin_time.strftime('%H:%M') if checkin_time else '',
+            'checkout_time': checkout_time.strftime('%H:%M') if checkout_time else '',
+            'has_attendance': bool(att and att.check_in_time),
+            'total_logs': len(logs),
+            'first_location': {
+                'timestamp': first_log['timestamp'].strftime('%H:%M') if first_log else '',
+                'lat': float(first_log['latitude']) if first_log else None,
+                'lng': float(first_log['longitude']) if first_log else None,
+                'address': first_log['address'] if first_log else '',
+            } if first_log else None,
+            'last_location': {
+                'timestamp': last_log['timestamp'].strftime('%H:%M') if last_log else '',
+                'lat': float(last_log['latitude']) if last_log else None,
+                'lng': float(last_log['longitude']) if last_log else None,
+                'address': last_log['address'] if last_log else '',
+            } if last_log else None,
+            'logs': [
+                {
+                    'timestamp': log['timestamp'].strftime('%H:%M'),
+                    'lat': float(log['latitude']),
+                    'lng': float(log['longitude']),
+                    'address': log['address'] or '',
+                    'accuracy': float(log['accuracy']) if log['accuracy'] else 0,
+                }
+                for log in logs
+            ],
+        })
+
+    # stats
+    total_emp = len(results)
+    with_attendance = sum(1 for r in results if r['has_attendance'])
+    tracked = sum(1 for r in results if r['total_logs'] > 0)
+
+    return Response({
+        'success': True,
+        'date': str(target_date),
+        'stats': {
+            'total_employees': total_emp,
+            'with_attendance': with_attendance,
+            'tracked': tracked,
+            'not_tracked': total_emp - tracked,
+        },
+        'employees': results,
+    })

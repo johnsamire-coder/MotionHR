@@ -55,11 +55,11 @@ def _get_company(request):
             return emp.company
     except Exception:
         pass
-    # Fallback: try via Employee model
+    # Fallback: try via Employee model using _base_manager (multi-tenant safe)
     try:
         from employees.models import Employee
-        emp = Employee.objects.filter(user=request.user).first()
-        if emp and emp.company:
+        emp = Employee._base_manager.filter(user=request.user).select_related("company").first()
+        if emp and getattr(emp, "company", None):
             return emp.company
     except Exception:
         pass
