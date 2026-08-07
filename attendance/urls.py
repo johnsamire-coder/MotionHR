@@ -33,6 +33,10 @@ from .api_work_locations import (
 from . import api_mobile
 from . import api_mobile_requests
 from .api_company_allowance_policy import allowance_policies_list, allowance_policy_detail
+from .api_insurance import insurance_policies_list, insurance_policy_detail, employee_insurances
+from .api_payroll_cycle import payroll_cycle_list, payroll_cycle_detail
+from .api_rules import penalty_list, penalty_detail, bonus_list, bonus_detail, allowance_list, allowance_detail
+from .api_leave_rule import leave_rule_list, leave_rule_detail
 from .api_general_policies import deduction_policies_list, deduction_policy_detail, bonus_policies_list, bonus_policy_detail
 
 app_name = 'attendance'
@@ -597,6 +601,27 @@ urlpatterns += [
     # ═══════════════════════════════════════════════════
     path('api/mobile/manager/allowance-policies/', allowance_policies_list, name='allowance_policies_list'),
     path('api/mobile/manager/allowance-policies/<int:policy_id>/', allowance_policy_detail, name='allowance_policy_detail'),
+
+    # Insurance Policies (Social + Medical)
+    path('api/mobile/manager/insurance-policies/', insurance_policies_list, name='insurance_policies_list'),
+    path('api/mobile/manager/insurance-policies/<int:policy_id>/', insurance_policy_detail, name='insurance_policy_detail'),
+    path('api/mobile/manager/employees/<int:employee_id>/insurances/', employee_insurances, name='employee_insurances'),
+
+    # Payroll Cycle Policies
+    path('api/mobile/manager/payroll-cycle-policies/', payroll_cycle_list, name='payroll_cycle_list'),
+    path('api/mobile/manager/payroll-cycle-policies/<int:policy_id>/', payroll_cycle_detail, name='payroll_cycle_detail'),
+    # Rules (Penalty + Bonus + Allowance) - New with Tiers
+    path('api/mobile/manager/rules/penalty/', penalty_list, name='penalty_list'),
+    path('api/mobile/manager/rules/penalty/<int:rule_id>/', penalty_detail, name='penalty_detail'),
+    path('api/mobile/manager/rules/bonus/', bonus_list, name='bonus_list'),
+    path('api/mobile/manager/rules/bonus/<int:rule_id>/', bonus_detail, name='bonus_detail'),
+    path('api/mobile/manager/rules/allowance/', allowance_list, name='allowance_list'),
+    path('api/mobile/manager/rules/allowance/<int:rule_id>/', allowance_detail, name='allowance_detail'),
+    # Leave Rules
+    path('api/mobile/manager/rules/leave/', leave_rule_list, name='leave_rule_list'),
+    path('api/mobile/manager/rules/leave/<int:rule_id>/', leave_rule_detail, name='leave_rule_detail'),
+
+
 
     # ═══════════════════════════════════════════════════
     # General Deduction Policies (خصومات عامة)
