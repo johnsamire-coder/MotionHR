@@ -37,6 +37,8 @@ from .api_insurance import insurance_policies_list, insurance_policy_detail, emp
 from .api_payroll_cycle import payroll_cycle_list, payroll_cycle_detail
 from .api_rules import penalty_list, penalty_detail, bonus_list, bonus_detail, allowance_list, allowance_detail
 from .api_leave_rule import leave_rule_list, leave_rule_detail
+from .api_tax_policy import tax_policy_list, tax_policy_detail, tax_calculate
+from .api_eos_policy import eos_policy_list, eos_policy_detail, eos_calculate
 from .api_manual_entries import (
     manual_penalty_list, manual_penalty_detail, manual_penalty_approve, manual_penalty_reject,
     manual_bonus_list, manual_bonus_detail, manual_bonus_approve, manual_bonus_reject,
@@ -640,6 +642,16 @@ urlpatterns += [
     path('api/mobile/manager/entries/allowance/<int:entry_id>/', manual_allowance_detail, name='manual_allowance_detail'),
     path('api/mobile/manager/entries/allowance/<int:entry_id>/approve/', manual_allowance_approve, name='manual_allowance_approve'),
     path('api/mobile/manager/entries/allowance/<int:entry_id>/reject/', manual_allowance_reject, name='manual_allowance_reject'),
+    # Tax Policy
+    path('api/mobile/manager/tax/policies/', tax_policy_list, name='tax_policy_list'),
+    path('api/mobile/manager/tax/policies/<int:policy_id>/', tax_policy_detail, name='tax_policy_detail'),
+    path('api/mobile/manager/tax/calculate/', tax_calculate, name='tax_calculate'),
+    # End of Service Policy
+    path('api/mobile/manager/eos/policies/', eos_policy_list, name='eos_policy_list'),
+    path('api/mobile/manager/eos/policies/<int:policy_id>/', eos_policy_detail, name='eos_policy_detail'),
+    path('api/mobile/manager/eos/calculate/', eos_calculate, name='eos_calculate'),
+
+
 
 
 

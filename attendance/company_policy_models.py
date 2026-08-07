@@ -1721,3 +1721,431 @@ class ManualAllowance(ManualEntryBase):
     def __str__(self):
         return f'بدل - {self.employee} - {self.target_year}/{self.target_month} - {self.status}'
 
+
+# ═══════════════════════════════════════════════════════════════
+# سياسة ضريبة الدخل (Tax Policy)
+# ═══════════════════════════════════════════════════════════════
+
+class TaxPolicy(TenantModel):
+    """
+    سياسة ضريبة الدخل — شرائح تصاعدية + إعفاءات
+    """
+
+    COUNTRY_CHOICES = [
+        ('EG', 'مصر'),
+        ('SA', 'السعودية'),
+        ('AE', 'الإمارات'),
+        ('KW', 'الكويت'),
+        ('OTHER', 'أخرى'),
+    ]
+
+    name = models.CharField(max_length=100, default='ضريبة الدخل', verbose_name='اسم السياسة')
+    country = models.CharField(max_length=10, choices=COUNTRY_CHOICES, default='EG', verbose_name='الدولة')
+    tax_year = models.PositiveSmallIntegerField(default=2026, verbose_name='السنة الضريبية')
+
+    # ═══ الشرائح الضريبية (Tax Brackets) ═══
+    # مثال (سنوي):
+    # [
+    #   {"from": 0,      "to": 40000,  "rate": 0},
+    #   {"from": 40001,  "to": 55000,  "rate": 10},
+    #   {"from": 55001,  "to": 70000,  "rate": 15},
+    #   {"from": 70001,  "to": 200000, "rate": 20},
+    #   {"from": 200001, "to": 400000, "rate": 22.5},
+    #   {"from": 400001, "to": 1200000, "rate": 25},
+    #   {"from": 1200001, "to": null,  "rate": 27.5}
+    # ]
+    tax_brackets = models.JSONField(
+        default=list,
+        verbose_name='الشرائح الضريبية (سنوي)',
+        help_text='قائمة الشرائح: from/to/rate',
+    )
+
+    # ═══ الإعفاء الشخصي السنوي ═══
+    personal_exemption_single = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        default=9000,
+        verbose_name='إعفاء أعزب (سنوي)',
+    )
+    personal_exemption_married = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        default=9000,
+        verbose_name='إعفاء متزوج (سنوي)',
+    )
+    child_exemption = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        default=0,
+        verbose_name='إعفاء لكل ابن معال (سنوي)',
+    )
+    max_children_exempted = models.PositiveSmallIntegerField(
+        default=3,
+        verbose_name='أقصى عدد أبناء للإعفاء',
+    )
+
+    # ═══ إعفاءات التأمين والادخار ═══
+    exempt_social_insurance = models.BooleanField(
+        default=True,
+        verbose_name='إعفاء حصة الموظف من التأمين الاجتماعي',
+    )
+    exempt_medical_insurance = models.BooleanField(
+        default=True,
+        verbose_name='إعفاء حصة الموظف من التأمين الطبي',
+    )
+    additional_exemption = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        default=0,
+        verbose_name='إعفاءات إضافية سنوية',
+        help_text='مثال: أقساط تأمين حياة أو صناديق ادخار',
+    )
+
+    # ═══ إعدادات الحساب ═══
+    calculation_method = models.CharField(
+        max_length=20,
+        choices=[
+            ('monthly_progressive', 'حساب تقدمي شهري (12/12 من السنوي)'),
+            ('cumulative',          'حساب تراكمي (Cumulative)'),
+        ],
+        default='monthly_progressive',
+        verbose_name='طريقة الحساب',
+    )
+
+    # ═══ Scoping ═══
+    SCOPE_CHOICES = [
+        ('company',    'الشركة كلها'),
+        ('branch',     'فرع محدد'),
+        ('department', 'إدارة محددة'),
+    ]
+    scope = models.CharField(max_length=20, choices=SCOPE_CHOICES, default='company', verbose_name='نطاق التطبيق')
+    branch = models.ForeignKey('companies.Branch', on_delete=models.CASCADE, null=True, blank=True, related_name='tax_policies', verbose_name='الفرع')
+    department = models.ForeignKey('companies.Department', on_delete=models.CASCADE, null=True, blank=True, related_name='tax_policies', verbose_name='الإدارة')
+
+    # ═══ Versioning ═══
+    previous_version = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='next_versions', verbose_name='النسخة السابقة')
+    version_number = models.PositiveIntegerField(default=1)
+    change_reason = models.TextField(blank=True, default='')
+    is_superseded = models.BooleanField(default=False)
+
+    # ═══ Metadata ═══
+    is_active = models.BooleanField(default=True, verbose_name='نشط')
+    start_date = models.DateField(verbose_name='من تاريخ')
+    end_date = models.DateField(null=True, blank=True, verbose_name='لحد تاريخ')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'سياسة ضريبة الدخل'
+        verbose_name_plural = 'سياسات ضريبة الدخل'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.name} - {self.tax_year} - v{self.version_number}'
+
+    def applies_to_employee(self, employee):
+        if not self.is_active:
+            return False
+        if self.scope == 'company':
+            return True
+        elif self.scope == 'branch':
+            return getattr(employee, 'branch_id', None) == self.branch_id
+        elif self.scope == 'department':
+            return getattr(employee, 'department_id', None) == self.department_id
+        return False
+
+    def calculate_annual_tax(self, annual_income, marital_status='single',
+                              children_count=0, social_insurance_paid=0,
+                              medical_insurance_paid=0, additional_deductions=0):
+        """
+        يحسب ضريبة الدخل السنوية بناءً على الشرائح
+        Returns: dict { annual_tax, monthly_tax, exemptions_total, taxable_income }
+        """
+        from decimal import Decimal
+
+        income = Decimal(str(annual_income or 0))
+
+        # حساب الإعفاءات
+        exemptions = Decimal('0')
+        if marital_status == 'married':
+            exemptions += self.personal_exemption_married
+        else:
+            exemptions += self.personal_exemption_single
+
+        # أبناء
+        eligible_children = min(children_count, self.max_children_exempted)
+        exemptions += Decimal(str(eligible_children)) * self.child_exemption
+
+        # تأمينات
+        if self.exempt_social_insurance:
+            exemptions += Decimal(str(social_insurance_paid or 0))
+        if self.exempt_medical_insurance:
+            exemptions += Decimal(str(medical_insurance_paid or 0))
+
+        # إعفاءات إضافية
+        exemptions += self.additional_exemption + Decimal(str(additional_deductions or 0))
+
+        # الدخل الخاضع للضريبة
+        taxable = max(income - exemptions, Decimal('0'))
+
+        # حساب الضريبة حسب الشرائح
+        total_tax = Decimal('0')
+        for bracket in (self.tax_brackets or []):
+            b_from = Decimal(str(bracket.get('from', 0)))
+            b_to = bracket.get('to')
+            b_rate = Decimal(str(bracket.get('rate', 0)))
+
+            if taxable <= b_from:
+                break
+
+            if b_to is None:
+                # آخر شريحة - بدون حد
+                slice_amount = taxable - b_from + Decimal('1') if b_from > 0 else taxable
+            else:
+                slice_amount = min(taxable, Decimal(str(b_to))) - b_from + Decimal('1') if b_from > 0 else min(taxable, Decimal(str(b_to)))
+
+            if slice_amount > 0:
+                total_tax += (slice_amount * b_rate) / Decimal('100')
+
+        monthly_tax = total_tax / Decimal('12')
+
+        return {
+            'annual_income': round(income, 2),
+            'exemptions_total': round(exemptions, 2),
+            'taxable_income': round(taxable, 2),
+            'annual_tax': round(total_tax, 2),
+            'monthly_tax': round(monthly_tax, 2),
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
+# مكافأة نهاية الخدمة (End of Service Benefit)
+# ═══════════════════════════════════════════════════════════════
+
+class EndOfServicePolicy(TenantModel):
+    """
+    سياسة مكافأة نهاية الخدمة - شرائح تصاعدية حسب سنوات الخدمة
+    مع دعم أسباب مختلفة للإنهاء (استقالة/فصل/وفاة/معاش)
+    """
+
+    SCOPE_CHOICES = [
+        ('company',    'الشركة كلها'),
+        ('branch',     'فرع محدد'),
+        ('department', 'إدارة محددة'),
+    ]
+
+    SALARY_BASE_TYPES = [
+        ('last_basic',           'آخر راتب أساسي'),
+        ('last_gross',           'آخر راتب إجمالي (أساسي + بدلات)'),
+        ('avg_3_months',         'متوسط آخر 3 شهور'),
+        ('avg_6_months',         'متوسط آخر 6 شهور'),
+        ('avg_12_months',        'متوسط آخر 12 شهر'),
+    ]
+
+    name = models.CharField(max_length=100, default='مكافأة نهاية الخدمة', verbose_name='اسم السياسة')
+
+    # ═══ الأساس اللي عليه بيتحسب ═══
+    salary_base_type = models.CharField(
+        max_length=20, choices=SALARY_BASE_TYPES, default='last_basic',
+        verbose_name='أساس الحساب',
+    )
+
+    # ═══ شرائح سنوات الخدمة (Tiers) ═══
+    # مثال (مصر):
+    # [
+    #   {"from_years": 0, "to_years": 5, "months_per_year": 1.0},
+    #   {"from_years": 5, "to_years": 10, "months_per_year": 1.5},
+    #   {"from_years": 10, "to_years": null, "months_per_year": 2.0}
+    # ]
+    service_tiers = models.JSONField(
+        default=list,
+        verbose_name='شرائح سنوات الخدمة',
+        help_text='قائمة الشرائح: from_years/to_years/months_per_year',
+    )
+
+    # ═══ حد أدنى لسنوات الخدمة للاستحقاق ═══
+    min_service_months = models.PositiveSmallIntegerField(
+        default=12,
+        verbose_name='أقل خدمة للاستحقاق (بالشهور)',
+        help_text='لو الموظف اشتغل أقل من ده مايستحقش',
+    )
+
+    # ═══ حد أقصى للمكافأة (اختياري) ═══
+    max_months_cap = models.DecimalField(
+        max_digits=5, decimal_places=1,
+        default=0,
+        verbose_name='الحد الأقصى للمكافأة (بالشهور)',
+        help_text='0 = بدون حد. مثال: 24 = أقصى 24 شهر',
+    )
+
+    # ═══ النسب حسب سبب الإنهاء ═══
+    percent_on_resignation = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        default=50,
+        verbose_name='نسبة الاستحقاق عند الاستقالة (%)',
+        help_text='مثال: 50 = نصف المكافأة عند الاستقالة',
+    )
+    percent_on_termination = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        default=100,
+        verbose_name='نسبة الاستحقاق عند إنهاء الخدمة من قبل الشركة (%)',
+    )
+    percent_on_death = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        default=100,
+        verbose_name='نسبة الاستحقاق عند الوفاة (%)',
+    )
+    percent_on_retirement = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        default=100,
+        verbose_name='نسبة الاستحقاق عند بلوغ سن المعاش (%)',
+    )
+    percent_on_disability = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        default=100,
+        verbose_name='نسبة الاستحقاق عند العجز الكلي (%)',
+    )
+    percent_on_misconduct = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        default=0,
+        verbose_name='نسبة الاستحقاق عند الفصل بسبب سوء السلوك (%)',
+        help_text='عادة 0% في حالات الفصل التأديبي',
+    )
+
+    # ═══ إعدادات إضافية ═══
+    include_bonuses_in_base = models.BooleanField(
+        default=False,
+        verbose_name='تشمل المكافآت السنوية في الحساب',
+    )
+    partial_year_calculation = models.CharField(
+        max_length=15,
+        choices=[
+            ('proportional', 'بالنسبة والتناسب'),
+            ('rounded_up',   'تُحسب سنة كاملة'),
+            ('rounded_down', 'تُهمل'),
+        ],
+        default='proportional',
+        verbose_name='معاملة السنة غير المكتملة',
+    )
+    tax_exempted = models.BooleanField(
+        default=True,
+        verbose_name='معفاة من الضريبة',
+    )
+
+    # ═══ Scoping ═══
+    scope = models.CharField(max_length=20, choices=SCOPE_CHOICES, default='company', verbose_name='نطاق التطبيق')
+    branch = models.ForeignKey('companies.Branch', on_delete=models.CASCADE, null=True, blank=True, related_name='eos_policies', verbose_name='الفرع')
+    department = models.ForeignKey('companies.Department', on_delete=models.CASCADE, null=True, blank=True, related_name='eos_policies', verbose_name='الإدارة')
+
+    # ═══ Versioning ═══
+    previous_version = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='next_versions', verbose_name='النسخة السابقة')
+    version_number = models.PositiveIntegerField(default=1)
+    change_reason = models.TextField(blank=True, default='')
+    is_superseded = models.BooleanField(default=False)
+
+    # ═══ Metadata ═══
+    is_active = models.BooleanField(default=True, verbose_name='نشط')
+    start_date = models.DateField(verbose_name='من تاريخ')
+    end_date = models.DateField(null=True, blank=True, verbose_name='لحد تاريخ')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'سياسة مكافأة نهاية الخدمة'
+        verbose_name_plural = 'سياسات مكافأة نهاية الخدمة'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.name} - v{self.version_number}'
+
+    def applies_to_employee(self, employee):
+        if not self.is_active:
+            return False
+        if self.scope == 'company':
+            return True
+        elif self.scope == 'branch':
+            return getattr(employee, 'branch_id', None) == self.branch_id
+        elif self.scope == 'department':
+            return getattr(employee, 'department_id', None) == self.department_id
+        return False
+
+    def calculate_eos(self, service_years, monthly_salary, termination_reason='resignation'):
+        """
+        يحسب مكافأة نهاية الخدمة
+        - service_years: سنوات الخدمة (ممكن decimal للـ partial year)
+        - monthly_salary: المرتب الأساسي (بعد ما نحدد type من الـ payroll)
+        - termination_reason: resignation/termination/death/retirement/disability/misconduct
+        Returns: dict
+        """
+        from decimal import Decimal
+
+        years = Decimal(str(service_years or 0))
+        salary = Decimal(str(monthly_salary or 0))
+
+        # الحد الأدنى
+        min_years = Decimal(str(self.min_service_months)) / Decimal('12')
+        if years < min_years:
+            return {
+                'eligible': False,
+                'reason': f'أقل من الحد الأدنى ({self.min_service_months} شهر)',
+                'total_months': 0,
+                'gross_amount': 0,
+                'percent_applied': 0,
+                'net_amount': 0,
+            }
+
+        # معاملة السنة غير المكتملة
+        if self.partial_year_calculation == 'rounded_up':
+            years = years.quantize(Decimal('1'), rounding='ROUND_UP')
+        elif self.partial_year_calculation == 'rounded_down':
+            years = years.quantize(Decimal('1'), rounding='ROUND_DOWN')
+
+        # حساب الشهور المستحقة حسب الشرائح
+        total_months = Decimal('0')
+        remaining_years = years
+
+        for tier in (self.service_tiers or []):
+            t_from = Decimal(str(tier.get('from_years', 0)))
+            t_to = tier.get('to_years')
+            months_per_year = Decimal(str(tier.get('months_per_year', 0)))
+
+            if remaining_years <= 0:
+                break
+
+            if t_to is None:
+                # آخر شريحة
+                tier_years = remaining_years
+            else:
+                tier_max = Decimal(str(t_to)) - t_from
+                tier_years = min(remaining_years, tier_max)
+
+            total_months += tier_years * months_per_year
+            remaining_years -= tier_years
+
+        # تطبيق الحد الأقصى
+        if self.max_months_cap > 0 and total_months > self.max_months_cap:
+            total_months = self.max_months_cap
+
+        # المبلغ الإجمالي
+        gross_amount = total_months * salary
+
+        # النسبة حسب سبب الإنهاء
+        percent_map = {
+            'resignation':  self.percent_on_resignation,
+            'termination':  self.percent_on_termination,
+            'death':        self.percent_on_death,
+            'retirement':   self.percent_on_retirement,
+            'disability':   self.percent_on_disability,
+            'misconduct':   self.percent_on_misconduct,
+        }
+        percent = percent_map.get(termination_reason, self.percent_on_resignation)
+
+        net_amount = (gross_amount * percent) / Decimal('100')
+
+        return {
+            'eligible': True,
+            'service_years': float(round(years, 2)),
+            'total_months': float(round(total_months, 2)),
+            'monthly_salary': float(round(salary, 2)),
+            'gross_amount': float(round(gross_amount, 2)),
+            'percent_applied': float(round(percent, 2)),
+            'net_amount': float(round(net_amount, 2)),
+            'termination_reason': termination_reason,
+        }
+
