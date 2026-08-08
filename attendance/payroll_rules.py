@@ -2032,6 +2032,54 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     medical_insurance_company = round(medical_insurance_company, 2)
     insurance_deduction = round(insurance_deduction, 2)
 
+    # ═══════════════════════════════════════════════════
+    # نظام الضرائب الجديد — TaxPolicy
+    # ═══════════════════════════════════════════════════
+    tax_deduction = 0.0
+    try:
+        from attendance.company_policy_models import TaxPolicy
+        from django.db.models import Q
+        from datetime import date as _date
+
+        period_end = _date(year, month, 28)
+        tax_policy = TaxPolicy._base_manager.filter(
+            company=company,
+            is_active=True,
+            is_superseded=False,
+            start_date__lte=period_end,
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=period_end)
+        ).order_by('-created_at').first()
+
+        if tax_policy:
+            # نجيب الحالة الاجتماعية من الموظف لو موجودة
+            marital_status = getattr(employee, 'marital_status', 'single') or 'single'
+            # نحول للقيم المتوقعة في السياسة
+            if marital_status not in ('single', 'married'):
+                marital_status = 'single'
+
+            # الدخل السنوي = gross شهري × 12
+            annual_gross = float(basic_salary) * 12
+
+            # نخصم التأمينات من الوعاء الضريبي لو السياسة تقول كده
+            taxable_base = annual_gross
+            if getattr(tax_policy, 'exempt_social_insurance', True):
+                taxable_base -= (social_insurance_employee * 12)
+            if getattr(tax_policy, 'exempt_medical_insurance', True):
+                taxable_base -= (medical_insurance_employee * 12)
+
+            tax_result = tax_policy.calculate_annual_tax(
+                annual_income=max(0, taxable_base),
+                marital_status=marital_status,
+            )
+            annual_tax = float(tax_result.get('annual_tax', 0))
+            tax_deduction = round(annual_tax / 12, 2)
+
+    except Exception as _tax_err:
+        tax_deduction = 0.0  # فشل الضريبة لا يوقف الحساب
+
+    tax_deduction = round(tax_deduction, 2)
+
     # بدل الانتقالات للموظفين الميدانيين — أولوية لقواعد البدلات الجديدة
     field_allowance = 0.0
     meal_allowance = 0.0
@@ -2101,6 +2149,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         late_deduction
         + absence_deduction
         + insurance_deduction
+        + tax_deduction
         + installments_total
         + penalties_total
         + extra_deductions_total
@@ -2142,6 +2191,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'late_deduction': round(late_deduction, 2),
         'absence_deduction': round(absence_deduction, 2),
         'insurance_deduction': round(insurance_deduction, 2),
+        'tax_deduction': round(tax_deduction, 2),
         # ═══ New insurance system ═══
         'social_insurance_employee': social_insurance_employee,
         'social_insurance_company': social_insurance_company,
