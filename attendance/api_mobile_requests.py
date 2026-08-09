@@ -96,9 +96,15 @@ def mobile_leave_types(request):
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     year = timezone.localdate().year
-    leave_types = LeaveType._base_manager.filter(
+    leave_types_qs = LeaveType._base_manager.filter(
         company=employee.company, is_active=True
-    ).order_by('name')
+    )
+    emp_gender = (getattr(employee, "gender", "") or "").lower()
+    if emp_gender == "male":
+        leave_types_qs = leave_types_qs.exclude(gender_restriction="female")
+    elif emp_gender == "female":
+        leave_types_qs = leave_types_qs.exclude(gender_restriction="male")
+    leave_types = leave_types_qs.order_by('name')
 
     result = []
     for lt in leave_types:
@@ -112,6 +118,7 @@ def mobile_leave_types(request):
         result.append({
             'id': lt.id,
             'name': lt.name,
+            'name_en': getattr(lt, 'name_en', '') or '',
             'category': lt.category,
             'days_allowed': lt.days_allowed,
             'is_paid': lt.is_paid,
@@ -1140,23 +1147,94 @@ def mobile_manager_live_locations(request):
     if company:
         employees = employees.filter(company=company)
 
+    # فلترة حسب الدور: manager يشوف فريقه فقط
+    if role == 'manager':
+        try:
+            from employees.visibility import get_visible_employees_qs
+            visible_ids = list(get_visible_employees_qs(user).values_list('id', flat=True))
+            employees = employees.filter(id__in=visible_ids)
+        except Exception:
+            # fallback: فريق مباشر
+            mgr_emp = Employee._base_manager.filter(user=user).first()
+            if mgr_emp:
+                employees = employees.filter(direct_manager=mgr_emp)
+            else:
+                employees = employees.none()
+
+    from django.utils import timezone
+    from attendance.models import Attendance
+    today = timezone.localdate()
+
+    attendance_employee_ids = set(
+        Attendance._base_manager.filter(
+            employee__in=employees,
+            date=today,
+        ).exclude(
+            check_in_time__isnull=True
+        ).values_list('employee_id', flat=True)
+    )
+
     items = []
     for emp in employees:
+        has_attendance = emp.id in attendance_employee_ids
         last_log = LocationLog._base_manager.filter(
             employee=emp
         ).order_by('-timestamp').first()
 
-        if last_log:
-            emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip()
+        emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip()
+        dept_name = getattr(getattr(emp, 'department', None), 'name_ar', '') or ''
+
+        if not has_attendance:
             items.append({
                 'employee_id': emp.id,
                 'employee_name': emp_name,
                 'employee_code': emp.employee_code or '',
+                'department': dept_name,
+                'latitude': None,
+                'longitude': None,
+                'accuracy': 0,
+                'address': '',
+                'timestamp': '',
+                'status': 'inactive_no_attendance',
+                'has_location': False,
+                'attendance_registered': False,
+                'status_note': 'لم يتم تسجيل حضوره في شيفت اليوم',
+            })
+            continue
+
+        if last_log:
+            log_date = last_log.timestamp.date() if last_log.timestamp else None
+            is_online = log_date == today
+            items.append({
+                'employee_id': emp.id,
+                'employee_name': emp_name,
+                'employee_code': emp.employee_code or '',
+                'department': dept_name,
                 'latitude': float(last_log.latitude),
                 'longitude': float(last_log.longitude),
                 'accuracy': float(last_log.accuracy) if last_log.accuracy else 0,
                 'address': getattr(last_log, 'address', '') or '',
                 'timestamp': last_log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if last_log.timestamp else '',
+                'status': 'online' if is_online else 'offline',
+                'has_location': True,
+                'attendance_registered': True,
+                'status_note': '' if is_online else 'آخر موقع مسجل ليس من اليوم',
+            })
+        else:
+            items.append({
+                'employee_id': emp.id,
+                'employee_name': emp_name,
+                'employee_code': emp.employee_code or '',
+                'department': dept_name,
+                'latitude': None,
+                'longitude': None,
+                'accuracy': 0,
+                'address': '',
+                'timestamp': '',
+                'status': 'no_data',
+                'has_location': False,
+                'attendance_registered': True,
+                'status_note': 'تم تسجيل الحضور ولكن لا يوجد موقع مباشر بعد',
             })
 
     return Response({
@@ -1628,12 +1706,15 @@ def manager_cancel_leave(request, leave_id):
     if not reason:
         return Response({'success': False, 'message': 'سبب الإلغاء مطلوب'}, status=400)
 
-    leave.status = 'cancelled'
-    leave.save()
+    # cancel() بترجع الرصيد تلقائيًا
+    leave.cancel()
+    if hasattr(leave, 'cancel_reason'):
+        leave.cancel_reason = reason
+        leave.save(update_fields=['cancel_reason'])
 
     return Response({
         'success': True,
-        'message': 'تم إلغاء طلب الإجازة بنجاح',
+        'message': 'تم إلغاء طلب الإجازة وإرجاع الرصيد بنجاح',
         'leave_id': leave.id,
     })
 
@@ -1825,3 +1906,140 @@ def list_leave_recalls(request):
 
     except Exception as e:
         return Response({'success': False, 'message': str(e)}, status=500)
+
+
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def hr_create_leave(request):
+    """إضافة إجازة من HR/company_admin لأي موظف"""
+    from datetime import datetime
+    from employees.models import Employee
+
+    role = getattr(request.user, "role", "")
+    if role not in ("company_admin", "hr_manager", "super_admin") and not request.user.is_superuser:
+        return Response({"success": False, "error": "غير مصرح"}, status=403)
+
+    company = getattr(request.user, "company", None)
+    if not company:
+        emp = Employee._base_manager.filter(user=request.user).first()
+        if emp:
+            company = emp.company
+    if not company:
+        return Response({"success": False, "error": "لا توجد شركة"}, status=400)
+
+    employee_id = request.data.get("employee_id")
+    leave_type_id = request.data.get("leave_type_id")
+    start_date_str = request.data.get("start_date")
+    end_date_str = request.data.get("end_date")
+    reason = (request.data.get("reason") or "").strip()
+    status_val = request.data.get("status", "approved")
+    half_day = request.data.get("half_day", False)
+
+    if not all([employee_id, leave_type_id, start_date_str, end_date_str, reason]):
+        return Response({"success": False, "error": "الموظف ونوع الإجازة والتواريخ والسبب مطلوبة"}, status=400)
+
+    try:
+        employee = Employee._base_manager.get(id=employee_id, company=company)
+    except Employee.DoesNotExist:
+        return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
+
+    try:
+        leave_type = LeaveType._base_manager.get(id=leave_type_id, company=company, is_active=True)
+    except LeaveType.DoesNotExist:
+        return Response({"success": False, "error": "نوع الإجازة غير موجود"}, status=404)
+
+    emp_gender = (getattr(employee, "gender", "") or "").lower()
+    lt_restriction = getattr(leave_type, "gender_restriction", "all")
+    if lt_restriction == "female" and emp_gender != "female":
+        return Response({"success": False, "error": "هذه الإجازة للإناث فقط"}, status=400)
+    if lt_restriction == "male" and emp_gender != "male":
+        return Response({"success": False, "error": "هذه الإجازة للذكور فقط"}, status=400)
+
+    try:
+        start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return Response({"success": False, "error": "صيغة التاريخ غير صحيحة"}, status=400)
+
+    if end < start:
+        return Response({"success": False, "error": "تاريخ النهاية قبل البداية"}, status=400)
+
+    days_count = 0.5 if (half_day and start_date_str == end_date_str) else (end - start).days + 1
+
+    if leave_type.is_paid:
+        balance = LeaveBalance._base_manager.filter(
+            company=company, employee=employee, leave_type=leave_type, year=start.year
+        ).first()
+        remaining = float(balance.remaining_days) if balance else 0
+        if days_count > remaining:
+            return Response({"success": False, "error": f"الرصيد غير كافي. المتاح: {remaining} يوم"}, status=400)
+
+    if status_val not in ("pending", "approved"):
+        status_val = "approved"
+
+    leave_request = LeaveRequest._base_manager.create(
+        company=company,
+        employee=employee,
+        leave_type=leave_type,
+        start_date=start,
+        end_date=end,
+        days_count=days_count,
+        reason=reason,
+        status=status_val,
+    )
+
+    if status_val == "approved":
+        balance = LeaveBalance._base_manager.filter(
+            company=company, employee=employee, leave_type=leave_type, year=start.year
+        ).first()
+        if balance:
+            balance.used_days = float(balance.used_days or 0) + days_count
+            balance.save(update_fields=["used_days"])
+
+    return Response({
+        "success": True,
+        "message": f"تم إضافة الإجازة ({days_count} يوم)",
+        "request_id": leave_request.id,
+    })
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def hr_leave_types(request):
+    """أنواع الإجازات للـ HR/company_admin — بدون حاجة لـ employee profile"""
+    try:
+        company = getattr(request.user, "company", None)
+        if not company:
+            from employees.models import Employee
+            emp = Employee._base_manager.filter(user=request.user).first()
+            if emp:
+                company = emp.company
+
+        if not company:
+            return Response({"success": False, "message": "لا توجد شركة مرتبطة"}, status=400)
+
+        year = timezone.localdate().year
+        leave_types = LeaveType._base_manager.filter(
+            company=company, is_active=True
+        ).order_by("name")
+
+        result = []
+        for lt in leave_types:
+            result.append({
+                "id": lt.id,
+                "name": lt.name,
+                "name_en": getattr(lt, "name_en", "") or "",
+                "category": lt.category,
+                "days_allowed": lt.days_allowed,
+                "is_paid": lt.is_paid,
+                "requires_document": lt.requires_document,
+                "color": lt.color,
+            })
+
+        return Response({"success": True, "leave_types": result, "count": len(result)})
+
+    except Exception as e:
+        logger.exception("hr_leave_types error")
+        return Response({"success": False, "error": str(e)}, status=500)

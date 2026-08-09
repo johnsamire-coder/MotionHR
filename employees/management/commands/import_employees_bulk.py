@@ -26,6 +26,7 @@ WORKER_TYPE_MAP = {
     "مكتبي": "office",
     "ميداني حر": "field_free",
     "ميداني معين": "field_assigned",
+    "ميداني محدد": "field_assigned",
     "office": "office",
     "field_free": "field_free",
     "field_assigned": "field_assigned",
@@ -156,6 +157,35 @@ def _date(row, key):
     return None
 
 
+def _company_employee_limit(company):
+    """
+    يرجع:
+    - subscription
+    - max_employees
+    - current_active_employees
+    لو مفيش باقة/حد، يرجع None
+    """
+    try:
+        from subscriptions.models import CompanySubscription
+        sub = (
+            CompanySubscription.objects
+            .filter(company=company, status__in=("trial", "active"))
+            .select_related("plan")
+            .first()
+        )
+        if not sub or not sub.plan:
+            return None, None, None
+
+        max_emp = sub.custom_max_employees or sub.plan.max_employees
+        if max_emp is None:
+            return sub, None, None
+
+        current = Employee._base_manager.filter(company=company, status="active").count()
+        return sub, max_emp, current
+    except Exception:
+        return None, None, None
+
+
 class Command(BaseCommand):
     help = "استيراد الموظفين من ملف Excel - v2"
 
@@ -209,6 +239,24 @@ class Command(BaseCommand):
 
         # تخطي أول 3 صفوف (section header + labels + keys)
         rows = list(ws.iter_rows(min_row=4, values_only=True))
+
+        # Trial employee limit pre-check
+        sub, max_emp, current_emp_count = _company_employee_limit(company)
+        if max_emp is not None:
+            new_rows_count = sum(
+                1
+                for row in rows
+                if row and str(row[C["operation_type"]] or "").strip().lower() == "new"
+            )
+            remaining_slots = max(max_emp - current_emp_count, 0)
+
+            if new_rows_count > remaining_slots:
+                self.stdout.write(self.style.ERROR(
+                    f"عدد الموظفين الجدد في الملف ({new_rows_count}) أكبر من المتاح في باقة الشركة "
+                    f"({remaining_slots} متاح من أصل {max_emp}). "
+                    f"يرجى الترقية أو تقليل عدد الصفوف الجديدة."
+                ))
+                return
 
         success_count = 0
         update_count  = 0
@@ -289,7 +337,7 @@ class Command(BaseCommand):
 
             worker_type = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
             if worker_type and worker_type not in ("office", "field_free", "field_assigned"):
-                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: مكتبي / ميداني حر / ميداني معين")
+                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: مكتبي / ميداني حر / ميداني محدد")
 
             att_mode = _str(row, "attendance_mode")
             if att_mode and att_mode not in ("fixed_shift", "flexible_hours", "field_worker", "multi_site", "rotating"):
@@ -332,7 +380,7 @@ class Command(BaseCommand):
 
             worker_type = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
             if worker_type and worker_type not in ("office", "field_free", "field_assigned"):
-                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: مكتبي / ميداني حر / ميداني معين")
+                errors.append(f"{prefix}: قيمة [worker_type] غير صحيحة — المسموح: مكتبي / ميداني حر / ميداني محدد")
 
             att_mode = _str(row, "attendance_mode")
             if att_mode and att_mode not in ("fixed_shift", "flexible_hours", "field_worker", "multi_site", "rotating"):
@@ -408,21 +456,21 @@ class Command(BaseCommand):
 
         created_defs = []
 
-        branch, branch_created = Branch.objects.get_or_create(
+        branch, branch_created = Branch._base_manager.get_or_create(
             company=company,
             name_ar=branch_name,
         )
         if branch_created:
             created_defs.append(f"صف {idx}: تم إنشاء فرع جديد [{branch_name}]")
 
-        dept, dept_created = Department.objects.get_or_create(
+        dept, dept_created = Department._base_manager.get_or_create(
             company=company,
             name_ar=dept_name,
         )
         if dept_created:
             created_defs.append(f"صف {idx}: تم إنشاء قسم جديد [{dept_name}]")
 
-        job, job_created = JobTitle.objects.get_or_create(
+        job, job_created = JobTitle._base_manager.get_or_create(
             company=company,
             name_ar=job_name,
         )
@@ -447,8 +495,15 @@ class Command(BaseCommand):
         att_mode = _str(row, "attendance_mode") or "fixed_shift"
         worker_type_val = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
         if worker_type_val not in ("office", "field_free", "field_assigned"):
-            raise ValueError("قيمة worker_type غير صحيحة أو غير موجودة — المسموح: مكتبي / ميداني حر / ميداني معين")
+            raise ValueError("حقل [تصنيف الموظف] إجباري — اختر واحدة من: مكتبي / ميداني حر / ميداني محدد")
         status   = "active"  # دايمًا نشط - مش بنقرأ من الإكسيل
+
+        # Trial employee limit runtime guard
+        _, max_emp, current_emp_count = _company_employee_limit(company)
+        if max_emp is not None and current_emp_count >= max_emp:
+            raise ValueError(
+                f"تم الوصول للحد الأقصى لعدد الموظفين في الباقة الحالية ({max_emp})"
+            )
 
         username = f"emp{nat_id[-6:]}{random.randint(10, 99)}"
         user = User.objects.create_user(

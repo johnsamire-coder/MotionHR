@@ -65,4 +65,16 @@ build_*.txt
 verify_*.txt
 cleanup_*.txt
 
+# Temp/verify files (per project rules)
+Get
+Run
+verify_*.py
+verify_*.sh
+verify_*.txt
+git_status_*.txt
+install_backup_cron.txt
+create_pgpass_*.py
+rebuild_pgpass_*.py
+*.pgpass
+
 find_gps_users.py

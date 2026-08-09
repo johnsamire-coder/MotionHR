@@ -1,10 +1,14 @@
 from django.urls import path
 from . import views
+from .api_signup import trial_signup, subscription_status
 from .views import contact_sales_view
 
 app_name = 'subscriptions'
 
 urlpatterns = [
+    path('api/trial-signup/', trial_signup, name='trial_signup'),
+    path('api/status/', subscription_status, name='subscription_status'),
+
     path('upgrade/module/<str:feature_code>/', views.feature_upsell_page, name='upsell'),
 
 

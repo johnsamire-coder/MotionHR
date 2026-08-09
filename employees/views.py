@@ -6,6 +6,7 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse, FileResponse
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
+from django.utils import timezone as tz
 from django.utils.crypto import get_random_string
 
 from .models import (
@@ -1522,8 +1523,10 @@ def import_employees_excel(request):
     if not file_obj:
         return Response({'success': False, 'message': 'لم يتم إرسال ملف'}, status=400)
 
-    # حفظ الملف مؤقتاً
-    path = default_storage.save('tmp/import_temp.xlsx', ContentFile(file_obj.read()))
+    # حفظ الملف مؤقتاً (اسم فريد لكل استيراد)
+    import uuid as _uuid
+    unique_name = f'tmp/import_{_uuid.uuid4().hex[:12]}.xlsx'
+    path = default_storage.save(unique_name, ContentFile(file_obj.read()))
     full_path = os.path.join(settings.MEDIA_ROOT, path)
 
     try:
@@ -1540,11 +1543,18 @@ def import_employees_excel(request):
         created  = 0
         updated  = 0
         errors   = 0
-        m = _re.search(r"جديد[:\s]+(\d+).*?تحديث[:\s]+(\d+).*?أخطاء[:\s]+(\d+)", raw)
+        # Remove ANSI color codes first
+        import re as _re2
+        clean_raw = _re2.sub(r'\x1b\[[0-9;]*m', '', raw)
+        m = _re.search(r"جديد[:\s]+(\d+)", clean_raw)
+        m2 = _re.search(r"تحديث[:\s]+(\d+)", clean_raw)
+        m3 = _re.search(r"أخطاء[:\s]+(\d+)", clean_raw)
         if m:
             created = int(m.group(1))
-            updated = int(m.group(2))
-            errors  = int(m.group(3))
+        if m2:
+            updated = int(m2.group(1))
+        if m3:
+            errors  = int(m3.group(1))
 
         lines = [l.strip() for l in raw.splitlines() if l.strip()]
         success_lines = [l for l in lines if "تم إنشاء" in l or "تم تحديث" in l]
@@ -1602,7 +1612,12 @@ def import_employees_excel(request):
     except Exception as e:
         return Response({'success': False, 'message': f'حدث خطأ أثناء المعالجة: {str(e)}'})
     finally:
-        pass  # الملف محفوظ في ImportLog مش بيتحذف
+        # Cleanup: نمسح الملف المؤقت بعد الاستيراد (سواء نجح أو فشل)
+        try:
+            if 'full_path' in locals() and os.path.exists(full_path):
+                os.remove(full_path)
+        except Exception:
+            pass
 
 
 @api_view(['GET'])

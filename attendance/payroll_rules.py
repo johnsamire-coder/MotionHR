@@ -1344,6 +1344,97 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     insurance_percent = _safe_float(settings.get('insurance_percent', 0))
 
     company = getattr(employee, 'company', None)
+
+    # ═══════════════════════════════════════════════════
+    # Override من قواعد الرواتب الجديدة (Rules)
+    # ═══════════════════════════════════════════════════
+    # القواعد الجديدة أولوية أعلى من الجدول القديم
+    late_grace = 0
+    absence_multiplier = 1.0
+    early_leave_grace = 0
+    late_max_per_day = 0
+    _deduction_rule = None
+    _bonus_rule = None
+    _allowance_rule = None
+
+    try:
+        from attendance.company_policy_models import (
+            PenaltyRule, BonusRule, AllowanceRule
+        )
+        from django.db.models import Q
+        from datetime import date as _date
+
+        period_end = _date(year, month, 28)
+
+        # قواعد الجزاءات (Penalty Rules with Tiers)
+        # نجيب كل قواعد الجزاءات النشطة، ونخزنها بحسب النوع
+        _penalty_rules_by_type = {}
+        penalty_rules = PenaltyRule._base_manager.filter(
+            company=company,
+            is_active=True,
+            start_date__lte=period_end,
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=period_end)
+        )
+        for r in penalty_rules:
+            if r.applies_to_employee(employee):
+                if r.penalty_type not in _penalty_rules_by_type:
+                    _penalty_rules_by_type[r.penalty_type] = r
+
+        # نقرأ قاعدة تأخير الحضور لو موجودة
+        _late_rule = _penalty_rules_by_type.get('late_arrival')
+        if _late_rule:
+            _deduction_rule = _late_rule
+            late_grace = int(_late_rule.grace_amount)
+
+        # قواعد الغياب
+        _absence_rule = _penalty_rules_by_type.get('absence')
+
+        # قواعد الخروج المبكر
+        _early_leave_rule = _penalty_rules_by_type.get('early_leave')
+        if _early_leave_rule:
+            early_leave_grace = int(_early_leave_rule.grace_amount)
+
+        # قواعد المكافآت (Bonus Rules with Tiers)
+        _bonus_rules_by_type = {}
+        bonus_rules = BonusRule._base_manager.filter(
+            company=company,
+            is_active=True,
+            start_date__lte=period_end,
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=period_end)
+        )
+        for r in bonus_rules:
+            if r.applies_to_employee(employee):
+                if r.bonus_type not in _bonus_rules_by_type:
+                    _bonus_rules_by_type[r.bonus_type] = r
+
+        _overtime_rule = _bonus_rules_by_type.get('overtime')
+        if _overtime_rule:
+            _bonus_rule = _overtime_rule
+
+        # قواعد البدلات (Allowance Rules with Tiers)
+        _allowance_rules_by_type = {}
+        allowance_rules = AllowanceRule._base_manager.filter(
+            company=company,
+            is_active=True,
+            start_date__lte=period_end,
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=period_end)
+        )
+        for r in allowance_rules:
+            if r.applies_to_employee(employee):
+                if r.allowance_type not in _allowance_rules_by_type:
+                    _allowance_rules_by_type[r.allowance_type] = r
+
+        _field_rule = _allowance_rules_by_type.get('field_work')
+        if _field_rule:
+            _allowance_rule = _field_rule
+
+    except Exception as _e:
+        pass  # fallback للجدول القديم لو حصل خطأ
+
+
     department = getattr(employee, 'department', None)
     branch = getattr(employee, 'branch', None)
 
@@ -1759,11 +1850,54 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         night_allowance += _apply_night_allowance(_pol, _pt['night'], daily_salary)
         weekend_allowance += _apply_weekend_allowance(_pol, _pt['weekend'], daily_salary)
 
-    # الأيام بدون سياسة -> settings الافتراضية
+    # الأيام بدون سياسة -> نطبق قواعد الجزاءات والمكافآت الجديدة (Tiers)
     if _no_policy_totals['late'] or _no_policy_totals['absent'] or _no_policy_totals['overtime']:
-        late_deduction += round(max(0, _no_policy_totals['late'] - _approved_late_min) * late_per_min, 2)
-        absence_deduction += round(_no_policy_totals['absent'] * absence_per_day, 2)
-        overtime_bonus += round(_no_policy_totals['overtime'] * overtime_per_hour, 2)
+        _days_in_month = 30
+
+        # ═══ حسم التأخير: استخدام Tiers ═══
+        _effective_late = max(0, _no_policy_totals['late'] - _approved_late_min)
+        if _late_rule and _late_rule.tiers:
+            # نطبق القاعدة الجديدة بالـ Tiers
+            _late_amount, _ = _late_rule.calculate(_effective_late, basic_salary, _days_in_month)
+            late_deduction += float(_late_amount)
+        else:
+            # fallback للطريقة القديمة
+            _effective = max(0, _effective_late - late_grace)
+            late_deduction += round(_effective * late_per_min, 2)
+
+        # ═══ حسم الغياب: استخدام Tiers ═══
+        if _absence_rule and _absence_rule.tiers:
+            _abs_amount, _ = _absence_rule.calculate(_no_policy_totals['absent'], basic_salary, _days_in_month)
+            absence_deduction += float(_abs_amount)
+        else:
+            absence_deduction += round(_no_policy_totals['absent'] * absence_per_day * absence_multiplier, 2)
+
+        # ═══ الأوفرتايم: استخدام Tiers ═══
+        if _overtime_rule and _overtime_rule.tiers:
+            # نلاقي الشريحة المطابقة للساعات
+            _ot_hours = _no_policy_totals['overtime']
+            _matched_tier = None
+            for tier in _overtime_rule.tiers:
+                t_from = tier.get('from', 0)
+                t_to = tier.get('to')
+                if _ot_hours >= t_from and (t_to is None or _ot_hours <= t_to):
+                    _matched_tier = tier
+                    break
+            if _matched_tier:
+                _vt = _matched_tier.get('value_type', 'multiplier')
+                _val = float(_matched_tier.get('value', 1.0) or 0)
+                if _vt == 'multiplier':
+                    overtime_bonus += round(_ot_hours * hourly_rate * _val, 2)
+                elif _vt == 'fixed_per_unit':
+                    overtime_bonus += round(_ot_hours * _val, 2)
+                elif _vt == 'fixed_total':
+                    overtime_bonus += _val
+                elif _vt == 'percent_basic':
+                    overtime_bonus += round((float(basic_salary) * _val) / 100.0, 2)
+            else:
+                overtime_bonus += round(_ot_hours * overtime_per_hour, 2)
+        else:
+            overtime_bonus += round(_no_policy_totals['overtime'] * overtime_per_hour, 2)
 
     late_deduction = round(late_deduction, 2)
     absence_deduction = round(absence_deduction, 2)
@@ -1845,36 +1979,177 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             insurance_deduction += round((basic_salary * insurance_percent) / 100.0, 2)
     insurance_deduction = round(insurance_deduction, 2)
 
-    # بدل الانتقالات للموظفين الميدانيين
-    field_allowance = 0.0
+    # ═══════════════════════════════════════════════════
+    # نظام التأمينات الجديد — CompanyInsurancePolicy
+    # ═══════════════════════════════════════════════════
+    social_insurance_employee = 0.0
+    social_insurance_company = 0.0
+    medical_insurance_employee = 0.0
+    medical_insurance_company = 0.0
+    total_company_insurance_contribution = 0.0
+
     try:
-        from attendance.payroll_settings_model import PayrollSettings
-        ps = PayrollSettings._base_manager.filter(company=company).first()
-        if ps and hasattr(employee, 'worker_type') and employee.worker_type in ('field_free', 'field_assigned'):
-            if ps.field_allowance_type == 'fixed':
-                field_allowance = float(ps.fixed_field_allowance or 0)
-            elif ps.field_allowance_type == 'per_visit':
-                from attendance.models import LocationCheckIn
-                visits_count = LocationCheckIn._base_manager.filter(
-                    employee=employee,
-                    arrival_time__year=year,
-                    arrival_time__month=month,
-                ).count()
-                field_allowance = visits_count * float(ps.per_visit_allowance or 0)
+        from attendance.company_policy_models import CompanyInsurancePolicy
+        from django.db.models import Q
+        from datetime import date as _date
+
+        # نجيب السياسات السارية في نهاية الشهر
+        period_end = _date(year, month, 28)  # آخر يوم مضمون في الشهر
+        insurance_policies = CompanyInsurancePolicy._base_manager.filter(
+            company=company,
+            is_active=True,
+            start_date__lte=period_end,
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=period_end)
+        )
+
+        for policy in insurance_policies:
+            if not policy.applies_to_employee(employee):
+                continue
+
+            calc = policy.calculate_deduction(employee)
+
+            if policy.insurance_type == 'social':
+                social_insurance_employee += float(calc['employee_share'])
+                social_insurance_company += float(calc['company_share'])
+            elif policy.insurance_type == 'medical':
+                medical_insurance_employee += float(calc['employee_share'])
+                medical_insurance_company += float(calc['company_share'])
+
+        # نضيف حصة الموظف الجديدة للـ insurance_deduction
+        new_insurance_total = social_insurance_employee + medical_insurance_employee
+        if new_insurance_total > 0:
+            insurance_deduction += round(new_insurance_total, 2)
+
+        total_company_insurance_contribution = round(social_insurance_company + medical_insurance_company, 2)
+
+    except Exception as _e:
+        pass  # فشل النظام الجديد لا يوقف الحساب القديم
+
+    social_insurance_employee = round(social_insurance_employee, 2)
+    social_insurance_company = round(social_insurance_company, 2)
+    medical_insurance_employee = round(medical_insurance_employee, 2)
+    medical_insurance_company = round(medical_insurance_company, 2)
+    insurance_deduction = round(insurance_deduction, 2)
+
+    # ═══════════════════════════════════════════════════
+    # نظام الضرائب الجديد — TaxPolicy
+    # ═══════════════════════════════════════════════════
+    tax_deduction = 0.0
+    try:
+        from attendance.company_policy_models import TaxPolicy
+        from django.db.models import Q
+        from datetime import date as _date
+
+        period_end = _date(year, month, 28)
+        tax_policy = TaxPolicy._base_manager.filter(
+            company=company,
+            is_active=True,
+            is_superseded=False,
+            start_date__lte=period_end,
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=period_end)
+        ).order_by('-created_at').first()
+
+        if tax_policy:
+            # نجيب الحالة الاجتماعية من الموظف لو موجودة
+            marital_status = getattr(employee, 'marital_status', 'single') or 'single'
+            # نحول للقيم المتوقعة في السياسة
+            if marital_status not in ('single', 'married'):
+                marital_status = 'single'
+
+            # الدخل السنوي = gross شهري × 12
+            annual_gross = float(basic_salary) * 12
+
+            # نخصم التأمينات من الوعاء الضريبي لو السياسة تقول كده
+            taxable_base = annual_gross
+            if getattr(tax_policy, 'exempt_social_insurance', True):
+                taxable_base -= (social_insurance_employee * 12)
+            if getattr(tax_policy, 'exempt_medical_insurance', True):
+                taxable_base -= (medical_insurance_employee * 12)
+
+            tax_result = tax_policy.calculate_annual_tax(
+                annual_income=max(0, taxable_base),
+                marital_status=marital_status,
+            )
+            annual_tax = float(tax_result.get('annual_tax', 0))
+            tax_deduction = round(annual_tax / 12, 2)
+
+    except Exception as _tax_err:
+        tax_deduction = 0.0  # فشل الضريبة لا يوقف الحساب
+
+    tax_deduction = round(tax_deduction, 2)
+
+    # بدل الانتقالات للموظفين الميدانيين — أولوية لقواعد البدلات الجديدة
+    field_allowance = 0.0
+    meal_allowance = 0.0
+    transport_allowance = 0.0
+    ps = None  # للحفاظ على compatibility مع الكود اللاحق
+
+    try:
+        _is_field_worker = hasattr(employee, 'worker_type') and employee.worker_type in ('field_free', 'field_assigned')
+
+        # ═══ أولوية 1: القاعدة الجديدة (AllowanceRule) ═══
+        if _allowance_rule:
+            # بدل الميدان
+            if _is_field_worker:
+                if _allowance_rule.field_allowance_type == 'fixed':
+                    field_allowance = float(_allowance_rule.fixed_field_allowance or 0)
+                elif _allowance_rule.field_allowance_type == 'per_visit':
+                    from attendance.models import LocationCheckIn
+                    visits_count = LocationCheckIn._base_manager.filter(
+                        employee=employee,
+                        arrival_time__year=year,
+                        arrival_time__month=month,
+                    ).count()
+                    field_allowance = visits_count * float(_allowance_rule.per_visit_allowance or 0)
+
+            # بدل الوجبات
+            if float(_allowance_rule.meal_allowance_per_day) > 0:
+                _min_hours = int(_allowance_rule.meal_min_work_hours or 0)
+                _eligible_days = sum(1 for _dd in daily_details if _dd.get('work_hours', 0) >= _min_hours)
+                meal_allowance = _eligible_days * float(_allowance_rule.meal_allowance_per_day)
+
+            # بدل المواصلات
+            if _allowance_rule.transport_allowance_type == 'per_day':
+                _work_days = sum(1 for _dd in daily_details if _dd.get('work_hours', 0) > 0)
+                transport_allowance = _work_days * float(_allowance_rule.transport_allowance_per_day or 0)
+            elif _allowance_rule.transport_allowance_type == 'monthly':
+                transport_allowance = float(_allowance_rule.monthly_transport or 0)
+
+        # ═══ أولوية 2: الجدول القديم (fallback) ═══
+        else:
+            from attendance.payroll_settings_model import PayrollSettings
+            ps = PayrollSettings._base_manager.filter(company=company).first()
+            if ps and _is_field_worker:
+                if ps.field_allowance_type == 'fixed':
+                    field_allowance = float(ps.fixed_field_allowance or 0)
+                elif ps.field_allowance_type == 'per_visit':
+                    from attendance.models import LocationCheckIn
+                    visits_count = LocationCheckIn._base_manager.filter(
+                        employee=employee,
+                        arrival_time__year=year,
+                        arrival_time__month=month,
+                    ).count()
+                    field_allowance = visits_count * float(ps.per_visit_allowance or 0)
     except Exception:
-        field_allowance = 0.0
+        pass
+
     field_allowance = round(field_allowance, 2)
+    meal_allowance = round(meal_allowance, 2)
+    transport_allowance = round(transport_allowance, 2)
 
     installments_total = round(deductions['installments_total'] + installments_total_new + general_installments_total, 2)
     penalties_total = round(deductions['penalties_total'] + penalties_total_new, 2)
     extra_deductions_total = round(deductions['extra_total'] + general_extra_total, 2)
 
-    gross_salary = round(basic_salary + allowances_total + overtime_bonus + bonuses_total + night_allowance + weekend_allowance + field_allowance, 2)
+    gross_salary = round(basic_salary + allowances_total + overtime_bonus + bonuses_total + night_allowance + weekend_allowance + field_allowance + meal_allowance + transport_allowance, 2)
 
     total_deductions = round(
         late_deduction
         + absence_deduction
         + insurance_deduction
+        + tax_deduction
         + installments_total
         + penalties_total
         + extra_deductions_total
@@ -1906,6 +2181,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'night_allowance': round(night_allowance, 2),
         'weekend_allowance': round(weekend_allowance, 2),
         'field_allowance': round(field_allowance, 2),
+        'meal_allowance': round(meal_allowance, 2),
+        'transport_allowance': round(transport_allowance, 2),
         'field_allowance_type': getattr(ps, 'field_allowance_type', 'none') if 'ps' in dir() else 'none',
         'policy_name': active_policy.name if active_policy else None,
         'flex_shortage_deduction': round(flex_shortage_deduction, 2),
@@ -1914,6 +2191,13 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'late_deduction': round(late_deduction, 2),
         'absence_deduction': round(absence_deduction, 2),
         'insurance_deduction': round(insurance_deduction, 2),
+        'tax_deduction': round(tax_deduction, 2),
+        # ═══ New insurance system ═══
+        'social_insurance_employee': social_insurance_employee,
+        'social_insurance_company': social_insurance_company,
+        'medical_insurance_employee': medical_insurance_employee,
+        'medical_insurance_company': medical_insurance_company,
+        'total_company_insurance_contribution': total_company_insurance_contribution,
         'installments_total': round(installments_total, 2),
         'penalties_total': round(penalties_total, 2),
         'extra_deductions_total': round(extra_deductions_total, 2),

@@ -19,34 +19,17 @@ from employees.visibility import get_visible_employees_qs
 from .models import LocationHistory
 import random
 import string
+from core.username_generator import generate_employee_username
 
 logger = logging.getLogger(__name__)
 
-def _generate_username_from_names(first_name_en, last_name_en, company, phone=""):
-    """توليد يوزر من الاسم الإنجليزي + فحص التكرار"""
-    from django.contrib.auth.models import User
-
-    first = re.sub(r'[^a-z]', '', (first_name_en or '').lower().strip())
-    last = re.sub(r'[^a-z]', '', (last_name_en or '').lower().strip())
-
-    if first and last:
-        base = f"{first}{last}"
-    elif first:
-        base = first
-    else:
-        clean_phone = ''.join(ch for ch in (phone or '') if ch.isdigit())
-        base = f"emp{clean_phone[-7:]}" if clean_phone else "emp1"
-
-    username = base
-    counter = 1
-    while User.objects.filter(username=username).exists():
-        username = f"{base}{counter}"
-        counter += 1
-        if counter > 999:
-            username = f"{base}{random.randint(1000, 9999)}"
-            break
-
-    return username
+def _generate_username_from_names(first_name_en, last_name_en, company, phone="", national_id=""):
+    """توليد يوزر ذكي: اسم + حرفين + آخر 4 من القومي"""
+    full_name = f"{first_name_en or ''} {last_name_en or ''}".strip()
+    if not full_name:
+        full_name = "user"
+    nid = national_id or phone or "1234"
+    return generate_employee_username(full_name, nid)
 
 
 User = get_user_model()
@@ -72,14 +55,188 @@ def _get_company(request):
             return emp.company
     except Exception:
         pass
-    # Fallback: try via Employee model
+    # Fallback: try via Employee model using _base_manager (multi-tenant safe)
     try:
         from employees.models import Employee
-        emp = Employee.objects.filter(user=request.user).first()
-        if emp and emp.company:
+        emp = Employee._base_manager.filter(user=request.user).select_related("company").first()
+        if emp and getattr(emp, "company", None):
             return emp.company
     except Exception:
         pass
+    return None
+
+
+def _stringify(value):
+    return "" if value is None else str(value)
+
+
+def _date_string(value):
+    return value.isoformat() if value else ""
+
+
+def _boolish(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on", "نعم"}
+
+
+def _int_or_none(value):
+    if value in (None, "", "null", "None"):
+        return None
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _employee_display_name(employee):
+    if not employee:
+        return ""
+
+    for attr in ("full_name_ar", "full_name_en", "full_name"):
+        val = getattr(employee, attr, None)
+        if val:
+            val = str(val).strip()
+            if val:
+                return val
+
+    parts = [
+        getattr(employee, "first_name_ar", "") or "",
+        getattr(employee, "middle_name_ar", "") or "",
+        getattr(employee, "last_name_ar", "") or "",
+    ]
+    full_name = " ".join([p for p in parts if p]).strip()
+    if full_name:
+        return full_name
+
+    user = getattr(employee, "user", None)
+    if user:
+        full_name = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+        if full_name:
+            return full_name
+        return getattr(user, "username", "") or ""
+
+    return ""
+
+
+def _serialize_employee_payload(employee):
+    branch = getattr(employee, "branch", None)
+    department = getattr(employee, "department", None)
+    job_title = getattr(employee, "job_title", None)
+    direct_manager = getattr(employee, "direct_manager", None)
+    user = getattr(employee, "user", None)
+
+    branch_name_ar = getattr(branch, "name_ar", "") or ""
+    branch_name_en = getattr(branch, "name_en", "") or ""
+    department_name_ar = getattr(department, "name_ar", "") or ""
+    department_name_en = getattr(department, "name_en", "") or ""
+    job_title_name_ar = (
+        getattr(job_title, "name_ar", "")
+        or getattr(job_title, "title", "")
+        or getattr(job_title, "name", "")
+        or ""
+    )
+    job_title_name_en = (
+        getattr(job_title, "name_en", "")
+        or getattr(job_title, "title_en", "")
+        or ""
+    )
+
+    return {
+        "id": employee.id,
+        "company_id": getattr(employee, "company_id", None),
+
+        "employee_code": getattr(employee, "employee_code", "") or "",
+        "username": getattr(user, "username", "") or "",
+        "user_role": getattr(user, "role", "") or "",
+
+        "full_name": _employee_display_name(employee),
+        "full_name_ar": _employee_display_name(employee),
+
+        "first_name_ar": getattr(employee, "first_name_ar", "") or "",
+        "middle_name_ar": getattr(employee, "middle_name_ar", "") or "",
+        "last_name_ar": getattr(employee, "last_name_ar", "") or "",
+        "first_name_en": getattr(employee, "first_name_en", "") or "",
+        "last_name_en": getattr(employee, "last_name_en", "") or "",
+
+        "phone": getattr(employee, "phone", "") or "",
+        "phone2": getattr(employee, "phone2", "") or "",
+        "email": getattr(employee, "email", "") or "",
+        "national_id": getattr(employee, "national_id", "") or "",
+        "birth_date": _date_string(getattr(employee, "birth_date", None)),
+        "gender": getattr(employee, "gender", "") or "",
+        "hire_date": _date_string(getattr(employee, "hire_date", None)),
+
+        "branch_id": getattr(branch, "id", None),
+        "branch": branch_name_ar,
+        "branch_name_ar": branch_name_ar,
+        "branch_name_en": branch_name_en,
+
+        "department_id": getattr(department, "id", None),
+        "department": department_name_ar,
+        "department_name_ar": department_name_ar,
+        "department_name_en": department_name_en,
+
+        "job_title_id": getattr(job_title, "id", None),
+        "job_title": job_title_name_ar,
+        "job_title_name_ar": job_title_name_ar,
+        "job_title_name_en": job_title_name_en,
+
+        "direct_manager_id": getattr(direct_manager, "id", None),
+        "direct_manager_name": _employee_display_name(direct_manager),
+
+        "worker_type": getattr(employee, "worker_type", "office") or "office",
+        "is_field_worker": bool(getattr(employee, "is_field_worker", False)),
+
+        "basic_salary": float(getattr(employee, "basic_salary", 0) or 0),
+        "currency": getattr(employee, "currency", "EGP") or "EGP",
+        "salary_payment_method": getattr(employee, "salary_payment_method", "cash") or "cash",
+        "bank_name": getattr(employee, "bank_name", "") or "",
+        "bank_account": getattr(employee, "bank_account", "") or "",
+        "iban": getattr(employee, "iban", "") or "",
+        "instapay_phone": getattr(employee, "instapay_phone", "") or "",
+        "wallet_phone": getattr(employee, "wallet_phone", "") or "",
+        "wallet_provider": getattr(employee, "wallet_provider", "") or "",
+
+        "has_insurance": bool(getattr(employee, "has_insurance", False)),
+        "insurance_number": getattr(employee, "insurance_number", "") or "",
+
+        "nationality": getattr(employee, "nationality", "") or "",
+        "marital_status": getattr(employee, "marital_status", "single") or "single",
+        "religion": getattr(employee, "religion", "") or "",
+        "contract_type": getattr(employee, "contract_type", "permanent") or "permanent",
+        "contract_end_date": _date_string(getattr(employee, "contract_end_date", None)),
+
+        "address": getattr(employee, "address", "") or "",
+        "city": getattr(employee, "city", "") or "",
+        "country": str(getattr(employee, "country", "EG") or "EG"),
+
+        "emergency_contact_name": getattr(employee, "emergency_contact_name", "") or "",
+        "emergency_contact_relation": getattr(employee, "emergency_contact_relation", "") or "",
+        "emergency_contact_phone": getattr(employee, "emergency_contact_phone", "") or "",
+
+        "status": getattr(employee, "status", "") or "",
+    }
+
+
+def _normalize_religion_value(value):
+    raw = str(value or "").strip().lower()
+    mapping = {
+        "": "",
+        "muslim": "muslim",
+        "مسلم": "muslim",
+        "islam": "muslim",
+        "christian": "christian",
+        "مسيحي": "christian",
+        "masihi": "christian",
+        "other": "other",
+        "أخرى": "other",
+        "اخرى": "other",
+    }
+    if raw in mapping:
+        return mapping[raw]
     return None
 
 
@@ -183,27 +340,13 @@ def manager_employees_simple(request):
         return Response({"success": False, "error": str(e)}, status=500)
 
 
-def _generate_username(phone, first_name_ar, company_id):
-    """Generate unique username"""
-    base = None
-    # Try phone as username if not exists
-    if phone:
-        clean_phone = re.sub(r'\D', '', phone)
-        if clean_phone:
-            base = f"emp{clean_phone[-7:]}"
-    if not base:
-        # Fallback random
-        base = f"emp{random.randint(10000, 99999)}"
-    
-    username = base
-    counter = 1
-    while User.objects.filter(username=username).exists():
-        username = f"{base}{counter}"
-        counter += 1
-        if counter > 100:
-            username = f"emp{random.randint(100000, 999999)}"
-            break
-    return username
+def _generate_username(phone, first_name_ar, company_id, last_name_ar="", national_id=""):
+    """توليد يوزر ذكي: اسم + حرفين + آخر 4 من القومي"""
+    full_name = f"{first_name_ar or ''} {last_name_ar or ''}".strip()
+    if not full_name:
+        full_name = "user"
+    nid = national_id or phone or "1234"
+    return generate_employee_username(full_name, nid)
 
 
 def _generate_password(phone=None):
@@ -310,7 +453,7 @@ def manager_create_employee(request):
         direct_manager_id = data.get("direct_manager_id")
         username_input = str(data.get("username", "")).strip()
         password_input = str(data.get("password", "")).strip()
-        employee_code_input = str(data.get("employee_code", "")).strip()
+        employee_code_input = ""
 
         # Optional extra fields
         first_name_en       = str(data.get("first_name_en", "")).strip()
@@ -335,16 +478,26 @@ def manager_create_employee(request):
         language            = str(data.get("language", "ar")).strip()
 
         # Payment method fields
-        salary_payment_method      = str(data.get("salary_payment_method", "none")).strip()
+        salary_payment_method      = str(data.get("salary_payment_method", "cash")).strip()
         instapay_phone             = str(data.get("instapay_phone", "")).strip()
         wallet_phone               = str(data.get("wallet_phone", "")).strip()
         wallet_provider            = str(data.get("wallet_provider", "")).strip()
+
+        worker_type = str(data.get("worker_type", "office")).strip()
+        if worker_type not in ("office", "field_free", "field_assigned"):
+            return Response({"success": False, "error": "قيمة نوع الموظف غير صحيحة"}, status=400)
 
         # Validation details
         if len(first_name_ar) < 2:
             return Response({"success": False, "error": "الاسم الأول قصير جداً"}, status=400)
         if len(last_name_ar) < 2:
             return Response({"success": False, "error": "الاسم الأخير قصير جداً"}, status=400)
+
+        if len(first_name_en) < 2:
+            return Response({"success": False, "error": "الاسم الأول بالإنجليزية إجباري ويجب ألا يقل عن حرفين"}, status=400)
+
+        if len(last_name_en) < 2:
+            return Response({"success": False, "error": "الاسم الأخير بالإنجليزية إجباري ويجب ألا يقل عن حرفين"}, status=400)
 
         # Phone validation Egyptian format (basic)
         clean_phone = re.sub(r'\D', '', phone)
@@ -385,12 +538,12 @@ def manager_create_employee(request):
         from employees.models import Employee, JobTitle
 
         try:
-            branch = Branch.objects.get(id=branch_id, company=company)
+            branch = Branch._base_manager.get(id=branch_id, company=company)
         except Branch.DoesNotExist:
             return Response({"success": False, "error": f"الفرع غير موجود أو لا ينتمي لشركتك (id={branch_id})"}, status=400)
 
         try:
-            department = Department.objects.get(id=department_id, company=company)
+            department = Department._base_manager.get(id=department_id, company=company)
         except Department.DoesNotExist:
             return Response({"success": False, "error": f"القسم غير موجود أو لا ينتمي لشركتك (id={department_id})"}, status=400)
 
@@ -485,6 +638,7 @@ def manager_create_employee(request):
                 department=department,
                 job_title=job_title,
                 direct_manager=direct_manager,
+                worker_type=worker_type,
                 basic_salary=basic_salary_val,
                 currency=currency if currency else "EGP",
                 language=language if language in ("ar", "en") else "ar",
@@ -506,12 +660,16 @@ def manager_create_employee(request):
                 first_name_en=first_name_en if first_name_en else None,
                 last_name_en=last_name_en if last_name_en else None,
                 country=country if country else "EG",
-                salary_payment_method=salary_payment_method if salary_payment_method in ("none","bank","instapay","wallet") else "none",
+                salary_payment_method=salary_payment_method if salary_payment_method in ("cash","bank","instapay","wallet") else "cash",
                 instapay_phone=instapay_phone if instapay_phone else None,
                 wallet_phone=wallet_phone if wallet_phone else None,
                 wallet_provider=wallet_provider if wallet_provider else None,
                 status="active",
             )
+
+            if hasattr(employee, "is_field_worker"):
+                employee.is_field_worker = worker_type in ("field_free", "field_assigned")
+                employee.save(update_fields=["is_field_worker"])
 
         # Prepare response with credentials for PDF
         full_name_ar = f"{first_name_ar} {middle_name_ar + ' ' if middle_name_ar else ''}{last_name_ar}".strip()
@@ -539,9 +697,12 @@ def manager_create_employee(request):
                 "job_title": job_title.name_ar,
                 "job_title_id": job_title.id,
                 "direct_manager": direct_manager.full_name_ar if direct_manager else None,
+                "direct_manager_id": direct_manager.id if direct_manager else None,
+                "worker_type": getattr(employee, "worker_type", "office"),
+                "is_field_worker": bool(getattr(employee, "is_field_worker", False)),
                 "basic_salary": float(employee.basic_salary or 0),
                 "currency": employee.currency,
-                "country": getattr(employee, "country", "EG"),
+                "country": str(getattr(employee, "country", "EG")),
                 "salary_payment_method": getattr(employee, "salary_payment_method", "none"),
                 "instapay_phone": getattr(employee, "instapay_phone", ""),
                 "wallet_phone": getattr(employee, "wallet_phone", ""),
@@ -595,7 +756,7 @@ def manager_reset_employee_password(request, employee_id):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        requester_employee = Employee._base_manager.select_related("company").filter(user=request.user).first()
+        requester_company = _get_company(request)
 
         allowed_groups = {"company_admin", "hr_manager", "super_admin"}
         is_allowed = request.user.is_superuser or (request.user.role in allowed_groups)
@@ -607,13 +768,13 @@ def manager_reset_employee_password(request, employee_id):
             )
 
         if not request.user.is_superuser:
-            if not requester_employee or not requester_employee.company_id:
+            if not requester_company:
                 return Response(
                     {"success": False, "error": "تعذر تحديد شركة المستخدم الحالي"},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
-            if target_employee.company_id != requester_employee.company_id:
+            if target_employee.company_id != requester_company.id:
                 return Response(
                     {"success": False, "error": "لا يمكنك إدارة موظف من شركة أخرى"},
                     status=status.HTTP_403_FORBIDDEN
@@ -676,22 +837,28 @@ def manager_reset_employee_password(request, employee_id):
         )
 
 
-@api_view(["PATCH", "PUT"])
+@api_view(["PUT", "PATCH"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_update_employee(request, employee_id):
     try:
-        from employees.models import Employee
-        target_employee = Employee._base_manager.select_related("user", "company").filter(id=employee_id).first()
+        from companies.models import Branch, Department
+        from employees.models import Employee, JobTitle
+
+        target_employee = Employee._base_manager.select_related(
+            "user", "company", "branch", "department", "job_title", "direct_manager__user"
+        ).filter(id=employee_id).first()
+
         if not target_employee:
             return Response(
                 {"success": False, "error": "الموظف غير موجود"},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        requester_employee = Employee._base_manager.select_related("company").filter(user=request.user).first()
+        requester_company = _get_company(request)
 
         allowed_groups = {"company_admin", "hr_manager", "super_admin"}
-        is_allowed = request.user.is_superuser or (request.user.role in allowed_groups)
+        is_allowed = request.user.is_superuser or (getattr(request.user, "role", None) in allowed_groups)
 
         if not is_allowed:
             return Response(
@@ -700,111 +867,276 @@ def manager_update_employee(request, employee_id):
             )
 
         if not request.user.is_superuser:
-            if not requester_employee or not requester_employee.company_id:
+            if not requester_company:
                 return Response(
                     {"success": False, "error": "تعذر تحديد شركة المستخدم الحالي"},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
-            if target_employee.company_id != requester_employee.company_id:
+            if target_employee.company_id != requester_company.id:
                 return Response(
                     {"success": False, "error": "لا يمكنك تعديل موظف من شركة أخرى"},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
-        phone = (request.data.get("phone") or "").strip()
-        email = (request.data.get("email") or "").strip()
-        address = (request.data.get("address") or "").strip()
-        bank_name = (request.data.get("bank_name") or "").strip()
-        bank_account = (request.data.get("bank_account") or "").strip()
-        iban = (request.data.get("iban") or "").strip()
-        worker_type = (request.data.get("worker_type") or "").strip()
+        company = target_employee.company
+        data = request.data
 
-        if phone:
-            clean_phone = ''.join(ch for ch in phone if ch.isdigit())
-            if len(clean_phone) < 10 or len(clean_phone) > 15:
-                return Response(
-                    {"success": False, "error": "رقم الموبايل يجب أن يكون من 10 إلى 15 رقم"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        current_branch = getattr(target_employee, "branch", None)
+        current_department = getattr(target_employee, "department", None)
+        current_job_title = getattr(target_employee, "job_title", None)
+        current_direct_manager = getattr(target_employee, "direct_manager", None)
 
-            phone_conflict = Employee._base_manager.filter(
-                company_id=target_employee.company_id,
-                phone=phone
-            ).exclude(id=target_employee.id).exists()
+        first_name_ar = str(data.get("first_name_ar", getattr(target_employee, "first_name_ar", "") or "")).strip()
+        middle_name_ar = str(data.get("middle_name_ar", getattr(target_employee, "middle_name_ar", "") or "")).strip()
+        last_name_ar = str(data.get("last_name_ar", getattr(target_employee, "last_name_ar", "") or "")).strip()
+        first_name_en = str(data.get("first_name_en", getattr(target_employee, "first_name_en", "") or "")).strip()
+        last_name_en = str(data.get("last_name_en", getattr(target_employee, "last_name_en", "") or "")).strip()
 
-            if phone_conflict:
-                return Response(
-                    {"success": False, "error": "رقم الموبايل مستخدم بالفعل داخل نفس الشركة"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        phone = str(data.get("phone", getattr(target_employee, "phone", "") or "")).strip()
+        phone2 = str(data.get("phone2", getattr(target_employee, "phone2", "") or "")).strip()
+        email = str(data.get("email", getattr(target_employee, "email", "") or "")).strip()
+        national_id = str(data.get("national_id", getattr(target_employee, "national_id", "") or "")).strip()
 
-        update_fields = []
+        birth_date_default = getattr(target_employee, "birth_date", None)
+        hire_date_default = getattr(target_employee, "hire_date", None)
+        contract_end_date_default = getattr(target_employee, "contract_end_date", None)
 
-        if hasattr(target_employee, "phone"):
+        birth_date_str = str(data.get("birth_date", birth_date_default.isoformat() if birth_date_default else "") or "").strip()
+        hire_date_str = str(data.get("hire_date", hire_date_default.isoformat() if hire_date_default else "") or "").strip()
+
+        gender = str(data.get("gender", getattr(target_employee, "gender", "male") or "male")).strip().lower()
+        marital_status = str(data.get("marital_status", getattr(target_employee, "marital_status", "single") or "single")).strip().lower()
+        religion_raw = str(data.get("religion", getattr(target_employee, "religion", "") or "")).strip()
+        religion = _normalize_religion_value(religion_raw)
+
+        branch_id = data.get("branch_id", getattr(current_branch, "id", None))
+        department_id = data.get("department_id", getattr(current_department, "id", None))
+        job_title_id = data.get("job_title_id", getattr(current_job_title, "id", None))
+        direct_manager_id = data.get("direct_manager_id", getattr(current_direct_manager, "id", None))
+
+        worker_type = str(data.get("worker_type", getattr(target_employee, "worker_type", "office") or "office")).strip()
+        contract_type = str(data.get("contract_type", getattr(target_employee, "contract_type", "permanent") or "permanent")).strip()
+        contract_end_date_str = str(data.get("contract_end_date", contract_end_date_default.isoformat() if contract_end_date_default else "") or "").strip()
+
+        basic_salary_raw = data.get("basic_salary", getattr(target_employee, "basic_salary", 0) or 0)
+        salary_payment_method = str(
+            data.get("salary_payment_method", getattr(target_employee, "salary_payment_method", "cash") or "cash")
+        ).strip().lower()
+
+        bank_name = str(data.get("bank_name", getattr(target_employee, "bank_name", "") or "")).strip()
+        bank_account = str(data.get("bank_account", getattr(target_employee, "bank_account", "") or "")).strip()
+        iban = str(data.get("iban", getattr(target_employee, "iban", "") or "")).strip()
+        instapay_phone = str(data.get("instapay_phone", getattr(target_employee, "instapay_phone", "") or "")).strip()
+        wallet_phone = str(data.get("wallet_phone", getattr(target_employee, "wallet_phone", "") or "")).strip()
+        wallet_provider = str(data.get("wallet_provider", getattr(target_employee, "wallet_provider", "") or "")).strip()
+
+        has_insurance_raw = data.get("has_insurance", getattr(target_employee, "has_insurance", False))
+        if isinstance(has_insurance_raw, bool):
+            has_insurance = has_insurance_raw
+        else:
+            has_insurance = str(has_insurance_raw).strip().lower() in {"1", "true", "yes", "on", "نعم"}
+
+        insurance_number = str(data.get("insurance_number", getattr(target_employee, "insurance_number", "") or "")).strip()
+
+        nationality = str(data.get("nationality", getattr(target_employee, "nationality", "") or "")).strip()
+        address = str(data.get("address", getattr(target_employee, "address", "") or "")).strip()
+        city = str(data.get("city", getattr(target_employee, "city", "") or "")).strip()
+        country = str(data.get("country", getattr(target_employee, "country", "EG") or "EG")).strip()
+        currency = str(data.get("currency", getattr(target_employee, "currency", "EGP") or "EGP")).strip()
+        language = str(data.get("language", getattr(target_employee, "language", "ar") or "ar")).strip()
+
+        if len(first_name_ar) < 2:
+            return Response({"success": False, "error": "الاسم الأول قصير جداً"}, status=400)
+
+        if len(last_name_ar) < 2:
+            return Response({"success": False, "error": "الاسم الأخير قصير جداً"}, status=400)
+
+        if len(first_name_en) < 2:
+            return Response({"success": False, "error": "الاسم الأول بالإنجليزية إجباري ويجب ألا يقل عن حرفين"}, status=400)
+
+        if len(last_name_en) < 2:
+            return Response({"success": False, "error": "الاسم الأخير بالإنجليزية إجباري ويجب ألا يقل عن حرفين"}, status=400)
+
+        clean_phone = re.sub(r"\D", "", phone)
+        if len(clean_phone) < 10 or len(clean_phone) > 15:
+            return Response({"success": False, "error": "رقم الموبايل غير صحيح (يجب أن يكون 10-15 رقم)"}, status=400)
+
+        if not national_id.isdigit() or len(national_id) != 14:
+            return Response({"success": False, "error": "الرقم القومي يجب أن يكون 14 رقم"}, status=400)
+
+        if email and "@" not in email:
+            return Response({"success": False, "error": "البريد الإلكتروني غير صحيح"}, status=400)
+
+        if gender not in ("male", "female"):
+            gender = "male"
+
+        if marital_status not in ("single", "married", "divorced", "widowed"):
+            return Response({"success": False, "error": "الحالة الاجتماعية غير صحيحة"}, status=400)
+
+        if religion is None:
+            return Response({"success": False, "error": "قيمة الديانة غير صحيحة"}, status=400)
+
+        if worker_type not in ("office", "field_free", "field_assigned"):
+            return Response({"success": False, "error": "قيمة نوع الموظف غير صحيحة"}, status=400)
+
+        if contract_type not in ("permanent", "temporary", "training", "freelance", "part_time"):
+            return Response({"success": False, "error": "نوع العقد غير صحيح"}, status=400)
+
+        if salary_payment_method not in ("cash", "bank", "instapay", "wallet"):
+            return Response({"success": False, "error": "طريقة القبض غير صحيحة"}, status=400)
+
+        try:
+            birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d").date()
+        except Exception:
+            return Response({"success": False, "error": "تاريخ الميلاد غير صحيح، استخدم YYYY-MM-DD"}, status=400)
+
+        try:
+            hire_date = datetime.strptime(hire_date_str, "%Y-%m-%d").date()
+        except Exception:
+            return Response({"success": False, "error": "تاريخ التعيين غير صحيح، استخدم YYYY-MM-DD"}, status=400)
+
+        contract_end_date = None
+        if contract_end_date_str:
+            try:
+                contract_end_date = datetime.strptime(contract_end_date_str, "%Y-%m-%d").date()
+            except Exception:
+                return Response({"success": False, "error": "تاريخ نهاية العقد غير صحيح، استخدم YYYY-MM-DD"}, status=400)
+
+        try:
+            basic_salary_val = float(basic_salary_raw) if str(basic_salary_raw).strip() else 0
+        except Exception:
+            return Response({"success": False, "error": "الراتب الأساسي غير صحيح"}, status=400)
+
+        try:
+            branch_id = int(branch_id)
+            department_id = int(department_id)
+            job_title_id = int(job_title_id)
+        except Exception:
+            return Response({"success": False, "error": "الفرع والقسم والمسمى الوظيفي مطلوبون"}, status=400)
+
+        try:
+            branch = Branch._base_manager.get(id=branch_id, company=company)
+        except Branch.DoesNotExist:
+            return Response({"success": False, "error": f"الفرع غير موجود أو لا ينتمي لشركتك (id={branch_id})"}, status=400)
+
+        try:
+            department = Department._base_manager.get(id=department_id, company=company)
+        except Department.DoesNotExist:
+            return Response({"success": False, "error": f"القسم غير موجود أو لا ينتمي لشركتك (id={department_id})"}, status=400)
+
+        try:
+            job_title = JobTitle._base_manager.get(id=job_title_id, company=company)
+        except JobTitle.DoesNotExist:
+            return Response({"success": False, "error": f"المسمى الوظيفي غير موجود (id={job_title_id})"}, status=400)
+
+        direct_manager = None
+        if direct_manager_id not in (None, "", "null"):
+            try:
+                direct_manager_id = int(direct_manager_id)
+                direct_manager = Employee._base_manager.get(id=direct_manager_id, company=company)
+            except Exception:
+                return Response({"success": False, "error": "المدير المباشر غير موجود"}, status=400)
+
+            if direct_manager.id == target_employee.id:
+                return Response({"success": False, "error": "لا يمكن أن يكون الموظف مديراً مباشراً لنفسه"}, status=400)
+
+        if Employee._base_manager.filter(company=company, national_id=national_id).exclude(id=target_employee.id).exists():
+            return Response({"success": False, "error": "الرقم القومي مسجل لموظف آخر في نفس الشركة"}, status=400)
+
+        if Employee._base_manager.filter(company=company, phone=phone).exclude(id=target_employee.id).exists():
+            return Response({"success": False, "error": "رقم الموبايل مستخدم بالفعل داخل نفس الشركة"}, status=400)
+
+        with transaction.atomic():
+            target_employee.first_name_ar = first_name_ar
+            target_employee.middle_name_ar = middle_name_ar or None
+            target_employee.last_name_ar = last_name_ar
+            target_employee.first_name_en = first_name_en
+            target_employee.last_name_en = last_name_en
+
             target_employee.phone = phone
-            update_fields.append("phone")
+            if hasattr(target_employee, "phone2"):
+                target_employee.phone2 = phone2 or None
+            target_employee.email = email or None
+            target_employee.national_id = national_id
+            target_employee.birth_date = birth_date
+            target_employee.gender = gender
+            target_employee.hire_date = hire_date
 
-        if hasattr(target_employee, "email"):
-            target_employee.email = email
-            update_fields.append("email")
+            target_employee.branch = branch
+            target_employee.department = department
+            target_employee.job_title = job_title
+            target_employee.direct_manager = direct_manager
 
-        if hasattr(target_employee, "address"):
-            target_employee.address = address
-            update_fields.append("address")
-
-        if hasattr(target_employee, "bank_name"):
-            target_employee.bank_name = bank_name
-            update_fields.append("bank_name")
-
-        if hasattr(target_employee, "bank_account"):
-            target_employee.bank_account = bank_account
-            update_fields.append("bank_account")
-
-        if hasattr(target_employee, "iban"):
-            target_employee.iban = iban
-            update_fields.append("iban")
-
-        if worker_type:
-            allowed_worker_types = {"office", "field_free", "field_assigned"}
-            if worker_type not in allowed_worker_types:
-                return Response(
-                    {"success": False, "error": "قيمة نوع الموظف غير صحيحة"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
             if hasattr(target_employee, "worker_type"):
                 target_employee.worker_type = worker_type
-                update_fields.append("worker_type")
+            if hasattr(target_employee, "is_field_worker"):
+                target_employee.is_field_worker = worker_type in ("field_free", "field_assigned")
 
-        if update_fields:
-            target_employee.save(update_fields=update_fields)
+            if hasattr(target_employee, "basic_salary"):
+                target_employee.basic_salary = basic_salary_val
+            if hasattr(target_employee, "currency"):
+                target_employee.currency = currency or "EGP"
+            if hasattr(target_employee, "language"):
+                target_employee.language = language if language in ("ar", "en") else "ar"
 
-        if getattr(target_employee, "user", None) and hasattr(target_employee.user, "email"):
-            target_employee.user.email = email
-            target_employee.user.save(update_fields=["email"])
+            if hasattr(target_employee, "nationality"):
+                target_employee.nationality = nationality or "مصري"
+            if hasattr(target_employee, "marital_status"):
+                target_employee.marital_status = marital_status
+            if hasattr(target_employee, "religion"):
+                target_employee.religion = religion or None
 
-        full_name = (
-            getattr(target_employee, "full_name_ar", "")
-            or getattr(target_employee, "full_name_en", "")
-            or getattr(target_employee, "full_name", "")
-            or target_employee.user.username
-        )
+            if hasattr(target_employee, "contract_type"):
+                target_employee.contract_type = contract_type
+            if hasattr(target_employee, "contract_end_date"):
+                target_employee.contract_end_date = contract_end_date
+
+            if hasattr(target_employee, "address"):
+                target_employee.address = address or None
+            if hasattr(target_employee, "city"):
+                target_employee.city = city or None
+            if hasattr(target_employee, "country"):
+                target_employee.country = country or "EG"
+
+            if hasattr(target_employee, "salary_payment_method"):
+                target_employee.salary_payment_method = salary_payment_method
+            if hasattr(target_employee, "bank_name"):
+                target_employee.bank_name = bank_name or None
+            if hasattr(target_employee, "bank_account"):
+                target_employee.bank_account = bank_account or None
+            if hasattr(target_employee, "iban"):
+                target_employee.iban = iban or None
+            if hasattr(target_employee, "instapay_phone"):
+                target_employee.instapay_phone = instapay_phone or None
+            if hasattr(target_employee, "wallet_phone"):
+                target_employee.wallet_phone = wallet_phone or None
+            if hasattr(target_employee, "wallet_provider"):
+                target_employee.wallet_provider = wallet_provider or None
+
+            if hasattr(target_employee, "has_insurance"):
+                target_employee.has_insurance = has_insurance
+            if hasattr(target_employee, "insurance_number"):
+                target_employee.insurance_number = insurance_number or None
+
+            target_employee.save()
+
+            if getattr(target_employee, "user", None):
+                user = target_employee.user
+                if hasattr(user, "first_name"):
+                    user.first_name = first_name_ar
+                if hasattr(user, "last_name"):
+                    user.last_name = last_name_ar
+                if hasattr(user, "email"):
+                    user.email = email or ""
+                if hasattr(user, "phone"):
+                    user.phone = phone
+                user.save()
 
         return Response({
             "success": True,
-            "message": f"تم تحديث بيانات {full_name} بنجاح",
-            "employee": {
-                "id": target_employee.id,
-                "employee_code": getattr(target_employee, "employee_code", ""),
-                "full_name": full_name,
-                "phone": getattr(target_employee, "phone", ""),
-                "email": getattr(target_employee, "email", ""),
-                "address": getattr(target_employee, "address", ""),
-                "bank_name": getattr(target_employee, "bank_name", ""),
-                "bank_account": getattr(target_employee, "bank_account", ""),
-                "iban": getattr(target_employee, "iban", ""),
-                "worker_type": getattr(target_employee, "worker_type", ""),
-            }
+            "message": "تم حفظ التعديلات بنجاح",
+            "employee_id": target_employee.id,
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
@@ -1386,3 +1718,336 @@ def manager_upload_company_logo(request):
 
     except Exception as e:
         return Response({'success': False, 'error': str(e)}, status=500)
+
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_employee_managers(request):
+    err = _check_manager(request)
+    if err:
+        return err
+
+    try:
+        from django.db.models import Q
+        from employees.models import Employee
+
+        def _display_name(emp):
+            for attr in ("full_name_ar", "full_name_en", "full_name"):
+                val = getattr(emp, attr, None)
+                if val:
+                    val = str(val).strip()
+                    if val:
+                        return val
+            parts = [
+                getattr(emp, "first_name_ar", "") or "",
+                getattr(emp, "middle_name_ar", "") or "",
+                getattr(emp, "last_name_ar", "") or "",
+            ]
+            name = " ".join([x for x in parts if x]).strip()
+            if name:
+                return name
+            user = getattr(emp, "user", None)
+            return getattr(user, "username", "") if user else ""
+
+        company = _get_company(request)
+        if not company:
+            return Response({"success": False, "error": "لا توجد شركة مرتبطة"}, status=400)
+
+        search = (request.GET.get("search") or "").strip()
+        exclude_employee_id = request.GET.get("exclude_employee_id") or request.GET.get("employee_id")
+
+        qs = Employee._base_manager.select_related("user", "department", "job_title").filter(company=company)
+
+        try:
+            qs = qs.filter(status="active")
+        except Exception:
+            pass
+
+        qs = qs.filter(user__role__in=["manager", "hr_manager", "company_admin"])
+
+        try:
+            visible_ids = list(get_visible_employees_qs(request.user).values_list("id", flat=True))
+            qs = qs.filter(id__in=visible_ids)
+        except Exception:
+            pass
+
+        if exclude_employee_id:
+            try:
+                qs = qs.exclude(id=int(exclude_employee_id))
+            except Exception:
+                pass
+
+        if search:
+            qs = qs.filter(
+                Q(first_name_ar__icontains=search) |
+                Q(middle_name_ar__icontains=search) |
+                Q(last_name_ar__icontains=search) |
+                Q(first_name_en__icontains=search) |
+                Q(last_name_en__icontains=search) |
+                Q(employee_code__icontains=search) |
+                Q(user__username__icontains=search)
+            )
+
+        results = []
+        for emp in qs.order_by("first_name_ar", "middle_name_ar", "last_name_ar", "employee_code")[:500]:
+            results.append({
+                "id": emp.id,
+                "employee_code": getattr(emp, "employee_code", "") or "",
+                "full_name": _display_name(emp),
+                "department_name_ar": getattr(getattr(emp, "department", None), "name_ar", "") or "",
+                "job_title_name_ar": (
+                    getattr(getattr(emp, "job_title", None), "name_ar", "")
+                    or getattr(getattr(emp, "job_title", None), "title", "")
+                    or ""
+                ),
+                "worker_type": getattr(emp, "worker_type", "office") or "office",
+                "user_role": getattr(getattr(emp, "user", None), "role", "") or "",
+            })
+
+        return Response({
+            "success": True,
+            "results": results,
+            "count": len(results),
+        }, status=200)
+
+    except Exception as e:
+        logger.exception("manager_employee_managers error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
+# ═══════════════════════════════════════════════════
+# Hierarchy Tree — الهيكل الهرمي (حسب direct_manager)
+# ═══════════════════════════════════════════════════
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_hierarchy_tree(request):
+    """
+    الهيكل الهرمي للشركة (حسب direct_manager)
+    
+    Returns:
+    {
+        "root": [
+            {
+                "id": 1,
+                "name": "صاحب الشركة",
+                "job_title": "CEO",
+                "employee_code": "EMP001",
+                "photo": null,
+                "children": [
+                    {
+                        "id": 2,
+                        "name": "مدير 1",
+                        "children": [ ... ]
+                    }
+                ]
+            }
+        ]
+    }
+    """
+    try:
+        from employees.models import Employee
+        
+        company = getattr(request.user, "company", None)
+        if not company:
+            return Response(
+                {"success": False, "error": "المستخدم غير مرتبط بشركة"},
+                status=400
+            )
+        
+        # كل الموظفين النشطين
+        all_emps = Employee._base_manager.filter(
+            company=company,
+            status="active"
+        ).select_related("user", "job_title", "department", "branch", "direct_manager")
+        
+        # نبني dict للسرعة
+        emp_dict = {e.id: e for e in all_emps}
+        
+        # نجمع الأبناء لكل مدير
+        children_map = {}
+        for e in all_emps:
+            if e.direct_manager_id:
+                children_map.setdefault(e.direct_manager_id, []).append(e)
+        
+        def serialize(emp):
+            children = children_map.get(emp.id, [])
+            # ترتيب: المديرين اللي عندهم فريق الأول
+            children_sorted = sorted(
+                children,
+                key=lambda x: (
+                    0 if children_map.get(x.id) else 1,
+                    x.first_name_ar or ""
+                )
+            )
+            
+            job_title_ar = ""
+            job_title_en = ""
+            try:
+                if emp.job_title:
+                    job_title_ar = emp.job_title.title or ""
+                    job_title_en = getattr(emp.job_title, 'title_en', '') or ""
+            except Exception:
+                pass
+            
+            return {
+                "id": emp.id,
+                "name_ar": f"{emp.first_name_ar or ''} {emp.last_name_ar or ''}".strip(),
+                "name_en": f"{emp.first_name_en or ''} {emp.last_name_en or ''}".strip(),
+                "employee_code": emp.employee_code or "",
+                "job_title_ar": job_title_ar,
+                "job_title_en": job_title_en,
+                "department": (getattr(emp.department, "name_ar", "") or getattr(emp.department, "name_en", "") or "") if emp.department else "",
+                "branch": (getattr(emp.branch, "name_ar", "") or getattr(emp.branch, "name_en", "") or "") if emp.branch else "",
+                "photo": None,
+                "role": getattr(emp.user, "role", "employee") if emp.user else "employee",
+                "team_size": len(children_map.get(emp.id, [])),
+                "children": [serialize(c) for c in children_sorted]
+            }
+        
+        # الجذور = اللي مالهمش direct_manager
+        roots = [e for e in all_emps if not e.direct_manager_id]
+        roots_sorted = sorted(
+            roots,
+            key=lambda x: (
+                0 if children_map.get(x.id) else 1,
+                x.first_name_ar or ""
+            )
+        )
+        
+        return Response({
+            "success": True,
+            "company_name": getattr(company, "name_ar", "") or getattr(company, "name_en", "") or str(company),
+            "total_employees": all_emps.count(),
+            "root": [serialize(r) for r in roots_sorted]
+        })
+    
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {"success": False, "error": str(e)},
+            status=500
+        )
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_employee_detail(request, employee_id):
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        from employees.models import Employee, JobTitle
+        from companies.models import Branch, Department
+
+        company = _get_company(request)
+        if not company:
+            return Response({"success": False, "error": "لا توجد شركة مرتبطة"}, status=400)
+
+        employee = Employee._base_manager.select_related(
+            "user", "company", "branch", "department", "job_title", "direct_manager__user"
+        ).filter(id=employee_id, company=company).first()
+
+        if not employee:
+            return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
+
+        branch = getattr(employee, "branch", None)
+        dept = getattr(employee, "department", None)
+        jt = getattr(employee, "job_title", None)
+        dm = getattr(employee, "direct_manager", None)
+
+        def _dn(emp):
+            if not emp:
+                return ""
+            for a in ("full_name_ar", "full_name_en", "full_name"):
+                v = getattr(emp, a, None)
+                if v and str(v).strip():
+                    return str(v).strip()
+            parts = [getattr(emp, "first_name_ar", "") or "", getattr(emp, "middle_name_ar", "") or "", getattr(emp, "last_name_ar", "") or ""]
+            n = " ".join([x for x in parts if x]).strip()
+            if n:
+                return n
+            u = getattr(emp, "user", None)
+            return getattr(u, "username", "") if u else ""
+
+        def _ds(val):
+            return val.isoformat() if val else ""
+
+        data = {
+            "id": employee.id,
+            "employee_code": getattr(employee, "employee_code", "") or "",
+            "first_name_ar": getattr(employee, "first_name_ar", "") or "",
+            "middle_name_ar": getattr(employee, "middle_name_ar", "") or "",
+            "last_name_ar": getattr(employee, "last_name_ar", "") or "",
+            "first_name_en": getattr(employee, "first_name_en", "") or "",
+            "last_name_en": getattr(employee, "last_name_en", "") or "",
+            "full_name_ar": _dn(employee),
+            "full_name": _dn(employee),
+            "phone": getattr(employee, "phone", "") or "",
+            "phone2": getattr(employee, "phone2", "") or "",
+            "email": getattr(employee, "email", "") or "",
+            "national_id": getattr(employee, "national_id", "") or "",
+            "birth_date": _ds(getattr(employee, "birth_date", None)),
+            "gender": getattr(employee, "gender", "") or "",
+            "marital_status": getattr(employee, "marital_status", "") or "",
+            "hire_date": _ds(getattr(employee, "hire_date", None)),
+            "address": getattr(employee, "address", "") or "",
+            "city": getattr(employee, "city", "") or "",
+            "country": str(getattr(employee, "country", "EG") or "EG"),
+            "nationality": getattr(employee, "nationality", "") or "",
+            "religion": getattr(employee, "religion", "") or "",
+            "language": getattr(employee, "language", "ar") or "ar",
+            "currency": getattr(employee, "currency", "EGP") or "EGP",
+
+            "branch_id": getattr(branch, "id", None),
+            "branch": getattr(branch, "name_ar", "") or "",
+            "branch_name_en": getattr(branch, "name_en", "") or "",
+            "department_id": getattr(dept, "id", None),
+            "department": getattr(dept, "name_ar", "") or "",
+            "department_name_en": getattr(dept, "name_en", "") or "",
+            "job_title_id": getattr(jt, "id", None),
+            "job_title": getattr(jt, "name_ar", "") or getattr(jt, "title", "") or "",
+            "job_title_name_en": getattr(jt, "name_en", "") or getattr(jt, "title_en", "") or "",
+            "direct_manager_id": getattr(dm, "id", None),
+            "direct_manager_name": _dn(dm),
+
+            "worker_type": getattr(employee, "worker_type", "office") or "office",
+            "is_field_worker": bool(getattr(employee, "is_field_worker", False)),
+            "status": getattr(employee, "status", "") or "",
+
+            "basic_salary": float(getattr(employee, "basic_salary", 0) or 0),
+            "salary_payment_method": getattr(employee, "salary_payment_method", "cash") or "cash",
+            "bank_name": getattr(employee, "bank_name", "") or "",
+            "bank_account": getattr(employee, "bank_account", "") or "",
+            "iban": getattr(employee, "iban", "") or "",
+            "instapay_phone": getattr(employee, "instapay_phone", "") or "",
+            "wallet_phone": getattr(employee, "wallet_phone", "") or "",
+            "wallet_provider": getattr(employee, "wallet_provider", "") or "",
+
+            "contract_type": getattr(employee, "contract_type", "permanent") or "permanent",
+            "contract_start_date": _ds(getattr(employee, "contract_start_date", None)),
+            "contract_end_date": _ds(getattr(employee, "contract_end_date", None)),
+            "contract_duration_months": getattr(employee, "contract_duration_months", None),
+
+            "has_insurance": bool(getattr(employee, "has_insurance", False)),
+            "insurance_number": getattr(employee, "insurance_number", "") or "",
+            "insurance_date": _ds(getattr(employee, "insurance_date", None)),
+
+            "emergency_contact_name": getattr(employee, "emergency_contact_name", "") or "",
+            "emergency_contact_relation": getattr(employee, "emergency_contact_relation", "") or "",
+            "emergency_contact_phone": getattr(employee, "emergency_contact_phone", "") or "",
+
+            "username": getattr(getattr(employee, "user", None), "username", "") or "",
+            "user_role": getattr(getattr(employee, "user", None), "role", "") or "",
+        }
+
+        return Response({"success": True, "employee": data}, status=200)
+
+    except Exception as e:
+        logger.exception("manager_employee_detail error")
+        return Response({"success": False, "error": str(e)}, status=500)
+

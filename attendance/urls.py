@@ -10,7 +10,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenVerifyView,
 )
-from .api_employee_management import manager_reset_employee_password, employee_save_location, manager_get_location_report, manager_update_company_info, manager_upload_company_logo, manager_update_employee, manager_company_info, manager_transfer_employee, manager_organization_tree
+from .api_employee_management import manager_reset_employee_password, employee_save_location, manager_get_location_report, manager_update_company_info, manager_upload_company_logo, manager_update_employee, manager_company_info, manager_transfer_employee, manager_organization_tree, manager_hierarchy_tree
 from . import views
 from .api_field_visits import (
     field_visit_start,
@@ -33,6 +33,18 @@ from .api_work_locations import (
 from . import api_mobile
 from . import api_mobile_requests
 from .api_company_allowance_policy import allowance_policies_list, allowance_policy_detail
+from .api_insurance import insurance_policies_list, insurance_policy_detail, employee_insurances
+from .api_payroll_cycle import payroll_cycle_list, payroll_cycle_detail
+from .api_rules import penalty_list, penalty_detail, bonus_list, bonus_detail, allowance_list, allowance_detail
+from .api_leave_rule import leave_rule_list, leave_rule_detail
+from .api_tax_policy import tax_policy_list, tax_policy_detail, tax_calculate
+from .api_eos_policy import eos_policy_list, eos_policy_detail, eos_calculate
+from .api_manual_entries import (
+    manual_penalty_list, manual_penalty_detail, manual_penalty_approve, manual_penalty_reject,
+    manual_bonus_list, manual_bonus_detail, manual_bonus_approve, manual_bonus_reject,
+    manual_allowance_list, manual_allowance_detail, manual_allowance_approve, manual_allowance_reject,
+    manual_entries_summary,
+)
 from .api_general_policies import deduction_policies_list, deduction_policy_detail, bonus_policies_list, bonus_policy_detail
 
 app_name = 'attendance'
@@ -106,6 +118,8 @@ urlpatterns = [
 
     # Leaves & Requests APIs
     path('api/mobile/leave-types/', api_mobile_requests.mobile_leave_types, name='mobile_leave_types'),
+    path('api/mobile/hr/leave-types/', api_mobile_requests.hr_leave_types, name='hr_leave_types'),
+    path('api/mobile/hr/create-leave/', api_mobile_requests.hr_create_leave, name='hr_create_leave'),
     path('api/mobile/leave-request/', api_mobile_requests.mobile_leave_request, name='mobile_leave_request'),
     path('api/mobile/leave-recall/create/', api_mobile_requests.create_leave_recall, name='create_leave_recall'),
     path('api/mobile/leave-recall/<int:recall_id>/review/', api_mobile_requests.review_leave_recall, name='review_leave_recall'),
@@ -123,6 +137,8 @@ urlpatterns = [
     path('api/mobile/manager/route/', api_mobile_requests.mobile_manager_employee_route, name='mobile_manager_employee_route'),
     path('api/mobile/geofence/', mobile_geofence_get, name='mobile_geofence_get'),
     path('api/mobile/geofence/set/', mobile_geofence_set, name='mobile_geofence_set'),
+    path('api/mobile/manager/geofence/', mobile_geofence_get, name='mobile_manager_geofence_get'),
+    path('api/mobile/manager/geofence/set/', mobile_geofence_set, name='mobile_manager_geofence_set'),
     path('api/mobile/fcm-token/', mobile_fcm_token_register, name='mobile_fcm_token_register'),
     path('api/mobile/fcm-token/delete/', mobile_fcm_token_delete, name='mobile_fcm_token_delete'),
     path('api/mobile/notifications/', api_mobile.mobile_notifications_list, name='mobile_notifications_list'),
@@ -255,12 +271,15 @@ urlpatterns += [
     path('api/mobile/manager/job-titles/', api_employee_management.manager_job_titles),
     path('api/mobile/manager/employees/simple/', api_employee_management.manager_employees_simple),
     path('api/mobile/manager/employees/create/', api_employee_management.manager_create_employee),
+    path('api/mobile/manager/employees/managers/', api_employee_management.manager_employee_managers),
+    path('api/mobile/manager/employees/<int:employee_id>/', api_employee_management.manager_employee_detail),
     path('api/mobile/manager/employees/<int:employee_id>/update/', manager_update_employee),
 
     path('api/mobile/manager/employees/<int:employee_id>/reset-password/', manager_reset_employee_password),
     path('api/mobile/manager/company-info/', manager_company_info),
     path('api/mobile/manager/employees/<int:employee_id>/transfer/', manager_transfer_employee),
     path('api/mobile/manager/organization-tree/', manager_organization_tree),
+    path('api/mobile/manager/hierarchy-tree/', manager_hierarchy_tree),
     path('api/mobile/manager/company-info/update/', manager_update_company_info),
     path('api/mobile/manager/company-info/upload-logo/', manager_upload_company_logo),
 ]
@@ -552,11 +571,13 @@ urlpatterns += [
 from .api_reports import (
     leaves_report_enhanced,
     shifts_report,
+    location_tracking_report,
 )
 
 urlpatterns += [
     path('api/mobile/manager/reports/leaves-enhanced/', leaves_report_enhanced, name='reports-leaves-enhanced'),
     path('api/mobile/manager/reports/shifts/', shifts_report, name='reports-shifts'),
+    path('api/mobile/manager/reports/location-tracking/', location_tracking_report, name='location-tracking-report'),
 
     # ═══════════════════════════════════════════════════
     # Field Visits Mobile APIs (زيارات ميدانية بدون موافقات)
@@ -588,6 +609,52 @@ urlpatterns += [
     # ═══════════════════════════════════════════════════
     path('api/mobile/manager/allowance-policies/', allowance_policies_list, name='allowance_policies_list'),
     path('api/mobile/manager/allowance-policies/<int:policy_id>/', allowance_policy_detail, name='allowance_policy_detail'),
+
+    # Insurance Policies (Social + Medical)
+    path('api/mobile/manager/insurance-policies/', insurance_policies_list, name='insurance_policies_list'),
+    path('api/mobile/manager/insurance-policies/<int:policy_id>/', insurance_policy_detail, name='insurance_policy_detail'),
+    path('api/mobile/manager/employees/<int:employee_id>/insurances/', employee_insurances, name='employee_insurances'),
+
+    # Payroll Cycle Policies
+    path('api/mobile/manager/payroll-cycle-policies/', payroll_cycle_list, name='payroll_cycle_list'),
+    path('api/mobile/manager/payroll-cycle-policies/<int:policy_id>/', payroll_cycle_detail, name='payroll_cycle_detail'),
+    # Rules (Penalty + Bonus + Allowance) - New with Tiers
+    path('api/mobile/manager/rules/penalty/', penalty_list, name='penalty_list'),
+    path('api/mobile/manager/rules/penalty/<int:rule_id>/', penalty_detail, name='penalty_detail'),
+    path('api/mobile/manager/rules/bonus/', bonus_list, name='bonus_list'),
+    path('api/mobile/manager/rules/bonus/<int:rule_id>/', bonus_detail, name='bonus_detail'),
+    path('api/mobile/manager/rules/allowance/', allowance_list, name='allowance_list'),
+    path('api/mobile/manager/rules/allowance/<int:rule_id>/', allowance_detail, name='allowance_detail'),
+    # Leave Rules
+    path('api/mobile/manager/rules/leave/', leave_rule_list, name='leave_rule_list'),
+    path('api/mobile/manager/rules/leave/<int:rule_id>/', leave_rule_detail, name='leave_rule_detail'),
+    # Manual Entries
+    path('api/mobile/manager/entries/summary/', manual_entries_summary, name='manual_entries_summary'),
+    path('api/mobile/manager/entries/penalty/', manual_penalty_list, name='manual_penalty_list'),
+    path('api/mobile/manager/entries/penalty/<int:entry_id>/', manual_penalty_detail, name='manual_penalty_detail'),
+    path('api/mobile/manager/entries/penalty/<int:entry_id>/approve/', manual_penalty_approve, name='manual_penalty_approve'),
+    path('api/mobile/manager/entries/penalty/<int:entry_id>/reject/', manual_penalty_reject, name='manual_penalty_reject'),
+    path('api/mobile/manager/entries/bonus/', manual_bonus_list, name='manual_bonus_list'),
+    path('api/mobile/manager/entries/bonus/<int:entry_id>/', manual_bonus_detail, name='manual_bonus_detail'),
+    path('api/mobile/manager/entries/bonus/<int:entry_id>/approve/', manual_bonus_approve, name='manual_bonus_approve'),
+    path('api/mobile/manager/entries/bonus/<int:entry_id>/reject/', manual_bonus_reject, name='manual_bonus_reject'),
+    path('api/mobile/manager/entries/allowance/', manual_allowance_list, name='manual_allowance_list'),
+    path('api/mobile/manager/entries/allowance/<int:entry_id>/', manual_allowance_detail, name='manual_allowance_detail'),
+    path('api/mobile/manager/entries/allowance/<int:entry_id>/approve/', manual_allowance_approve, name='manual_allowance_approve'),
+    path('api/mobile/manager/entries/allowance/<int:entry_id>/reject/', manual_allowance_reject, name='manual_allowance_reject'),
+    # Tax Policy
+    path('api/mobile/manager/tax/policies/', tax_policy_list, name='tax_policy_list'),
+    path('api/mobile/manager/tax/policies/<int:policy_id>/', tax_policy_detail, name='tax_policy_detail'),
+    path('api/mobile/manager/tax/calculate/', tax_calculate, name='tax_calculate'),
+    # End of Service Policy
+    path('api/mobile/manager/eos/policies/', eos_policy_list, name='eos_policy_list'),
+    path('api/mobile/manager/eos/policies/<int:policy_id>/', eos_policy_detail, name='eos_policy_detail'),
+    path('api/mobile/manager/eos/calculate/', eos_calculate, name='eos_calculate'),
+
+
+
+
+
 
     # ═══════════════════════════════════════════════════
     # General Deduction Policies (خصومات عامة)

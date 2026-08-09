@@ -2244,6 +2244,8 @@ def mobile_charter_update(request):
     settings_changed = False
 
     new_title = request.data.get("title", "").strip()
+    if "title" in request.data and not new_title:
+        return Response({"success": False, "error": "عنوان اللائحة لا يمكن أن يكون فارغاً"}, status=400)
     new_intro = request.data.get("introduction", "").strip()
     new_content = request.data.get("content", "").strip()
 

@@ -35,6 +35,9 @@ def _get_company_employees(user):
     if company:
         qs = qs.filter(company=company)
 
+    # استبعاد staff (المديرين الإداريين مش موظفين حقيقيين)
+    qs = qs.exclude(user__is_staff=True)
+
     return qs.order_by('id')
 
 
@@ -337,8 +340,21 @@ def requests_report(request):
 
     from requests_app.models import EmployeeRequest
 
+    try:
+        if 'year' in request.GET:
+            int(request.GET.get('year'))
+        if 'month' in request.GET:
+            month_raw = int(request.GET.get('month'))
+            if month_raw < 1 or month_raw > 12:
+                return Response({'error': 'الشهر يجب أن يكون من 1 إلى 12'}, status=400)
+    except (ValueError, TypeError):
+        return Response({'error': 'صيغة year/month غير صحيحة'}, status=400)
+
     year, month = _parse_month(request)
     status_filter = request.GET.get('status')
+    valid_statuses = {'approved', 'pending', 'rejected'}
+    if status_filter and status_filter not in valid_statuses:
+        return Response({'error': 'status غير صحيح. القيم المتاحة: approved, pending, rejected'}, status=400)
 
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
@@ -708,9 +724,23 @@ def requests_report(request):
 
     from requests_app.models import EmployeeRequest
 
+    try:
+        if 'year' in request.GET:
+            int(request.GET.get('year'))
+        if 'month' in request.GET:
+            month_raw = int(request.GET.get('month'))
+            if month_raw < 1 or month_raw > 12:
+                return Response({'error': 'الشهر يجب أن يكون من 1 إلى 12'}, status=400)
+    except (ValueError, TypeError):
+        return Response({'error': 'صيغة year/month غير صحيحة'}, status=400)
+
     year, month = _parse_month(request)
     status_filter = request.GET.get('status')
     employee_id = request.GET.get('employee_id')
+
+    valid_statuses = {'approved', 'pending', 'rejected'}
+    if status_filter and status_filter not in valid_statuses:
+        return Response({'error': 'status غير صحيح. القيم المتاحة: approved, pending, rejected'}, status=400)
 
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
@@ -923,6 +953,16 @@ def payroll_report(request):
     user = request.user
     if not _check_manager(user):
         return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    try:
+        if 'year' in request.GET:
+            int(request.GET.get('year'))
+        if 'month' in request.GET:
+            month_raw = int(request.GET.get('month'))
+            if month_raw < 1 or month_raw > 12:
+                return Response({'error': 'الشهر يجب أن يكون من 1 إلى 12'}, status=400)
+    except (ValueError, TypeError):
+        return Response({'error': 'صيغة year/month غير صحيحة'}, status=400)
 
     year, month = _parse_month(request)
     lang = request.GET.get('lang', 'ar')
@@ -1141,7 +1181,12 @@ def daily_attendance_report(request):
                 'shift_name': summary.shift.name if summary.shift else '',
             }
         elif att and att.check_in_time:
-            status = 'present'
+            if getattr(att, 'status', None) in ('late', 'present', 'absent', 'on_leave', 'weekend', 'mission'):
+                status = att.status
+            elif (att.late_minutes or 0) > 0:
+                status = 'late'
+            else:
+                status = 'present'
             row = {
                 'employee_id': emp.id,
                 'employee_name': _employee_name(emp),
@@ -1159,13 +1204,13 @@ def daily_attendance_report(request):
                 'shift_name': att.shift.name if att.shift else '',
             }
         else:
-            status = 'no_data'
+            status = 'absent'
             row = {
                 'employee_id': emp.id,
                 'employee_name': _employee_name(emp),
                 'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
                 'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
-                'status': 'no_data',
+                'status': 'absent',
                 'check_in': None,
                 'check_out': None,
                 'work_hours': 0,
@@ -1236,6 +1281,7 @@ def leaves_report_enhanced(request):
             leave_items.append({
                 'id': lv.id,
                 'leave_type': lv.leave_type.name if lv.leave_type else '',
+                'leave_type_en': getattr(lv.leave_type, 'name_en', '') if lv.leave_type else '',
                 'is_paid': not is_unpaid,
                 'start_date': str(lv.start_date) if lv.start_date else '',
                 'end_date': str(lv.end_date) if lv.end_date else '',
@@ -1246,15 +1292,25 @@ def leaves_report_enhanced(request):
                 'reason': lv.reason or '',
             })
 
-        balances = LeaveBalance._base_manager.filter(
+        # Filter balances by employee gender (skip leave types restricted to opposite gender)
+        emp_gender = (getattr(emp, "gender", "") or "").lower()
+        balances_qs = LeaveBalance._base_manager.filter(
             employee=emp,
             year=year,
         ).select_related('leave_type')
+
+        if emp_gender == "male":
+            balances_qs = balances_qs.exclude(leave_type__gender_restriction="female")
+        elif emp_gender == "female":
+            balances_qs = balances_qs.exclude(leave_type__gender_restriction="male")
+
+        balances = balances_qs
 
         balance_items = []
         for bal in balances:
             balance_items.append({
                 'leave_type': bal.leave_type.name if bal.leave_type else '',
+                'leave_type_en': getattr(bal.leave_type, 'name_en', '') if bal.leave_type else '',
                 'total_days': float(bal.total_days or 0),
                 'used_days': float(bal.used_days or 0),
                 'pending_days': float(bal.pending_days or 0),
@@ -1349,4 +1405,104 @@ def shifts_report(request):
         'shifts_count': len(all_shifts),
         'shifts': all_shifts,
         'no_shift_employees': no_shift_employees,
+    })
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def location_tracking_report(request):
+    """تقرير تتبع مواقع الموظفين لليوم"""
+    from datetime import date, datetime, timedelta
+    from django.utils import timezone
+    from django.db.models import Min, Max, Count
+    from attendance.models import Attendance, LocationLog
+
+    user = request.user
+    if not _check_manager(user):
+        return Response({'success': False, 'error': 'صلاحية غير كافية'}, status=403)
+
+    date_str = request.GET.get('date', str(date.today()))
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        return Response({'success': False, 'error': 'صيغة التاريخ غير صحيحة'}, status=400)
+
+    employees = _get_manager_scope_employees(user)
+
+    results = []
+    for emp in employees:
+        att = Attendance._base_manager.filter(employee=emp, date=target_date).first()
+
+        checkin_time = att.check_in_time if att and att.check_in_time else None
+        checkout_time = att.check_out_time if att and att.check_out_time else None
+
+        # location logs في نطاق الحضور
+        logs_qs = LocationLog._base_manager.filter(
+            employee=emp,
+            timestamp__date=target_date,
+        ).order_by('timestamp')
+
+        if checkin_time:
+            logs_qs = logs_qs.filter(timestamp__gte=checkin_time)
+        if checkout_time:
+            logs_qs = logs_qs.filter(timestamp__lte=checkout_time)
+
+        logs = list(logs_qs.values('timestamp', 'latitude', 'longitude', 'address', 'accuracy'))
+
+        first_log = logs[0] if logs else None
+        last_log = logs[-1] if logs else None
+
+        emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip() or emp.employee_code
+
+        results.append({
+            'employee_id': emp.id,
+            'employee_code': emp.employee_code or '',
+            'employee_name': emp_name,
+            'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+            'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
+            'worker_type': getattr(emp, 'worker_type', '') or '',
+            'checkin_time': checkin_time.strftime('%H:%M') if checkin_time else '',
+            'checkout_time': checkout_time.strftime('%H:%M') if checkout_time else '',
+            'has_attendance': bool(att and att.check_in_time),
+            'total_logs': len(logs),
+            'first_location': {
+                'timestamp': first_log['timestamp'].strftime('%H:%M') if first_log else '',
+                'lat': float(first_log['latitude']) if first_log else None,
+                'lng': float(first_log['longitude']) if first_log else None,
+                'address': first_log['address'] if first_log else '',
+            } if first_log else None,
+            'last_location': {
+                'timestamp': last_log['timestamp'].strftime('%H:%M') if last_log else '',
+                'lat': float(last_log['latitude']) if last_log else None,
+                'lng': float(last_log['longitude']) if last_log else None,
+                'address': last_log['address'] if last_log else '',
+            } if last_log else None,
+            'logs': [
+                {
+                    'timestamp': log['timestamp'].strftime('%H:%M'),
+                    'lat': float(log['latitude']),
+                    'lng': float(log['longitude']),
+                    'address': log['address'] or '',
+                    'accuracy': float(log['accuracy']) if log['accuracy'] else 0,
+                }
+                for log in logs
+            ],
+        })
+
+    # stats
+    total_emp = len(results)
+    with_attendance = sum(1 for r in results if r['has_attendance'])
+    tracked = sum(1 for r in results if r['total_logs'] > 0)
+
+    return Response({
+        'success': True,
+        'date': str(target_date),
+        'stats': {
+            'total_employees': total_emp,
+            'with_attendance': with_attendance,
+            'tracked': tracked,
+            'not_tracked': total_emp - tracked,
+        },
+        'employees': results,
     })

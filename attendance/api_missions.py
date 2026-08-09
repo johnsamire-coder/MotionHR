@@ -1,3 +1,4 @@
+from django.db import models
 # ============================================================
 # MISSIONS APIs - MotionHR V1
 # ============================================================
@@ -18,6 +19,7 @@ from attendance.missions_models import (
     MissionFeedback, MissionFeedbackAddendum, MissionFollowup
 )
 from employees.models import Employee
+from employees.visibility import get_visible_employees_qs
 
 
 # ─────────────────────────────────────────────────────────────
@@ -148,7 +150,15 @@ def manager_missions_list(request):
     if not company:
         return Response({'error': 'لم يتم العثور على بيانات الشركة'}, status=400)
 
-    missions = Mission._base_manager.filter(company=company).prefetch_related('assignments__employee')
+    # فلترة المهمات حسب صلاحية المدير
+    visible_emps = get_visible_employees_qs(request.user)
+    missions = Mission._base_manager.filter(
+        company=company
+    ).filter(
+        models.Q(created_by=request.user) | # مهمات أنشأها
+        models.Q(assignments__employee__in=visible_emps) | # مهمات لفريقه
+        models.Q(mission_request__requested_by__in=visible_emps) # طلبات من فريقه
+    ).distinct().prefetch_related('assignments__employee')
 
     # فلتر الحالة
     status_filter = request.GET.get('status')

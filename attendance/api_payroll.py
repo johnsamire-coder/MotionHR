@@ -3,6 +3,7 @@ MotionHR - Payroll API (v4 - Phase 15 Payroll Pro)
 """
 from datetime import datetime
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import TokenAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -55,6 +56,9 @@ def _get_company_employees(user):
 
     if company:
         qs = qs.filter(company=company)
+
+    # استبعاد staff (المديرين الإداريين مش موظفين حقيقيين)
+    qs = qs.exclude(user__is_staff=True)
 
     return qs.order_by('id')
 
@@ -131,6 +135,12 @@ def _serialize_summary_row(payroll):
         'late_deduction': payroll.get('late_deduction', 0),
         'absence_deduction': payroll.get('absence_deduction', 0),
         'insurance_deduction': payroll.get('insurance_deduction', 0),
+        # ═══ New insurance system ═══
+        'social_insurance_employee': payroll.get('social_insurance_employee', 0),
+        'social_insurance_company': payroll.get('social_insurance_company', 0),
+        'medical_insurance_employee': payroll.get('medical_insurance_employee', 0),
+        'medical_insurance_company': payroll.get('medical_insurance_company', 0),
+        'total_company_insurance_contribution': payroll.get('total_company_insurance_contribution', 0),
         'installments_total': payroll.get('installments_total', 0),
         'penalties_total': payroll.get('penalties_total', 0),
         'extra_deductions_total': payroll.get('extra_deductions_total', 0),
@@ -162,6 +172,17 @@ def payroll_summary(request):
 
     year, month = _parse_month(request)
     lang = _get_lang(request)
+
+    # Cache Key: company + year + month + lang
+    company_id = getattr(getattr(user, 'employee_profile', None), 'company_id', None) or getattr(user, 'company_id', None)
+    cache_key = f"payroll_summary:{company_id}:{year}:{month}:{lang}"
+
+    # جرب الـ cache الأول
+    cached_result = cache.get(cache_key)
+    if cached_result is not None:
+        cached_result['_from_cache'] = True
+        return Response(cached_result)
+
     employees = _get_company_employees(user)
     settings = _get_payroll_settings(user)
 
@@ -184,7 +205,7 @@ def payroll_summary(request):
         grand_total_deductions += payroll['total_deductions']
         grand_total_net += payroll['net_salary']
 
-    return Response({
+    response_data = {
         'year': year,
         'month': month,
         'lang': lang,
@@ -199,7 +220,13 @@ def payroll_summary(request):
 
         'payroll_settings': settings,
         'employees': results,
-    })
+    }
+
+    # حفظ في الـ cache لمدة 30 دقيقة
+    cache.set(cache_key, response_data, timeout=1800)
+    response_data['_from_cache'] = False
+
+    return Response(response_data)
 
 
 
@@ -219,10 +246,10 @@ def _generate_payslip_pdf(emp, payroll, year, month):
     import datetime
 
     # تسجيل الخط العربي
-    font_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), 'core', 'fonts', 'Cairo-Regular.ttf')
+    font_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), 'core', 'fonts', 'Amiri-Regular.ttf')
     try:
-        pdfmetrics.registerFont(TTFont('Cairo', font_path))
-        FONT = 'Cairo'
+        pdfmetrics.registerFont(TTFont('Amiri', font_path))
+        FONT = 'Amiri'
     except Exception:
         FONT = 'Helvetica'
 
@@ -270,7 +297,9 @@ def _generate_payslip_pdf(emp, payroll, year, month):
     month_names = ['','يناير','فبراير','مارس','أبريل','مايو','يونيو',
                    'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
     month_label = month_names[month] if 1 <= month <= 12 else str(month)
-    pdf.drawCentredString(width/2, height - 22*mm, ar(f'{month_label} {year}'))
+    pdf.drawCentredString(width/2, height - 20.5*mm, ar(month_label))
+    pdf.setFont(FONT, 9)
+    pdf.drawCentredString(width/2, height - 25*mm, str(year))
 
     # ===== اسم الشركة =====
     company_name = payroll.get('company_name', '')

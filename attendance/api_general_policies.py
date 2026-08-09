@@ -1,12 +1,5 @@
 """
 APIs - سياسات الخصومات والمكافآت العامة
-Deduction Policies:
-  GET/POST   /api/mobile/manager/deduction-policies/
-  GET/PUT/DELETE /api/mobile/manager/deduction-policies/<id>/
-
-Bonus Policies:
-  GET/POST   /api/mobile/manager/bonus-policies/
-  GET/PUT/DELETE /api/mobile/manager/bonus-policies/<id>/
 """
 
 from django.http import JsonResponse
@@ -25,11 +18,7 @@ from employees.models import Employee
 
 def _check_hr(user):
     role = getattr(user, 'role', None)
-    if not (
-        user.is_superuser
-        or user.is_staff
-        or role in ['company_admin', 'hr_manager']
-    ):
+    if not (user.is_superuser or user.is_staff or role in ['company_admin', 'hr_manager']):
         raise PermissionDenied('مش مسموح')
 
 
@@ -37,25 +26,58 @@ def _parse_date(val):
     return date.fromisoformat(val) if val else None
 
 
+def _m2m_read_ids(policy):
+    try:
+        through = policy.specific_employees.through
+        src_fk = emp_fk = None
+        for f in through._meta.fields:
+            rm = getattr(getattr(f, 'remote_field', None), 'model', None)
+            if rm == policy.__class__:
+                src_fk = f.attname
+            elif getattr(getattr(rm, '_meta', None), 'label_lower', '') == 'employees.employee':
+                emp_fk = f.attname
+        if not src_fk or not emp_fk:
+            return []
+        return list(through._base_manager.filter(**{src_fk: policy.id}).values_list(emp_fk, flat=True))
+    except Exception:
+        return []
+
+
+def _m2m_set_ids(policy, company, employee_ids):
+    try:
+        ids = [int(x) for x in (employee_ids or []) if str(x).isdigit()]
+        valid = list(Employee._base_manager.filter(company=company, id__in=ids).values_list('id', flat=True))
+        through = policy.specific_employees.through
+        src_fk = emp_fk = None
+        for f in through._meta.fields:
+            rm = getattr(getattr(f, 'remote_field', None), 'model', None)
+            if rm == policy.__class__:
+                src_fk = f.attname
+            elif getattr(getattr(rm, '_meta', None), 'label_lower', '') == 'employees.employee':
+                emp_fk = f.attname
+        if not src_fk or not emp_fk:
+            return
+        through._base_manager.filter(**{src_fk: policy.id}).delete()
+        rows = [through(**{src_fk: policy.id, emp_fk: eid}) for eid in valid]
+        if rows:
+            through._base_manager.bulk_create(rows, ignore_conflicts=True)
+    except Exception:
+        pass
+
+
 def _set_scope(policy, data, company):
     scope = data.get('scope', policy.scope)
     policy.scope = scope
     policy.branch = None
     policy.department = None
-    policy.specific_employees.clear()
-
+    _m2m_set_ids(policy, company, [])
     if scope == 'branch' and data.get('branch_id'):
         policy.branch = Branch.objects.get(id=data['branch_id'], company=company)
     elif scope == 'department' and data.get('department_id'):
         policy.department = Department.objects.get(id=data['department_id'], company=company)
-    elif scope == 'employees' and data.get('employee_ids'):
-        emps = Employee._base_manager.filter(id__in=data['employee_ids'], company=company)
-        policy.specific_employees.set(emps)
+    elif scope == 'employees':
+        _m2m_set_ids(policy, company, data.get('employee_ids') or [])
 
-
-# ══════════════════════════════════════════════
-# Deduction Policies
-# ══════════════════════════════════════════════
 
 def _deduction_to_dict(p):
     return {
@@ -71,7 +93,7 @@ def _deduction_to_dict(p):
         'branch_name': p.branch.name_ar if p.branch else None,
         'department_id': p.department_id,
         'department_name': p.department.name_ar if p.department else None,
-        'specific_employees': list(p.specific_employees.values_list('id', flat=True)),
+        'specific_employees': _m2m_read_ids(p),
         'is_monthly': p.is_monthly,
         'is_active': p.is_active,
         'start_date': str(p.start_date),
@@ -88,17 +110,14 @@ def deduction_policies_list(request):
     try:
         _check_hr(request.user)
         company = request.user.company
-
         if request.method == 'GET':
             qs = CompanyDeductionPolicy._base_manager.filter(company=company).order_by('-created_at')
             return JsonResponse({'success': True, 'count': qs.count(), 'results': [_deduction_to_dict(p) for p in qs]})
-
         elif request.method == 'POST':
             data = json.loads(request.body)
             for f in ['deduction_type', 'name_ar', 'amount', 'scope', 'start_date']:
                 if not data.get(f):
                     return JsonResponse({'success': False, 'error': f'{f} مطلوب'}, status=400)
-
             policy = CompanyDeductionPolicy(
                 company=company,
                 deduction_type=data['deduction_type'],
@@ -116,9 +135,7 @@ def deduction_policies_list(request):
             _set_scope(policy, data, company)
             policy.save()
             return JsonResponse({'success': True, 'message': 'تم إضافة الخصم العام', 'policy': _deduction_to_dict(policy)}, status=201)
-
         return JsonResponse({'error': 'Method not allowed'}, status=405)
-
     except PermissionDenied as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=403)
     except Exception as e:
@@ -137,10 +154,8 @@ def deduction_policy_detail(request, policy_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=403)
     except CompanyDeductionPolicy.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'مش موجود'}, status=404)
-
     if request.method == 'GET':
         return JsonResponse({'success': True, 'policy': _deduction_to_dict(policy)})
-
     elif request.method == 'PUT':
         try:
             data = json.loads(request.body)
@@ -157,17 +172,11 @@ def deduction_policy_detail(request, policy_id):
             return JsonResponse({'success': True, 'message': 'تم التعديل', 'policy': _deduction_to_dict(policy)})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
     elif request.method == 'DELETE':
         policy.delete()
         return JsonResponse({'success': True, 'message': 'تم الحذف'})
-
     return JsonResponse({'error': 'Method not allowed'}, status=405)
 
-
-# ══════════════════════════════════════════════
-# Bonus Policies
-# ══════════════════════════════════════════════
 
 def _bonus_to_dict(p):
     return {
@@ -183,7 +192,7 @@ def _bonus_to_dict(p):
         'branch_name': p.branch.name_ar if p.branch else None,
         'department_id': p.department_id,
         'department_name': p.department.name_ar if p.department else None,
-        'specific_employees': list(p.specific_employees.values_list('id', flat=True)),
+        'specific_employees': _m2m_read_ids(p),
         'is_monthly': p.is_monthly,
         'is_active': p.is_active,
         'start_date': str(p.start_date),
@@ -200,17 +209,14 @@ def bonus_policies_list(request):
     try:
         _check_hr(request.user)
         company = request.user.company
-
         if request.method == 'GET':
             qs = CompanyBonusPolicy._base_manager.filter(company=company).order_by('-created_at')
             return JsonResponse({'success': True, 'count': qs.count(), 'results': [_bonus_to_dict(p) for p in qs]})
-
         elif request.method == 'POST':
             data = json.loads(request.body)
             for f in ['bonus_type', 'name_ar', 'amount', 'scope', 'start_date']:
                 if not data.get(f):
                     return JsonResponse({'success': False, 'error': f'{f} مطلوب'}, status=400)
-
             policy = CompanyBonusPolicy(
                 company=company,
                 bonus_type=data['bonus_type'],
@@ -228,9 +234,7 @@ def bonus_policies_list(request):
             _set_scope(policy, data, company)
             policy.save()
             return JsonResponse({'success': True, 'message': 'تم إضافة المكافأة العامة', 'policy': _bonus_to_dict(policy)}, status=201)
-
         return JsonResponse({'error': 'Method not allowed'}, status=405)
-
     except PermissionDenied as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=403)
     except Exception as e:
@@ -249,10 +253,8 @@ def bonus_policy_detail(request, policy_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=403)
     except CompanyBonusPolicy.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'مش موجود'}, status=404)
-
     if request.method == 'GET':
         return JsonResponse({'success': True, 'policy': _bonus_to_dict(policy)})
-
     elif request.method == 'PUT':
         try:
             data = json.loads(request.body)
@@ -269,9 +271,7 @@ def bonus_policy_detail(request, policy_id):
             return JsonResponse({'success': True, 'message': 'تم التعديل', 'policy': _bonus_to_dict(policy)})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
     elif request.method == 'DELETE':
         policy.delete()
         return JsonResponse({'success': True, 'message': 'تم الحذف'})
-
     return JsonResponse({'error': 'Method not allowed'}, status=405)
