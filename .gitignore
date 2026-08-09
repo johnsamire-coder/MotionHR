@@ -64,3 +64,5 @@ scan_*.txt
 build_*.txt
 verify_*.txt
 cleanup_*.txt
+
+find_gps_users.py
