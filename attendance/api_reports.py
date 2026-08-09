@@ -340,8 +340,21 @@ def requests_report(request):
 
     from requests_app.models import EmployeeRequest
 
+    try:
+        if 'year' in request.GET:
+            int(request.GET.get('year'))
+        if 'month' in request.GET:
+            month_raw = int(request.GET.get('month'))
+            if month_raw < 1 or month_raw > 12:
+                return Response({'error': 'الشهر يجب أن يكون من 1 إلى 12'}, status=400)
+    except (ValueError, TypeError):
+        return Response({'error': 'صيغة year/month غير صحيحة'}, status=400)
+
     year, month = _parse_month(request)
     status_filter = request.GET.get('status')
+    valid_statuses = {'approved', 'pending', 'rejected'}
+    if status_filter and status_filter not in valid_statuses:
+        return Response({'error': 'status غير صحيح. القيم المتاحة: approved, pending, rejected'}, status=400)
 
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
@@ -711,9 +724,23 @@ def requests_report(request):
 
     from requests_app.models import EmployeeRequest
 
+    try:
+        if 'year' in request.GET:
+            int(request.GET.get('year'))
+        if 'month' in request.GET:
+            month_raw = int(request.GET.get('month'))
+            if month_raw < 1 or month_raw > 12:
+                return Response({'error': 'الشهر يجب أن يكون من 1 إلى 12'}, status=400)
+    except (ValueError, TypeError):
+        return Response({'error': 'صيغة year/month غير صحيحة'}, status=400)
+
     year, month = _parse_month(request)
     status_filter = request.GET.get('status')
     employee_id = request.GET.get('employee_id')
+
+    valid_statuses = {'approved', 'pending', 'rejected'}
+    if status_filter and status_filter not in valid_statuses:
+        return Response({'error': 'status غير صحيح. القيم المتاحة: approved, pending, rejected'}, status=400)
 
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
@@ -926,6 +953,16 @@ def payroll_report(request):
     user = request.user
     if not _check_manager(user):
         return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    try:
+        if 'year' in request.GET:
+            int(request.GET.get('year'))
+        if 'month' in request.GET:
+            month_raw = int(request.GET.get('month'))
+            if month_raw < 1 or month_raw > 12:
+                return Response({'error': 'الشهر يجب أن يكون من 1 إلى 12'}, status=400)
+    except (ValueError, TypeError):
+        return Response({'error': 'صيغة year/month غير صحيحة'}, status=400)
 
     year, month = _parse_month(request)
     lang = request.GET.get('lang', 'ar')

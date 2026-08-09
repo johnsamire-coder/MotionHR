@@ -2418,7 +2418,7 @@ def rotation_list_create(request):
         return Response({"success": False, "error": "cycle_length_days لازم يكون أكبر من صفر"}, status=400)
 
     try:
-        start_date = dt.strptime(str(start_date), "%Y-%m-%d").date()
+        start_date = datetime.strptime(str(start_date), "%Y-%m-%d").date()
     except ValueError:
         return Response({"success": False, "error": "صيغة التاريخ لازم تكون YYYY-MM-DD"}, status=400)
 
@@ -2564,7 +2564,7 @@ def rotation_detail(request, rotation_id):
 
     if "start_date" in d:
         try:
-            rotation.start_date = dt.strptime(str(d["start_date"]), "%Y-%m-%d").date()
+            rotation.start_date = datetime.strptime(str(d["start_date"]), "%Y-%m-%d").date()
         except ValueError:
             return Response({"success": False, "error": "صيغة التاريخ لازم تكون YYYY-MM-DD"}, status=400)
 
@@ -2650,8 +2650,8 @@ def rotation_assign(request, rotation_id):
     if not start_date_raw:
         return Response({"success": False, "error": "start_date مطلوب"}, status=400)
 
-    start_date = dt.strptime(str(start_date_raw), "%Y-%m-%d").date()
-    end_date = dt.strptime(str(end_date_raw), "%Y-%m-%d").date() if end_date_raw else None
+    start_date = datetime.strptime(str(start_date_raw), "%Y-%m-%d").date()
+    end_date = datetime.strptime(str(end_date_raw), "%Y-%m-%d").date() if end_date_raw else None
 
     priority_map = {"employee": 1, "department": 2, "branch": 3, "company": 4}
     priority = priority_map.get(assignment_type, 4)
