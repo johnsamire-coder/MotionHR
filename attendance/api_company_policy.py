@@ -57,6 +57,11 @@ def get_work_policy(request):
             'work_friday': policy.work_friday,
             'work_saturday': policy.work_saturday,
             'is_24_7': policy.is_24_7,
+            'attendance_trigger_mode': getattr(policy, 'attendance_trigger_mode', 'notification'),
+            'pre_shift_checkin_window': getattr(policy, 'pre_shift_checkin_window', 15),
+            'require_live_location': getattr(policy, 'require_live_location', True),
+            'location_loss_action': getattr(policy, 'location_loss_action', 'alert_only'),
+            'location_loss_grace_minutes': getattr(policy, 'location_loss_grace_minutes', 5),
         }
     else:
         # افتراضي: أحد → خميس + سبت، جمعة إجازة
@@ -102,13 +107,21 @@ def save_work_policy(request):
                 'work_friday': d.get('work_friday', False),
                 'work_saturday': d.get('work_saturday', True),
                 'is_24_7': d.get('is_24_7', False),
+                'attendance_trigger_mode': d.get('attendance_trigger_mode', 'notification'),
+                'pre_shift_checkin_window': d.get('pre_shift_checkin_window', 15),
+                'require_live_location': d.get('require_live_location', True),
+                'location_loss_action': d.get('location_loss_action', 'alert_only'),
+                'location_loss_grace_minutes': d.get('location_loss_grace_minutes', 5),
             }
         )
 
         if not created:
             for field in ['work_sunday', 'work_monday', 'work_tuesday',
                           'work_wednesday', 'work_thursday', 'work_friday',
-                          'work_saturday', 'is_24_7']:
+                          'work_saturday', 'is_24_7',
+                          'attendance_trigger_mode', 'pre_shift_checkin_window',
+                          'require_live_location', 'location_loss_action',
+                          'location_loss_grace_minutes']:
                 if field in d:
                     setattr(policy, field, d[field])
             policy.save()
@@ -116,6 +129,7 @@ def save_work_policy(request):
         msg = 'Work policy saved successfully' if lang == 'en' else 'تم حفظ سياسة العمل بنجاح'
         return Response({
             'status': 'saved',
+            'success': True,
             'message': msg,
             'work_sunday': policy.work_sunday,
             'work_monday': policy.work_monday,
@@ -125,6 +139,11 @@ def save_work_policy(request):
             'work_friday': policy.work_friday,
             'work_saturday': policy.work_saturday,
             'is_24_7': policy.is_24_7,
+            'attendance_trigger_mode': getattr(policy, 'attendance_trigger_mode', 'notification'),
+            'pre_shift_checkin_window': getattr(policy, 'pre_shift_checkin_window', 15),
+            'require_live_location': getattr(policy, 'require_live_location', True),
+            'location_loss_action': getattr(policy, 'location_loss_action', 'alert_only'),
+            'location_loss_grace_minutes': getattr(policy, 'location_loss_grace_minutes', 5),
         })
 
     except Exception as e:
