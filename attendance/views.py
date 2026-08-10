@@ -123,57 +123,105 @@ def check_in_page(request):
 @login_required
 @require_http_methods(["POST"])
 def api_check_in(request):
-    """API لتسجيل الحضور"""
-    
+    """API لتسجيل الحضور بناءً على نوع الموظف والموقع"""
     try:
         data = json.loads(request.body)
         latitude = data.get('latitude')
         longitude = data.get('longitude')
         accuracy = data.get('accuracy', 0)
         address = data.get('address', '')
-        
+
         if not latitude or not longitude:
             return JsonResponse({
                 'success': False,
-                'message': 'لم يتم تحديد الموقع'
+                'message': 'لم يتم تحديد الموقع الجغرافي. يرجى تفعيل الـ GPS.'
             })
-        
+
         try:
             employee = Employee.objects.get(user=request.user)
         except Employee.DoesNotExist:
             return JsonResponse({
                 'success': False,
-                'message': 'لم يتم العثور على بيانات الموظف. تواصل مع المدير.'
+                'message': 'لم يتم العثور على بيانات الموظف. تواصل مع إدارة الموارد البشرية.'
             })
-        
+
         today = date.today()
-        
+
+        # التحقق هل سجل اليوم مسبقاً
         existing = Attendance.objects.filter(employee=employee, date=today).first()
         if existing and existing.check_in_time:
             return JsonResponse({
                 'success': False,
                 'message': f'تم تسجيل الحضور مسبقاً في {existing.check_in_time.strftime("%I:%M %p")}'
             })
-        
+
+        lat = float(latitude)
+        lng = float(longitude)
         within_range = False
         distance = None
-        if employee.branch and employee.branch.latitude and employee.branch.longitude:
-            distance = calculate_distance(
-                latitude, longitude,
-                employee.branch.latitude, employee.branch.longitude
-            )
-            within_range = distance <= employee.branch.check_in_radius
+        block_reason = None
+        matched_location_name = ""
+
+        # ══════════════════════════════════════════════════════════════
+        # 1) الموظف الميداني (Field Worker)
+        # ══════════════════════════════════════════════════════════════
+        if getattr(employee, 'is_field_worker', False):
+            # فحص هل الموظف له مواقع عمل مخصصة
+            assigned_locations = []
+            if hasattr(employee, 'work_locations'):
+                assigned_locations = list(employee.work_locations.all())
+
+            if assigned_locations:
+                # موظف ميداني مخصص بمواقع عمل معينة
+                in_any_location = False
+                for wloc in assigned_locations:
+                    if wloc.latitude and wloc.longitude:
+                        rad = getattr(wloc, 'radius', 100) or 100
+                        dist = calculate_distance(lat, lng, wloc.latitude, wloc.longitude)
+                        if dist <= rad:
+                            in_any_location = True
+                            within_range = True
+                            distance = dist
+                            matched_location_name = getattr(wloc, 'name', '')
+                            break
+
+                if not in_any_location:
+                    return JsonResponse({
+                        'success': False,
+                        'message': '❌ عفواً، أنت خارج جميع مواقع العمل المعتمدة والمخصصة لك.'
+                    })
+            else:
+                # موظف ميداني حر -> مسموح من أي مكان
+                within_range = True
+                matched_location_name = "ميداني حر"
+
+        # ══════════════════════════════════════════════════════════════
+        # 2) الموظف العادي (Office Worker)
+        # ══════════════════════════════════════════════════════════════
         else:
-            within_range = True
-        
+            if employee.branch and employee.branch.latitude and employee.branch.longitude:
+                radius = getattr(employee.branch, 'check_in_radius', 100) or 100
+                distance = calculate_distance(lat, lng, employee.branch.latitude, employee.branch.longitude)
+                within_range = (distance <= radius)
+
+                if not within_range:
+                    return JsonResponse({
+                        'success': False,
+                        'message': f'❌ عفواً، أنت خارج نطاق فرع الشركة. المسافة الحالية: {int(distance)} متر (النطاق المسموح: {radius} متر).'
+                    })
+            else:
+                # في حال عدم تحديد إحداثيات للفرع -> يعتبر داخل النطاق تلقائياً
+                within_range = True
+
+        # جلب الشيفت الحالي
         current_shift = EmployeeShift.objects.filter(
             employee=employee,
             is_active=True,
             start_date__lte=today
         ).order_by('-start_date').first()
-        
+
         shift = current_shift.shift if current_shift else None
-        
+
         if existing:
             attendance = existing
         else:
@@ -183,38 +231,40 @@ def api_check_in(request):
                 shift=shift,
                 company=employee.company
             )
-        
+
         attendance.check_in_time = timezone.now()
         attendance.check_in_latitude = latitude
         attendance.check_in_longitude = longitude
         attendance.check_in_address = address
         attendance.check_in_within_range = within_range
         attendance.status = 'present'
-        
+
         if shift:
             attendance.calculate_late_minutes()
             if attendance.late_minutes > 0:
                 attendance.status = 'late'
-        
+
         attendance.save()
-        
+
+        msg = 'تم تسجيل الحضور بنجاح ✅'
+        if matched_location_name:
+            msg += f' ({matched_location_name})'
+
         return JsonResponse({
             'success': True,
-            'message': 'تم تسجيل الحضور بنجاح ✅',
+            'message': msg,
             'time': attendance.check_in_time.strftime('%H:%M:%S'),
             'within_range': within_range,
             'distance': distance,
-            'late_minutes': attendance.late_minutes,
+            'late_minutes': getattr(attendance, 'late_minutes', 0),
             'address': address,
         })
-        
+
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': f'خطأ: {str(e)}'
+            'message': f'خطأ أثناء تسجيل الحضور: {str(e)}'
         })
-
-
 @login_required
 @require_http_methods(["POST"])
 def api_check_out(request):
