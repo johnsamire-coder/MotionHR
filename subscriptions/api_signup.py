@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 
 from companies.models import Company
+from employees.models import Employee, Branch, Department, JobTitle
 from core.username_generator import generate_owner_username
 from subscriptions.models import SubscriptionPlan, CompanySubscription
 
@@ -112,10 +113,33 @@ def trial_signup(request):
                 company=company,
             )
             
-            # 4. Create Employee record for owner
-            branch = Branch._base_manager.filter(company=company, is_main=True).first() or Branch._base_manager.filter(company=company).first()
+            # 4. Create default Branch, Department, JobTitle if not exists
+            branch = Branch._base_manager.filter(company=company, is_main=True).first()
+            if not branch:
+                branch = Branch._base_manager.filter(company=company).first()
+            if not branch:
+                branch = Branch._base_manager.create(
+                    company=company,
+                    name_ar='الفرع الرئيسي',
+                    name_en='Main Branch',
+                    is_main=True,
+                )
+
             department = Department._base_manager.filter(company=company).first()
+            if not department:
+                department = Department._base_manager.create(
+                    company=company,
+                    name_ar='الإدارة العامة',
+                    name_en='General Management',
+                )
+
             job_title = JobTitle._base_manager.filter(company=company).first()
+            if not job_title:
+                job_title = JobTitle._base_manager.create(
+                    company=company,
+                    name_ar='صاحب الشركة',
+                    name_en='Owner',
+                )
 
             owner_national_id = str(data.get("national_id", "")).strip() or f"00000000000{company.id:03d}"[-14:]
             owner_birth_date = data.get("birth_date") or timezone.now().date().replace(year=timezone.now().year - 30)
@@ -123,8 +147,7 @@ def trial_signup(request):
             if owner_gender not in ("male", "female"):
                 owner_gender = "male"
 
-            if branch and department and job_title:
-                Employee._base_manager.create(
+            Employee._base_manager.create(
                     company=company,
                     user=user,
                     first_name_ar=first_name or owner_name,
@@ -136,7 +159,7 @@ def trial_signup(request):
                     gender=owner_gender,
                     phone=phone,
                     email=email,
-                    hire_date=start_date if False else timezone.now().date(),
+                    hire_date=timezone.now().date(),
                     branch=branch,
                     department=department,
                     job_title=job_title,
