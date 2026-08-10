@@ -604,6 +604,36 @@ def _get_allowances(employee, first_day, last_day, lang='ar'):
     except Exception:
         pass
 
+    # 3) بدلات يدوية معتمدة من HR (ManualAllowance)
+    try:
+        from .company_policy_models import ManualAllowance
+        import calendar
+        days_in_month = calendar.monthrange(first_day.year, first_day.month)[1]
+        manual_allowances = ManualAllowance._base_manager.filter(
+            employee=employee,
+            target_year=first_day.year,
+            target_month=first_day.month,
+            status__in=['approved', 'applied'],
+        )
+        for entry in manual_allowances:
+            basic = float(getattr(employee, 'basic_salary', 0) or 0)
+            amount = float(entry.calculate_amount(basic_salary=basic, days_in_month=days_in_month))
+            if amount > 0:
+                total += amount
+                cat = entry.get_category_display() if hasattr(entry, 'get_category_display') else entry.category
+                items.append({
+                    'type': entry.category,
+                    'name_ar': f"بدل يدوي - {cat}",
+                    'name_en': f"Manual Allowance - {cat}",
+                    'name': f"بدل يدوي - {cat}" if lang == 'ar' else f"Manual Allowance - {cat}",
+                    'amount': round(amount, 2),
+                    'is_monthly': False,
+                    'source': 'manual_entry',
+                    'reason': entry.reason or '',
+                })
+    except Exception:
+        pass
+
     return round(total, 2), items
 
 
@@ -831,6 +861,34 @@ def _get_bonuses(employee, year, month, lang='ar'):
     except Exception:
         pass
 
+    # 4) مكافآت يدوية معتمدة من HR (ManualBonus)
+    try:
+        from .company_policy_models import ManualBonus
+        import calendar
+        days_in_month = calendar.monthrange(year, month)[1]
+        manual_bonuses = ManualBonus._base_manager.filter(
+            employee=employee,
+            target_year=year,
+            target_month=month,
+            status__in=['approved', 'applied'],
+        )
+        for entry in manual_bonuses:
+            basic = float(getattr(employee, 'basic_salary', 0) or 0)
+            amount = float(entry.calculate_amount(basic_salary=basic, days_in_month=days_in_month))
+            if amount > 0:
+                total += amount
+                cat = entry.get_category_display() if hasattr(entry, 'get_category_display') else entry.category
+                items.append({
+                    'name_ar': f"مكافأة يدوية - {cat}",
+                    'name_en': f"Manual Bonus - {cat}",
+                    'name': f"مكافأة يدوية - {cat}" if lang == 'ar' else f"Manual Bonus - {cat}",
+                    'amount': round(amount, 2),
+                    'reason': entry.reason or '',
+                    'source': 'manual_entry',
+                })
+    except Exception:
+        pass
+
     return round(total, 2), items
 
 
@@ -914,6 +972,34 @@ def _get_penalties(employee, year, month, lang='ar'):
                 })
                 action.payroll_applied = True
                 action.save(update_fields=["payroll_applied"])
+    except Exception:
+        pass
+
+    # ManualPenalty - جزاءات يدوية معتمدة من HR
+    try:
+        from .company_policy_models import ManualPenalty
+        import calendar
+        days_in_month = calendar.monthrange(year, month)[1]
+        manual_penalties = ManualPenalty._base_manager.filter(
+            employee=employee,
+            target_year=year,
+            target_month=month,
+            status__in=['approved', 'applied'],
+        )
+        for entry in manual_penalties:
+            basic = float(getattr(employee, 'basic_salary', 0) or 0)
+            amount = float(entry.calculate_amount(basic_salary=basic, days_in_month=days_in_month))
+            if amount > 0:
+                total += amount
+                cat = entry.get_category_display() if hasattr(entry, 'get_category_display') else entry.category
+                items.append({
+                    'name_ar': f"جزاء يدوي - {cat}",
+                    'name_en': f"Manual Penalty - {cat}",
+                    'name': f"جزاء يدوي - {cat}" if lang == 'ar' else f"Manual Penalty - {cat}",
+                    'amount': round(amount, 2),
+                    'reason': entry.reason or '',
+                    'source': 'manual_entry',
+                })
     except Exception:
         pass
 
