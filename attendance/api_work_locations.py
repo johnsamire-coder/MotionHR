@@ -169,7 +169,7 @@ def propose_work_location(request):
         valid_from=parse_date(request.data.get('valid_from')),
         valid_until=parse_date(request.data.get('valid_until')),
         notes=request.data.get('notes', '').strip() or None,
-        status='pending',
+        status='pending_manager',
         proposed_by=request.user,
     )
     
@@ -187,7 +187,7 @@ def propose_work_location(request):
     
     return Response({
         'success': True,
-        'message': 'تم اقتراح الموقع بنجاح. في انتظار موافقة المدير.',
+        'message': 'تم اقتراح الموقع بنجاح. في انتظار موافقة المدير أولاً ثم HR.',
         'location': work_location_to_dict(location),
     }, status=201)
 
@@ -290,7 +290,7 @@ def cancel_pending_location(request, location_id):
     if not location:
         return Response({'success': False, 'message': 'الموقع غير موجود'}, status=404)
     
-    if location.status != 'pending':
+    if location.status != 'pending_manager':
         return Response({
             'success': False,
             'message': f'يمكن إلغاء الطلبات المعلقة فقط. الحالة الحالية: {location.get_status_display()}',
@@ -350,7 +350,7 @@ def manager_pending_locations(request):
     
     qs = EmployeeWorkLocation._base_manager.filter(
         company=company,
-        status='pending',
+        status='pending_manager',
     ).select_related('employee', 'proposed_by').order_by('-proposed_at')
     
     locations = list(qs[:100])
@@ -437,54 +437,71 @@ def manager_all_locations(request):
 def approve_work_location(request, location_id):
     """
     POST /attendance/api/mobile/manager/work-locations/<id>/approve/
-    
-    Body:
-    {
-        "notes": "ملاحظات الموافقة"  // اختياري
-    }
+
+    المدير يوافق على pending_manager → pending_hr
+    HR يعتمد نهائياً pending_hr → approved
     """
     if not _is_manager_or_hr(request.user):
         return Response({'success': False, 'message': 'غير مصرح'}, status=403)
-    
+
     location = EmployeeWorkLocation._base_manager.filter(
         id=location_id,
         company=request.user.company,
     ).first()
-    
+
     if not location:
         return Response({'success': False, 'message': 'الموقع غير موجود'}, status=404)
-    
-    if location.status != 'pending':
+
+    if location.status not in ('pending_manager', 'pending_hr'):
         return Response({
             'success': False,
-            'message': f'الموقع بحالة {location.get_status_display()}، لا يمكن الموافقة عليه',
+            'message': f'لا يمكن الموافقة على موقع بحالة: {location.get_status_display()}',
         }, status=400)
-    
-    location.status = 'approved'
-    location.approved_by = request.user
-    location.approved_at = timezone.now()
-    location.approval_notes = request.data.get('notes', '').strip() or None
-    location.save()
-    
-    # نبعت إشعار للموظف صاحب الاقتراح
-    try:
-        from accounts.fcm_service import notify_work_location_approved
-        if location.employee and location.employee.user:
-            approver_name = request.user.get_full_name() or request.user.username
-            notify_work_location_approved(
-                user=location.employee.user,
-                location_name=location.name,
-                approved_by_name=approver_name,
-            )
-    except Exception:
-        pass
-    
-    return Response({
-        'success': True,
-        'message': 'تم اعتماد الموقع بنجاح',
-        'location': work_location_to_dict(location),
-    })
 
+    user_role = getattr(request.user, 'role', '')
+    is_hr = user_role in ('company_admin', 'hr_manager', 'super_admin')
+
+    # المدير يوافق على pending_manager → pending_hr
+    if location.status == 'pending_manager':
+        location.status = 'pending_hr'
+        location.approval_notes = request.data.get('notes', '').strip() or None
+        location.save()
+        return Response({
+            'success': True,
+            'message': 'تم قبول الموقع من المدير. في انتظار اعتماد HR النهائي.',
+            'location': work_location_to_dict(location),
+        })
+
+    # HR يعتمد نهائياً pending_hr → approved
+    if location.status == 'pending_hr':
+        if not is_hr:
+            return Response({
+                'success': False,
+                'message': 'صلاحية الاعتماد النهائي لـ HR فقط',
+            }, status=403)
+        location.status = 'approved'
+        location.approved_by = request.user
+        location.approved_at = timezone.now()
+        location.approval_notes = request.data.get('notes', '').strip() or None
+        location.save()
+
+        try:
+            from accounts.fcm_service import notify_work_location_approved
+            if location.employee and location.employee.user:
+                approver_name = request.user.get_full_name() or request.user.username
+                notify_work_location_approved(
+                    user=location.employee.user,
+                    location_name=location.name,
+                    approved_by_name=approver_name,
+                )
+        except Exception:
+            pass
+
+        return Response({
+            'success': True,
+            'message': 'تم اعتماد الموقع نهائياً',
+            'location': work_location_to_dict(location),
+        })
 
 # ═══════════════════════════════════════════════════
 # API 9: رفض موقع (Manager/HR)
@@ -516,7 +533,7 @@ def reject_work_location(request, location_id):
     if not location:
         return Response({'success': False, 'message': 'الموقع غير موجود'}, status=404)
     
-    if location.status != 'pending':
+    if location.status not in ('pending_manager', 'pending_hr'):
         return Response({
             'success': False,
             'message': f'الموقع بحالة {location.get_status_display()}، لا يمكن رفضه',
@@ -544,4 +561,48 @@ def reject_work_location(request, location_id):
         'success': True,
         'message': 'تم رفض الموقع',
         'location': work_location_to_dict(location),
+    })
+
+
+# ═══════════════════════════════════════════════════
+# API 10: قائمة الطلبات قيد اعتماد HR
+# ═══════════════════════════════════════════════════
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def hr_pending_locations(request):
+    """
+    GET /attendance/api/mobile/manager/work-locations/hr-pending/
+    للـ HR فقط - يجيب الطلبات اللي المدير وافق عليها
+    """
+    user_role = getattr(request.user, 'role', '')
+    is_hr = user_role in ('company_admin', 'hr_manager', 'super_admin')
+    if not is_hr:
+        return Response({'success': False, 'message': 'غير مصرح - HR فقط'}, status=403)
+
+    company = request.user.company
+    if not company:
+        return Response({'success': False, 'message': 'لا توجد شركة'}, status=400)
+
+    qs = EmployeeWorkLocation._base_manager.filter(
+        company=company,
+        status='pending_hr',
+    ).select_related('employee', 'proposed_by', 'approved_by').order_by('-proposed_at')
+
+    data = []
+    for loc in list(qs[:100]):
+        item = work_location_to_dict(loc)
+        item['employee_name'] = (
+            f"{loc.employee.first_name_ar} {loc.employee.last_name_ar}"
+            if loc.employee else 'غير محدد'
+        )
+        item['proposed_by_name'] = (
+            loc.proposed_by.get_full_name() if loc.proposed_by else 'غير معروف'
+        )
+        data.append(item)
+
+    return Response({
+        'success': True,
+        'count': len(data),
+        'locations': data,
     })

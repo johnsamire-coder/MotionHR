@@ -20,6 +20,7 @@ from .api_field_visits import (
     field_visit_types,
 )
 from .api_work_locations import (
+    hr_pending_locations,
     propose_work_location,
     my_work_locations,
     work_location_detail,

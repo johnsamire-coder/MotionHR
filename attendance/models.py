@@ -2608,11 +2608,12 @@ class EmployeeWorkLocation(TenantModel):
     ]
     
     STATUS_CHOICES = [
-        ('pending', 'قيد الموافقة'),
-        ('approved', 'معتمد'),
-        ('rejected', 'مرفوض'),
-        ('expired', 'منتهي'),
-        ('suspended', 'موقف مؤقتاً'),
+        ('pending_manager', 'قيد موافقة المدير'),
+        ('pending_hr',      'قيد اعتماد HR'),
+        ('approved',        'معتمد'),
+        ('rejected',        'مرفوض'),
+        ('expired',         'منتهي'),
+        ('suspended',       'موقف مؤقتاً'),
     ]
     
     # ═══ معلومات أساسية ═══
@@ -2726,7 +2727,7 @@ class EmployeeWorkLocation(TenantModel):
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='pending',
+        default='pending_manager',
         verbose_name='الحالة'
     )
     proposed_by = models.ForeignKey(
