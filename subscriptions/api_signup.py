@@ -11,7 +11,8 @@ from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 
 from companies.models import Company
-from employees.models import Employee, Branch, Department, JobTitle
+from employees.models import Employee, JobTitle
+from companies.models import Branch, Department
 from core.username_generator import generate_owner_username
 from subscriptions.models import SubscriptionPlan, CompanySubscription
 
