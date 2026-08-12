@@ -252,7 +252,7 @@ def auto_check_in(request):
         # ATT-10b: تسجيل GPS Alert للمدير
         try:
             from attendance.models import TrackingAlert
-            _today = timezone.localdate()
+            _today = date.today()
             _now = timezone.now()
             note = "GPS disabled during auto check-in"
 
@@ -291,76 +291,15 @@ def auto_check_in(request):
     except (ValueError, TypeError):
         return Response({'error': _msg('invalid_coords', lang)}, status=400)
 
-    today = timezone.localdate()
+    today = date.today()
     now = timezone.now()
 
-    # منع الـ Auto Check-in خارج نافذة الشيفت
-    shift = _get_employee_shift(emp)
-    try:
-        from attendance.api_mobile import get_shift_periods
-        from attendance.company_policy_models import CompanyWorkPolicy
-        from datetime import datetime, timedelta
-
-        policy = CompanyWorkPolicy._base_manager.filter(company=emp.company).first()
-        pre_window = int(getattr(policy, 'pre_shift_checkin_window', 15) or 15)
-
-        start_candidates = []
-        if shift:
-            for base_day in [today - timedelta(days=1), today]:
-                periods = get_shift_periods(shift, base_day)
-                if periods and periods[0].get('start'):
-                    candidate = periods[0].get('start')
-                    if timezone.is_naive(candidate):
-                        candidate = timezone.make_aware(candidate, timezone.get_current_timezone())
-                    start_candidates.append(candidate)
-
-            if not start_candidates and getattr(shift, 'start_time', None):
-                candidate = datetime.combine(today, shift.start_time)
-                if timezone.is_naive(candidate):
-                    candidate = timezone.make_aware(candidate, timezone.get_current_timezone())
-                start_candidates.append(candidate)
-
-                shift_end = getattr(shift, 'end_time', None)
-                if shift_end and shift_end <= shift.start_time:
-                    prev_candidate = datetime.combine(today - timedelta(days=1), shift.start_time)
-                    if timezone.is_naive(prev_candidate):
-                        prev_candidate = timezone.make_aware(prev_candidate, timezone.get_current_timezone())
-                    start_candidates.append(prev_candidate)
-
-        matched_window = None
-        nearest_window = None
-
-        for start_dt in sorted(set(start_candidates)):
-            allowed_from = start_dt - timedelta(minutes=pre_window)
-            allowed_to = start_dt + timedelta(hours=4)
-
-            if nearest_window is None or abs((start_dt - now).total_seconds()) < abs((nearest_window[0] - now).total_seconds()):
-                nearest_window = (start_dt, allowed_from, allowed_to)
-
-            if allowed_from <= now <= allowed_to:
-                matched_window = (start_dt, allowed_from, allowed_to)
-                break
-
-        if start_candidates and matched_window is None:
-            start_dt, allowed_from, allowed_to = nearest_window
-            return Response({
-                'status': 'outside_shift_window',
-                'message': 'لا يمكن تسجيل الحضور التلقائي خارج وقت الشيفت',
-                'shift_start': timezone.localtime(start_dt).strftime('%I:%M %p'),
-                'allowed_from': timezone.localtime(allowed_from).strftime('%I:%M %p'),
-                'allowed_to': timezone.localtime(allowed_to).strftime('%I:%M %p'),
-            }, status=400)
-
-    except Exception as e:
-        print('AUTO WINDOW ERROR:', e)
-
-    # هل عمل check-in النهارده أو امبارح (لشيفتات بعد نص الليل)؟
-    from datetime import timedelta
-    existing = Attendance._base_manager.filter(
+    # هل عمل check-in النهارده؟
+    existing = Attendance.objects.filter(
         employee=emp,
-        date__in=[today, today - timedelta(days=1)],
+        date=today,
         check_in_time__isnull=False,
-    ).order_by('-date').first()
+    ).first()
 
     if existing:
         return Response({
@@ -432,31 +371,15 @@ def auto_check_in(request):
 
     # حساب التأخير
     shift = _get_employee_shift(emp)
-    local_now = timezone.localtime(now)
-    check_in_time_only = local_now.time().replace(microsecond=0)
+    check_in_time_only = now.time().replace(microsecond=0)
     late_minutes = _calculate_late_minutes(shift, check_in_time_only)
     status_val = 'late' if late_minutes > 0 else 'present'
-    check_in_str = local_now.strftime('%I:%M %p')
+    check_in_str = check_in_time_only.strftime('%I:%M %p')
 
     # إنشاء أو تحديث سجل الحضور (نستخدم now الكامل مش الوقت فقط)
-    # شيفت بعد نص الليل: لازم السجل يتربط بيوم بداية الشيفت
-    att_date = today
-    if shift:
-        from attendance.api_mobile import get_shift_periods
-        from datetime import timedelta
-        local_now_for_att_date = timezone.localtime(now)
-        prev_periods = get_shift_periods(shift, today - timedelta(days=1))
-        if prev_periods and prev_periods[0].get('start'):
-            prev_start = prev_periods[0]['start']
-            if timezone.is_naive(prev_start):
-                prev_start = timezone.make_aware(prev_start, timezone.get_current_timezone())
-            prev_end_estimate = prev_start + timedelta(hours=8)
-            if prev_start <= local_now_for_att_date <= prev_end_estimate:
-                att_date = today - timedelta(days=1)
-
     att, created = Attendance._base_manager.get_or_create(
         employee=emp,
-        date=att_date,
+        date=today,
         defaults={
             'check_in_time': now,
             'status': status_val,
@@ -516,7 +439,7 @@ def auto_check_out(request):
         # ATT-10b: تسجيل GPS Alert للمدير
         try:
             from attendance.models import TrackingAlert
-            _today = timezone.localdate()
+            _today = date.today()
             _now = timezone.now()
             note = "GPS disabled during auto check-in"
 
@@ -555,18 +478,16 @@ def auto_check_out(request):
     except (ValueError, TypeError):
         return Response({'error': _msg('invalid_coords', lang)}, status=400)
 
-    today = timezone.localdate()
+    today = date.today()
     now = timezone.now()
-    from datetime import timedelta
 
     # لازم يكون عمل check-in الأول
-    # بنبحث في اليوم الحالي واليوم السابق (شيفت بعد نص الليل)
-    att = Attendance._base_manager.filter(
+    att = Attendance.objects.filter(
         employee=emp,
-        date__in=[today, today - timedelta(days=1)],
+        date=today,
         check_in_time__isnull=False,
         check_out_time__isnull=True,
-    ).order_by('-date').first()
+    ).first()
 
     if not att:
         return Response({
@@ -600,13 +521,12 @@ def auto_check_out(request):
     # الميداني الحر والمحدد: مفيش فحص للانصراف (ممكن من أي مكان)
 
     # حساب ساعات العمل
-    local_now = timezone.localtime(now)
-    check_in_local = timezone.localtime(att.check_in_time)
-    check_out_dt = local_now.replace(microsecond=0)
-    check_in_dt = check_in_local.replace(microsecond=0)
+    check_out_time = now.time().replace(microsecond=0)
+    check_in_dt = datetime.combine(today, att.check_in_time)
+    check_out_dt = datetime.combine(today, check_out_time)
     work_duration = check_out_dt - check_in_dt
-    work_hours = round(max(0, work_duration.total_seconds()) / 3600, 2)
-    check_out_str = local_now.strftime('%I:%M %p')
+    work_hours = round(work_duration.total_seconds() / 3600, 2)
+    check_out_str = check_out_time.strftime('%I:%M %p')
 
     # حساب الأوفرتايم
     shift = _get_employee_shift(emp)
@@ -624,7 +544,7 @@ def auto_check_out(request):
         except Exception:
             pass
 
-    att.check_out_time = now
+    att.check_out_time = check_out_time
     att.work_hours = work_hours
     att.overtime_hours = overtime_hours
     att.check_out_latitude = lat
@@ -660,33 +580,21 @@ def auto_checkin_status(request):
     if not emp:
         return Response({'error': _msg('employee_not_found', lang)}, status=404)
 
-    today = timezone.localdate()
-    from datetime import timedelta
+    today = date.today()
+    att = Attendance.objects.filter(employee=emp, date=today).first()
 
-    # شيفت بعد نص الليل: نبحث في اليوم الحالي واليوم السابق
-    att = Attendance._base_manager.filter(
-        employee=emp,
-        date__in=[today, today - timedelta(days=1)],
-        check_in_time__isnull=False,
-    ).order_by('-date').first()
-
-    if not att:
+    if not att or att.check_in_time is None:
         return Response({
             'status': 'not_checked_in',
             'message': _msg('not_checked_in', lang),
             'has_check_in': False,
             'has_check_out': False,
-            'checked_in': False,
-            'checked_out': False,
         })
 
     return Response({
-        'success': True,
         'status': att.status,
         'has_check_in': att.check_in_time is not None,
         'has_check_out': att.check_out_time is not None,
-        'checked_in': att.check_in_time is not None,
-        'checked_out': att.check_out_time is not None,
         'check_in': timezone.localtime(att.check_in_time).strftime('%I:%M %p') if att.check_in_time else None,
         'check_out': timezone.localtime(att.check_out_time).strftime('%I:%M %p') if att.check_out_time else None,
         'work_hours': float(att.work_hours or 0),

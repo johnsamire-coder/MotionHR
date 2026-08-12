@@ -1503,21 +1503,8 @@ def mobile_attendance_status(request):
             'action_required': 'تواصل مع الموارد البشرية' if getattr(employee, 'language', 'ar') == 'ar' else 'Contact HR',
         }, status=200)
     
-    # شيفت بعد نص الليل: نبحث في اليوم الحالي واليوم السابق
-    from datetime import timedelta as _td
-    attendance = (
-        Attendance._base_manager.filter(
-            employee=employee,
-            date__in=[today, today - _td(days=1)],
-            check_in_time__isnull=False,
-        ).order_by('-date').first()
-        or
-        Attendance._base_manager.filter(employee=employee, date=today).first()
-    )
+    attendance = Attendance._base_manager.filter(employee=employee, date=today).first()
     today_dict = attendance_to_dict(attendance)
-
-    # تاريخ الشيفت الفعلي (ممكن يكون امبارح لو شيفت بعد نص الليل)
-    att_date = attendance.date if attendance else today
 
     shift_start_str = ''
     shift_end_str = ''
@@ -1529,12 +1516,12 @@ def mobile_attendance_status(request):
     has_early_leave = False
 
     try:
-        shift = get_active_shift(employee, att_date)
+        shift = get_active_shift(employee, today)
 
         if shift:
             shift_name = shift.name
             shift_mode = getattr(shift, 'shift_mode', '') or getattr(shift, 'shift_type', '')
-            periods = get_shift_periods(shift, att_date)
+            periods = get_shift_periods(shift, today)
 
             effective_start_dt = None
             effective_end_dt = None
@@ -1709,40 +1696,7 @@ def mobile_attendance_status(request):
         'current_approved_location': _get_current_approved_location(employee, request),
         'active_field_visit': _get_active_field_visit(employee),
         'today': today_dict,
-        'is_late': False,
-        'late_minutes': 0,
     }
-
-    # ── حساب التأخير ──────────────────────────────────
-    try:
-        if attendance and attendance.check_in_time and shift:
-            from datetime import datetime, timedelta
-            check_in_local = timezone.localtime(attendance.check_in_time)
-            periods = get_shift_periods(shift, att_date)
-
-            if periods:
-                first_start = periods[0].get('start')
-                if first_start:
-                    if timezone.is_naive(first_start):
-                        tz = timezone.get_current_timezone()
-                        first_start = timezone.make_aware(first_start, tz)
-                    diff = (check_in_local - timezone.localtime(first_start)).total_seconds()
-                    if diff > 0:
-                        response_data['is_late'] = True
-                        response_data['late_minutes'] = int(diff // 60)
-            elif shift.start_time:
-                from datetime import datetime
-                shift_start_dt = datetime.combine(att_date, shift.start_time)
-                tz = timezone.get_current_timezone()
-                shift_start_aware = timezone.make_aware(shift_start_dt, tz)
-                diff = (check_in_local - shift_start_aware).total_seconds()
-                if diff > 0:
-                    response_data['is_late'] = True
-                    response_data['late_minutes'] = int(diff // 60)
-    except Exception:
-        pass
-    # ──────────────────────────────────────────────────
-
     return Response(response_data)
 
 

@@ -460,7 +460,6 @@ urlpatterns += [
     path('api/mobile/manager/shifts/override/create/', shift_override_create),
     path('api/mobile/manager/shifts/override/<int:override_id>/delete/', shift_override_delete),
     path('api/mobile/my-shift/', my_shift),
-    path('api/mobile/employee/my-shift/', my_shift),
     path('api/mobile/employee/partial-checkout/', partial_checkout),
     path('api/mobile/employee/resume-checkin/', resume_checkin),
     path('api/mobile/employee/today-sessions/', today_sessions),

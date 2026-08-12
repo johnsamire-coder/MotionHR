@@ -304,63 +304,40 @@ def auto_check_in(request):
         policy = CompanyWorkPolicy._base_manager.filter(company=emp.company).first()
         pre_window = int(getattr(policy, 'pre_shift_checkin_window', 15) or 15)
 
-        start_candidates = []
+        start_dt = None
         if shift:
-            for base_day in [today - timedelta(days=1), today]:
-                periods = get_shift_periods(shift, base_day)
-                if periods and periods[0].get('start'):
-                    candidate = periods[0].get('start')
-                    if timezone.is_naive(candidate):
-                        candidate = timezone.make_aware(candidate, timezone.get_current_timezone())
-                    start_candidates.append(candidate)
+            periods = get_shift_periods(shift, today)
+            if periods and periods[0].get('start'):
+                start_dt = periods[0].get('start')
+                if timezone.is_naive(start_dt):
+                    start_dt = timezone.make_aware(start_dt, timezone.get_current_timezone())
+            elif getattr(shift, 'start_time', None):
+                start_dt = datetime.combine(today, shift.start_time)
+                if timezone.is_naive(start_dt):
+                    start_dt = timezone.make_aware(start_dt, timezone.get_current_timezone())
 
-            if not start_candidates and getattr(shift, 'start_time', None):
-                candidate = datetime.combine(today, shift.start_time)
-                if timezone.is_naive(candidate):
-                    candidate = timezone.make_aware(candidate, timezone.get_current_timezone())
-                start_candidates.append(candidate)
-
-                shift_end = getattr(shift, 'end_time', None)
-                if shift_end and shift_end <= shift.start_time:
-                    prev_candidate = datetime.combine(today - timedelta(days=1), shift.start_time)
-                    if timezone.is_naive(prev_candidate):
-                        prev_candidate = timezone.make_aware(prev_candidate, timezone.get_current_timezone())
-                    start_candidates.append(prev_candidate)
-
-        matched_window = None
-        nearest_window = None
-
-        for start_dt in sorted(set(start_candidates)):
+        if start_dt is not None:
             allowed_from = start_dt - timedelta(minutes=pre_window)
             allowed_to = start_dt + timedelta(hours=4)
 
-            if nearest_window is None or abs((start_dt - now).total_seconds()) < abs((nearest_window[0] - now).total_seconds()):
-                nearest_window = (start_dt, allowed_from, allowed_to)
-
-            if allowed_from <= now <= allowed_to:
-                matched_window = (start_dt, allowed_from, allowed_to)
-                break
-
-        if start_candidates and matched_window is None:
-            start_dt, allowed_from, allowed_to = nearest_window
-            return Response({
-                'status': 'outside_shift_window',
-                'message': 'لا يمكن تسجيل الحضور التلقائي خارج وقت الشيفت',
-                'shift_start': timezone.localtime(start_dt).strftime('%I:%M %p'),
-                'allowed_from': timezone.localtime(allowed_from).strftime('%I:%M %p'),
-                'allowed_to': timezone.localtime(allowed_to).strftime('%I:%M %p'),
-            }, status=400)
+            if now < allowed_from or now > allowed_to:
+                return Response({
+                    'status': 'outside_shift_window',
+                    'message': 'لا يمكن تسجيل الحضور التلقائي خارج وقت الشيفت',
+                    'shift_start': timezone.localtime(start_dt).strftime('%I:%M %p'),
+                    'allowed_from': timezone.localtime(allowed_from).strftime('%I:%M %p'),
+                    'allowed_to': timezone.localtime(allowed_to).strftime('%I:%M %p'),
+                }, status=400)
 
     except Exception as e:
         print('AUTO WINDOW ERROR:', e)
 
-    # هل عمل check-in النهارده أو امبارح (لشيفتات بعد نص الليل)؟
-    from datetime import timedelta
+    # هل عمل check-in النهارده؟
     existing = Attendance._base_manager.filter(
         employee=emp,
-        date__in=[today, today - timedelta(days=1)],
+        date=today,
         check_in_time__isnull=False,
-    ).order_by('-date').first()
+    ).first()
 
     if existing:
         return Response({
@@ -439,24 +416,9 @@ def auto_check_in(request):
     check_in_str = local_now.strftime('%I:%M %p')
 
     # إنشاء أو تحديث سجل الحضور (نستخدم now الكامل مش الوقت فقط)
-    # شيفت بعد نص الليل: لازم السجل يتربط بيوم بداية الشيفت
-    att_date = today
-    if shift:
-        from attendance.api_mobile import get_shift_periods
-        from datetime import timedelta
-        local_now_for_att_date = timezone.localtime(now)
-        prev_periods = get_shift_periods(shift, today - timedelta(days=1))
-        if prev_periods and prev_periods[0].get('start'):
-            prev_start = prev_periods[0]['start']
-            if timezone.is_naive(prev_start):
-                prev_start = timezone.make_aware(prev_start, timezone.get_current_timezone())
-            prev_end_estimate = prev_start + timedelta(hours=8)
-            if prev_start <= local_now_for_att_date <= prev_end_estimate:
-                att_date = today - timedelta(days=1)
-
     att, created = Attendance._base_manager.get_or_create(
         employee=emp,
-        date=att_date,
+        date=today,
         defaults={
             'check_in_time': now,
             'status': status_val,
@@ -557,16 +519,14 @@ def auto_check_out(request):
 
     today = timezone.localdate()
     now = timezone.now()
-    from datetime import timedelta
 
     # لازم يكون عمل check-in الأول
-    # بنبحث في اليوم الحالي واليوم السابق (شيفت بعد نص الليل)
     att = Attendance._base_manager.filter(
         employee=emp,
-        date__in=[today, today - timedelta(days=1)],
+        date=today,
         check_in_time__isnull=False,
         check_out_time__isnull=True,
-    ).order_by('-date').first()
+    ).first()
 
     if not att:
         return Response({
@@ -661,32 +621,20 @@ def auto_checkin_status(request):
         return Response({'error': _msg('employee_not_found', lang)}, status=404)
 
     today = timezone.localdate()
-    from datetime import timedelta
+    att = Attendance._base_manager.filter(employee=emp, date=today).first()
 
-    # شيفت بعد نص الليل: نبحث في اليوم الحالي واليوم السابق
-    att = Attendance._base_manager.filter(
-        employee=emp,
-        date__in=[today, today - timedelta(days=1)],
-        check_in_time__isnull=False,
-    ).order_by('-date').first()
-
-    if not att:
+    if not att or att.check_in_time is None:
         return Response({
             'status': 'not_checked_in',
             'message': _msg('not_checked_in', lang),
             'has_check_in': False,
             'has_check_out': False,
-            'checked_in': False,
-            'checked_out': False,
         })
 
     return Response({
-        'success': True,
         'status': att.status,
         'has_check_in': att.check_in_time is not None,
         'has_check_out': att.check_out_time is not None,
-        'checked_in': att.check_in_time is not None,
-        'checked_out': att.check_out_time is not None,
         'check_in': timezone.localtime(att.check_in_time).strftime('%I:%M %p') if att.check_in_time else None,
         'check_out': timezone.localtime(att.check_out_time).strftime('%I:%M %p') if att.check_out_time else None,
         'work_hours': float(att.work_hours or 0),

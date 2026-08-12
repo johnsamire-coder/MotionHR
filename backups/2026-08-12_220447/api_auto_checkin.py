@@ -354,13 +354,12 @@ def auto_check_in(request):
     except Exception as e:
         print('AUTO WINDOW ERROR:', e)
 
-    # هل عمل check-in النهارده أو امبارح (لشيفتات بعد نص الليل)؟
-    from datetime import timedelta
+    # هل عمل check-in النهارده؟
     existing = Attendance._base_manager.filter(
         employee=emp,
-        date__in=[today, today - timedelta(days=1)],
+        date=today,
         check_in_time__isnull=False,
-    ).order_by('-date').first()
+    ).first()
 
     if existing:
         return Response({
@@ -444,14 +443,13 @@ def auto_check_in(request):
     if shift:
         from attendance.api_mobile import get_shift_periods
         from datetime import timedelta
-        local_now_for_att_date = timezone.localtime(now)
         prev_periods = get_shift_periods(shift, today - timedelta(days=1))
         if prev_periods and prev_periods[0].get('start'):
             prev_start = prev_periods[0]['start']
             if timezone.is_naive(prev_start):
                 prev_start = timezone.make_aware(prev_start, timezone.get_current_timezone())
             prev_end_estimate = prev_start + timedelta(hours=8)
-            if prev_start <= local_now_for_att_date <= prev_end_estimate:
+            if prev_start.date() < now.date() and now <= prev_end_estimate:
                 att_date = today - timedelta(days=1)
 
     att, created = Attendance._base_manager.get_or_create(
@@ -681,12 +679,9 @@ def auto_checkin_status(request):
         })
 
     return Response({
-        'success': True,
         'status': att.status,
         'has_check_in': att.check_in_time is not None,
         'has_check_out': att.check_out_time is not None,
-        'checked_in': att.check_in_time is not None,
-        'checked_out': att.check_out_time is not None,
         'check_in': timezone.localtime(att.check_in_time).strftime('%I:%M %p') if att.check_in_time else None,
         'check_out': timezone.localtime(att.check_out_time).strftime('%I:%M %p') if att.check_out_time else None,
         'work_hours': float(att.work_hours or 0),

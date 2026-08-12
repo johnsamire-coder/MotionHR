@@ -1,0 +1,11 @@
+{
+  "id": 31101,
+  "employee_id": 3590,
+  "date": "2026-08-13",
+  "check_in_time": "2026-08-12T22:14:37.086529+00:00",
+  "check_out_time": null,
+  "status": "present",
+  "late_minutes": 0,
+  "work_hours": "0.00",
+  "overtime_hours": "0.00"
+}

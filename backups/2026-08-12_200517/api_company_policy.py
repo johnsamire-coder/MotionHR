@@ -35,8 +35,9 @@ def get_work_policy(request):
     user = request.user
     lang = _get_lang(user)
 
-    # الموظف العادي يقدر يقرأ السياسة عشان الـ Auto Check-in يشتغل
-    # بس مش يقدر يعدلها (save_work_policy محمية بالـ _check_manager)
+    if not _check_manager(user):
+        msg = 'Insufficient permissions' if lang == 'en' else 'صلاحية غير كافية'
+        return Response({'error': msg}, status=403)
 
     company = getattr(user, 'company', None)
 

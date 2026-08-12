@@ -1230,7 +1230,7 @@ def my_shift(request):
         if not employee:
             return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
 
-        today = timezone.localdate()
+        today = date.today()
         shift, source = get_effective_shift(employee, today)
 
         if not shift:
