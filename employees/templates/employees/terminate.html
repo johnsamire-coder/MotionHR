@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}انهاء خدمة موظف{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+
+      <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+          <h5 class="mb-0">
+            <i class="bi bi-person-x-fill me-2"></i>
+            انهاء خدمة الموظف
+          </h5>
+        </div>
+        <div class="card-body">
+
+          <!-- بيانات الموظف -->
+          <div class="alert alert-warning">
+            <div class="d-flex align-items-center gap-3">
+              {% if employee.photo %}
+                <img src="{{ employee.photo.url }}" class="rounded-circle" width="50" height="50" style="object-fit:cover">
+              {% else %}
+                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white" style="width:50px;height:50px;font-size:1.2rem">
+                  {{ employee.first_name_ar|first }}
+                </div>
+              {% endif %}
+              <div>
+                <div class="fw-bold fs-6">{{ employee.full_name_ar }}</div>
+                <div class="text-muted small">
+                  {{ employee.employee_code }} |
+                  {{ employee.job_title.name_ar|default:"—" }} |
+                  {{ employee.department.name_ar|default:"—" }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            تحذير: هذا الاجراء سيوقف حساب الموظف ويسجل انهاء الخدمة. لا يمكن التراجع عنه بسهولة.
+          </div>
+
+          <form method="post">
+            {% csrf_token %}
+
+            <!-- نوع انهاء الخدمة -->
+            <div class="mb-3">
+              <label class="form-label fw-bold">
+                نوع انهاء الخدمة <span class="text-danger">*</span>
+              </label>
+              <select name="termination_type" class="form-select" required>
+                <option value="terminated">فصل من الخدمة</option>
+                <option value="resigned">استقالة</option>
+                <option value="retired">تقاعد</option>
+              </select>
+            </div>
+
+            <!-- تاريخ انهاء الخدمة -->
+            <div class="mb-3">
+              <label class="form-label fw-bold">
+                تاريخ انهاء الخدمة <span class="text-danger">*</span>
+              </label>
+              <input
+                type="date"
+                name="termination_date"
+                class="form-control"
+                required
+                value="{{ today|date:'Y-m-d' }}"
+              >
+            </div>
+
+            <!-- السبب -->
+            <div class="mb-3">
+              <label class="form-label fw-bold">
+                سبب انهاء الخدمة <span class="text-danger">*</span>
+              </label>
+              <textarea
+                name="termination_reason"
+                class="form-control"
+                rows="4"
+                required
+                placeholder="اكتب سبب انهاء الخدمة بالتفصيل..."
+              ></textarea>
+            </div>
+
+            <!-- الازرار -->
+            <div class="d-flex gap-2 justify-content-end">
+              <a href="{% url 'employees:detail' employee.pk %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-right me-1"></i> الغاء
+              </a>
+              <button type="submit" class="btn btn-danger">
+                <i class="bi bi-person-x-fill me-1"></i> تاكيد انهاء الخدمة
+              </button>
+            </div>
+
+          </form>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -43,7 +43,7 @@ def get_work_policy(request):
 
     try:
         from .company_policy_models import CompanyWorkPolicy
-        policy = CompanyWorkPolicy.objects.filter(company=company).first()
+        policy = CompanyWorkPolicy._base_manager.filter(company=company).first()
     except Exception:
         policy = None
 

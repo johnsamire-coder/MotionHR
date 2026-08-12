@@ -153,11 +153,20 @@ def mobile_leave_request(request):
     half_day = request.data.get('half_day', False)
     half_day_type = request.data.get('half_day_type', 'morning').strip()
 
-    if not all([leave_type_id, start_date, end_date, reason]):
+    if not all([leave_type_id, start_date, end_date]):
         return Response({
             'success': False,
-            'message': 'نوع الإجازة وتاريخ البداية والنهاية والسبب مطلوبين'
+            'message': 'نوع الإجازة وتاريخ البداية والنهاية مطلوبين'
         }, status=400)
+
+    # REQ-1: السبب اختياري - نحط اسم النوع
+    if not reason:
+        try:
+            _lt = LeaveType._base_manager.get(id=leave_type_id, company=employee.company)
+            reason = _lt.name or 'إجازة'
+        except Exception:
+            reason = 'إجازة'
+
 
     try:
         leave_type = LeaveType._base_manager.get(
@@ -195,6 +204,30 @@ def mobile_leave_request(request):
             'success': False,
             'message': 'عندك إجازة موجودة بالفعل في نفس الفترة دي'
         }, status=400)
+
+    # LEV-1: فحص لو الموظف حاضر في نفس الفترة
+    from attendance.models import Attendance
+    from datetime import timedelta
+
+    conflict_dates = []
+    check_date = start
+    while check_date <= end:
+        att = Attendance._base_manager.filter(
+            employee=employee,
+            date=check_date,
+            check_in_time__isnull=False,
+        ).first()
+        if att:
+            conflict_dates.append(check_date.isoformat())
+        check_date += timedelta(days=1)
+
+    if conflict_dates:
+        return Response({
+            'success': False,
+            'message': f'لا يمكن تقديم إجازة - يوجد حضور مسجل في: {", ".join(conflict_dates)}',
+            'conflict_dates': conflict_dates,
+        }, status=400)
+
 
     if half_day and start_date == end_date:
         days_count = 0.5
@@ -404,10 +437,10 @@ def mobile_submit_request(request):
     permission_date = request.data.get('permission_date')
     permission_time_raw = request.data.get('permission_time')
 
-    if not all([request_type_id, subject, details]):
+    if not request_type_id:
         return Response({
             'success': False,
-            'message': 'نوع الطلب والموضوع والتفاصيل مطلوبين'
+            'message': 'نوع الطلب مطلوب'
         }, status=400)
 
     try:
@@ -416,6 +449,15 @@ def mobile_submit_request(request):
         )
     except RequestType.DoesNotExist:
         return Response({'success': False, 'message': 'نوع الطلب غير موجود'}, status=404)
+
+    # REQ-1: العنوان تلقائي من اسم النوع لو مبعتش
+    if not subject:
+        subject = request_type.name or 'طلب'
+
+    # التفاصيل اختيارية - لو مبعتش نحط رسالة افتراضية
+    if not details:
+        details = f'طلب {request_type.name}' if request_type.name else 'طلب'
+
 
     is_permission_request = request_type.permission_kind in ['late_arrival', 'early_leave']
 
@@ -587,6 +629,60 @@ def mobile_submit_request(request):
             except ValueError:
                 continue
 
+    from datetime import timedelta
+    today = timezone.localdate()
+
+    _requires_date = getattr(request_type, 'requires_date_range', False) or is_permission_request
+
+    if _requires_date and parsed_start:
+        if parsed_start > today + timedelta(days=90):
+            return Response({
+                'success': False,
+                'message': 'تاريخ البداية لا يمكن أن يكون أكثر من 90 يوم في المستقبل'
+            }, status=400)
+
+        if parsed_start < today - timedelta(days=60):
+            return Response({
+                'success': False,
+                'message': 'تاريخ البداية قديم جداً (أكثر من 60 يوم)'
+            }, status=400)
+
+    if _requires_date and parsed_end and parsed_start and parsed_end < parsed_start:
+        return Response({
+            'success': False,
+            'message': 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو نفسه'
+        }, status=400)
+
+    if is_permission_request and request_type.permission_kind == 'early_leave' and parsed_permission_time:
+        try:
+            from attendance.api_mobile import get_active_shift
+            shift = get_active_shift(employee, parsed_start or today)
+            if shift and shift.end_time:
+                if parsed_permission_time >= shift.end_time:
+                    return Response({
+                        'success': False,
+                        'message': 'لا يمكن طلب انصراف مبكر بعد نهاية الشيفت'
+                    }, status=400)
+        except Exception:
+            pass
+
+    _rt_name = (request_type.name or '').lower() if request_type else ''
+    is_expense_request = ('مصروف' in _rt_name or 'expense' in _rt_name or 'reimburs' in _rt_name) and 'بدل' not in _rt_name
+
+    if is_expense_request and parsed_start:
+        from attendance.models import Attendance
+        att = Attendance._base_manager.filter(
+            employee=employee,
+            date=parsed_start,
+            check_in_time__isnull=False,
+        ).first()
+
+        if not att:
+            return Response({
+                'success': False,
+                'message': 'لا يمكن رد المصروفات - لا يوجد حضور مسجل في هذا التاريخ'
+            }, status=400)
+
         if parsed_permission_time is None:
             return Response({
                 'success': False,
@@ -604,6 +700,62 @@ def mobile_submit_request(request):
                 'success': False,
                 'message': 'المبلغ غير صحيح'
             }, status=400)
+
+    # REQ-3: Validation للسلفة والقرض
+    _rt_name_lower = (request_type.name or '').lower() if request_type else ''
+    is_advance_or_loan = any(k in _rt_name_lower for k in ['سلفة', 'قرض', 'advance', 'loan'])
+
+    if is_advance_or_loan:
+        if not parsed_amount or parsed_amount <= 0:
+            return Response({
+                'success': False,
+                'message': 'المبلغ مطلوب لطلب السلفة/القرض ويجب أن يكون أكبر من صفر'
+            }, status=400)
+
+        # الحد الأقصى = 3 أضعاف الراتب الأساسي
+        try:
+            basic_salary = float(getattr(employee, 'basic_salary', 0) or 0)
+        except Exception:
+            basic_salary = 0
+
+        if basic_salary <= 0:
+            return Response({
+                'success': False,
+                'message': 'لا يمكن تقديم طلب سلفة - راتبك الأساسي غير محدد. تواصل مع HR'
+            }, status=400)
+
+        max_allowed = basic_salary * 3
+        if parsed_amount > max_allowed:
+            return Response({
+                'success': False,
+                'message': f'الحد الأقصى للسلفة {max_allowed:.0f} جنيه (3 أضعاف الراتب). المطلوب: {parsed_amount:.0f}'
+            }, status=400)
+
+        # فحص سلفة قائمة
+        from django.db.models import Sum
+        active_advances = EmployeeRequest._base_manager.filter(
+            employee=employee,
+            status__in=['pending', 'approved'],
+            request_type__name__icontains='سلفة',
+        ).exclude(status='rejected')
+
+        active_loans = EmployeeRequest._base_manager.filter(
+            employee=employee,
+            status__in=['pending', 'approved'],
+            request_type__name__icontains='قرض',
+        ).exclude(status='rejected')
+
+        total_active = (active_advances.aggregate(total=Sum('amount'))['total'] or 0) +                        (active_loans.aggregate(total=Sum('amount'))['total'] or 0)
+
+        total_active = float(total_active)
+
+        if total_active + parsed_amount > max_allowed:
+            remaining = max_allowed - total_active
+            return Response({
+                'success': False,
+                'message': f'لديك سلف/قروض قائمة بمبلغ {total_active:.0f} جنيه. المتبقي المسموح: {remaining:.0f} جنيه'
+            }, status=400)
+
 
     emp_request = EmployeeRequest._base_manager.create(
         company=employee.company,

@@ -37,73 +37,90 @@ WORKER_TYPE_MAP = {
 # ═══════════════════════════════════════════════════════
 C = {
     "operation_type": 0,
-    "employee_code": 1,
-    "temporary_password": 2,
-    "first_name_ar": 3,
-    "middle_name_ar": 4,
-    "last_name_ar": 5,
-    "first_name_en": 6,
-    "last_name_en": 7,
-    "national_id": 8,
-    "birth_date": 9,
-    "gender": 10,
-    "marital_status": 11,
-    "religion": 12,
-    "nationality": 13,
-    "language": 14,
-    "country_code": 15,
-    "phone": 16,
-    "phone2": 17,
-    "email": 18,
-    "address": 19,
-    "city": 20,
-    "emergency_contact_name": 21,
-    "emergency_contact_relation": 22,
-    "emergency_contact_phone": 23,
-    "branch_name": 24,
-    "department_name": 25,
-    "job_title_name": 26,
-    "direct_manager_department": 27,
-    "direct_manager_name": 28,
-    "hire_date": 29,
-    "attendance_mode": 30,
-    "status": 31,
-    "worker_type": 32,
-    "contract_type": 33,
-    "contract_start_date": 34,
-    "contract_end_date": 35,
-    "contract_duration_months": 36,
-    "probation_months": 37,
-    "has_insurance": 38,
-    "insurance_number": 39,
-    "basic_salary": 40,
-    "currency": 41,
-    "salary_payment_method": 42,
-    "bank_name": 43,
-    "bank_account": 44,
-    "iban": 45,
-    "instapay_transfer_id": 46,
-    "wallet_transfer_number": 47,
-    "wallet_provider": 48,
-    "annual_entitled": 49,
-    "annual_used_before_system": 50,
-    "annual_carry_forward": 51,
-    "sick_entitled": 52,
-    "sick_used_before_system": 53,
-    "sick_carry_forward": 54,
-    "emergency_entitled": 55,
-    "emergency_used_before_system": 56,
-    "emergency_carry_forward": 57,
-    "maternity_entitled": 58,
-    "maternity_used_before_system": 59,
-    "maternity_carry_forward": 60,
-    "paternity_entitled": 61,
-    "paternity_used_before_system": 62,
-    "paternity_carry_forward": 63,
-    "unpaid_entitled": 64,
-    "unpaid_used_before_system": 65,
-    "unpaid_carry_forward": 66,
+    "full_name_ar": 1,
+    "full_name_en": 2,
+    "national_id": 3,
+    "phone": 4,
+    "birth_date": 5,
+    "hire_date": 6,
+    "branch_name": 7,
+    "department_name": 8,
+    "job_title_name": 9,
+    "worker_type": 10,
+    "basic_salary": 11,
 }
+
+
+
+def _parse_flexible_date(value):
+    """يقرأ التاريخ بأي فورمات ممكنة"""
+    if value is None or value == '':
+        return None
+
+    # لو datetime object من openpyxl
+    from datetime import datetime, date
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+
+    # لو رقم (Excel serial date)
+    if isinstance(value, (int, float)):
+        try:
+            from openpyxl.utils.datetime import from_excel
+            return from_excel(value).date()
+        except Exception:
+            pass
+
+    # لو string - نجرب فورمات مختلفة
+    s = str(value).strip()
+    if not s:
+        return None
+
+    formats = [
+        '%Y-%m-%d',
+        '%d/%m/%Y',
+        '%d-%m-%Y',
+        '%m/%d/%Y',
+        '%Y/%m/%d',
+        '%d.%m.%Y',
+        '%Y.%m.%d',
+        '%d %m %Y',
+        '%Y-%m-%d %H:%M:%S',
+        '%d/%m/%Y %H:%M:%S',
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+
+    return None
+
+
+def _get_val(row, key):
+    """يجلب القيمة الخام بدون تحويل لـ string"""
+    idx = C.get(key)
+    if idx is None or idx >= len(row):
+        return None
+    return row[idx]
+
+
+def _split_full_name(full_name):
+    """يقسم الاسم الكامل لـ (first, middle, last)"""
+    if not full_name:
+        return ("", "", "")
+    parts = str(full_name).strip().split()
+    if len(parts) == 0:
+        return ("", "", "")
+    if len(parts) == 1:
+        return (parts[0], "", parts[0])
+    if len(parts) == 2:
+        return (parts[0], "", parts[1])
+    return (parts[0], " ".join(parts[1:-1]), parts[-1])
+
+
 
 LEAVE_COLS = {
     "annual":    ("annual_entitled",    "annual_used_before_system",    "annual_carry_forward"),
@@ -116,8 +133,16 @@ LEAVE_COLS = {
 
 
 def _str(row, key):
-    val = row[C[key]]
-    return str(val).strip() if val is not None else ""
+    """يرجع string فارغة لو الحقل مش موجود (بدل ما يرمي error)"""
+    idx = C.get(key)
+    if idx is None:
+        return ""
+    if idx >= len(row):
+        return ""
+    v = row[idx]
+    if v is None:
+        return ""
+    return str(v).strip()
 
 
 def _dec(row, key):
@@ -130,31 +155,29 @@ def _dec(row, key):
         return Decimal("0")
 
 
-def _int(row, key, default=0):
-    val = row[C[key]]
-    if val is None or str(val).strip() == "":
+def _int(row, key, default=None):
+    """يقرأ رقم صحيح - يرجع default لو الحقل مش موجود"""
+    idx = C.get(key)
+    if idx is None or idx >= len(row):
+        return default
+    v = row[idx]
+    if v is None or v == "":
         return default
     try:
-        return int(float(str(val).strip()))
+        return int(float(v))
     except (ValueError, TypeError):
         return default
 
 
-def _date(row, key):
-    val = row[C[key]]
-    if val is None:
-        return None
-    if hasattr(val, "date"):
-        return val.date()
-    from datetime import date
-    s = str(val).strip()
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
-        try:
-            from datetime import datetime
-            return datetime.strptime(s, fmt).date()
-        except Exception:
-            pass
-    return None
+def _date(row, key, default=None):
+    """يقرأ تاريخ - يرجع default لو الحقل مش موجود"""
+    idx = C.get(key)
+    if idx is None or idx >= len(row):
+        return default
+    v = row[idx]
+    if v is None or v == "":
+        return default
+    return _parse_flexible_date(v) or default
 
 
 def _company_employee_limit(company):
@@ -268,7 +291,7 @@ class Command(BaseCommand):
                 continue
 
             op_type  = _str(row, "operation_type").lower()
-            emp_code = _str(row, "employee_code")
+            emp_code = (_str(row, "employee_code") if "employee_code" in C else "")
             nat_id   = _str(row, "national_id")
 
             row_errors = self._validate_row(row, op_type, idx)
@@ -323,17 +346,28 @@ class Command(BaseCommand):
         prefix = f"صف {idx}"
 
         if op_type == "new":
-            required = [
-                "first_name_ar", "last_name_ar",
-                "national_id", "phone",
-                "hire_date", "branch_name",
-                "department_name", "job_title_name",
-                "salary_payment_method",
-                "worker_type",
+            # الحقول الجديدة المبسطة
+            required_new = [
+                ("full_name_ar", "الاسم الكامل بالعربي"),
+                ("full_name_en", "الاسم الكامل بالإنجليزي"),
+                ("national_id", "الرقم القومي"),
+                ("phone", "الموبايل"),
+                ("birth_date", "تاريخ الميلاد"),
+                ("hire_date", "تاريخ التعيين"),
+                ("branch_name", "الفرع"),
+                ("department_name", "القسم"),
+                ("job_title_name", "المسمى الوظيفي"),
+                ("worker_type", "تصنيف الموظف"),
             ]
-            for field in required:
+            for field, label in required_new:
                 if not _str(row, field):
-                    errors.append(f"{prefix}: الحقل [{field}] إجباري للموظف الجديد")
+                    errors.append(f"{prefix}: الحقل [{label}] إجباري للموظف الجديد")
+
+            worker_type = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
+            if worker_type and worker_type not in ("office", "field_free", "field_assigned"):
+                errors.append(f"{prefix}: قيمة تصنيف الموظف غير صحيحة — المسموح: مكتبي / ميداني حر / ميداني محدد")
+
+            return errors  # نتخطى باقي الـ validations القديمة
 
             worker_type = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
             if worker_type and worker_type not in ("office", "field_free", "field_assigned"):
@@ -375,7 +409,7 @@ class Command(BaseCommand):
                     errors.append(f"{prefix}: مزود المحفظة إجباري لطريقة القبض [wallet]")
 
         elif op_type == "update":
-            if not _str(row, "employee_code") and not _str(row, "national_id"):
+            if not (_str(row, "employee_code") if "employee_code" in C else "") and not _str(row, "national_id"):
                 errors.append(f"{prefix}: كود الموظف أو الرقم القومي مطلوب للتحديث")
 
             worker_type = WORKER_TYPE_MAP.get(_str(row, "worker_type"), "")
@@ -440,12 +474,29 @@ class Command(BaseCommand):
 
     # ─────────────────────────────────────────
     def _create_employee(self, row, company, leave_types_map, send_emails, idx):
-        fname_ar  = _str(row, "first_name_ar")
-        lname_ar  = _str(row, "last_name_ar")
+        # قراءة الأسماء الجديدة (full_name_ar / full_name_en) + fallback للقديم
+        full_ar = _str(row, "full_name_ar")
+        full_en = _str(row, "full_name_en")
+        print(f"[DEBUG] Row {idx}: full_ar='{full_ar}' full_en='{full_en}'")
+
+        if full_ar:
+            fname_ar, mname_ar, lname_ar = _split_full_name(full_ar)
+        else:
+            fname_ar = _str(row, "first_name_ar")
+            mname_ar = _str(row, "middle_name_ar")
+            lname_ar = _str(row, "last_name_ar")
+
+        if full_en:
+            fname_en, _mid_en, lname_en = _split_full_name(full_en)
+        else:
+            fname_en = _str(row, "first_name_en")
+            lname_en = _str(row, "last_name_en")
+
+
         nat_id    = _str(row, "national_id")
         phone     = _str(row, "phone")
         email     = _str(row, "email") or None
-        emp_code  = _str(row, "employee_code")
+        emp_code  = (_str(row, "employee_code") if "employee_code" in C else "")
         temp_pass = _str(row, "temporary_password") or self.generate_random_password()
 
         hire_date = _date(row, "hire_date")
@@ -521,10 +572,10 @@ class Command(BaseCommand):
             user=user,
             employee_code=emp_code or f"EMP{user.id}",
             first_name_ar=fname_ar,
-            middle_name_ar=_str(row, "middle_name_ar"),
+            middle_name_ar=mname_ar,
             last_name_ar=lname_ar,
-            first_name_en=_str(row, "first_name_en"),
-            last_name_en=_str(row, "last_name_en"),
+            first_name_en=fname_en,
+            last_name_en=lname_en,
             national_id=nat_id,
             birth_date=_date(row, "birth_date"),
             gender="female" if gender_val in ("female", "أنثى") else "male",

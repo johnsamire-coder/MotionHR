@@ -16,82 +16,30 @@ from openpyxl.formatting.rule import FormulaRule
 # ═══════════════════════════════════════════════════════════════
 COLUMNS = [
     # (key, label, required, val_type, val_formula, width, is_text_format, section)
-    # --- العملية ---
-    ("operation_type",            "نوع العملية *",                   True,  "list", "new,update",             15, False, "بيانات العملية"),
-    ("employee_code",             "كود الموظف",                      False, None,   None,                     15, True,  "بيانات العملية"),
-    ("temporary_password",        "الباسورد المؤقتة *",              True,  None,   None,                     20, True,  "بيانات العملية"),
-    # --- الشخصية ---
-    ("first_name_ar",             "الاسم الأول عربي *",              True,  None,   None,                     20, False, "البيانات الشخصية"),
-    ("middle_name_ar",            "الاسم الأوسط عربي",               False, None,   None,                     20, False, "البيانات الشخصية"),
-    ("last_name_ar",              "الاسم الأخير عربي *",             True,  None,   None,                     20, False, "البيانات الشخصية"),
-    ("first_name_en",             "الاسم الأول إنجليزي *",           True,  None,   None,                     20, False, "البيانات الشخصية"),
-    ("last_name_en",              "الاسم الأخير إنجليزي *",          True,  None,   None,                     20, False, "البيانات الشخصية"),
-    ("national_id",               "الرقم القومي * (Text)",           True,  None,   None,                     20, True,  "البيانات الشخصية"),
-    ("birth_date",                "تاريخ الميلاد * (YYYY-MM-DD)",    True,  None,   None,                     22, False, "البيانات الشخصية"),
-    ("gender",                    "النوع *",                         True,  "list", "القوائم!$B$2:$B$3",      12, False, "البيانات الشخصية"),
-    ("marital_status",            "الحالة الاجتماعية",               False, "list", "القوائم!$C$2:$C$5",      18, False, "البيانات الشخصية"),
-    ("religion",                  "الديانة",                         False, "list", "القوائم!$D$2:$D$4",      12, False, "البيانات الشخصية"),
-    ("nationality",               "الجنسية",                         False, None,   None,                     15, False, "البيانات الشخصية"),
-    ("language",                  "اللغة",                           False, "list", "القوائم!$E$2:$E$3",      10, False, "البيانات الشخصية"),
-    # --- التواصل ---
-    ("country_code",              "كود الدولة",                      False, None,   None,                     12, False, "التواصل"),
-    ("phone",                     "الموبايل * (Text)",               True,  None,   None,                     18, True,  "التواصل"),
-    ("phone2",                    "موبايل إضافي (Text)",             False, None,   None,                     18, True,  "التواصل"),
-    ("email",                     "البريد الإلكتروني",               False, None,   None,                     25, False, "التواصل"),
-    ("address",                   "العنوان",                         False, None,   None,                     30, False, "التواصل"),
-    ("city",                      "المدينة",                         False, None,   None,                     15, False, "التواصل"),
-    ("emergency_contact_name",    "اسم جهة الطوارئ",                 False, None,   None,                     22, False, "التواصل"),
-    ("emergency_contact_relation","صلة القرابة",                     False, None,   None,                     15, False, "التواصل"),
-    ("emergency_contact_phone",   "موبايل الطوارئ (Text)",           False, None,   None,                     20, True,  "التواصل"),
+
+    # --- بيانات العملية ---
+    ("operation_type",       "نوع العملية *",                   True,  "list", "new,update",              15, False, "بيانات العملية"),
+
+    # --- الاسم ---
+    ("full_name_ar",         "الاسم الكامل بالعربي *",          True,  None,   None,                      35, False, "الاسم"),
+    ("full_name_en",         "الاسم الكامل بالإنجليزي *",       True,  None,   None,                      35, False, "الاسم"),
+
+    # --- البيانات الأساسية ---
+    ("national_id",          "الرقم القومي * (Text)",           True,  None,   None,                      20, True,  "البيانات الأساسية"),
+    ("phone",                "الموبايل * (Text)",               True,  None,   None,                      18, True,  "البيانات الأساسية"),
+    ("birth_date",           "تاريخ الميلاد * (YYYY-MM-DD)",    True,  None,   None,                      22, False, "البيانات الأساسية"),
+
     # --- الوظيفة ---
-    ("branch_name", "الفرع *", True, "list", "التعريفات!$A$2:$A$200", 20, False, "بيانات الوظيفة"),
-    ("department_name", "القسم *", True, "list", "التعريفات!$B$2:$B$200", 20, False, "بيانات الوظيفة"),
-    ("job_title_name", "المسمى الوظيفي *", True, "list", "التعريفات!$C$2:$C$200", 22, False, "بيانات الوظيفة"),
-    ("direct_manager_department", "قسم المدير المباشر", False, "list", "التعريفات!$B$2:$B$200", 22, False, "بيانات الوظيفة"),
-    ("direct_manager_name", "اسم المدير المباشر", False, None, None, 28, False, "بيانات الوظيفة"),
-    ("hire_date",                 "تاريخ التعيين * (YYYY-MM-DD)",    True,  None,   None,                     25, False, "بيانات الوظيفة"),
-    ("attendance_mode",           "نمط الحضور *",                    True,  "list", "القوائم!$I$2:$I$6",      18, False, "بيانات الوظيفة"),
-    ("status",                    "الحالة الوظيفية (اختياري - سيتم الاستيراد نشط)", False, "list", "القوائم!$O$2:$O$6", 28, False, "بيانات الوظيفة"),
-    ("worker_type",               "تصنيف الموظف * (مكتبي/ميداني حر/ميداني محدد)", True, "list", "القوائم!$P$2:$P$4", 30, False, "بيانات الوظيفة"),
-    # --- العقد ---
-    ("contract_type",             "نوع العقد *",                     True,  "list", "القوائم!$J$2:$J$7",      18, False, "العقد"),
-    ("contract_start_date",       "بداية العقد (YYYY-MM-DD)",        False, None,   None,                     22, False, "العقد"),
-    ("contract_end_date",         "نهاية العقد (YYYY-MM-DD)",        False, None,   None,                     22, False, "العقد"),
-    ("contract_duration_months",  "مدة العقد بالشهور (رقم فقط)",    False, None,   None,                     24, False, "العقد"),
-    ("probation_months",          "فترة التجربة بالشهور (رقم فقط)", False, None,   None,                     24, False, "العقد"),
-    # --- التأمين ---
-    ("has_insurance",             "مؤمن عليه",                       False, "list", "نعم,لا",                 12, False, "التأمين"),
-    ("insurance_number",          "رقم التأمين (Text)",              False, None,   None,                     18, True,  "التأمين"),
-    # --- الماليات ---
-    ("basic_salary",              "المرتب الأساسي",                  False, None,   None,                     18, False, "الماليات"),
-    ("currency",                  "العملة",                          False, "list", "القوائم!$K$2:$K$7",      10, False, "الماليات"),
-    ("salary_payment_method",     "طريقة القبض *",                   True,  "list", "القوائم!$L$2:$L$5",      18, False, "الماليات"),
-    ("bank_name",                 "اسم البنك",                       False, None,   None,                     20, False, "الماليات"),
-    ("bank_account",              "رقم الحساب (Text)",               False, None,   None,                     20, True,  "الماليات"),
-    ("iban",                      "IBAN (Text - EG...)",             False, None,   None,                     30, True,  "الماليات"),
-    ("instapay_transfer_id",      "رقم إنستا باي (Text)",            False, None,   None,                     22, True,  "الماليات"),
-    ("wallet_transfer_number",    "رقم المحفظة (Text)",              False, None,   None,                     22, True,  "الماليات"),
-    ("wallet_provider",           "مزود المحفظة",                    False, "list", "القوائم!$M$2:$M$7",      18, False, "الماليات"),
-    # --- أرصدة الإجازات ---
-    ("annual_entitled",           "السنوية - المستحق",               False, None,   None,                     20, False, "أرصدة الإجازات"),
-    ("annual_used_before_system", "السنوية - المستنفذ",              False, None,   None,                     22, False, "أرصدة الإجازات"),
-    ("annual_carry_forward",      "السنوية - مرحل",                  False, None,   None,                     18, False, "أرصدة الإجازات"),
-    ("sick_entitled",             "المرضية - المستحق",               False, None,   None,                     20, False, "أرصدة الإجازات"),
-    ("sick_used_before_system",   "المرضية - المستنفذ",              False, None,   None,                     22, False, "أرصدة الإجازات"),
-    ("sick_carry_forward",        "المرضية - مرحل",                  False, None,   None,                     18, False, "أرصدة الإجازات"),
-    ("emergency_entitled",        "الطارئة - المستحق",               False, None,   None,                     20, False, "أرصدة الإجازات"),
-    ("emergency_used_before_system","الطارئة - المستنفذ",            False, None,   None,                     22, False, "أرصدة الإجازات"),
-    ("emergency_carry_forward",   "الطارئة - مرحل",                  False, None,   None,                     18, False, "أرصدة الإجازات"),
-    ("maternity_entitled",        "الأمومة - المستحق",               False, None,   None,                     20, False, "أرصدة الإجازات"),
-    ("maternity_used_before_system","الأمومة - المستنفذ",            False, None,   None,                     22, False, "أرصدة الإجازات"),
-    ("maternity_carry_forward",   "الأمومة - مرحل",                  False, None,   None,                     18, False, "أرصدة الإجازات"),
-    ("paternity_entitled",        "الأبوة - المستحق",                False, None,   None,                     20, False, "أرصدة الإجازات"),
-    ("paternity_used_before_system","الأبوة - المستنفذ",             False, None,   None,                     22, False, "أرصدة الإجازات"),
-    ("paternity_carry_forward",   "الأبوة - مرحل",                   False, None,   None,                     18, False, "أرصدة الإجازات"),
-    ("unpaid_entitled",           "بدون مرتب - المستحق",             False, None,   None,                     22, False, "أرصدة الإجازات"),
-    ("unpaid_used_before_system", "بدون مرتب - المستنفذ",            False, None,   None,                     24, False, "أرصدة الإجازات"),
-    ("unpaid_carry_forward",      "بدون مرتب - مرحل",                False, None,   None,                     20, False, "أرصدة الإجازات"),
+    ("hire_date",            "تاريخ التعيين * (YYYY-MM-DD)",    True,  None,   None,                      25, False, "الوظيفة"),
+    ("branch_name",          "الفرع *",                          True,  "list", "التعريفات!$A$2:$A$200",  20, False, "الوظيفة"),
+    ("department_name",      "القسم *",                          True,  "list", "التعريفات!$B$2:$B$200",  20, False, "الوظيفة"),
+    ("job_title_name",       "المسمى الوظيفي *",                True,  "list", "التعريفات!$C$2:$C$200",  22, False, "الوظيفة"),
+    ("worker_type",          "تصنيف الموظف *",                  True,  "list", "القوائم!$P$2:$P$4",       30, False, "الوظيفة"),
+
+    # --- الراتب ---
+    ("basic_salary",         "المرتب الأساسي",                  False, None,   None,                      18, False, "الراتب"),
 ]
+
 
 # ألوان الأقسام
 SECTION_COLORS = {
@@ -294,74 +242,7 @@ class Command(BaseCommand):
         ws.row_dimensions[2].height = 45
         ws.row_dimensions[3].height = 20
         ws.freeze_panes = "A4"
-
-        # ─────────────────────────────────────────
-        # Conditional Formatting — مطلوب / غير مطلوب
-        # ─────────────────────────────────────────
-        # بنحدد أعمدة الـ keys المهمة من COLUMNS
-        col_map = {col[0]: idx for idx, col in enumerate(COLUMNS, start=1)}
-
-        # طريقة القبض
-        pay_col = get_column_letter(col_map.get("salary_payment_method", 0))
-
-        # لون برتقالي للحقول المطلوبة حسب طريقة القبض
-        orange_fill = PatternFill(start_color="FFE0B2", end_color="FFE0B2", fill_type="solid")
-        # لون رمادي للحقول غير المطلوبة
-        grey_fill   = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
-
-        bank_cols  = ["bank_name", "bank_account", "iban"]
-        insta_cols = ["instapay_transfer_id"]
-        wallet_cols = ["wallet_transfer_number", "wallet_provider"]
-
-        for key_list, condition in [
-            (bank_cols,   f'{pay_col}4="bank"'),
-            (insta_cols,  f'{pay_col}4="instapay"'),
-            (wallet_cols, f'{pay_col}4="wallet"'),
-        ]:
-            for key in key_list:
-                c_idx = col_map.get(key)
-                if not c_idx:
-                    continue
-                cl = get_column_letter(c_idx)
-                rng = f"{cl}4:{cl}10000"
-                # مطلوب = برتقالي
-                ws.conditional_formatting.add(
-                    rng,
-                    FormulaRule(
-                        formula=[f"${pay_col}4={condition.split(chr(61))[1]}"],
-                        fill=orange_fill,
-                    )
-                )
-                # غير مطلوب = رمادي
-                ws.conditional_formatting.add(
-                    rng,
-                    FormulaRule(
-                        formula=[f"NOT(${pay_col}4={condition.split(chr(61))[1]})"],
-                        fill=grey_fill,
-                    )
-                )
-
-        # التأمين
-        ins_col = get_column_letter(col_map.get("has_insurance", 0))
-        ins_num_col = col_map.get("insurance_number")
-        if ins_num_col:
-            cl = get_column_letter(ins_num_col)
-            rng = f"{cl}4:{cl}10000"
-            ws.conditional_formatting.add(
-                rng,
-                FormulaRule(
-                    formula=[f'${ins_col}4="نعم"'],
-                    fill=orange_fill,
-                )
-            )
-            ws.conditional_formatting.add(
-                rng,
-                FormulaRule(
-                    formula=[f'NOT(${ins_col}4="نعم")'],
-                    fill=grey_fill,
-                )
-            )
-
+        # Conditional formatting removed - simplified template
     # ─────────────────────────────────────────
     def _create_definitions_sheet(self, wb):
         ws = wb.create_sheet('التعريفات')

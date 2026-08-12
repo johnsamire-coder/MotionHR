@@ -27,6 +27,8 @@ urlpatterns = [
     path('<int:pk>/create-account/', views.create_account_view, name='create_account'),
     path('<int:pk>/deactivate-account/', views.deactivate_account_view, name='deactivate_account'),
     path('<int:pk>/reset-password/', views.reset_password_view, name='reset_password'),
+    path('<int:pk>/toggle-status/', views.employee_toggle_status, name='toggle_status'),
+    path('<int:pk>/terminate/', views.employee_terminate, name='terminate'),
     path('<int:pk>/', views.employee_detail, name='detail'),
 
     path('', views.employee_list, name='list'),

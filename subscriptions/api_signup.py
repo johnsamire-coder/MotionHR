@@ -275,3 +275,17 @@ def subscription_status(request):
         })
     except Exception as e:
         return Response({'success': False, 'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def trial_plan_info(request):
+    """يرجع حدود خطة التجربة"""
+    trial_plan = SubscriptionPlan.objects.filter(is_trial=True, is_active=True).first()
+    if not trial_plan:
+        return Response({'max_employees': 5, 'trial_days': 14})
+    return Response({
+        'max_employees': trial_plan.max_employees,
+        'trial_days': trial_plan.trial_days,
+        'name_ar': trial_plan.name_ar,
+    })

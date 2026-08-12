@@ -83,10 +83,48 @@
                         <i class="bi bi-printer"></i>
                         طباعة البيانات
                     </a>
-                    <a href="{% url 'employees:delete' employee.pk %}" class="btn btn-outline-danger">
-                        <i class="bi bi-trash"></i>
-                        حذف الموظف
+
+                    <!-- E11: Toggle Status -->
+                    {% if employee.status == 'active' %}
+                    <form method="post" action="{% url 'employees:toggle_status' employee.pk %}"
+                          onsubmit="return confirm('تاكيد ايقاف الموظف؟')">
+                        {% csrf_token %}
+                        <input type="hidden" name="new_status" value="suspended">
+                        <button type="submit" class="btn btn-warning w-100">
+                            <i class="bi bi-pause-circle"></i>
+                            ايقاف الموظف
+                        </button>
+                    </form>
+                    {% elif employee.status == 'suspended' %}
+                    <form method="post" action="{% url 'employees:toggle_status' employee.pk %}"
+                          onsubmit="return confirm('تاكيد تفعيل الموظف؟')">
+                        {% csrf_token %}
+                        <input type="hidden" name="new_status" value="active">
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="bi bi-play-circle"></i>
+                            تفعيل الموظف
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    <!-- E-T13: Terminate -->
+                    {% if employee.status not in 'terminated,resigned,retired' %}
+                    <a href="{% url 'employees:terminate' employee.pk %}"
+                       class="btn btn-outline-danger">
+                        <i class="bi bi-person-x-fill"></i>
+                        انهاء الخدمة
                     </a>
+                    {% endif %}
+
+                    <!-- E10: Delete -->
+                    <form method="post" action="{% url 'employees:delete' employee.pk %}"
+                          onsubmit="return confirm('تاكيد حذف الموظف نهائيا؟ لا يمكن التراجع!')">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger w-100">
+                            <i class="bi bi-trash-fill"></i>
+                            حذف الموظف نهائيا
+                        </button>
+                    </form>
                 </div>
                 
             </div>

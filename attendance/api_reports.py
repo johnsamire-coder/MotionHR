@@ -3,6 +3,7 @@ MotionHR - Reports API
 Batch 1: Attendance / Late / Absence
 """
 from datetime import datetime, timedelta, date
+from django.utils import timezone
 from calendar import monthrange
 
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -35,8 +36,19 @@ def _get_company_employees(user):
     if company:
         qs = qs.filter(company=company)
 
-    # استبعاد staff (المديرين الإداريين مش موظفين حقيقيين)
+    # استبعاد staff
     qs = qs.exclude(user__is_staff=True)
+
+    # ATT-17: استبعاد company_admin و hr_manager لأنهم مش موظفين حقيقيين
+    # (مش بيسجلوا حضور وبيظهروا كغائبين)
+    qs = qs.exclude(
+        user__role__in=['company_admin', 'super_admin']
+    )
+
+    # استبعاد الموظفين المنتهية خدمتهم
+    qs = qs.exclude(
+        status__in=['terminated', 'resigned', 'retired']
+    )
 
     return qs.order_by('id')
 
@@ -1142,15 +1154,29 @@ def daily_attendance_report(request):
     employees = _get_manager_scope_employees(user)
 
     try:
-        from attendance.models import DailyAttendanceSummary, Attendance
+        from attendance.models import DailyAttendanceSummary, Attendance, TrackingAlert
     except ImportError:
         return Response({'error': 'attendance module not available'}, status=500)
+
+    gps_alert_map = {}
+    try:
+        gps_qs = TrackingAlert._base_manager.filter(date=target_date, status='open')
+        requester_company = getattr(user, 'company', None)
+        if requester_company:
+            gps_qs = gps_qs.filter(company=requester_company)
+
+        for al in gps_qs:
+            note = (getattr(al, 'notes', '') or '').lower()
+            if 'gps' in note or (getattr(al, 'last_latitude', None) is None and getattr(al, 'last_longitude', None) is None):
+                gps_alert_map[al.employee_id] = al
+    except Exception:
+        gps_alert_map = {}
 
     results = []
     stats = {
         'present': 0, 'late': 0, 'absent': 0,
         'on_leave': 0, 'weekend': 0, 'mission': 0,
-        'no_data': 0,
+        'no_data': 0, 'gps_disabled': 0,
     }
 
     for emp in employees:
@@ -1170,8 +1196,8 @@ def daily_attendance_report(request):
                 'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
                 'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
                 'status': status,
-                'check_in': att.check_in_time.strftime('%I:%M %p') if att and att.check_in_time else None,
-                'check_out': att.check_out_time.strftime('%I:%M %p') if att and att.check_out_time else None,
+                'check_in': timezone.localtime(att.check_in_time).strftime('%I:%M %p') if att and att.check_in_time else None,
+                'check_out': timezone.localtime(att.check_out_time).strftime('%I:%M %p') if att and att.check_out_time else None,
                 'work_hours': float(summary.work_hours or 0),
                 'late_minutes': summary.late_minutes or 0,
                 'early_leave_minutes': summary.early_leave_minutes or 0,
@@ -1193,8 +1219,8 @@ def daily_attendance_report(request):
                 'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
                 'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
                 'status': status,
-                'check_in': att.check_in_time.strftime('%I:%M %p') if att.check_in_time else None,
-                'check_out': att.check_out_time.strftime('%I:%M %p') if att and att.check_out_time else None,
+                'check_in': timezone.localtime(att.check_in_time).strftime('%I:%M %p') if att.check_in_time else None,
+                'check_out': timezone.localtime(att.check_out_time).strftime('%I:%M %p') if att and att.check_out_time else None,
                 'work_hours': float(att.work_hours or 0),
                 'late_minutes': att.late_minutes or 0,
                 'early_leave_minutes': att.early_leave_minutes or 0,
@@ -1221,6 +1247,12 @@ def daily_attendance_report(request):
                 'is_weekend_work': False,
                 'shift_name': '',
             }
+
+        row['gps_disabled'] = emp.id in gps_alert_map
+        row['gps_alert_note'] = getattr(gps_alert_map.get(emp.id), 'notes', '') if emp.id in gps_alert_map else ''
+
+        if row['gps_disabled']:
+            stats['gps_disabled'] = stats.get('gps_disabled', 0) + 1
 
         results.append(row)
         stats[status] = stats.get(status, 0) + 1
@@ -1506,3 +1538,915 @@ def location_tracking_report(request):
         },
         'employees': results,
     })
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def eos_report(request):
+    """تقرير مكافأة نهاية الخدمة"""
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    as_of_str = request.GET.get('as_of_date', str(timezone.localdate()))
+    try:
+        as_of_date = date.fromisoformat(as_of_str)
+    except ValueError:
+        return Response({'error': 'صيغة التاريخ غير صحيحة (YYYY-MM-DD)'}, status=400)
+
+    employees = (
+        _get_manager_scope_employees(user)
+        .exclude(user__is_staff=True)
+        .exclude(user__role__in=['company_admin', 'super_admin'])
+        .exclude(status__in=['terminated', 'resigned', 'retired'])
+        .select_related('department', 'branch', 'user')
+        .order_by('id')
+    )
+
+    results = []
+    total_eos_amount = 0.0
+
+    for emp in employees:
+        if not emp.hire_date:
+            continue
+
+        service_days = (as_of_date - emp.hire_date).days
+        if service_days < 0:
+            continue
+
+        years_of_service = round(service_days / 365.25, 2)
+        basic_salary = round(float(emp.basic_salary or 0), 2)
+
+        if years_of_service <= 5:
+            eos_amount = (basic_salary * 0.5) * years_of_service
+        else:
+            eos_amount = (basic_salary * 0.5 * 5) + (basic_salary * (years_of_service - 5))
+
+        eos_amount = round(eos_amount, 2)
+        total_eos_amount += eos_amount
+
+        results.append({
+            'employee_id': emp.id,
+            'employee_code': emp.employee_code,
+            'employee_name': _employee_name(emp),
+            'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+            'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
+            'hire_date': str(emp.hire_date),
+            'years_of_service': years_of_service,
+            'basic_salary': basic_salary,
+            'eos_amount': eos_amount,
+        })
+
+    results.sort(key=lambda x: x['eos_amount'], reverse=True)
+
+    return Response({
+        'as_of_date': str(as_of_date),
+        'summary': {
+            'employees_count': len(results),
+            'total_eos_amount': round(total_eos_amount, 2),
+        },
+        'results': results,
+    })
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def eos_export_excel(request):
+    """تصدير تقرير EOS كـ Excel"""
+    from attendance.report_export_helper import export_to_excel
+    from datetime import date
+
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    as_of_str = request.GET.get('as_of_date', str(timezone.localdate()))
+    try:
+        as_of_date = date.fromisoformat(as_of_str)
+    except ValueError:
+        return Response({'error': 'صيغة التاريخ غير صحيحة'}, status=400)
+
+    employees = (
+        _get_manager_scope_employees(user)
+        .exclude(user__is_staff=True)
+        .exclude(user__role__in=['company_admin', 'super_admin'])
+        .exclude(status__in=['terminated', 'resigned', 'retired'])
+        .select_related('department', 'branch', 'user')
+        .order_by('id')
+    )
+
+    rows = []
+    for emp in employees:
+        if not emp.hire_date:
+            continue
+        service_days = (as_of_date - emp.hire_date).days
+        if service_days < 0:
+            continue
+        years = round(service_days / 365.25, 2)
+        basic = round(float(emp.basic_salary or 0), 2)
+        if years <= 5:
+            eos = round((basic * 0.5) * years, 2)
+        else:
+            eos = round((basic * 0.5 * 5) + (basic * (years - 5)), 2)
+
+        rows.append({
+            'employee_code': emp.employee_code or '',
+            'employee_name': _employee_name(emp),
+            'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+            'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
+            'hire_date': str(emp.hire_date),
+            'years_of_service': years,
+            'basic_salary': basic,
+            'eos_amount': eos,
+        })
+
+    rows.sort(key=lambda x: x['eos_amount'], reverse=True)
+
+    columns = [
+        ('employee_code',   'الكود',           15),
+        ('employee_name',   'اسم الموظف',      25),
+        ('department',      'القسم',           20),
+        ('branch',          'الفرع',           20),
+        ('hire_date',       'تاريخ التعيين',   15),
+        ('years_of_service','سنوات الخدمة',    15),
+        ('basic_salary',    'الراتب الأساسي',  18),
+        ('eos_amount',      'مكافأة نهاية الخدمة', 22),
+    ]
+
+    if not rows:
+        columns = [('info', 'ملاحظة', 40)]
+        rows = [{'info': 'لا توجد بيانات'}]
+
+    return export_to_excel(
+        title=f'تقرير مكافأة نهاية الخدمة - {as_of_date}',
+        columns=columns,
+        rows=rows,
+        user=user,
+        filename=f'eos_report_{as_of_date}.xlsx',
+    )
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def eos_export_pdf(request):
+    """تصدير تقرير EOS كـ PDF"""
+    from attendance.report_export_helper import export_to_pdf
+    from datetime import date
+
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    as_of_str = request.GET.get('as_of_date', str(timezone.localdate()))
+    try:
+        as_of_date = date.fromisoformat(as_of_str)
+    except ValueError:
+        return Response({'error': 'صيغة التاريخ غير صحيحة'}, status=400)
+
+    employees = (
+        _get_manager_scope_employees(user)
+        .exclude(user__is_staff=True)
+        .exclude(user__role__in=['company_admin', 'super_admin'])
+        .exclude(status__in=['terminated', 'resigned', 'retired'])
+        .select_related('department', 'branch', 'user')
+        .order_by('id')
+    )
+
+    rows = []
+    for emp in employees:
+        if not emp.hire_date:
+            continue
+        service_days = (as_of_date - emp.hire_date).days
+        if service_days < 0:
+            continue
+        years = round(service_days / 365.25, 2)
+        basic = round(float(emp.basic_salary or 0), 2)
+        if years <= 5:
+            eos = round((basic * 0.5) * years, 2)
+        else:
+            eos = round((basic * 0.5 * 5) + (basic * (years - 5)), 2)
+
+        rows.append({
+            'employee_code': emp.employee_code or '',
+            'employee_name': _employee_name(emp),
+            'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+            'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
+            'hire_date': str(emp.hire_date),
+            'years_of_service': years,
+            'basic_salary': basic,
+            'eos_amount': eos,
+        })
+
+    rows.sort(key=lambda x: x['eos_amount'], reverse=True)
+
+    columns = [
+        ('employee_code',    'الكود',                15),
+        ('employee_name',    'اسم الموظف',           25),
+        ('department',       'القسم',                20),
+        ('branch',           'الفرع',                20),
+        ('hire_date',        'تاريخ التعيين',        15),
+        ('years_of_service', 'سنوات الخدمة',         15),
+        ('basic_salary',     'الراتب الأساسي',       18),
+        ('eos_amount',       'مكافأة نهاية الخدمة',  22),
+    ]
+
+    if not rows:
+        columns = [('info', 'ملاحظة', 40)]
+        rows = [{'info': 'لا توجد بيانات'}]
+
+    return export_to_pdf(
+        title=f'تقرير مكافأة نهاية الخدمة - {as_of_date}',
+        columns=columns,
+        rows=rows,
+        user=user,
+        filename=f'eos_report_{as_of_date}.pdf',
+    )
+
+# ═══════════════════════════════════════════════════
+# 10 New Reports + Excel + PDF Exports
+# ═══════════════════════════════════════════════════
+
+def _reimbursements_data(user):
+    """رد المصروفات"""
+    company = getattr(user, 'company', None)
+    rows = []
+    try:
+        from requests_app.models import EmployeeRequest
+        reqs = EmployeeRequest._base_manager.filter(
+            company=company, request_type__name__icontains='مصروف',
+        ).select_related('employee', 'request_type')
+        for req in reqs:
+            rows.append({
+                'employee_name': _employee_name(req.employee),
+                'type': req.request_type.name if req.request_type else '',
+                'subject': req.subject or '',
+                'amount': round(float(req.amount or 0), 2),
+                'status': req.status,
+                'created_at': str(req.created_at)[:10] if req.created_at else '',
+            })
+    except Exception:
+        pass
+    return rows
+
+
+def _bank_transfer_data(user):
+    """كشف تحويلات البنك"""
+    from employees.models import Employee
+    company = getattr(user, 'company', None)
+    rows = []
+    emps = Employee._base_manager.filter(
+        company=company, status='active', salary_payment_method='bank',
+    ).exclude(bank_account__isnull=True).exclude(bank_account='')
+    for emp in emps:
+        rows.append({
+            'employee_code': emp.employee_code,
+            'employee_name': _employee_name(emp),
+            'bank_name': emp.bank_name or '',
+            'account_number': emp.bank_account or '',
+            'iban': emp.iban or '',
+            'amount': round(float(emp.basic_salary or 0), 2),
+        })
+    return rows
+
+
+def _insurance_data(user):
+    """التأمينات"""
+    from employees.models import Employee
+    company = getattr(user, 'company', None)
+    rows = []
+    insured = Employee._base_manager.filter(company=company, status='active', has_insurance=True)
+    for emp in insured:
+        base = float(emp.basic_salary or 0)
+        ins_base = float(getattr(emp, 'insurance_base_salary', None) or base)
+        rows.append({
+            'employee_code': emp.employee_code,
+            'employee_name': _employee_name(emp),
+            'insurance_number': emp.insurance_number or '',
+            'basic_salary': round(base, 2),
+            'insurance_base': round(ins_base, 2),
+            'insurance_amount': round(ins_base * 0.11, 2),
+        })
+    return rows
+
+
+def _tax_data(user, year, month):
+    """الضرائب"""
+    from employees.models import Employee, Deduction
+    company = getattr(user, 'company', None)
+    rows = []
+    for emp in Employee._base_manager.filter(company=company, status='active'):
+        taxes = Deduction._base_manager.filter(
+            employee=emp, deduction_type='tax', year=year, month=month,
+        )
+        tax_sum = sum(float(d.amount) for d in taxes)
+        if tax_sum > 0:
+            rows.append({
+                'employee_code': emp.employee_code,
+                'employee_name': _employee_name(emp),
+                'basic_salary': round(float(emp.basic_salary or 0), 2),
+                'tax_amount': round(tax_sum, 2),
+            })
+    return rows
+
+
+def _turnover_data(user, year):
+    """معدل دوران الموظفين"""
+    from employees.models import Employee
+    from datetime import date
+    company = getattr(user, 'company', None)
+    year_start = date(year, 1, 1)
+    year_end = date(year, 12, 31)
+
+    all_emps = Employee._base_manager.filter(company=company)
+    hired = all_emps.filter(hire_date__gte=year_start, hire_date__lte=year_end).count()
+    terminated = all_emps.filter(
+        status__in=['terminated', 'resigned', 'retired'],
+        termination_date__gte=year_start, termination_date__lte=year_end,
+    ).count()
+    active = all_emps.filter(status='active').count()
+
+    rows = [
+        {'metric': f'التعيينات في {year}', 'value': hired},
+        {'metric': f'انتهاء الخدمة في {year}', 'value': terminated},
+        {'metric': 'الموظفين النشطين حالياً', 'value': active},
+        {'metric': 'معدل الدوران %', 'value': round((terminated/max(active,1))*100, 2)},
+    ]
+    return rows
+
+
+def _branch_comparison_data(user):
+    """مقارنة الفروع والأقسام"""
+    from employees.models import Employee
+    from companies.models import Branch
+    company = getattr(user, 'company', None)
+    rows = []
+    for br in Branch._base_manager.filter(company=company):
+        emps = Employee._base_manager.filter(branch=br, status='active')
+        salaries = [float(e.basic_salary or 0) for e in emps]
+        rows.append({
+            'branch_name': br.name_ar,
+            'employees_count': len(salaries),
+            'total_salary': round(sum(salaries), 2),
+            'avg_salary': round(sum(salaries)/len(salaries) if salaries else 0, 2),
+            'max_salary': round(max(salaries) if salaries else 0, 2),
+            'min_salary': round(min(salaries) if salaries else 0, 2),
+        })
+    return rows
+
+
+def _contracts_expiry_data(user):
+    """العقود المنتهية / قريبة الانتهاء"""
+    from employees.models import Employee
+    from datetime import timedelta
+    company = getattr(user, 'company', None)
+    today = timezone.localdate()
+    next_90 = today + timedelta(days=90)
+
+    rows = []
+    emps = Employee._base_manager.filter(
+        company=company, status='active', contract_end_date__isnull=False,
+    )
+    for emp in emps:
+        end = emp.contract_end_date
+        if end < today:
+            rows.append({
+                'employee_name': _employee_name(emp),
+                'employee_code': emp.employee_code,
+                'contract_end': str(end),
+                'status': 'منتهي',
+                'days': (today - end).days,
+            })
+        elif end <= next_90:
+            rows.append({
+                'employee_name': _employee_name(emp),
+                'employee_code': emp.employee_code,
+                'contract_end': str(end),
+                'status': 'قريب الانتهاء',
+                'days': (end - today).days,
+            })
+    return rows
+
+
+def _loans_advances_data(user):
+    """السلف والقروض"""
+    company = getattr(user, 'company', None)
+    rows = []
+    try:
+        from requests_app.models import EmployeeRequest
+        from django.db.models import Q
+        loans = EmployeeRequest._base_manager.filter(
+            company=company, status__in=['approved', 'pending'],
+        ).filter(Q(request_type__name__icontains='سلفة') | Q(request_type__name__icontains='قرض'))
+        for loan in loans:
+            rows.append({
+                'employee_name': _employee_name(loan.employee),
+                'type': loan.request_type.name if loan.request_type else '',
+                'amount': round(float(loan.amount or 0), 2),
+                'status': loan.status,
+                'created_at': str(loan.created_at)[:10] if loan.created_at else '',
+            })
+    except Exception:
+        pass
+    return rows
+
+
+def _missions_performance_data(user):
+    """أداء المهام"""
+    employees = _get_manager_scope_employees(user)
+    rows = []
+    try:
+        from attendance.models import MissionAssignment
+        for emp in employees:
+            assignments = MissionAssignment._base_manager.filter(employee=emp)
+            total = assignments.count()
+            if total > 0:
+                completed = assignments.filter(status='completed').count()
+                rows.append({
+                    'employee_name': _employee_name(emp),
+                    'total_missions': total,
+                    'completed': completed,
+                    'in_progress': assignments.filter(status='in_progress').count(),
+                    'pending': assignments.filter(status='pending').count(),
+                    'completion_rate': round((completed/total*100), 2),
+                })
+    except Exception:
+        pass
+    return rows
+
+
+def _executive_dashboard_data(user):
+    """التقرير التنفيذي"""
+    from employees.models import Employee
+    company = getattr(user, 'company', None)
+    active = Employee._base_manager.filter(company=company, status='active')
+    total_sal = sum(float(e.basic_salary or 0) for e in active)
+    rows = [
+        {'metric': 'إجمالي الموظفين النشطين', 'value': active.count()},
+        {'metric': 'إجمالي الرواتب الشهرية', 'value': round(total_sal, 2)},
+        {'metric': 'إجمالي الرواتب السنوية', 'value': round(total_sal * 12, 2)},
+        {'metric': 'متوسط الراتب', 'value': round(total_sal/active.count() if active.count() else 0, 2)},
+    ]
+    return rows
+
+
+# ═══════════════════════════════════════════════════
+# API Views - كل تقرير عنده 3 endpoints: json, excel, pdf
+# ═══════════════════════════════════════════════════
+
+def _make_report_views(report_key, data_func, title, columns, needs_year_month=False, needs_year=False):
+    """factory لتوليد 3 views (json, excel, pdf) لأي تقرير"""
+
+    def _get_params(request):
+        from datetime import date as _d
+        if needs_year_month:
+            year = int(request.GET.get('year', _d.today().year))
+            month = int(request.GET.get('month', _d.today().month))
+            return {'year': year, 'month': month}
+        if needs_year:
+            year = int(request.GET.get('year', _d.today().year))
+            return {'year': year}
+        return {}
+
+    @api_view(['GET'])
+    @authentication_classes([TokenAuthentication, JWTAuthentication])
+    @permission_classes([IsAuthenticated])
+    def view_json(request):
+        user = request.user
+        if not _check_manager(user):
+            return Response({'error': 'صلاحية غير كافية'}, status=403)
+        params = _get_params(request)
+        rows = data_func(user, **params) if params else data_func(user)
+        return Response({
+            'title': title,
+            'count': len(rows),
+            'results': rows,
+        })
+
+    @api_view(['GET'])
+    @authentication_classes([TokenAuthentication, JWTAuthentication])
+    @permission_classes([IsAuthenticated])
+    def view_excel(request):
+        from attendance.report_export_helper import export_to_excel
+        user = request.user
+        if not _check_manager(user):
+            return Response({'error': 'صلاحية غير كافية'}, status=403)
+        params = _get_params(request)
+        rows = data_func(user, **params) if params else data_func(user)
+        if not rows:
+            rows = [{'info': 'لا توجد بيانات'}]
+            cols = [('info', 'ملاحظة', 40)]
+        else:
+            cols = columns
+        return export_to_excel(title=title, columns=cols, rows=rows, user=user, filename=f'{report_key}.xlsx')
+
+    @api_view(['GET'])
+    @authentication_classes([TokenAuthentication, JWTAuthentication])
+    @permission_classes([IsAuthenticated])
+    def view_pdf(request):
+        from attendance.report_export_helper import export_to_pdf
+        user = request.user
+        if not _check_manager(user):
+            return Response({'error': 'صلاحية غير كافية'}, status=403)
+        params = _get_params(request)
+        rows = data_func(user, **params) if params else data_func(user)
+        if not rows:
+            rows = [{'info': 'لا توجد بيانات'}]
+            cols = [('info', 'ملاحظة', 40)]
+        else:
+            cols = columns
+        return export_to_pdf(title=title, columns=cols, rows=rows, user=user, filename=f'{report_key}.pdf')
+
+    return view_json, view_excel, view_pdf
+
+
+# ═══════════════════════════════════════════════════
+# Generate all views
+# ═══════════════════════════════════════════════════
+
+reimbursements_report, reimbursements_export_excel, reimbursements_export_pdf = _make_report_views(
+    'reimbursements', _reimbursements_data, 'تقرير رد المصروفات',
+    [
+        ('employee_name', 'اسم الموظف', 25),
+        ('type', 'النوع', 20),
+        ('subject', 'الموضوع', 30),
+        ('amount', 'المبلغ', 15),
+        ('status', 'الحالة', 15),
+        ('created_at', 'التاريخ', 15),
+    ],
+)
+
+bank_transfer_report, bank_transfer_export_excel, bank_transfer_export_pdf = _make_report_views(
+    'bank_transfer', _bank_transfer_data, 'كشف تحويلات البنك',
+    [
+        ('employee_code', 'الكود', 15),
+        ('employee_name', 'اسم الموظف', 25),
+        ('bank_name', 'البنك', 20),
+        ('account_number', 'رقم الحساب', 20),
+        ('iban', 'IBAN', 25),
+        ('amount', 'المبلغ', 15),
+    ],
+)
+
+insurance_report, insurance_export_excel, insurance_export_pdf = _make_report_views(
+    'insurance', _insurance_data, 'تقرير التأمينات',
+    [
+        ('employee_code', 'الكود', 15),
+        ('employee_name', 'اسم الموظف', 25),
+        ('insurance_number', 'رقم التأمين', 18),
+        ('basic_salary', 'الراتب الأساسي', 15),
+        ('insurance_base', 'الأساس التأميني', 18),
+        ('insurance_amount', 'مبلغ التأمين', 15),
+    ],
+)
+
+tax_report, tax_export_excel, tax_export_pdf = _make_report_views(
+    'tax', _tax_data, 'تقرير الضرائب',
+    [
+        ('employee_code', 'الكود', 15),
+        ('employee_name', 'اسم الموظف', 25),
+        ('basic_salary', 'الراتب الأساسي', 18),
+        ('tax_amount', 'مبلغ الضريبة', 18),
+    ],
+    needs_year_month=True,
+)
+
+turnover_report, turnover_export_excel, turnover_export_pdf = _make_report_views(
+    'turnover', _turnover_data, 'معدل دوران الموظفين',
+    [
+        ('metric', 'البند', 40),
+        ('value', 'القيمة', 20),
+    ],
+    needs_year=True,
+)
+
+branch_comparison_report, branch_comparison_export_excel, branch_comparison_export_pdf = _make_report_views(
+    'branch_comparison', _branch_comparison_data, 'مقارنة الفروع',
+    [
+        ('branch_name', 'الفرع', 25),
+        ('employees_count', 'عدد الموظفين', 15),
+        ('total_salary', 'إجمالي الرواتب', 20),
+        ('avg_salary', 'متوسط الراتب', 18),
+        ('max_salary', 'أعلى راتب', 15),
+        ('min_salary', 'أقل راتب', 15),
+    ],
+)
+
+contracts_expiry_report, contracts_expiry_export_excel, contracts_expiry_export_pdf = _make_report_views(
+    'contracts_expiry', _contracts_expiry_data, 'تقرير العقود المنتهية',
+    [
+        ('employee_code', 'الكود', 15),
+        ('employee_name', 'اسم الموظف', 25),
+        ('contract_end', 'تاريخ الانتهاء', 18),
+        ('status', 'الحالة', 20),
+        ('days', 'عدد الأيام', 15),
+    ],
+)
+
+loans_advances_report, loans_advances_export_excel, loans_advances_export_pdf = _make_report_views(
+    'loans_advances', _loans_advances_data, 'تقرير السلف والقروض',
+    [
+        ('employee_name', 'اسم الموظف', 25),
+        ('type', 'النوع', 20),
+        ('amount', 'المبلغ', 15),
+        ('status', 'الحالة', 15),
+        ('created_at', 'التاريخ', 15),
+    ],
+)
+
+missions_performance_report, missions_performance_export_excel, missions_performance_export_pdf = _make_report_views(
+    'missions_performance', _missions_performance_data, 'تقرير أداء المهام',
+    [
+        ('employee_name', 'اسم الموظف', 25),
+        ('total_missions', 'إجمالي المهام', 18),
+        ('completed', 'المكتملة', 15),
+        ('in_progress', 'جاري تنفيذها', 18),
+        ('pending', 'معلقة', 15),
+        ('completion_rate', 'نسبة الإنجاز %', 20),
+    ],
+)
+
+executive_dashboard_report, executive_dashboard_export_excel, executive_dashboard_export_pdf = _make_report_views(
+    'executive_dashboard', _executive_dashboard_data, 'التقرير التنفيذي',
+    [
+        ('metric', 'البند', 40),
+        ('value', 'القيمة', 25),
+    ],
+)
+
+# ═══════════════════════════════════════════════════
+# CEO/HR Unified Dashboard - نبض الشركة
+# ═══════════════════════════════════════════════════
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def unified_dashboard(request):
+    """Dashboard شامل - كل ما يحتاجه صاحب الشركة والـ HR"""
+    from datetime import date, timedelta
+    from employees.models import Employee
+    from attendance.models import Attendance
+    from django.db.models import Sum, Count, Avg
+
+    user = request.user
+    if not _check_manager(user):
+        return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+    company = getattr(user, 'company', None)
+    if not company:
+        return Response({'error': 'لا توجد شركة'}, status=400)
+
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
+    last_month_start = (month_start - timedelta(days=1)).replace(day=1)
+    last_month_end = month_start - timedelta(days=1)
+
+    # ═══ 1) نبض الشركة النهاردة ═══
+    all_emps = Employee._base_manager.filter(company=company).exclude(
+        user__is_staff=True
+    ).exclude(user__role__in=['company_admin', 'super_admin'])
+
+    active_emps = all_emps.filter(status='active')
+    total_active = active_emps.count()
+
+    today_att = Attendance._base_manager.filter(
+        employee__company=company, date=today,
+    )
+    present_today = today_att.filter(status='present').count()
+    late_today = today_att.filter(status='late').count()
+    absent_today = max(0, total_active - today_att.count())
+    on_leave_today = today_att.filter(status='on_leave').count()
+
+    attendance_rate = round((present_today + late_today) / max(total_active, 1) * 100, 1)
+
+    # ═══ 2) المالية ═══
+    total_monthly_salary = sum(float(e.basic_salary or 0) for e in active_emps)
+
+    # سلف قائمة
+    total_active_loans = 0
+    active_loans_count = 0
+    try:
+        from requests_app.models import EmployeeRequest
+        from django.db.models import Q
+        loans = EmployeeRequest._base_manager.filter(
+            company=company, status='approved',
+        ).filter(Q(request_type__name__icontains='سلفة') | Q(request_type__name__icontains='قرض'))
+        total_active_loans = sum(float(l.amount or 0) for l in loans)
+        active_loans_count = loans.count()
+    except Exception:
+        pass
+
+    # الفرق عن الشهر اللي فات
+    last_month_att_count = Attendance._base_manager.filter(
+        employee__company=company,
+        date__gte=last_month_start, date__lte=last_month_end,
+        status='present',
+    ).count()
+    this_month_att_count = Attendance._base_manager.filter(
+        employee__company=company,
+        date__gte=month_start, date__lte=today,
+        status='present',
+    ).count()
+
+    # ═══ 3) القرارات المطلوبة ═══
+    pending_requests = 0
+    pending_leaves = 0
+    try:
+        from requests_app.models import EmployeeRequest
+        pending_requests = EmployeeRequest._base_manager.filter(
+            company=company, status='pending',
+        ).count()
+    except Exception:
+        pass
+
+    try:
+        from leaves.models import LeaveRequest
+        pending_leaves = LeaveRequest._base_manager.filter(
+            company=company, status='pending',
+        ).count()
+    except Exception:
+        pass
+
+    # عقود قربت تنتهي (30 يوم)
+    next_30_days = today + timedelta(days=30)
+    contracts_expiring = active_emps.filter(
+        contract_end_date__isnull=False,
+        contract_end_date__gte=today,
+        contract_end_date__lte=next_30_days,
+    ).count()
+
+    # موظفين في فترة تجربة (خلصت خلال الشهر)
+    probation_ending = 0
+    for emp in active_emps:
+        if emp.hire_date and hasattr(emp, 'probation_months'):
+            prob_months = emp.probation_months or 3
+            probation_end = emp.hire_date + timedelta(days=prob_months * 30)
+            if today <= probation_end <= next_30_days:
+                probation_ending += 1
+
+    # ═══ 4) الترند - آخر 30 يوم ═══
+    attendance_trend = []
+    for i in range(29, -1, -1):
+        d = today - timedelta(days=i)
+        count = Attendance._base_manager.filter(
+            employee__company=company, date=d, status='present',
+        ).count()
+        attendance_trend.append({
+            'date': str(d),
+            'present': count,
+        })
+
+    # ═══ 5) توزيع الموظفين حسب القسم ═══
+    from companies.models import Department, Branch
+    dept_distribution = []
+    for dept in Department._base_manager.filter(company=company):
+        count = active_emps.filter(department=dept).count()
+        if count > 0:
+            dept_distribution.append({
+                'name': dept.name_ar,
+                'count': count,
+            })
+
+    branch_distribution = []
+    for br in Branch._base_manager.filter(company=company):
+        emps_br = active_emps.filter(branch=br)
+        count = emps_br.count()
+        salary = sum(float(e.basic_salary or 0) for e in emps_br)
+        if count > 0:
+            branch_distribution.append({
+                'name': br.name_ar,
+                'count': count,
+                'total_salary': round(salary, 2),
+            })
+
+    # ═══ 6) Turnover الشهر ═══
+    hired_this_month = all_emps.filter(
+        hire_date__gte=month_start, hire_date__lte=today,
+    ).count()
+    terminated_this_month = all_emps.filter(
+        status__in=['terminated', 'resigned', 'retired'],
+        termination_date__gte=month_start,
+        termination_date__lte=today,
+    ).count()
+
+    # ═══ 7) أفضل 5 موظفين (حضور الشهر) ═══
+    top_performers = []
+    for emp in active_emps[:100]:  # نجيب 100 ونرتب
+        emp_att = Attendance._base_manager.filter(
+            employee=emp, date__gte=month_start, date__lte=today,
+        )
+        present = emp_att.filter(status='present').count()
+        late = emp_att.filter(status='late').count()
+        total_days = (today - month_start).days + 1
+        score = (present * 100 + late * 50) / max(total_days, 1)
+        top_performers.append({
+            'employee_id': emp.id,
+            'name': _employee_name(emp),
+            'present_days': present,
+            'late_days': late,
+            'score': round(score, 1),
+        })
+
+    top_performers.sort(key=lambda x: x['score'], reverse=True)
+
+    # ═══ 8) موظفين محتاجين متابعة ═══
+    need_attention = []
+    for emp in active_emps[:100]:
+        emp_att = Attendance._base_manager.filter(
+            employee=emp, date__gte=month_start, date__lte=today,
+        )
+        absent = emp_att.filter(status='absent').count()
+        late = emp_att.filter(status='late').count()
+        if absent >= 3 or late >= 5:
+            need_attention.append({
+                'employee_id': emp.id,
+                'name': _employee_name(emp),
+                'absent_days': absent,
+                'late_days': late,
+            })
+
+    need_attention.sort(key=lambda x: (x['absent_days'] + x['late_days']), reverse=True)
+
+    # ═══ 9) تنبيهات ذكية ═══
+    alerts = []
+
+    if contracts_expiring > 0:
+        alerts.append({
+            'type': 'warning',
+            'icon': 'file-warning',
+            'title': f'{contracts_expiring} عقد قرب انتهاؤه',
+            'action': '/hr/reports/contracts-expiry',
+        })
+
+    if pending_requests + pending_leaves > 0:
+        alerts.append({
+            'type': 'info',
+            'icon': 'inbox',
+            'title': f'{pending_requests + pending_leaves} طلب معلق ينتظر الموافقة',
+            'action': '/hr/requests',
+        })
+
+    if active_loans_count > 0:
+        alerts.append({
+            'type': 'info',
+            'icon': 'wallet',
+            'title': f'{active_loans_count} سلفة/قرض قائمة ({round(total_active_loans, 0)} جنيه)',
+            'action': '/hr/reports/loans-advances',
+        })
+
+    if len(need_attention) > 0:
+        alerts.append({
+            'type': 'danger',
+            'icon': 'alert-triangle',
+            'title': f'{len(need_attention)} موظف يحتاج متابعة (تأخير/غياب)',
+            'action': '/hr/attendance',
+        })
+
+    if probation_ending > 0:
+        alerts.append({
+            'type': 'info',
+            'icon': 'user-check',
+            'title': f'{probation_ending} موظف تنتهي فترة تجربتهم',
+            'action': '/hr/employees',
+        })
+
+    return Response({
+        'today': str(today),
+        'pulse': {
+            'total_employees': total_active,
+            'present': present_today,
+            'late': late_today,
+            'absent': absent_today,
+            'on_leave': on_leave_today,
+            'attendance_rate': attendance_rate,
+        },
+        'financial': {
+            'monthly_salary': round(total_monthly_salary, 2),
+            'yearly_salary': round(total_monthly_salary * 12, 2),
+            'active_loans_amount': round(total_active_loans, 2),
+            'active_loans_count': active_loans_count,
+            'this_month_attendance': this_month_att_count,
+            'last_month_attendance': last_month_att_count,
+            'attendance_change': this_month_att_count - last_month_att_count,
+        },
+        'decisions': {
+            'pending_requests': pending_requests,
+            'pending_leaves': pending_leaves,
+            'contracts_expiring_30d': contracts_expiring,
+            'probation_ending_30d': probation_ending,
+        },
+        'trend': {
+            'attendance_last_30_days': attendance_trend,
+        },
+        'distribution': {
+            'by_department': dept_distribution,
+            'by_branch': branch_distribution,
+        },
+        'turnover': {
+            'hired_this_month': hired_this_month,
+            'terminated_this_month': terminated_this_month,
+        },
+        'top_performers': top_performers[:5],
+        'need_attention': need_attention[:5],
+        'alerts': alerts,
+    })
+

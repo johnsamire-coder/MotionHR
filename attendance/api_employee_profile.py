@@ -170,6 +170,7 @@ def _build_summary(emp):
 
     # طلبات الإجازة
     leaves_summary = {"pending": 0, "approved": 0, "rejected": 0, "total": 0}
+    leaves_list = []
     try:
         from leaves.models import LeaveRequest
         lrs = LeaveRequest.objects.filter(employee=emp)
@@ -177,8 +178,39 @@ def _build_summary(emp):
         leaves_summary["pending"] = lrs.filter(status="pending").count()
         leaves_summary["approved"] = lrs.filter(status="approved").count()
         leaves_summary["rejected"] = lrs.filter(status="rejected").count()
+
+        for lr in lrs.select_related("leave_type").order_by("-start_date")[:100]:
+            leaves_list.append({
+                "id": lr.id,
+                "leave_type": _name_of(getattr(lr, "leave_type", None)) or "",
+                "start_date": str(lr.start_date) if lr.start_date else None,
+                "end_date": str(lr.end_date) if lr.end_date else None,
+                "days_count": float(lr.days_count) if lr.days_count else 0,
+                "status": lr.status or "",
+                "reason": lr.reason or "",
+                "created_at": str(lr.created_at) if getattr(lr, "created_at", None) else None,
+            })
     except Exception as e:
         logger.warning(f"leaves summary error: {e}")
+
+    # قائمة الطلبات الكاملة
+    requests_list = []
+    try:
+        from requests_app.models import EmployeeRequest
+        for req in EmployeeRequest.objects.filter(employee=emp).select_related("request_type").order_by("-created_at")[:100]:
+            requests_list.append({
+                "id": req.id,
+                "type_name": _name_of(getattr(req, "request_type", None)) or "",
+                "subject": req.subject or "",
+                "details": req.details or "",
+                "status": req.status or "",
+                "start_date": str(req.start_date) if req.start_date else None,
+                "end_date": str(req.end_date) if req.end_date else None,
+                "amount": float(req.amount) if req.amount else None,
+                "created_at": str(req.created_at) if getattr(req, "created_at", None) else None,
+            })
+    except Exception as e:
+        logger.warning(f"requests list error: {e}")
 
     return {
         "month": today.strftime("%Y-%m"),
@@ -195,7 +227,9 @@ def _build_summary(emp):
         },
         "leave_balances": leave_balances,
         "requests": requests_summary,
+        "requests_list": requests_list,
         "leaves": leaves_summary,
+        "leaves_list": leaves_list,
     }
 
 
@@ -302,10 +336,54 @@ def manager_employees_list(request):
         if status_filter:
             qs = qs.filter(status=status_filter)
 
+        department_filter = request.GET.get("department", "").strip()
+        if department_filter:
+            try:
+                qs = qs.filter(department_id=int(department_filter))
+            except (ValueError, TypeError):
+                qs = qs.filter(department__name_ar__icontains=department_filter)
+
+        branch_filter = request.GET.get("branch", "").strip()
+        if branch_filter:
+            try:
+                qs = qs.filter(branch_id=int(branch_filter))
+            except (ValueError, TypeError):
+                pass
+
+        worker_type_filter = request.GET.get("worker_type", "").strip()
+        if worker_type_filter:
+            qs = qs.filter(worker_type=worker_type_filter)
+
+        page_size = int(request.GET.get("page_size", 25))
+        page = int(request.GET.get("page", 1))
+        offset = (page - 1) * page_size
+
         qs = qs.order_by("first_name_ar", "last_name_ar")
         total = qs.count()
-        data = [_serialize_employee_list(e) for e in qs]
-        return Response({"count": total, "employees": data})
+
+        active_count = qs.filter(status="active").count()
+        inactive_count = qs.exclude(status="active").exclude(status="on_leave").count()
+        on_leave_count = qs.filter(status="on_leave").count()
+
+        paged_qs = qs[offset:offset + page_size]
+        data = [_serialize_employee_list(e) for e in paged_qs]
+
+        total_pages = max(1, (total + page_size - 1) // page_size)
+
+        return Response({
+            "count": total,
+            "total": total,
+            "employees": data,
+            "results": data,
+            "total_pages": total_pages,
+            "current_page": page,
+            "stats": {
+                "total": total,
+                "active": active_count,
+                "inactive": inactive_count,
+                "on_leave": on_leave_count,
+            }
+        })
     except Exception as e:
         logger.exception("manager_employees_list error")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

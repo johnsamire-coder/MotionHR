@@ -20,6 +20,29 @@ from employees.models import Employee
 # ═══════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════
+
+
+def _get_assigned_employee_ids(loc):
+    """جلب IDs الموظفين المخصصين للموقع - يتخطى TenantModel filter"""
+    from django.db import connection
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT employee_id FROM attendance_employeeworklocation_assigned_employees WHERE employeeworklocation_id = %s",
+            [loc.id]
+        )
+        return [row[0] for row in cursor.fetchall()]
+
+
+def _get_assigned_employee_names(loc):
+    """جلب أسماء الموظفين المخصصين"""
+    from employees.models import Employee
+    ids = _get_assigned_employee_ids(loc)
+    if not ids:
+        return []
+    emps = Employee._base_manager.filter(id__in=ids)
+    return [getattr(e, 'full_name_ar', None) or getattr(e, 'first_name_ar', '') or f'#{e.id}' for e in emps]
+
+
 def get_employee_for_user(user):
     return Employee._base_manager.filter(user=user).first()
 
@@ -75,6 +98,9 @@ def work_location_to_dict(loc):
         
         'total_visits_count': loc.total_visits_count,
         'last_visited_at': loc.last_visited_at.isoformat() if loc.last_visited_at else None,
+        'assigned_employee_ids': _get_assigned_employee_ids(loc),
+        'assigned_employees_names': _get_assigned_employee_names(loc),
+        'assigned_count': len(_get_assigned_employee_ids(loc)),
     }
 
 
@@ -172,6 +198,19 @@ def propose_work_location(request):
         status='pending_manager',
         proposed_by=request.user,
     )
+
+    # لو المستخدم مدير أو HR - نعتمد تلقائياً
+    user_role = getattr(request.user, 'role', '')
+    if user_role in ('company_admin', 'hr_manager', 'super_admin'):
+        from django.utils import timezone as _tz
+        location.status = 'approved'
+        location.approved_by = request.user
+        location.approved_at = _tz.now()
+        location.save()
+    elif user_role == 'manager':
+        # المدير يخلي الموقع في pending_hr مباشرة
+        location.status = 'pending_hr'
+        location.save()
     
     # نبعت إشعار للمدير/HR
     try:
@@ -605,4 +644,103 @@ def hr_pending_locations(request):
         'success': True,
         'count': len(data),
         'locations': data,
+    })
+
+
+# ═══════════════════════════════════════════════════
+# API 11: حذف موقع عمل (Manager/HR)
+# ═══════════════════════════════════════════════════
+@api_view(['DELETE'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_delete_location(request, location_id):
+    """حذف موقع عمل - HR/Manager فقط"""
+    if not _is_manager_or_hr(request.user):
+        return Response({'success': False, 'message': 'غير مصرح'}, status=403)
+
+    location = EmployeeWorkLocation._base_manager.filter(
+        id=location_id, company=request.user.company,
+    ).first()
+
+    if not location:
+        return Response({'success': False, 'message': 'الموقع غير موجود'}, status=404)
+
+    location.delete()
+    return Response({'success': True, 'message': 'تم حذف الموقع'})
+
+
+# ═══════════════════════════════════════════════════
+# API 12: تعيين موظفين لموقع
+# ═══════════════════════════════════════════════════
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_assign_employees_to_location(request, location_id):
+    """تعيين موقع لموظفين محددين / قسم كامل / فرع كامل / الشركة كلها"""
+    if not _is_manager_or_hr(request.user):
+        return Response({'success': False, 'message': 'غير مصرح'}, status=403)
+
+    location = EmployeeWorkLocation._base_manager.filter(
+        id=location_id, company=request.user.company,
+    ).first()
+
+    if not location:
+        return Response({'success': False, 'message': 'الموقع غير موجود'}, status=404)
+
+    from employees.models import Employee
+
+    # نحدد الـ scope
+    scope = request.data.get('scope', 'employees')
+    employee_ids = []
+
+    if scope == 'employees':
+        employee_ids = request.data.get('employee_ids', [])
+        if not employee_ids:
+            return Response({'success': False, 'message': 'اختر موظفين'}, status=400)
+    elif scope == 'department':
+        dept_id = request.data.get('department_id')
+        if not dept_id:
+            return Response({'success': False, 'message': 'اختر قسم'}, status=400)
+        employee_ids = list(Employee._base_manager.filter(
+            company=request.user.company, department_id=dept_id, status='active'
+        ).values_list('id', flat=True))
+    elif scope == 'branch':
+        branch_id = request.data.get('branch_id')
+        if not branch_id:
+            return Response({'success': False, 'message': 'اختر فرع'}, status=400)
+        employee_ids = list(Employee._base_manager.filter(
+            company=request.user.company, branch_id=branch_id, status='active'
+        ).values_list('id', flat=True))
+    elif scope == 'company':
+        employee_ids = list(Employee._base_manager.filter(
+            company=request.user.company, status='active'
+        ).values_list('id', flat=True))
+    else:
+        return Response({'success': False, 'message': 'نطاق غير صحيح'}, status=400)
+
+    if not employee_ids:
+        return Response({'success': False, 'message': 'لا يوجد موظفون في النطاق المحدد'}, status=400)
+
+    # نضيف الموظفين للموقع (Many-to-Many)
+    employees_qs = Employee._base_manager.filter(
+        id__in=employee_ids,
+        company=request.user.company
+    )
+
+    # الحل: استخدم set() بدل add() للتأكد من الحفظ
+    existing_ids = set(location.assigned_employees.values_list('id', flat=True))
+    new_ids = set(employees_qs.values_list('id', flat=True))
+    all_ids = existing_ids | new_ids
+
+    all_emps = Employee._base_manager.filter(id__in=all_ids)
+    location.assigned_employees.set(all_emps)
+
+    location.refresh_from_db()
+    final_count = location.assigned_employees.count()
+
+    return Response({
+        'success': True,
+        'message': f'تم تعيين {len(new_ids)} موظف',
+        'assigned': len(new_ids),
+        'total_assigned': final_count,
     })

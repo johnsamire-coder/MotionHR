@@ -648,6 +648,45 @@ def mobile_login(request):
     })
 
 
+
+
+def _create_gps_disabled_alert(employee, source="attendance"):
+    try:
+        from attendance.models import TrackingAlert
+        now = timezone.now()
+        today = timezone.localdate()
+
+        note = f"GPS disabled أثناء {source}"
+
+        open_alert = TrackingAlert._base_manager.filter(
+            company=employee.company,
+            employee=employee,
+            date=today,
+            status='open'
+        ).filter(notes__icontains='GPS').first()
+
+        if open_alert:
+            open_alert.last_seen_at = now
+            if not getattr(open_alert, 'notes', ''):
+                open_alert.notes = note
+            open_alert.save(update_fields=['last_seen_at', 'notes'])
+        else:
+            TrackingAlert._base_manager.create(
+                company=employee.company,
+                employee=employee,
+                date=today,
+                started_at=now,
+                last_seen_at=now,
+                minutes_outside=0,
+                last_latitude=None,
+                last_longitude=None,
+                last_address='',
+                status='open',
+                notes=note,
+            )
+    except Exception:
+        pass
+
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -661,7 +700,8 @@ def mobile_send_location(request):
     accuracy = request.data.get('accuracy', 0)
 
     if latitude in [None, ''] or longitude in [None, '']:
-        return Response({'success': False, 'message': 'خط العرض وخط الطول مطلوبان'}, status=400)
+        _create_gps_disabled_alert(employee, 'location_ping')
+        return Response({'success': False, 'message': 'الموقع الجغرافي غير متاح. يرجى تفعيل GPS والمحاولة مرة أخرى'}, status=400)
 
     try:
         latitude = float(latitude)
@@ -732,7 +772,8 @@ def mobile_attendance_action(request):
         return Response({'success': False, 'message': 'نوع العملية لازم يكون check_in أو check_out'}, status=400)
 
     if latitude in [None, ''] or longitude in [None, '']:
-        return Response({'success': False, 'message': 'خط العرض وخط الطول مطلوبان'}, status=400)
+        _create_gps_disabled_alert(employee, action)
+        return Response({'success': False, 'message': 'الموقع الجغرافي غير متاح. يرجى تفعيل GPS والمحاولة مرة أخرى'}, status=400)
 
     try:
         latitude = float(latitude)
@@ -1371,6 +1412,56 @@ def mobile_attendance_status(request):
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     today = timezone.localdate()
+
+    # ═══════════════════════════════════════════════════
+    # ATT-10b: GPS Detection - يسجل Alert لو GPS مقفول
+    # ═══════════════════════════════════════════════════
+    try:
+        _lat = request.GET.get('latitude')
+        _lng = request.GET.get('longitude')
+        _has_gps = _lat not in (None, '', 'null') and _lng not in (None, '', 'null')
+
+        from attendance.models import TrackingAlert
+        _now = timezone.now()
+
+        _open_alert = TrackingAlert._base_manager.filter(
+            company=employee.company,
+            employee=employee,
+            date=today,
+            status='open',
+            notes__icontains='GPS'
+        ).first()
+
+        if not _has_gps:
+            # GPS مقفول - نسجل Alert
+            if _open_alert:
+                # تحديث Alert الموجود
+                _open_alert.last_seen_at = _now
+                _open_alert.save(update_fields=['last_seen_at'])
+            else:
+                # إنشاء Alert جديد
+                TrackingAlert._base_manager.create(
+                    company=employee.company,
+                    employee=employee,
+                    date=today,
+                    started_at=_now,
+                    last_seen_at=_now,
+                    minutes_outside=0,
+                    last_latitude=None,
+                    last_longitude=None,
+                    last_address='',
+                    status='open',
+                    notes='GPS disabled - detected from status ping',
+                )
+        else:
+            # GPS شغال - نقفل أي Alert مفتوح
+            if _open_alert:
+                _open_alert.status = 'resolved'
+                _open_alert.resolved_at = _now
+                _open_alert.save(update_fields=['status', 'resolved_at'])
+    except Exception:
+        pass
+    # ═══════════════════════════════════════════════════
     
     # ═══════════════════════════════════════════════════
     # Validation: worker_type and shift must be set

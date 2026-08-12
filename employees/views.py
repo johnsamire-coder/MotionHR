@@ -1662,3 +1662,150 @@ def import_logs_list(request):
         'logs': data,
         'count': len(data),
     })
+
+
+@login_required
+@feature_required('employees_management')
+def employee_toggle_status(request, pk):
+    """E11 - تفعيل/تعطيل الموظف"""
+    employee = get_object_or_404(Employee, pk=pk)
+
+    if not can_user_edit_employee(request.user, employee):
+        raise PermissionDenied('ليس لديك صلاحية تغيير حالة هذا الموظف')
+
+    if request.method == 'POST':
+        new_status = request.POST.get('new_status', '').strip()
+
+        VALID_TOGGLE_STATUSES = ['active', 'suspended', 'on_leave']
+        if new_status not in VALID_TOGGLE_STATUSES:
+            messages.error(request, 'حالة غير صحيحة')
+            return redirect('employees:detail', pk=pk)
+
+        old_status = employee.status
+        employee.status = new_status
+        employee.save(update_fields=['status'])
+
+        if getattr(employee, 'user', None):
+            if new_status == 'active':
+                employee.user.is_active = True
+            elif new_status == 'suspended':
+                employee.user.is_active = False
+            employee.user.save(update_fields=['is_active'])
+
+        status_labels = {
+            'active': 'نشط',
+            'suspended': 'موقوف',
+            'on_leave': 'في اجازة',
+        }
+        messages.success(
+            request,
+            'تم تغيير حالة الموظف %s من "%s" الى "%s"' % (
+                _employee_name(employee),
+                status_labels.get(old_status, old_status),
+                status_labels.get(new_status, new_status),
+            )
+        )
+
+    return redirect('employees:detail', pk=pk)
+
+
+@login_required
+@feature_required('employees_management')
+def employee_terminate(request, pk):
+    """E-T13 - انهاء خدمة الموظف"""
+    employee = get_object_or_404(Employee, pk=pk)
+
+    if not can_user_edit_employee(request.user, employee):
+        raise PermissionDenied('ليس لديك صلاحية انهاء خدمة هذا الموظف')
+
+    if employee.status in ['terminated', 'resigned', 'retired']:
+        messages.warning(
+            request,
+            'الموظف %s منتهي الخدمة بالفعل (%s)' % (
+                _employee_name(employee),
+                employee.get_status_display(),
+            )
+        )
+        return redirect('employees:detail', pk=pk)
+
+    if request.method == 'POST':
+        termination_type = request.POST.get('termination_type', 'terminated').strip()
+        termination_date_str = request.POST.get('termination_date', '').strip()
+        termination_reason = request.POST.get('termination_reason', '').strip()
+
+        VALID_TYPES = ['terminated', 'resigned', 'retired']
+        if termination_type not in VALID_TYPES:
+            termination_type = 'terminated'
+
+        if not termination_date_str:
+            messages.error(request, 'يرجى تحديد تاريخ انهاء الخدمة')
+            return render(request, 'employees/terminate.html', {
+                'employee': employee,
+                'page_title': 'انهاء خدمة - %s' % _employee_name(employee),
+            })
+
+        if not termination_reason:
+            messages.error(request, 'يرجى كتابة سبب انهاء الخدمة')
+            return render(request, 'employees/terminate.html', {
+                'employee': employee,
+                'page_title': 'انهاء خدمة - %s' % _employee_name(employee),
+            })
+
+        import datetime
+        try:
+            termination_date = datetime.date.fromisoformat(termination_date_str)
+        except ValueError:
+            messages.error(request, 'تاريخ انهاء الخدمة غير صحيح')
+            return render(request, 'employees/terminate.html', {
+                'employee': employee,
+                'page_title': 'انهاء خدمة - %s' % _employee_name(employee),
+            })
+
+        old_status = employee.status
+        employee.status = termination_type
+        employee.termination_date = termination_date
+        employee.termination_reason = termination_reason
+        employee.save(update_fields=['status', 'termination_date', 'termination_reason'])
+
+        if getattr(employee, 'user', None):
+            employee.user.is_active = False
+            employee.user.save(update_fields=['is_active'])
+
+        try:
+            from .models import EmployeeMovement
+            type_map = {
+                'terminated': 'termination',
+                'resigned': 'resignation',
+                'retired': 'other',
+            }
+            EmployeeMovement.objects.create(
+                company=employee.company,
+                employee=employee,
+                movement_type=type_map.get(termination_type, 'termination'),
+                movement_date=termination_date,
+                old_value=old_status,
+                new_value=termination_type,
+                reason=termination_reason,
+            )
+        except Exception:
+            pass
+
+        type_labels = {
+            'terminated': 'مفصول',
+            'resigned': 'مستقيل',
+            'retired': 'متقاعد',
+        }
+        messages.success(
+            request,
+            'تم انهاء خدمة الموظف %s (%s) بتاريخ %s' % (
+                _employee_name(employee),
+                type_labels.get(termination_type, termination_type),
+                termination_date,
+            )
+        )
+        return redirect('employees:detail', pk=pk)
+
+    return render(request, 'employees/terminate.html', {
+        'employee': employee,
+        'page_title': 'انهاء خدمة - %s' % _employee_name(employee),
+    })

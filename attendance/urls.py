@@ -20,6 +20,8 @@ from .api_field_visits import (
     field_visit_types,
 )
 from .api_work_locations import (
+    manager_delete_location,
+    manager_assign_employees_to_location,
     hr_pending_locations,
     propose_work_location,
     my_work_locations,
@@ -270,6 +272,7 @@ urlpatterns += [
     path('api/mobile/manager/branches/', api_employee_management.manager_branches),
     path('api/mobile/manager/departments/', api_employee_management.manager_departments),
     path('api/mobile/manager/job-titles/', api_employee_management.manager_job_titles),
+    path('api/mobile/manager/job-titles/<int:title_id>/', api_employee_management.manager_job_title_detail),
     path('api/mobile/manager/employees/simple/', api_employee_management.manager_employees_simple),
     path('api/mobile/manager/employees/create/', api_employee_management.manager_create_employee),
     path('api/mobile/manager/employees/managers/', api_employee_management.manager_employee_managers),
@@ -518,12 +521,16 @@ urlpatterns += [
 # ══════════════════════════════════════
 from attendance.api_offboarding import (
     offboard_employee, reactivate_employee, offboarded_employees,
+    toggle_employee_status, delete_employee_api, offboard_employee_web,
 )
 
 urlpatterns += [
     path('api/mobile/manager/offboarding/<int:employee_id>/', offboard_employee),
     path('api/mobile/manager/offboarding/<int:employee_id>/reactivate/', reactivate_employee),
     path('api/mobile/manager/offboarding/list/', offboarded_employees),
+    path('api/mobile/manager/employees/<int:employee_id>/toggle-status/', toggle_employee_status),
+    path('api/mobile/manager/employees/<int:employee_id>/delete/', delete_employee_api),
+    path('api/mobile/manager/offboarding/<int:employee_id>/web/', offboard_employee_web),
 ]
 
 
@@ -561,12 +568,79 @@ from .api_reports import (
     payroll_report,
     permissions_report,
     daily_attendance_report,
+    eos_report,
+    eos_export_excel,
+    eos_export_pdf,
+    reimbursements_report, reimbursements_export_excel, reimbursements_export_pdf,
+    bank_transfer_report, bank_transfer_export_excel, bank_transfer_export_pdf,
+    insurance_report, insurance_export_excel, insurance_export_pdf,
+    tax_report, tax_export_excel, tax_export_pdf,
+    turnover_report, turnover_export_excel, turnover_export_pdf,
+    branch_comparison_report, branch_comparison_export_excel, branch_comparison_export_pdf,
+    contracts_expiry_report, contracts_expiry_export_excel, contracts_expiry_export_pdf,
+    loans_advances_report, loans_advances_export_excel, loans_advances_export_pdf,
+    missions_performance_report, missions_performance_export_excel, missions_performance_export_pdf,
+    executive_dashboard_report, executive_dashboard_export_excel, executive_dashboard_export_pdf,
+    unified_dashboard,
 )
 
 urlpatterns += [
     path('api/mobile/manager/reports/payroll/', payroll_report, name='reports-payroll'),
     path('api/mobile/manager/reports/permissions/', permissions_report, name='reports-permissions'),
     path('api/mobile/manager/reports/daily-attendance/', daily_attendance_report, name='reports-daily-attendance'),
+    path('api/mobile/manager/reports/eos/', eos_report, name='reports-eos'),
+    path('api/mobile/manager/reports/eos/export/', eos_export_excel, name='reports-eos-export'),
+    path('api/mobile/manager/reports/eos/export/pdf/', eos_export_pdf, name='reports-eos-export-pdf'),
+
+    # Reimbursements
+    path('api/mobile/manager/reports/reimbursements/', reimbursements_report),
+    path('api/mobile/manager/reports/reimbursements/export/', reimbursements_export_excel),
+    path('api/mobile/manager/reports/reimbursements/export/pdf/', reimbursements_export_pdf),
+
+    # Bank Transfer
+    path('api/mobile/manager/reports/bank-transfer/', bank_transfer_report),
+    path('api/mobile/manager/reports/bank-transfer/export/', bank_transfer_export_excel),
+    path('api/mobile/manager/reports/bank-transfer/export/pdf/', bank_transfer_export_pdf),
+
+    # Insurance
+    path('api/mobile/manager/reports/insurance/', insurance_report),
+    path('api/mobile/manager/reports/insurance/export/', insurance_export_excel),
+    path('api/mobile/manager/reports/insurance/export/pdf/', insurance_export_pdf),
+
+    # Tax
+    path('api/mobile/manager/reports/tax/', tax_report),
+    path('api/mobile/manager/reports/tax/export/', tax_export_excel),
+    path('api/mobile/manager/reports/tax/export/pdf/', tax_export_pdf),
+
+    # Turnover
+    path('api/mobile/manager/reports/turnover/', turnover_report),
+    path('api/mobile/manager/reports/turnover/export/', turnover_export_excel),
+    path('api/mobile/manager/reports/turnover/export/pdf/', turnover_export_pdf),
+
+    # Branch Comparison
+    path('api/mobile/manager/reports/branch-comparison/', branch_comparison_report),
+    path('api/mobile/manager/reports/branch-comparison/export/', branch_comparison_export_excel),
+    path('api/mobile/manager/reports/branch-comparison/export/pdf/', branch_comparison_export_pdf),
+
+    # Contracts Expiry
+    path('api/mobile/manager/reports/contracts-expiry/', contracts_expiry_report),
+    path('api/mobile/manager/reports/contracts-expiry/export/', contracts_expiry_export_excel),
+    path('api/mobile/manager/reports/contracts-expiry/export/pdf/', contracts_expiry_export_pdf),
+
+    # Loans & Advances
+    path('api/mobile/manager/reports/loans-advances/', loans_advances_report),
+    path('api/mobile/manager/reports/loans-advances/export/', loans_advances_export_excel),
+    path('api/mobile/manager/reports/loans-advances/export/pdf/', loans_advances_export_pdf),
+
+    # Missions Performance
+    path('api/mobile/manager/reports/missions-performance/', missions_performance_report),
+    path('api/mobile/manager/reports/missions-performance/export/', missions_performance_export_excel),
+    path('api/mobile/manager/reports/missions-performance/export/pdf/', missions_performance_export_pdf),
+
+    # Executive Dashboard
+    path('api/mobile/manager/reports/executive-dashboard/', executive_dashboard_report),
+    path('api/mobile/manager/reports/executive-dashboard/export/', executive_dashboard_export_excel),
+    path('api/mobile/manager/reports/executive-dashboard/export/pdf/', executive_dashboard_export_pdf),
 ]
 
 from .api_reports import (
@@ -605,6 +679,8 @@ urlpatterns += [
     path('api/mobile/manager/work-locations/pending/', manager_pending_locations, name='manager_pending_locations'),
     path('api/mobile/manager/work-locations/<int:location_id>/approve/', approve_work_location, name='approve_work_location'),
     path('api/mobile/manager/work-locations/<int:location_id>/reject/', reject_work_location, name='reject_work_location'),
+    path('api/mobile/manager/work-locations/<int:location_id>/delete/', manager_delete_location),
+    path('api/mobile/manager/work-locations/<int:location_id>/assign-employees/', manager_assign_employees_to_location),
     # ═══════════════════════════════════════════════════
     # Company Allowance Policies (بدلات عامة)
     # ═══════════════════════════════════════════════════
@@ -674,5 +750,5 @@ urlpatterns += [
     # ═══════════════════════════════════════════════════
     path('api/mobile/manager/official-holidays/', official_holiday_list_create, name='official_holiday_list_create'),
     path('api/mobile/manager/official-holidays/<int:holiday_id>/', official_holiday_detail, name='official_holiday_detail'),
-
+    path('api/mobile/manager/dashboard/', unified_dashboard, name='unified-dashboard'),
 ]

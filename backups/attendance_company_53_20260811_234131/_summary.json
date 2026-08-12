@@ -1,0 +1,19 @@
+{
+  "company_id": 53,
+  "employee_count": 7,
+  "backup_dir": "/var/www/motionhr/backups/attendance_company_53_20260811_234131",
+  "models": {
+    "AttendanceActionLog": 0,
+    "AttendanceSession": 2,
+    "DailyAttendanceSummary": 1,
+    "LateIncident": 0,
+    "LateNotification": 0,
+    "DisciplinaryAction": 0,
+    "PermissionLedger": 0,
+    "TrackingAlert": 0,
+    "LocationHistory": 2,
+    "LocationLog": 5,
+    "LocationCheckIn": 0,
+    "Attendance": 3
+  }
+}

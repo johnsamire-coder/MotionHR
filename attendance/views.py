@@ -152,7 +152,7 @@ def api_check_in(request):
         if existing and existing.check_in_time:
             return JsonResponse({
                 'success': False,
-                'message': f'تم تسجيل الحضور مسبقاً في {existing.check_in_time.strftime("%I:%M %p")}'
+                'message': f'تم تسجيل الحضور مسبقاً في {timezone.localtime(existing.check_in_time).strftime("%I:%M %p")}'
             })
 
         lat = float(latitude)
@@ -253,7 +253,7 @@ def api_check_in(request):
         return JsonResponse({
             'success': True,
             'message': msg,
-            'time': attendance.check_in_time.strftime('%H:%M:%S'),
+            'time': timezone.localtime(attendance.check_in_time).strftime('%H:%M:%S'),
             'within_range': within_range,
             'distance': distance,
             'late_minutes': getattr(attendance, 'late_minutes', 0),
@@ -302,7 +302,7 @@ def api_check_out(request):
         if attendance.check_out_time:
             return JsonResponse({
                 'success': False,
-                'message': f'تم تسجيل الانصراف مسبقاً في {attendance.check_out_time.strftime("%I:%M %p")}'
+                'message': f'تم تسجيل الانصراف مسبقاً في {timezone.localtime(attendance.check_out_time).strftime("%I:%M %p")}'
             })
         
         within_range = False
@@ -326,7 +326,7 @@ def api_check_out(request):
         return JsonResponse({
             'success': True,
             'message': 'تم تسجيل الانصراف بنجاح ✅',
-            'time': attendance.check_out_time.strftime('%H:%M:%S'),
+            'time': timezone.localtime(attendance.check_out_time).strftime('%H:%M:%S'),
             'work_hours': float(attendance.work_hours),
             'address': address,
         })

@@ -2596,6 +2596,14 @@ class EmployeeWorkLocation(TenantModel):
     الموظف يقترح موقع → المدير/HR يوافق → الموظف يقدر يبصم منه
     """
     
+    # الموظفين المخصص لهم الموقع (Many-to-Many)
+    assigned_employees = models.ManyToManyField(
+        'employees.Employee',
+        blank=True,
+        related_name='assigned_work_locations',
+        verbose_name='الموظفين المخصصين'
+    )
+
     LOCATION_TYPE_CHOICES = [
         ('project', 'موقع مشروع'),
         ('client', 'موقع عميل'),

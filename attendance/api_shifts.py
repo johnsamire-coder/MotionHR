@@ -636,7 +636,17 @@ def manager_shift_delete(request, shift_id):
         total_usage = active_employee_shifts + active_assignments + active_overrides + rotation_slots
 
         if total_usage > 0 or attendance_count > 0:
-            # فيه ارتباطات → soft delete (إلغاء تفعيل)
+            # Hard delete + مسح كل الـ assignments و emp_shifts القديمة
+            # (الحضور بيفضل بدون شيفت لأن الـ FK فيها on_delete=SET_NULL)
+            EmployeeShift._base_manager.filter(shift=shift).delete()
+            ShiftAssignment._base_manager.filter(shift=shift).delete()
+            ShiftOverride._base_manager.filter(shift=shift).delete()
+            ShiftRotationSlot._base_manager.filter(shift=shift).delete()
+
+            # الحضور القديم نخليه بدون shift (لا نمسحه!)
+            Attendance._base_manager.filter(shift=shift).update(shift=None)
+
+            # الآن نقدر نمسح الشيفت
             shift.is_active = False
             shift.save()
 
@@ -2134,8 +2144,8 @@ def today_sessions(request):
             total_minutes += worked
             data.append({
                 "session_number": s.session_number,
-                "check_in": s.check_in_time.strftime('%I:%M %p') if s.check_in_time else None,
-                "check_out": s.check_out_time.strftime('%I:%M %p') if s.check_out_time else None,
+                "check_in": timezone.localtime(s.check_in_time).strftime('%I:%M %p') if s.check_in_time else None,
+                "check_out": timezone.localtime(s.check_out_time).strftime('%I:%M %p') if s.check_out_time else None,
                 "is_partial": s.is_partial,
                 "is_complete": s.is_complete,
                 "worked_minutes": worked,

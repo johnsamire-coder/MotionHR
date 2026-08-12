@@ -2,6 +2,7 @@ from django import forms
 from .models import Employee, JobTitle
 from companies.models import Branch, Department
 from core.middleware import get_current_company, get_current_user
+import datetime
 
 
 class EmployeeForm(forms.ModelForm):
@@ -163,44 +164,153 @@ class EmployeeForm(forms.ModelForm):
             if field in self.fields:
                 self.fields[field].required = False
     
-    def clean_national_id(self):
-        """التحقق من الرقم القومي"""
-        national_id = self.cleaned_data.get('national_id')
-        
-        if national_id:
-            if not national_id.isdigit():
-                raise forms.ValidationError('الرقم القومي يجب أن يحتوي على أرقام فقط')
-            
-            if len(national_id) != 14:
-                raise forms.ValidationError('الرقم القومي يجب أن يكون 14 رقم')
-            
-            # تحقق من عدم التكرار
-            company = get_current_company()
-            if company:
-                qs = Employee.objects.filter(
-                    company=company,
-                    national_id=national_id
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if not email:
+            return email
+
+        email = email.strip().lower()
+        company = get_current_company()
+
+        if company:
+            qs = Employee.objects.filter(company=company, email__iexact=email)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError(
+                    'هذا البريد الالكتروني مسجل لموظف اخر في نفس الشركة'
                 )
-                if self.instance.pk:
-                    qs = qs.exclude(pk=self.instance.pk)
-                
-                if qs.exists():
-                    raise forms.ValidationError('هذا الرقم القومي مسجل لموظف آخر')
-        
+
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user_qs = User.objects.filter(email__iexact=email)
+        if self.instance.pk and getattr(self.instance, 'user', None):
+            user_qs = user_qs.exclude(pk=self.instance.user.pk)
+        if user_qs.exists():
+            raise forms.ValidationError(
+                'هذا البريد الالكتروني مستخدم بالفعل في النظام'
+            )
+
+        return email
+
+    def clean_birth_date(self):
+        birth_date = self.cleaned_data.get('birth_date')
+        if not birth_date:
+            return birth_date
+
+        today = datetime.date.today()
+
+        if birth_date > today:
+            raise forms.ValidationError(
+                'تاريخ الميلاد لا يمكن ان يكون في المستقبل'
+            )
+
+        try:
+            min_date = today.replace(year=today.year - 100)
+        except ValueError:
+            min_date = today.replace(year=today.year - 100, day=28)
+
+        if birth_date < min_date:
+            raise forms.ValidationError(
+                'تاريخ الميلاد غير صحيح - يتجاوز 100 سنة'
+            )
+
+        try:
+            max_date = today.replace(year=today.year - 16)
+        except ValueError:
+            max_date = today.replace(year=today.year - 16, day=28)
+
+        if birth_date > max_date:
+            raise forms.ValidationError(
+                'يجب ان يكون عمر الموظف 16 سنة على الاقل'
+            )
+
+        return birth_date
+
+    def clean_hire_date(self):
+        hire_date = self.cleaned_data.get('hire_date')
+        if not hire_date:
+            return hire_date
+
+        today = datetime.date.today()
+
+        try:
+            min_date = today.replace(year=today.year - 50)
+        except ValueError:
+            min_date = today.replace(year=today.year - 50, day=28)
+
+        if hire_date < min_date:
+            raise forms.ValidationError(
+                'تاريخ التعيين غير صحيح - يتجاوز 50 سنة'
+            )
+
+        return hire_date
+
+    def clean_national_id(self):
+        national_id = self.cleaned_data.get('national_id')
+
+        if not national_id:
+            return national_id
+
+        if not national_id.isdigit():
+            raise forms.ValidationError('الرقم القومي يجب ان يحتوي على ارقام فقط (14 رقم)')
+
+        if len(national_id) != 14:
+            raise forms.ValidationError(
+                'الرقم القومي يجب ان يكون 14 رقم - ادخلت %d رقم' % len(national_id)
+            )
+
+        if national_id[0] not in ('2', '3'):
+            raise forms.ValidationError('الرقم القومي غير صحيح - يجب ان يبدا بـ 2 او 3')
+
+        company = get_current_company()
+        if company:
+            qs = Employee.objects.filter(
+                company=company,
+                national_id=national_id
+            )
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+
+            if qs.exists():
+                raise forms.ValidationError('هذا الرقم القومي مسجل لموظف اخر في نفس الشركة')
+
         return national_id
-    
+
     def clean_phone(self):
-        """التحقق من رقم الموبايل"""
         phone = self.cleaned_data.get('phone')
-        
-        if phone:
-            # إزالة المسافات
-            phone = phone.replace(' ', '').replace('-', '')
-            
-            if not phone.isdigit():
-                raise forms.ValidationError('رقم الموبايل يجب أن يحتوي على أرقام فقط')
-            
-            if len(phone) < 10 or len(phone) > 15:
-                raise forms.ValidationError('رقم الموبايل غير صحيح')
-        
+
+        if not phone:
+            return phone
+
+        phone = phone.replace(' ', '').replace('-', '')
+
+        if not phone.isdigit():
+            raise forms.ValidationError('رقم الموبايل يجب ان يحتوي على ارقام فقط')
+
+        if len(phone) < 10 or len(phone) > 15:
+            raise forms.ValidationError('رقم الموبايل غير صحيح - يجب ان يكون بين 10 و 15 رقم')
+
         return phone
+
+    def clean(self):
+        cleaned_data = super().clean()
+        birth_date = cleaned_data.get('birth_date')
+        hire_date = cleaned_data.get('hire_date')
+        contract_end_date = cleaned_data.get('contract_end_date')
+
+        if birth_date and hire_date:
+            if hire_date <= birth_date:
+                self.add_error(
+                    'hire_date',
+                    'تاريخ التعيين يجب ان يكون بعد تاريخ الميلاد'
+                )
+
+        if hire_date and contract_end_date:
+            if contract_end_date <= hire_date:
+                self.add_error(
+                    'contract_end_date',
+                    'تاريخ انتهاء العقد يجب ان يكون بعد تاريخ التعيين'
+                )
+
+        return cleaned_data

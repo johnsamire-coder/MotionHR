@@ -480,6 +480,59 @@ class LeaveRequest(TenantModel):
         self.review_notes = notes
         self.save()
         self._update_balance("approve")
+        # LEV-7: تحديث سجلات الحضور للأيام المعتمدة
+        self._update_attendance_records()
+
+    def _update_attendance_records(self):
+        """LEV-7: تحديث سجلات الحضور لتصبح on_leave + شيل خصومات الغياب"""
+        try:
+            from attendance.models import Attendance, DailyAttendanceSummary
+            from employees.models import Deduction
+            from datetime import timedelta
+
+            check_date = self.start_date
+            while check_date <= self.end_date:
+                # 1) تحديث سجل الحضور
+                att, created = Attendance._base_manager.get_or_create(
+                    company=self.company,
+                    employee=self.employee,
+                    date=check_date,
+                    defaults={
+                        'status': 'on_leave',
+                    }
+                )
+                if not created and not att.check_in_time:
+                    att.status = 'on_leave'
+                    att.save(update_fields=['status'])
+
+                # 2) تحديث DailyAttendanceSummary
+                try:
+                    summary = DailyAttendanceSummary._base_manager.filter(
+                        employee=self.employee,
+                        date=check_date,
+                    ).first()
+                    if summary:
+                        summary.status = 'on_leave'
+                        summary.effective_status = 'on_leave'
+                        if hasattr(summary, 'absent_days'):
+                            summary.absent_days = 0
+                        summary.save()
+                except Exception:
+                    pass
+
+                # 3) شيل خصومات الغياب اليوم ده
+                try:
+                    Deduction._base_manager.filter(
+                        employee=self.employee,
+                        date=check_date,
+                        deduction_type='absence',
+                    ).delete()
+                except Exception:
+                    pass
+
+                check_date += timedelta(days=1)
+        except Exception:
+            pass
 
     def reject(self, user, notes=""):
         """رفض الطلب"""

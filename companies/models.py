@@ -254,6 +254,13 @@ class Department(models.Model):
         related_name='sub_departments',
         verbose_name='الإدارة الأم'
     )
+    branch = models.ForeignKey(
+        'companies.Branch',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='dept_branch_link',
+        verbose_name='الفرع'
+    )
     name_ar = models.CharField(
         max_length=200,
         verbose_name='اسم الإدارة بالعربي'

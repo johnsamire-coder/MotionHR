@@ -22,6 +22,24 @@ class JobTitle(TenantModel):
         null=True,
         verbose_name='الوصف'
     )
+    branch = models.ForeignKey(
+        'companies.Branch',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='jt_branch_master',
+        verbose_name='الفرع'
+    )
+    department = models.ForeignKey(
+        'companies.Department',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='jt_dept_master',
+        verbose_name='القسم'
+    )
+    is_manager = models.BooleanField(
+        default=False,
+        verbose_name='هل هذا المسمى الوظيفي مدير؟'
+    )
     is_active = models.BooleanField(
         default=True,
         verbose_name='نشط'
@@ -802,6 +820,24 @@ class JobHierarchyLevel(models.Model):
     name_en = models.CharField(max_length=150, blank=True, verbose_name='الاسم بالإنجليزي')
     sort_order = models.PositiveIntegerField(default=1, verbose_name='الترتيب الهرمي')
     description = models.TextField(blank=True, verbose_name='الوصف')
+    branch = models.ForeignKey(
+        'companies.Branch',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='hierarchy_branch',
+        verbose_name='الفرع'
+    )
+    department = models.ForeignKey(
+        'companies.Department',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='hierarchy_dept',
+        verbose_name='القسم'
+    )
+    is_manager = models.BooleanField(
+        default=False,
+        verbose_name='هل هذا المسمى الوظيفي مدير؟'
+    )
     is_active = models.BooleanField(default=True, verbose_name='نشط')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -863,6 +899,24 @@ class DepartmentJobTitleRule(models.Model):
     allow_higher_parent_fallback = models.BooleanField(
         default=True,
         verbose_name='السماح ببدائل أعلى لو المسمى الأب غير موجود',
+    )
+    branch = models.ForeignKey(
+        'companies.Branch',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='dept_rule_branch',
+        verbose_name='الفرع'
+    )
+    department = models.ForeignKey(
+        'companies.Department',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='dept_rule_dept',
+        verbose_name='القسم'
+    )
+    is_manager = models.BooleanField(
+        default=False,
+        verbose_name='هل هذا المسمى الوظيفي مدير؟'
     )
     is_active = models.BooleanField(default=True, verbose_name='نشط')
     notes = models.TextField(blank=True, verbose_name='ملاحظات')

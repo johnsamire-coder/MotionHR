@@ -165,14 +165,189 @@ def offboarded_employees(request):
 
     data = []
     for emp in emps:
+        full_name = emp.full_name_ar or emp.full_name_en or f'#{emp.id}'
         data.append({
             'id': emp.id,
-            'name': emp.full_name_ar or emp.full_name_en or f'#{emp.id}',
+            'name': full_name,
+            'full_name': full_name,
+            'employee_code': getattr(emp, 'employee_code', '') or '',
             'status': emp.status,
             'status_label': STATUS_LABELS.get(emp.status, emp.status),
             'department': emp.department.name_ar if emp.department else '',
             'job_title': emp.job_title.name_ar if emp.job_title else '',
+            'termination_date': emp.termination_date.isoformat() if getattr(emp, 'termination_date', None) else None,
+            'termination_reason': getattr(emp, 'termination_reason', '') or '',
             'is_account_active': emp.user.is_active if emp.user else False,
         })
 
     return Response({'employees': data, 'total': len(data)})
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def toggle_employee_status(request, employee_id):
+    """تغيير حالة الموظف - نشط/موقوف"""
+    company = request.user.company
+    if not company:
+        return Response({'error': 'تعذر تحديد الشركة'}, status=403)
+
+    allowed = request.user.is_superuser or getattr(request.user, 'role', '') in [
+        'super_admin', 'company_admin', 'hr_manager'
+    ]
+    if not allowed:
+        return Response({'error': 'غير مصرح'}, status=403)
+
+    emp = Employee._base_manager.select_related('user').filter(
+        id=employee_id, company=company
+    ).first()
+    if not emp:
+        return Response({'error': 'الموظف غير موجود'}, status=404)
+
+    new_status = (request.data.get('status') or '').strip()
+    VALID = ['active', 'suspended', 'on_leave']
+    if new_status not in VALID:
+        return Response({'error': f'حالة غير صحيحة، الحالات المتاحة: {", ".join(VALID)}'}, status=400)
+
+    old_status = emp.status
+    emp.status = new_status
+    emp.save(update_fields=['status'])
+
+    if emp.user:
+        emp.user.is_active = (new_status == 'active')
+        emp.user.save(update_fields=['is_active'])
+
+    return Response({
+        'success': True,
+        'old_status': old_status,
+        'new_status': new_status,
+        'message': f'تم تغيير الحالة من {old_status} الى {new_status}',
+    })
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def delete_employee_api(request, employee_id):
+    """حذف موظف نهائيا"""
+    company = request.user.company
+    if not company:
+        return Response({'error': 'تعذر تحديد الشركة'}, status=403)
+
+    allowed = request.user.is_superuser or getattr(request.user, 'role', '') in [
+        'super_admin', 'company_admin'
+    ]
+    if not allowed:
+        return Response({'error': 'غير مصرح - فقط Company Admin يقدر يحذف موظف'}, status=403)
+
+    emp = Employee._base_manager.select_related('user').filter(
+        id=employee_id, company=company
+    ).first()
+    if not emp:
+        return Response({'error': 'الموظف غير موجود'}, status=404)
+
+    emp_name = getattr(emp, 'full_name_ar', None) or f'#{emp.id}'
+
+    if emp.user:
+        emp.user.is_active = False
+        emp.user.save(update_fields=['is_active'])
+
+    emp.delete()
+
+    return Response({
+        'success': True,
+        'message': f'تم حذف الموظف {emp_name} نهائيا',
+    })
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def offboard_employee_web(request, employee_id):
+    """انهاء خدمة موظف - نسخة ويب بدون permission check صارم"""
+    company = request.user.company
+    if not company:
+        return Response({'error': 'تعذر تحديد الشركة'}, status=403)
+
+    allowed = request.user.is_superuser or getattr(request.user, 'role', '') in [
+        'super_admin', 'company_admin', 'hr_manager'
+    ]
+    if not allowed:
+        return Response({'error': 'غير مصرح'}, status=403)
+
+    emp = Employee._base_manager.select_related('user', 'department').filter(
+        id=employee_id, company=company
+    ).first()
+    if not emp:
+        return Response({'error': 'الموظف غير موجود'}, status=404)
+
+    STATUS_MAP = {
+        'terminated': 'مفصول',
+        'resigned': 'مستقيل',
+        'retired': 'متقاعد',
+        'suspended': 'موقوف',
+    }
+
+    termination_type = (
+        request.data.get('termination_type') or
+        request.data.get('status') or
+        'terminated'
+    ).strip()
+
+    if termination_type not in STATUS_MAP:
+        termination_type = 'terminated'
+
+    reason = (
+        request.data.get('termination_reason') or
+        request.data.get('reason') or
+        ''
+    ).strip()
+
+    termination_date = (
+        request.data.get('termination_date') or ''
+    ).strip()
+
+    from django.db import transaction
+    with transaction.atomic():
+        old_status = emp.status
+        emp.status = termination_type
+        if termination_date:
+            try:
+                from datetime import datetime
+                emp.termination_date = datetime.strptime(termination_date, '%Y-%m-%d').date()
+            except Exception:
+                pass
+        if reason:
+            emp.termination_reason = reason
+        emp.save(update_fields=['status', 'termination_date', 'termination_reason'])
+
+        if emp.user:
+            emp.user.is_active = False
+            emp.user.save(update_fields=['is_active'])
+
+        try:
+            from employees.models import EmployeeMovement
+            type_map = {
+                'terminated': 'termination',
+                'resigned': 'resignation',
+                'retired': 'other',
+                'suspended': 'suspension',
+            }
+            EmployeeMovement.objects.create(
+                company=company,
+                employee=emp,
+                movement_type=type_map.get(termination_type, 'termination'),
+                movement_date=emp.termination_date or __import__('datetime').date.today(),
+                old_value=old_status,
+                new_value=termination_type,
+                reason=reason,
+            )
+        except Exception:
+            pass
+
+    return Response({
+        'success': True,
+        'message': f'تم انهاء خدمة الموظف - الحالة: {STATUS_MAP.get(termination_type, termination_type)}',
+        'employee_id': emp.id,
+        'new_status': termination_type,
+    })

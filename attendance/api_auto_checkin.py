@@ -256,6 +256,40 @@ def auto_check_in(request):
     lon = request.data.get('longitude')
 
     if lat is None or lon is None:
+        # ATT-10b: تسجيل GPS Alert للمدير
+        try:
+            from attendance.models import TrackingAlert
+            _today = date.today()
+            _now = timezone.now()
+            note = "GPS disabled during auto check-in"
+
+            open_alert = TrackingAlert._base_manager.filter(
+                company=emp.company,
+                employee=emp,
+                date=_today,
+                status='open'
+            ).filter(notes__icontains='GPS').first()
+
+            if open_alert:
+                open_alert.last_seen_at = _now
+                open_alert.save(update_fields=['last_seen_at'])
+            else:
+                TrackingAlert._base_manager.create(
+                    company=emp.company,
+                    employee=emp,
+                    date=_today,
+                    started_at=_now,
+                    last_seen_at=_now,
+                    minutes_outside=0,
+                    last_latitude=None,
+                    last_longitude=None,
+                    last_address='',
+                    status='open',
+                    notes=note,
+                )
+        except Exception:
+            pass
+
         return Response({'error': _msg('coords_required', lang)}, status=400)
 
     try:
@@ -278,7 +312,7 @@ def auto_check_in(request):
         return Response({
             'status': 'already_checked_in',
             'message': _msg('already_checked_in', lang),
-            'check_in': existing.check_in_time.strftime('%I:%M %p') if existing.check_in_time else None,
+            'check_in': timezone.localtime(existing.check_in_time).strftime('%I:%M %p') if existing.check_in_time else None,
         })
 
     # ═══════════════════════════════════════════════════
@@ -409,6 +443,40 @@ def auto_check_out(request):
     lon = request.data.get('longitude')
 
     if lat is None or lon is None:
+        # ATT-10b: تسجيل GPS Alert للمدير
+        try:
+            from attendance.models import TrackingAlert
+            _today = date.today()
+            _now = timezone.now()
+            note = "GPS disabled during auto check-in"
+
+            open_alert = TrackingAlert._base_manager.filter(
+                company=emp.company,
+                employee=emp,
+                date=_today,
+                status='open'
+            ).filter(notes__icontains='GPS').first()
+
+            if open_alert:
+                open_alert.last_seen_at = _now
+                open_alert.save(update_fields=['last_seen_at'])
+            else:
+                TrackingAlert._base_manager.create(
+                    company=emp.company,
+                    employee=emp,
+                    date=_today,
+                    started_at=_now,
+                    last_seen_at=_now,
+                    minutes_outside=0,
+                    last_latitude=None,
+                    last_longitude=None,
+                    last_address='',
+                    status='open',
+                    notes=note,
+                )
+        except Exception:
+            pass
+
         return Response({'error': _msg('coords_required', lang)}, status=400)
 
     try:
@@ -499,7 +567,7 @@ def auto_check_out(request):
     return Response({
         'status': 'checked_out',
         'message': _msg('checked_out', lang),
-        'check_in': att.check_in_time.strftime('%I:%M %p'),
+        'check_in': timezone.localtime(att.check_in_time).strftime('%I:%M %p'),
         'check_out': check_out_str,
         'work_hours': work_hours,
         'overtime_hours': overtime_hours,
@@ -534,8 +602,8 @@ def auto_checkin_status(request):
         'status': att.status,
         'has_check_in': att.check_in_time is not None,
         'has_check_out': att.check_out_time is not None,
-        'check_in': att.check_in_time.strftime('%I:%M %p') if att.check_in_time else None,
-        'check_out': att.check_out_time.strftime('%I:%M %p') if att.check_out_time else None,
+        'check_in': timezone.localtime(att.check_in_time).strftime('%I:%M %p') if att.check_in_time else None,
+        'check_out': timezone.localtime(att.check_out_time).strftime('%I:%M %p') if att.check_out_time else None,
         'work_hours': float(att.work_hours or 0),
         'late_minutes': int(att.late_minutes or 0),
         'overtime_hours': float(att.overtime_hours or 0),
