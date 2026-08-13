@@ -7,6 +7,7 @@ Mission-aware + Shift-aware + Policy-aware
 from datetime import date, timedelta, datetime
 from calendar import monthrange
 from django.db.models import Q
+from django.utils import timezone
 from .models import Attendance
 
 
