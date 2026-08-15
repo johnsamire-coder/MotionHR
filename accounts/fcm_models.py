@@ -98,3 +98,85 @@ class NotificationLog(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.title}"
+
+
+class TrustedDevice(models.Model):
+    """الأجهزة المعتمدة لكل موظف"""
+
+    STATUS_CHOICES = [
+        ('pending', 'في انتظار الموافقة'),
+        ('approved', 'معتمد'),
+        ('rejected', 'مرفوض'),
+        ('revoked', 'ملغي'),
+    ]
+
+    PLATFORM_CHOICES = [
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+    ]
+
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='trusted_devices',
+        verbose_name='المستخدم'
+    )
+    device_id = models.CharField(
+        max_length=255,
+        verbose_name='معرف الجهاز'
+    )
+    device_name = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        verbose_name='اسم الجهاز'
+    )
+    platform = models.CharField(
+        max_length=20,
+        choices=PLATFORM_CHOICES,
+        default='android',
+        verbose_name='نوع الجهاز'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='الحالة'
+    )
+    is_first_device = models.BooleanField(
+        default=False,
+        verbose_name='أول جهاز'
+    )
+    auto_attendance_enabled = models.BooleanField(
+        default=False,
+        verbose_name='Auto Attendance مفعّل'
+    )
+    approved_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_devices',
+        verbose_name='تمت الموافقة بواسطة'
+    )
+    approved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='وقت الموافقة'
+    )
+    last_login_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='آخر دخول'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'جهاز موثوق'
+        verbose_name_plural = 'الأجهزة الموثوقة'
+        unique_together = [('user', 'device_id')]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.device_name or self.device_id[:20]} - {self.status}"

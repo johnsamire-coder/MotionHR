@@ -245,6 +245,22 @@ def auto_check_in(request):
     if not emp:
         return Response({'error': _msg('employee_not_found', lang)}, status=404)
 
+    # ─── Device Approval Check ───
+    device_id = request.data.get('device_id', '').strip()
+    if device_id:
+        try:
+            from accounts.fcm_models import TrustedDevice
+            device = TrustedDevice._base_manager.filter(user=user, device_id=device_id).first()
+            if device and not device.auto_attendance_enabled:
+                return Response({
+                    'success': False,
+                    'status': 'device_not_approved',
+                    'message': 'الجهاز غير معتمد — Auto Attendance متوقف حتى موافقة المدير' if lang == 'ar' else 'Device not approved — Auto Attendance disabled until manager approval',
+                }, status=403)
+        except Exception:
+            pass
+    # ─────────────────────────────
+
     lat = request.data.get('latitude')
     lon = request.data.get('longitude')
 

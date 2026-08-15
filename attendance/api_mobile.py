@@ -2074,6 +2074,231 @@ def mobile_fcm_token_delete(request):
     except Exception as e:
         return Response({'success': False, 'message': str(e)}, status=500)
 
+# ============================================================
+# Device Approval Workflow
+# ============================================================
+from accounts.fcm_models import TrustedDevice
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_device_register(request):
+    """تسجيل جهاز جديد — أول جهاز يتعمد تلقائياً، الجهاز الجديد يحتاج موافقة"""
+    try:
+        from django.utils import timezone as tz
+        from accounts.fcm_service import send_notification_to_managers
+        from accounts.fcm_models import TrustedDevice
+
+        user = request.user
+        device_id = request.data.get('device_id', '').strip()
+        device_name = request.data.get('device_name', '').strip()
+        platform = request.data.get('platform', 'android')
+
+        if not device_id:
+            return Response({'success': False, 'message': 'device_id مطلوب'}, status=400)
+
+        # هل الجهاز ده موجود قبل كده؟
+        existing = TrustedDevice._base_manager.filter(user=user, device_id=device_id).first()
+        if existing:
+            existing.last_login_at = tz.now()
+            existing.save(update_fields=['last_login_at'])
+            return Response({
+                'success': True,
+                'status': existing.status,
+                'auto_attendance_enabled': existing.auto_attendance_enabled,
+                'message': 'جهاز موجود بالفعل',
+                'is_new': False,
+            })
+
+        # هل ده أول جهاز للموظف؟
+        existing_devices = TrustedDevice._base_manager.filter(user=user)
+        is_first = not existing_devices.exists()
+
+        status = 'approved' if is_first else 'pending'
+        auto_attendance = is_first
+
+        device = TrustedDevice._base_manager.create(
+            user=user,
+            device_id=device_id,
+            device_name=device_name or f'{platform} device',
+            platform=platform,
+            status=status,
+            is_first_device=is_first,
+            auto_attendance_enabled=auto_attendance,
+            approved_by=user if is_first else None,
+            approved_at=tz.now() if is_first else None,
+            last_login_at=tz.now(),
+        )
+
+        # لو جهاز جديد مش الأول → نبعت إشعار للمديرين
+        if not is_first:
+            emp = Employee._base_manager.filter(user=user).first()
+            emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip() if emp else user.username
+            try:
+                send_notification_to_managers(
+                    company=getattr(user, 'company', None),
+                    title=f'🔔 جهاز جديد — {emp_name}',
+                    body=f'الموظف {emp_name} دخل من جهاز جديد ويحتاج موافقة. الجهاز: {device_name or device_id[:20]}',
+                    data={
+                        'type': 'new_device_approval',
+                        'screen': 'trusted_devices',
+                        'device_id': str(device.id),
+                        'user_id': str(user.id),
+                    },
+                )
+            except Exception:
+                pass
+
+        return Response({
+            'success': True,
+            'status': status,
+            'auto_attendance_enabled': auto_attendance,
+            'is_new': True,
+            'is_first_device': is_first,
+            'message': 'تم تسجيل الجهاز بنجاح' if is_first else 'طلب تسجيل الجهاز في انتظار موافقة المدير',
+        })
+
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_device_status(request):
+    """حالة الجهاز الحالي"""
+    try:
+        from accounts.fcm_models import TrustedDevice
+        device_id = request.query_params.get('device_id', '').strip()
+        if not device_id:
+            return Response({'success': False, 'message': 'device_id مطلوب'}, status=400)
+
+        device = TrustedDevice._base_manager.filter(user=request.user, device_id=device_id).first()
+        if not device:
+            return Response({'success': False, 'status': 'not_registered', 'auto_attendance_enabled': False})
+
+        return Response({
+            'success': True,
+            'status': device.status,
+            'auto_attendance_enabled': device.auto_attendance_enabled,
+            'is_first_device': device.is_first_device,
+            'device_name': device.device_name,
+            'created_at': str(device.created_at)[:10],
+        })
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_devices_list(request):
+    """قائمة أجهزة الموظفين — للمدير"""
+    try:
+        from accounts.fcm_models import TrustedDevice
+        from attendance.api_reports import _check_manager
+        if not _check_manager(request.user):
+            return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+        company = getattr(request.user, 'company', None)
+        status_filter = request.query_params.get('status', None)
+
+        qs = TrustedDevice._base_manager.filter(
+            user__company=company
+        ).select_related('user', 'approved_by').order_by('-created_at')
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        results = []
+        for d in qs:
+            emp = Employee._base_manager.filter(user=d.user).first()
+            emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip() if emp else d.user.username
+            results.append({
+                'id': d.id,
+                'employee_name': emp_name,
+                'username': d.user.username,
+                'device_name': d.device_name,
+                'device_id': d.device_id[:20] + '...' if len(d.device_id) > 20 else d.device_id,
+                'platform': d.platform,
+                'status': d.status,
+                'is_first_device': d.is_first_device,
+                'auto_attendance_enabled': d.auto_attendance_enabled,
+                'created_at': str(d.created_at)[:16],
+                'last_login_at': str(d.last_login_at)[:16] if d.last_login_at else '',
+            })
+
+        return Response({'success': True, 'count': len(results), 'results': results})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_device_action(request, device_id):
+    """موافقة / رفض / إلغاء جهاز — للمدير"""
+    try:
+        from accounts.fcm_models import TrustedDevice
+        from django.utils import timezone as tz
+        from attendance.api_reports import _check_manager
+        from accounts.fcm_service import send_notification_to_user
+
+        if not _check_manager(request.user):
+            return Response({'error': 'صلاحية غير كافية'}, status=403)
+
+        action = request.data.get('action', '').strip()
+        if action not in ('approve', 'reject', 'revoke'):
+            return Response({'success': False, 'message': 'action لازم يكون approve / reject / revoke'}, status=400)
+
+        device = TrustedDevice._base_manager.filter(id=device_id).first()
+        if not device:
+            return Response({'success': False, 'message': 'الجهاز مش موجود'}, status=404)
+
+        if action == 'approve':
+            device.status = 'approved'
+            device.auto_attendance_enabled = True
+            device.approved_by = request.user
+            device.approved_at = tz.now()
+            msg_ar = 'تم اعتماد جهازك وتفعيل الحضور التلقائي'
+            msg_en = 'Your device has been approved and auto attendance is enabled'
+        elif action == 'reject':
+            device.status = 'rejected'
+            device.auto_attendance_enabled = False
+            msg_ar = 'تم رفض طلب اعتماد جهازك'
+            msg_en = 'Your device registration request has been rejected'
+        else:  # revoke
+            device.status = 'revoked'
+            device.auto_attendance_enabled = False
+            msg_ar = 'تم إلغاء صلاحية جهازك'
+            msg_en = 'Your device access has been revoked'
+
+        device.save()
+
+        # إشعار الموظف
+        try:
+            send_notification_to_user(
+                user=device.user,
+                title='📱 ' + msg_ar,
+                body=f'الجهاز: {device.device_name}',
+                data={'type': 'device_status_update', 'status': device.status},
+                title_en='📱 ' + msg_en,
+                body_en=f'Device: {device.device_name}',
+            )
+        except Exception:
+            pass
+
+        return Response({
+            'success': True,
+            'message': msg_ar,
+            'status': device.status,
+            'auto_attendance_enabled': device.auto_attendance_enabled,
+        })
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+
+
 
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])

@@ -3,7 +3,7 @@ from attendance import api_employee_profile
 from attendance import api_announcements
 from attendance import api_attachments
 from attendance import api_employee_management
-from attendance.api_mobile import mobile_geofence_get, mobile_geofence_set, mobile_fcm_token_register, mobile_fcm_token_delete
+from attendance.api_mobile import mobile_geofence_get, mobile_geofence_set, mobile_fcm_token_register, mobile_fcm_token_delete, mobile_device_register, mobile_device_status, manager_devices_list, manager_device_action
 from django.urls import path
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -757,4 +757,12 @@ urlpatterns += [
     path('api/mobile/manager/official-holidays/', official_holiday_list_create, name='official_holiday_list_create'),
     path('api/mobile/manager/official-holidays/<int:holiday_id>/', official_holiday_detail, name='official_holiday_detail'),
     path('api/mobile/manager/dashboard/', unified_dashboard, name='unified-dashboard'),
+
+    # ═══════════════════════════════════════════════════
+    # Device Approval Workflow
+    # ═══════════════════════════════════════════════════
+    path('api/mobile/device/register/', mobile_device_register, name='mobile_device_register'),
+    path('api/mobile/device/status/', mobile_device_status, name='mobile_device_status'),
+    path('api/mobile/manager/devices/', manager_devices_list, name='manager_devices_list'),
+    path('api/mobile/manager/devices/<int:device_id>/action/', manager_device_action, name='manager_device_action'),
 ]
