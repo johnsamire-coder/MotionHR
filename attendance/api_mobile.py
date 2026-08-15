@@ -2097,6 +2097,41 @@ def mobile_device_register(request):
         if not device_id:
             return Response({'success': False, 'message': 'device_id مطلوب'}, status=400)
 
+        # ─── منع تعدد الحسابات على نفس الجهاز ───
+        other_user_device = TrustedDevice._base_manager.filter(
+            device_id=device_id
+        ).exclude(user=user).first()
+
+        if other_user_device:
+            # نبعت إشعار للمديرين إن في نشاط مشبوه
+            emp = Employee._base_manager.filter(user=user).first()
+            emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip() if emp else user.username
+            other_emp = Employee._base_manager.filter(user=other_user_device.user).first()
+            other_name = f"{getattr(other_emp, 'first_name_ar', '')} {getattr(other_emp, 'last_name_ar', '')}".strip() if other_emp else other_user_device.user.username
+            try:
+                from accounts.fcm_service import send_notification_to_managers
+                send_notification_to_managers(
+                    company=getattr(user, 'company', None),
+                    title='🚨 نشاط مشبوه — تعدد حسابات',
+                    body=f'الجهاز نفسه مسجل باسم {other_name} وحاول الدخول باسم {emp_name}',
+                    data={
+                        'type': 'suspicious_device_activity',
+                        'screen': 'trusted_devices',
+                        'device_id': device_id[:20],
+                        'user_id': str(user.id),
+                    },
+                )
+            except Exception:
+                pass
+
+            return Response({
+                'success': False,
+                'status': 'suspicious',
+                'auto_attendance_enabled': False,
+                'message': 'هذا الجهاز مسجل بحساب آخر — تم إبلاغ المدير',
+            }, status=403)
+        # ─────────────────────────────────────────────
+
         # هل الجهاز ده موجود قبل كده؟
         existing = TrustedDevice._base_manager.filter(user=user, device_id=device_id).first()
         if existing:
