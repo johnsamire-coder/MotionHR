@@ -1878,11 +1878,29 @@ def _branch_comparison_data(user):
     """مقارنة الفروع والأقسام"""
     from employees.models import Employee
     from companies.models import Branch
+    from attendance.models import Attendance
+    from django.db.models import Sum, Count, Q
+    from datetime import timedelta
     company = getattr(user, 'company', None)
+    today = timezone.localdate()
+    date_from = today - timedelta(days=30)
     rows = []
     for br in Branch._base_manager.filter(company=company):
         emps = Employee._base_manager.filter(branch=br, status='active')
+        emp_ids = list(emps.values_list('id', flat=True))
         salaries = [float(e.basic_salary or 0) for e in emps]
+
+        # بيانات الحضور آخر 30 يوم
+        att_qs = Attendance._base_manager.filter(
+            employee_id__in=emp_ids,
+            date__gte=date_from,
+            date__lte=today,
+        )
+        present_days = att_qs.filter(status__in=['present', 'late']).count()
+        absent_days = att_qs.filter(status='absent').count()
+        late_minutes = att_qs.aggregate(t=Sum('late_minutes'))['t'] or 0
+        overtime_hours = att_qs.aggregate(t=Sum('overtime_hours'))['t'] or 0
+
         rows.append({
             'branch_name': br.name_ar,
             'employees_count': len(salaries),
@@ -1890,6 +1908,10 @@ def _branch_comparison_data(user):
             'avg_salary': round(sum(salaries)/len(salaries) if salaries else 0, 2),
             'max_salary': round(max(salaries) if salaries else 0, 2),
             'min_salary': round(min(salaries) if salaries else 0, 2),
+            'present_days': present_days,
+            'absent_days': absent_days,
+            'total_late_minutes': int(late_minutes),
+            'total_overtime_hours': round(float(overtime_hours), 2),
         })
     return rows
 
@@ -2128,6 +2150,10 @@ branch_comparison_report, branch_comparison_export_excel, branch_comparison_expo
         ('avg_salary', 'متوسط الراتب', 18),
         ('max_salary', 'أعلى راتب', 15),
         ('min_salary', 'أقل راتب', 15),
+        ('present_days', 'أيام الحضور 30 يوم', 18),
+        ('absent_days', 'أيام الغياب 30 يوم', 18),
+        ('total_late_minutes', 'إجمالي دقائق التأخير', 20),
+        ('total_overtime_hours', 'إجمالي الأوفر تايم', 18),
     ],
 )
 

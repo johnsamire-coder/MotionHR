@@ -121,6 +121,8 @@ urlpatterns = [
 
     # Leaves & Requests APIs
     path('api/mobile/leave-types/', api_mobile_requests.mobile_leave_types, name='mobile_leave_types'),
+    path('api/mobile/leave-substitutes/', api_mobile_requests.mobile_leave_substitutes, name='mobile_leave_substitutes'),
+    path('api/mobile/manager/substitution-summary/', api_mobile_requests.manager_substitution_summary, name='manager_substitution_summary'),
     path('api/mobile/hr/leave-types/', api_mobile_requests.hr_leave_types, name='hr_leave_types'),
     path('api/mobile/hr/create-leave/', api_mobile_requests.hr_create_leave, name='hr_create_leave'),
     path('api/mobile/leave-request/', api_mobile_requests.mobile_leave_request, name='mobile_leave_request'),
@@ -267,6 +269,9 @@ urlpatterns += [
     path("api/mobile/attachments/<int:attachment_id>/delete/", api_attachments.delete_attachment),
     path("api/mobile/attachments/<int:attachment_id>/download/", api_attachments.download_attachment),
     path('api/mobile/manager/employees/<int:emp_id>/summary/', api_employee_profile.manager_employee_summary),
+    path('api/mobile/manager/employees/<int:emp_id>/attendance/', api_employee_profile.manager_employee_attendance),
+    path('api/mobile/manager/employees/<int:emp_id>/leaves/', api_employee_profile.manager_employee_leaves),
+    path('api/mobile/manager/employees/<int:emp_id>/requests/', api_employee_profile.manager_employee_requests),
 
     # Phase 8
     path('api/mobile/manager/branches/', api_employee_management.manager_branches),

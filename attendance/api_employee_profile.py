@@ -457,3 +457,131 @@ def manager_employee_summary(request, emp_id):
     except Exception as e:
         logger.exception("manager_employee_summary error")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ═══════════════════════════════════════════
+# E-T17: Attendance / Leaves / Requests tabs
+# ═══════════════════════════════════════════
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_employee_attendance(request, emp_id):
+    """حضور موظف واحد — للمدير"""
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        emp = _get_employee_scoped(request, emp_id)
+        if not emp:
+            return Response({"error": "الموظف غير موجود"}, status=status.HTTP_404_NOT_FOUND)
+
+        from attendance.models import Attendance
+        from django.utils import timezone
+
+        # فلترة بالتاريخ (اختيارية)
+        date_from = request.GET.get("date_from")
+        date_to = request.GET.get("date_to")
+
+        qs = Attendance._base_manager.filter(employee=emp).order_by("-date")
+
+        if date_from:
+            try:
+                from datetime import date
+                qs = qs.filter(date__gte=date_from)
+            except Exception:
+                pass
+        if date_to:
+            try:
+                qs = qs.filter(date__lte=date_to)
+            except Exception:
+                pass
+
+        qs = qs[:90]  # آخر 90 يوم كحد أقصى
+
+        records = []
+        for att in qs:
+            records.append({
+                "date": str(att.date),
+                "status": att.status,
+                "check_in": timezone.localtime(att.check_in_time).strftime("%I:%M %p") if att.check_in_time else None,
+                "check_out": timezone.localtime(att.check_out_time).strftime("%I:%M %p") if att.check_out_time else None,
+                "work_hours": float(att.work_hours or 0),
+                "late_minutes": int(att.late_minutes or 0),
+                "overtime_hours": float(att.overtime_hours or 0),
+            })
+
+        return Response({"attendance": records, "count": len(records)})
+    except Exception as e:
+        logger.exception("manager_employee_attendance error")
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_employee_leaves(request, emp_id):
+    """إجازات موظف واحد — للمدير"""
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        emp = _get_employee_scoped(request, emp_id)
+        if not emp:
+            return Response({"error": "الموظف غير موجود"}, status=status.HTTP_404_NOT_FOUND)
+
+        from leaves.models import LeaveRequest
+
+        qs = LeaveRequest._base_manager.filter(employee=emp).order_by("-created_at")[:50]
+
+        records = []
+        for lv in qs:
+            records.append({
+                "id": lv.id,
+                "leave_type": str(lv.leave_type) if lv.leave_type else "",
+                "start_date": str(lv.start_date) if lv.start_date else None,
+                "end_date": str(lv.end_date) if lv.end_date else None,
+                "days": float(lv.days_count or 0),
+                "status": lv.status,
+                "reason": lv.reason or "",
+                "created_at": lv.created_at.strftime("%Y-%m-%d") if lv.created_at else None,
+            })
+
+        return Response({"leaves": records, "count": len(records)})
+    except Exception as e:
+        logger.exception("manager_employee_leaves error")
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_employee_requests(request, emp_id):
+    """طلبات موظف واحد — للمدير"""
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        emp = _get_employee_scoped(request, emp_id)
+        if not emp:
+            return Response({"error": "الموظف غير موجود"}, status=status.HTTP_404_NOT_FOUND)
+
+        from requests_app.models import EmployeeRequest
+
+        qs = EmployeeRequest._base_manager.filter(employee=emp).order_by("-created_at")[:50]
+
+        records = []
+        for req in qs:
+            records.append({
+                "id": req.id,
+                "request_type": str(req.request_type) if req.request_type else "",
+                "title": req.title or "",
+                "status": req.status,
+                "created_at": req.created_at.strftime("%Y-%m-%d") if req.created_at else None,
+                "notes": req.notes or "",
+            })
+
+        return Response({"requests": records, "count": len(records)})
+    except Exception as e:
+        logger.exception("manager_employee_requests error")
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

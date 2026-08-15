@@ -137,6 +137,46 @@ def mobile_leave_types(request):
     return Response({'success': True, 'leave_types': result})
 
 
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_leave_substitutes(request):
+    """قائمة الموظفين المتاحين كبديل — من نفس الشركة عدا الموظف نفسه"""
+    employee = get_employee_for_user(request.user)
+    if not employee:
+        return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
+
+    # exclude_employee_id → نستثني موظف معين (صاحب الإجازة)
+    exclude_id = request.query_params.get('exclude_employee_id')
+
+    from employees.models import Employee
+    qs = Employee._base_manager.filter(
+        company=employee.company,
+        status='active',
+    ).exclude(id=employee.id)
+
+    if exclude_id:
+        try:
+            qs = qs.exclude(id=int(exclude_id))
+        except (ValueError, TypeError):
+            pass
+
+    qs = qs.order_by('first_name_ar', 'last_name_ar')
+
+    result = []
+    for emp in qs:
+        full_name = f"{emp.first_name_ar or ''} {emp.last_name_ar or ''}".strip()
+        result.append({
+            'id': emp.id,
+            'name': full_name or emp.user.username,
+            'job_title': getattr(getattr(emp, 'job_title', None), 'name', '') or '',
+            'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+            'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
+        })
+
+    return Response({'success': True, 'substitutes': result, 'count': len(result)})
+
+
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -152,6 +192,7 @@ def mobile_leave_request(request):
     reason = request.data.get('reason', '').strip()
     half_day = request.data.get('half_day', False)
     half_day_type = request.data.get('half_day_type', 'morning').strip()
+    substitute_employee_id = request.data.get('substitute_employee_id')
 
     if not all([leave_type_id, start_date, end_date]):
         return Response({
@@ -259,6 +300,19 @@ def mobile_leave_request(request):
         _half_label = 'صباحي' if half_day_type == 'morning' else 'مسائي'
         _leave_notes = f'نص يوم ({_half_label})'
 
+    # تحديد الموظف البديل لو موجود
+    substitute_emp = None
+    if substitute_employee_id:
+        from employees.models import Employee
+        try:
+            substitute_emp = Employee._base_manager.get(
+                id=substitute_employee_id,
+                company=employee.company,
+                status='active',
+            )
+        except Employee.DoesNotExist:
+            pass
+
     leave_request = LeaveRequest._base_manager.create(
         company=employee.company,
         employee=employee,
@@ -271,6 +325,7 @@ def mobile_leave_request(request):
         reason=reason,
         notes=_leave_notes if half_day else '',
         status='pending',
+        substitute_employee=substitute_emp,
     )
 
     year = start.year
@@ -871,6 +926,38 @@ def mobile_manager_pending(request):
     if company:
         pending_leaves = pending_leaves.filter(company=company)
 
+    # لو البديل مدير مؤقت → يشوف طلبات فريق المدير الغايب كمان
+    try:
+        from leaves.models import ManagerSubstitution
+        from employees.models import Employee as _Emp
+        today = timezone.localdate()
+        my_emp = _Emp._base_manager.filter(user=user, company=company).first()
+        if my_emp:
+            active_subs = ManagerSubstitution._base_manager.filter(
+                substitute_employee=my_emp,
+                is_active=True,
+                start_date__lte=today,
+                end_date__gte=today,
+            ).select_related('manager_employee')
+            for sub in active_subs:
+                mgr_emp = sub.manager_employee
+                team_ids = list(
+                    _Emp._base_manager.filter(
+                        direct_manager=mgr_emp,
+                        company=company,
+                        status='active',
+                    ).values_list('id', flat=True)
+                )
+                if team_ids:
+                    extra_leaves = LeaveRequest._base_manager.filter(
+                        status='pending',
+                        company=company,
+                        employee_id__in=team_ids,
+                    ).select_related('employee', 'leave_type')
+                    pending_leaves = (pending_leaves | extra_leaves).distinct()
+    except Exception:
+        pass
+
     search = request.query_params.get('search', '').strip()
     if search:
         pending_leaves = pending_leaves.filter(
@@ -885,17 +972,28 @@ def mobile_manager_pending(request):
         emp_name = ''
         if lr.employee:
             emp_name = f"{getattr(lr.employee, 'first_name_ar', '')} {getattr(lr.employee, 'last_name_ar', '')}".strip()
+        sub_emp = getattr(lr, 'substitute_employee', None)
+        sub_name = ''
+        sub_id = None
+        if sub_emp:
+            sub_name = f"{getattr(sub_emp, 'first_name_ar', '')} {getattr(sub_emp, 'last_name_ar', '')}".strip()
+            sub_id = sub_emp.id
+
         leave_items.append({
             'id': lr.id,
             'type': 'leave',
             'employee_name': emp_name,
+            'employee_id': lr.employee.id if lr.employee else None,
             'leave_type': lr.leave_type.name if lr.leave_type else '',
+            'leave_type_category': lr.leave_type.category if lr.leave_type else '',
             'start_date': lr.start_date.strftime('%Y-%m-%d') if lr.start_date else '',
             'end_date': lr.end_date.strftime('%Y-%m-%d') if lr.end_date else '',
             'days_count': float(lr.days_count),
             'reason': lr.reason or '',
             'status': lr.status,
             'created_at': lr.created_at.strftime('%Y-%m-%d %H:%M') if lr.created_at else '',
+            'substitute_employee_id': sub_id,
+            'substitute_employee_name': sub_name,
         })
 
     pending_requests = EmployeeRequest._base_manager.filter(
@@ -982,6 +1080,28 @@ def mobile_manager_action(request):
                 leave_type_name = 'إجازة'
 
             if action == 'approve':
+                # لو المدير بعت substitute_employee_id مع الاعتماد → نحطه في الطلب
+                sub_id = request.data.get('substitute_employee_id')
+                if sub_id:
+                    try:
+                        from employees.models import Employee as _Emp
+                        sub_emp = _Emp._base_manager.get(
+                            id=sub_id,
+                            company=item.employee.company,
+                            status='active',
+                        )
+                        item.substitute_employee = sub_emp
+                        item.save(update_fields=['substitute_employee'])
+                    except Exception:
+                        pass
+
+                leave_category = getattr(getattr(item, 'leave_type', None), 'category', '') or ''
+                if leave_category == 'sick' and not getattr(item, 'substitute_employee', None):
+                    return Response({
+                        'success': False,
+                        'message': 'لا يمكن اعتماد الإجازة المرضية بدون تحديد موظف بديل'
+                    }, status=400)
+
                 item.approve(user, notes)
                 if employee_user:
                     try:
@@ -1823,7 +1943,27 @@ def manager_edit_leave(request, leave_id):
     if 'reason' in d:
         leave.reason = d['reason']
     if 'status' in d and role in ('company_admin', 'hr_manager', 'super_admin'):
-        leave.status = d['status']
+        new_status = d['status']
+        leave_category = getattr(getattr(leave, 'leave_type', None), 'category', '') or ''
+        if new_status == 'approved' and leave_category == 'sick' and not (
+            d.get('substitute_employee_id') or getattr(leave, 'substitute_employee_id', None)
+        ):
+            return Response({
+                'success': False,
+                'message': 'لا يمكن اعتماد الإجازة المرضية بدون تحديد موظف بديل'
+            }, status=400)
+        leave.status = new_status
+    if 'substitute_employee_id' in d:
+        from employees.models import Employee
+        try:
+            sub = Employee._base_manager.get(
+                id=d['substitute_employee_id'],
+                company=leave.employee.company,
+                status='active',
+            )
+            leave.substitute_employee = sub
+        except Employee.DoesNotExist:
+            pass
     leave.save()
 
     return Response({
@@ -2130,6 +2270,30 @@ def hr_create_leave(request):
     if status_val not in ("pending", "approved"):
         status_val = "approved"
 
+    # إجبار البديل في المرضية عند الإنشاء المباشر كـ approved
+    leave_category = getattr(leave_type, 'category', '') or ''
+    if status_val == 'approved' and leave_category == 'sick':
+        _sub_id = request.data.get('substitute_employee_id')
+        if not _sub_id:
+            return Response({
+                'success': False,
+                'error': 'لا يمكن اعتماد الإجازة المرضية بدون تحديد موظف بديل'
+            }, status=400)
+
+    # البديل لو بعته المدير أو HR
+    substitute_emp = None
+    substitute_employee_id = request.data.get('substitute_employee_id')
+    if substitute_employee_id:
+        from employees.models import Employee as _Emp
+        try:
+            substitute_emp = _Emp._base_manager.get(
+                id=substitute_employee_id,
+                company=company,
+                status='active',
+            )
+        except _Emp.DoesNotExist:
+            pass
+
     leave_request = LeaveRequest._base_manager.create(
         company=company,
         employee=employee,
@@ -2139,6 +2303,7 @@ def hr_create_leave(request):
         days_count=days_count,
         reason=reason,
         status=status_val,
+        substitute_employee=substitute_emp,
     )
 
     if status_val == "approved":
@@ -2195,3 +2360,143 @@ def hr_leave_types(request):
     except Exception as e:
         logger.exception("hr_leave_types error")
         return Response({"success": False, "error": str(e)}, status=500)
+
+@api_view(['GET', 'POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_substitution_summary(request):
+    """
+    GET: ملخص اللي حصل أثناء غياب المدير
+    POST: تعليم إن المدير شاف الملخص (summary_viewed=True)
+    """
+    from leaves.models import ManagerSubstitution, LeaveRequest
+    from employees.models import Employee as _Emp
+    from requests_app.models import EmployeeRequest
+    from attendance.missions_models import Mission
+
+    company = getattr(request.user, 'company', None)
+    if not company:
+        return Response({'error': 'لا توجد شركة'}, status=400)
+
+    mgr_emp = _Emp._base_manager.filter(user=request.user, company=company).first()
+    if not mgr_emp:
+        return Response({'error': 'لم يتم العثور على الموظف'}, status=404)
+
+    # POST → عليم إن المدير شاف الملخص
+    if request.method == 'POST':
+        ManagerSubstitution._base_manager.filter(
+            manager_employee=mgr_emp,
+            summary_viewed=False,
+        ).update(summary_viewed=True)
+        return Response({'success': True, 'message': 'تم تعليم الملخص كمُراجَع'})
+
+    # GET → رجّع الملخص
+    # نجيب آخر تفويض منتهي للمدير
+    last_sub = ManagerSubstitution._base_manager.filter(
+        manager_employee=mgr_emp,
+    ).order_by('-end_date').first()
+
+    if not last_sub:
+        return Response({
+            'success': True,
+            'has_summary': False,
+            'message': 'لا يوجد سجل غياب سابق',
+        })
+
+    start = last_sub.start_date
+    end = last_sub.end_date
+    sub_name = ''
+    if last_sub.substitute_employee:
+        sub = last_sub.substitute_employee
+        sub_name = f"{getattr(sub, 'first_name_ar', '')} {getattr(sub, 'last_name_ar', '')}".strip()
+
+    # جيب فريق المدير
+    from employees.visibility import get_visible_employees_qs
+    team_qs = _Emp._base_manager.filter(
+        direct_manager=mgr_emp,
+        company=company,
+        status='active',
+    )
+    team_ids = list(team_qs.values_list('id', flat=True))
+
+    # الطلبات اللي اتحركت أثناء الغياب
+    requests_qs = EmployeeRequest._base_manager.filter(
+        company=company,
+        employee_id__in=team_ids,
+        updated_at__date__gte=start,
+        updated_at__date__lte=end,
+    ).exclude(status='pending').select_related('employee', 'request_type').order_by('-updated_at')
+
+    requests_data = []
+    for req in requests_qs[:50]:
+        emp_name = f"{getattr(req.employee, 'first_name_ar', '')} {getattr(req.employee, 'last_name_ar', '')}".strip()
+        requests_data.append({
+            'id': req.id,
+            'employee_name': emp_name,
+            'type': req.request_type.name if req.request_type else '',
+            'subject': req.subject or '',
+            'status': req.status,
+            'updated_at': req.updated_at.strftime('%Y-%m-%d') if req.updated_at else '',
+        })
+
+    # الإجازات اللي اتحركت أثناء الغياب
+    leaves_qs = LeaveRequest._base_manager.filter(
+        company=company,
+        employee_id__in=team_ids,
+        updated_at__date__gte=start,
+        updated_at__date__lte=end,
+    ).exclude(status='pending').select_related('employee', 'leave_type').order_by('-updated_at')
+
+    leaves_data = []
+    for lv in leaves_qs[:50]:
+        emp_name = f"{getattr(lv.employee, 'first_name_ar', '')} {getattr(lv.employee, 'last_name_ar', '')}".strip()
+        leaves_data.append({
+            'id': lv.id,
+            'employee_name': emp_name,
+            'leave_type': lv.leave_type.name if lv.leave_type else '',
+            'start_date': str(lv.start_date) if lv.start_date else '',
+            'end_date': str(lv.end_date) if lv.end_date else '',
+            'status': lv.status,
+            'updated_at': lv.updated_at.strftime('%Y-%m-%d') if lv.updated_at else '',
+        })
+
+    # المهام أثناء الغياب
+    missions_qs = Mission._base_manager.filter(
+        company=company,
+        assignments__employee_id__in=team_ids,
+        created_at__date__gte=start,
+        created_at__date__lte=end,
+    ).distinct().order_by('-created_at')
+
+    missions_data = []
+    for m in missions_qs[:50]:
+        missions_data.append({
+            'id': m.id,
+            'title': m.title or '',
+            'status': m.status or '',
+            'created_at': m.created_at.strftime('%Y-%m-%d') if m.created_at else '',
+        })
+
+    return Response({
+        'success': True,
+        'has_summary': True,
+        'summary_viewed': last_sub.summary_viewed,
+        'absence_period': {
+            'start': str(start),
+            'end': str(end),
+            'substitute_name': sub_name,
+        },
+        'stats': {
+            'total_requests': len(requests_data),
+            'approved_requests': sum(1 for r in requests_data if r['status'] == 'approved'),
+            'rejected_requests': sum(1 for r in requests_data if r['status'] == 'rejected'),
+            'total_leaves': len(leaves_data),
+            'approved_leaves': sum(1 for l in leaves_data if l['status'] == 'approved'),
+            'rejected_leaves': sum(1 for l in leaves_data if l['status'] == 'rejected'),
+            'total_missions': len(missions_data),
+        },
+        'requests': requests_data,
+        'leaves': leaves_data,
+        'missions': missions_data,
+    })
+

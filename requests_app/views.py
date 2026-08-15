@@ -241,6 +241,27 @@ def _get_active_delegation(company, role):
     return None
 
 
+def _get_manager_substitution_delegate(manager_employee):
+    """
+    هل فيه تفويض مؤقت نشط للمدير ده؟
+    لو أيوه → يرجع البديل
+    """
+    try:
+        from leaves.models import ManagerSubstitution
+        today = timezone.now().date()
+        sub = ManagerSubstitution._base_manager.filter(
+            manager_employee=manager_employee,
+            is_active=True,
+            start_date__lte=today,
+            end_date__gte=today,
+        ).select_related('substitute_employee__user').first()
+        if sub and sub.substitute_employee and sub.substitute_employee.user:
+            return sub.substitute_employee.user
+    except Exception:
+        pass
+    return None
+
+
 def _get_approver_for_role(role, employee, company):
     """
     جلب المستخدم المسؤول عن الموافقة حسب الدور
@@ -258,6 +279,10 @@ def _get_approver_for_role(role, employee, company):
         try:
             manager_emp = employee.direct_manager
             if manager_emp and manager_emp.user:
+                # هل المدير في إجازة وعنده بديل؟
+                sub_user = _get_manager_substitution_delegate(manager_emp)
+                if sub_user:
+                    return sub_user
                 return manager_emp.user
         except Exception:
             pass

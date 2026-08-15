@@ -152,6 +152,29 @@ def manager_missions_list(request):
 
     # فلترة المهمات حسب صلاحية المدير
     visible_emps = get_visible_employees_qs(request.user)
+
+    # لو البديل المؤقت → نضيف موظفي المدير الغايب
+    try:
+        from leaves.models import ManagerSubstitution
+        from employees.models import Employee as _Emp
+        from django.utils import timezone as _tz
+        today = _tz.localdate()
+        my_emp = _Emp._base_manager.filter(user=request.user, company=company).first()
+        if my_emp:
+            active_subs = ManagerSubstitution._base_manager.filter(
+                substitute_employee=my_emp,
+                is_active=True,
+                start_date__lte=today,
+                end_date__gte=today,
+            ).select_related('manager_employee')
+            for sub in active_subs:
+                mgr_emp = sub.manager_employee
+                if mgr_emp:
+                    extra_emps = get_visible_employees_qs(mgr_emp.user) if mgr_emp.user else _Emp._base_manager.none()
+                    visible_emps = (visible_emps | extra_emps).distinct()
+    except Exception:
+        pass
+
     missions = Mission._base_manager.filter(
         company=company
     ).filter(
@@ -328,6 +351,32 @@ def manager_pending_requests(request):
         manager_approval='pending',
         manager=request.user,
     ).select_related('mission', 'requested_by')
+
+    # لو البديل المؤقت → يشوف طلبات المدير الغايب كمان
+    try:
+        from leaves.models import ManagerSubstitution
+        from employees.models import Employee as _Emp
+        from django.utils import timezone as _tz
+        today = _tz.localdate()
+        my_emp = _Emp._base_manager.filter(user=request.user, company=company).first()
+        if my_emp:
+            active_subs = ManagerSubstitution._base_manager.filter(
+                substitute_employee=my_emp,
+                is_active=True,
+                start_date__lte=today,
+                end_date__gte=today,
+            ).select_related('manager_employee__user')
+            for sub in active_subs:
+                mgr_user = sub.manager_employee.user if sub.manager_employee else None
+                if mgr_user:
+                    extra_qs = MissionRequest.objects.filter(
+                        mission__company=company,
+                        manager_approval='pending',
+                        manager=mgr_user,
+                    ).select_related('mission', 'requested_by')
+                    requests_qs = (requests_qs | extra_qs).distinct()
+    except Exception:
+        pass
 
     data = []
     for req in requests_qs:

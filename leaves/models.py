@@ -271,13 +271,16 @@ class LeaveType(TenantModel):
     """أنواع الإجازات"""
 
     LEAVE_CATEGORIES = [
-        ("annual",      "إجازة سنوية"),
-        ("sick",        "إجازة مرضية"),
-        ("emergency",   "إجازة طارئة"),
-        ("maternity",   "إجازة أمومة"),
-        ("paternity",   "إجازة أبوة"),
-        ("unpaid",      "إجازة بدون مرتب"),
-        ("other",       "أخرى"),
+        ("annual",       "إجازة سنوية"),
+        ("sick",         "إجازة مرضية"),
+        ("emergency",    "إجازة طارئة"),
+        ("maternity",    "إجازة أمومة"),
+        ("unpaid",       "إجازة بدون مرتب"),
+        ("casual",       "إجازة عارضة"),
+        ("marriage",     "إجازة زواج"),
+        ("bereavement",  "إجازة وفاة"),
+        ("hajj",         "إجازة حج"),
+        ("other",        "أخرى"),
     ]
 
     name             = models.CharField(max_length=100, verbose_name="الاسم")
@@ -433,6 +436,15 @@ class LeaveRequest(TenantModel):
         default="pending", verbose_name="الحالة"
     )
 
+    # البديل
+    substitute_employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="substituted_leaves",
+        verbose_name="الموظف البديل"
+    )
+
     # الموافقة
     reviewed_by = models.ForeignKey(
         "accounts.User",
@@ -482,6 +494,55 @@ class LeaveRequest(TenantModel):
         self._update_balance("approve")
         # LEV-7: تحديث سجلات الحضور للأيام المعتمدة
         self._update_attendance_records()
+        # تفويض مؤقت لو المدير عنده بديل
+        self._create_manager_substitution()
+
+    def _create_manager_substitution(self):
+        """ننشئ تفويض مؤقت لو الموظف مدير وعنده بديل محدد"""
+        try:
+            emp = self.employee
+            if not emp:
+                return
+            # هل الموظف ده مدير؟ (عنده تابعين)
+            from employees.models import Employee
+            has_subordinates = Employee._base_manager.filter(
+                direct_manager=emp,
+                status='active',
+            ).exists()
+            if not has_subordinates:
+                return
+            # هل فيه بديل محدد؟
+            sub = getattr(self, 'substitute_employee', None)
+            if not sub:
+                return
+            # نعمل التفويض المؤقت
+            ManagerSubstitution._base_manager.update_or_create(
+                leave_request=self,
+                defaults={
+                    'company': self.company,
+                    'manager_employee': emp,
+                    'substitute_employee': sub,
+                    'start_date': self.start_date,
+                    'end_date': self.end_date,
+                    'is_active': True,
+                }
+            )
+            # إشعار للبديل
+            try:
+                from accounts.fcm_models import NotificationLog
+                sub_user = getattr(sub, 'user', None)
+                mgr_name = emp.full_name_ar or (emp.user.username if emp.user else '')
+                if sub_user:
+                    NotificationLog.objects.create(
+                        user=sub_user,
+                        title='🔄 تم تعيينك بديلاً',
+                        body=f'ستتولى مهام فريق {mgr_name} من {self.start_date} إلى {self.end_date}',
+                        notification_type='manager_substitution',
+                    )
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     def _update_attendance_records(self):
         """LEV-7: تحديث سجلات الحضور لتصبح on_leave + شيل خصومات الغياب"""
@@ -542,6 +603,7 @@ class LeaveRequest(TenantModel):
         self.review_notes = notes
         self.save()
         self._update_balance("reject")
+        self._deactivate_manager_substitution()
 
     def cancel(self):
         """إلغاء الطلب"""
@@ -552,6 +614,17 @@ class LeaveRequest(TenantModel):
             self._update_balance("cancel_pending")
         elif old_status == "approved":
             self._update_balance("cancel_approved")
+        self._deactivate_manager_substitution()
+
+    def _deactivate_manager_substitution(self):
+        """نوقف التفويض المؤقت لو الإجازة اترفضت أو اتلغت"""
+        try:
+            ManagerSubstitution._base_manager.filter(
+                leave_request=self,
+                is_active=True,
+            ).update(is_active=False)
+        except Exception:
+            pass
 
     def _update_balance(self, action):
         """تحديث رصيد الإجازات"""
@@ -699,3 +772,44 @@ class LeaveRecallRequest(TenantModel):
 
 # ── الإجازات الرسمية ──
 from leaves.official_holiday_models import OfficialHoliday, OfficialHolidayRule
+
+class ManagerSubstitution(TenantModel):
+    """
+    تفويض مؤقت تلقائي عند اعتماد إجازة مدير
+    يتنشأ تلقائياً لما إجازة مدير تتاعتمد
+    وينتهي تلقائياً لما الإجازة تنتهي أو تتلغى
+    """
+    leave_request = models.OneToOneField(
+        LeaveRequest,
+        on_delete=models.CASCADE,
+        related_name='manager_substitution',
+        verbose_name='طلب الإجازة'
+    )
+    manager_employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='substitutions_as_manager',
+        verbose_name='المدير الغايب'
+    )
+    substitute_employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='substitutions_as_substitute',
+        verbose_name='الموظف البديل'
+    )
+    start_date = models.DateField(verbose_name='من تاريخ')
+    end_date   = models.DateField(verbose_name='إلى تاريخ')
+    is_active  = models.BooleanField(default=True, verbose_name='نشط')
+    summary_viewed = models.BooleanField(default=False, verbose_name='شاف الملخص بعد الرجوع')
+
+    class Meta:
+        verbose_name        = 'تفويض مدير مؤقت'
+        verbose_name_plural = 'تفويضات المديرين المؤقتة'
+        ordering            = ['-start_date']
+
+    def __str__(self):
+        return (
+            f"{self.manager_employee} → بديل: {self.substitute_employee} "
+            f"({self.start_date} - {self.end_date})"
+        )
+

@@ -166,6 +166,7 @@ def _seed_leave_types(company, user, defaults, stats):
                 leave_type = LeaveType(
                     company=company,
                     name=item['name'],
+                    name_en=item.get('name_en', ''),
                     category=item['category'],
                     days_allowed=item['days_allowed'],
                     is_paid=item['is_paid'],
@@ -174,6 +175,7 @@ def _seed_leave_types(company, user, defaults, stats):
                     carry_forward=item['carry_forward'],
                     max_carry_days=item['max_carry_days'],
                     color=item['color'],
+                    gender_restriction=item.get('gender_restriction', 'all'),
                     description=item.get('description', ''),
                     is_active=item['is_active'],
                 )
