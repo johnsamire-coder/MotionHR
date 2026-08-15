@@ -566,6 +566,128 @@ def remind_split_fixed_periods():
     except Exception as e:
         logger.error(f"remind_split_fixed_periods error: {e}")
 
+
+
+# ═══════════════════════════════════════════════════════
+# 7.7  تنبيه فجوات تغطية الشيفتات للمديرين
+# ═══════════════════════════════════════════════════════
+def remind_shift_coverage_gaps():
+    """
+    يتشغل كل يوم الساعة 8:00 صباحاً.
+    بيشوف كل التناوبات النشطة ويتحقق من التغطية.
+    لو فيه فجوات → يبعت إشعار للمديرين.
+    """
+    try:
+        from django.contrib.auth import get_user_model
+        from attendance.models import ShiftRotation, ShiftRotationSlot
+
+        User = get_user_model()
+        today = timezone.localdate()
+
+        logger.info("remind_shift_coverage_gaps: checking...")
+
+        rotations = ShiftRotation._base_manager.filter(is_active=True)
+        total_alerts = 0
+
+        for rotation in rotations:
+            try:
+                slots = list(
+                    ShiftRotationSlot._base_manager.filter(
+                        rotation=rotation,
+                        company=rotation.company,
+                    ).order_by('start_day_index', 'id')
+                )
+
+                covered_days = set()
+                overlap_days = set()
+                invalid_slot_ids = []
+                missing_shift_slot_ids = []
+
+                for slot in slots:
+                    try:
+                        start_idx = int(slot.start_day_index)
+                        end_idx = int(slot.end_day_index)
+                    except (TypeError, ValueError):
+                        invalid_slot_ids.append(slot.id)
+                        continue
+
+                    if start_idx < 0 or end_idx < 0 or start_idx > end_idx or end_idx >= rotation.cycle_length_days:
+                        invalid_slot_ids.append(slot.id)
+                        continue
+
+                    if not slot.shift_id:
+                        missing_shift_slot_ids.append(slot.id)
+
+                    slot_days = set(range(start_idx, end_idx + 1))
+                    overlap_days.update(slot_days & covered_days)
+                    covered_days.update(slot_days)
+
+                missing_days = [day for day in range(rotation.cycle_length_days) if day not in covered_days]
+                coverage_ok = not invalid_slot_ids and not overlap_days and not missing_days and not missing_shift_slot_ids
+
+                if coverage_ok:
+                    continue
+
+                # فيه مشكلة → نبعت للمديرين
+                problems = []
+                if missing_days:
+                    problems.append(f"أيام غير مغطاة: {missing_days}")
+                if overlap_days:
+                    problems.append(f"تداخل في أيام: {sorted(overlap_days)}")
+                if invalid_slot_ids:
+                    problems.append(f"slots غير صالحة: {len(invalid_slot_ids)}")
+                if missing_shift_slot_ids:
+                    problems.append(f"slots بدون شيفت: {len(missing_shift_slot_ids)}")
+
+                problem_text = " | ".join(problems)
+
+                title_ar = f'⚠️ تناوب "{rotation.name}" فيه فجوات في التغطية'
+                body_ar = f"يرجى مراجعة التناوب وإصلاح التغطية. {problem_text}"
+                title_en = f'⚠️ Rotation "{rotation.name}" has coverage gaps'
+                body_en = f"Please review the rotation and fix coverage. {problem_text}"
+
+                managers = User.objects.filter(
+                    company=rotation.company,
+                    role__in=["company_admin", "manager", "hr_manager", "super_admin"],
+                    is_active=True,
+                )
+
+                sent_once = False
+                for manager in managers:
+                    created = _create_internal_notification_for_user(
+                        manager,
+                        title_ar,
+                        body_ar,
+                        notification_type='general_notice',
+                        severity='warning',
+                    )
+                    if created:
+                        sent_once = True
+
+                if sent_once:
+                    _send_to_users(
+                        managers,
+                        title=title_ar,
+                        body=body_ar,
+                        title_en=title_en,
+                        body_en=body_en,
+                        data={
+                            "type": "shift_coverage_gap",
+                            "screen": "shifts",
+                            "rotation_id": str(rotation.id),
+                            "date": str(today),
+                        },
+                    )
+                    total_alerts += 1
+
+            except Exception as rot_err:
+                logger.error(f"remind_shift_coverage_gaps rotation error: {rot_err}")
+
+        logger.info(f"remind_shift_coverage_gaps: done — alerts={total_alerts}")
+
+    except Exception as e:
+        logger.error(f"remind_shift_coverage_gaps error: {e}")
+
 # ═══════════════════════════════════════════════════════
 # الدالة الرئيسية — بيتم استدعاؤها من Cron
 # ═══════════════════════════════════════════════════════
@@ -583,6 +705,7 @@ def run_all_reminders(reminder_type="all"):
         "charter": remind_charter_acceptance,
         "documents": remind_expiring_documents,
         "split_periods": remind_split_fixed_periods,
+        "shift_coverage": remind_shift_coverage_gaps,
     }
 
     if reminder_type == "all":
