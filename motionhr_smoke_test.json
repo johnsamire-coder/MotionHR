@@ -11,10 +11,10 @@
 					"listen": "test",
 					"script": {
 						"exec": [
-							"pm.test('Login Successful', function() { pm.response.to.have.status(200); });",
-							"pm.test('Token exists', function() { pm.expect(pm.response.json().token).to.not.be.undefined; });",
+							"pm.test('Status 200', function() { pm.response.to.have.status(200); });",
 							"var data = pm.response.json();",
-							"pm.globals.set('auth_token', data.token);"
+							"pm.test('Token exists', function() { pm.expect(data.token).to.not.be.undefined; });",
+							"if (data.token) { pm.globals.set('auth_token', data.token); }"
 						],
 						"type": "text/javascript"
 					}
@@ -29,7 +29,7 @@
 					"mode": "raw",
 					"raw": "{\"username\": \"wh_admin\", \"password\": \"12345678\"}"
 				},
-				"url": { "raw": "https://jssolutions-eg.com/attendance/api/mobile/login/" }
+				"url": "https://jssolutions-eg.com/attendance/api/mobile/login/"
 			}
 		},
 		{
@@ -50,7 +50,7 @@
 				"header": [
 					{ "key": "Authorization", "value": "Token {{auth_token}}" }
 				],
-				"url": { "raw": "https://jssolutions-eg.com/attendance/api/mobile/status/" }
+				"url": "https://jssolutions-eg.com/attendance/api/mobile/status/"
 			}
 		}
 	]
