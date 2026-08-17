@@ -779,12 +779,12 @@ def manager_shift_assign(request):
                 return Response({"success": False, "error": "بعض الموظفين المستثنين غير موجودين"}, status=404)
 
         if department_ids:
-            departments = list(Department.objects.filter(id__in=department_ids, company=company))
+            departments = list(Department._base_manager.filter(id__in=department_ids, company=company))
             if len(departments) != len(department_ids):
                 return Response({"success": False, "error": "بعض الأقسام غير موجودة"}, status=404)
 
         if branch_ids:
-            branches = list(Branch.objects.filter(id__in=branch_ids, company=company))
+            branches = list(Branch._base_manager.filter(id__in=branch_ids, company=company))
             if len(branches) != len(branch_ids):
                 return Response({"success": False, "error": "بعض الفروع غير موجودة"}, status=404)
 
@@ -1828,7 +1828,7 @@ def _notify_hr_shift_change(employee, shift, requested_by, company):
         from accounts.fcm_service import send_notification_to_user, _get_user_lang
         from accounts.models import User
         emp_name = getattr(employee, "full_name_ar", str(employee))
-        hr_users = User.objects.filter(company=company, role__in=['hr_manager', 'company_admin'])
+        hr_users = User._base_manager.filter(company=company, role__in=['hr_manager', 'company_admin'])
         for hr_user in hr_users:
             lang = _get_user_lang(hr_user)
             if lang == 'en':
@@ -2687,13 +2687,13 @@ def rotation_assign(request, rotation_id):
         dept_id = d.get("department_id")
         if not dept_id:
             return Response({"success": False, "error": "department_id مطلوب"}, status=400)
-        kwargs["department"] = Department.objects.get(id=dept_id, company=company)
+        kwargs["department"] = Department._base_manager.get(id=dept_id, company=company)
 
     elif assignment_type == "branch":
         branch_id = d.get("branch_id")
         if not branch_id:
             return Response({"success": False, "error": "branch_id مطلوب"}, status=400)
-        kwargs["branch"] = Branch.objects.get(id=branch_id, company=company)
+        kwargs["branch"] = Branch._base_manager.get(id=branch_id, company=company)
 
     # نلغي أي تناوب نشط قديم من نفس النوع لنفس الهدف قبل ما نضيف الجديد
     dedup_filter = {

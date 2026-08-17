@@ -153,7 +153,7 @@ def _notify_missing_period(employee, period, shift, after_grace=False):
             )
 
             # إشعار داخلي للموظف
-            EmployeeNotification.objects.create(
+            EmployeeNotification._base_manager.create(
                 employee=employee,
                 title=title_ar,
                 message=body_ar,
@@ -183,7 +183,7 @@ def _notify_missing_period(employee, period, shift, after_grace=False):
             )
 
             # إشعار داخلي للموظف
-            EmployeeNotification.objects.create(
+            EmployeeNotification._base_manager.create(
                 employee=employee,
                 title=f'🚨 غياب عن {period_name}',
                 message=f'لم تسجل حضور في {period_name} ({period_start} - {period_end})',
@@ -554,7 +554,7 @@ def mobile_login(request):
     if not user:
         return Response({'success': False, 'message': 'بيانات الدخول غير صحيحة'}, status=401)
 
-    token, _ = Token.objects.get_or_create(user=user)
+    token, _ = Token._base_manager.get_or_create(user=user)
 
     # JWT tokens
     try:
@@ -1873,8 +1873,8 @@ def mobile_change_password(request):
     user.must_change_password = False
     user.save()
 
-    Token.objects.filter(user=user).delete()
-    new_token = Token.objects.create(user=user)
+    Token._base_manager.filter(user=user).delete()
+    new_token = Token._base_manager.create(user=user)
 
     return Response({
         'success': True,
@@ -1882,6 +1882,19 @@ def mobile_change_password(request):
         'token': new_token.key,
     })
 
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_logout(request):
+    """تسجيل الخروج وحذف التوكن"""
+    try:
+        if hasattr(request.user, 'auth_token'):
+            request.user.auth_token.delete()
+        return Response({'success': True, 'message': 'تم تسجيل الخروج بنجاح'})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
 
 # ==================== GEOFENCE APIs ====================
 
@@ -2019,12 +2032,12 @@ def mobile_fcm_token_register(request):
             logging.getLogger(__name__).warning(f'Employee.language update error: {_lang_err}')
 
         # لو نفس التوكن موجود لحد تاني، امسحه
-        FCMDeviceToken.objects.filter(fcm_token=fcm_token).exclude(user=user).delete()
+        FCMDeviceToken._base_manager.filter(fcm_token=fcm_token).exclude(user=user).delete()
 
         # لو عندنا توكن قديم لنفس الـ user على نفس الجهاز، حدّثه
         # لو التوكن نفسه موجود، update_or_create بالتوكن
         # لو التوكن اتغير (refresh)، شيل القديم وحط الجديد
-        existing = FCMDeviceToken.objects.filter(user=user, platform=platform).first()
+        existing = FCMDeviceToken._base_manager.filter(user=user, platform=platform).first()
         if existing and existing.fcm_token != fcm_token:
             existing.fcm_token = fcm_token
             existing.device_info = device_info
@@ -2034,7 +2047,7 @@ def mobile_fcm_token_register(request):
             created = False
             token_obj = existing
         else:
-            token_obj, created = FCMDeviceToken.objects.update_or_create(
+            token_obj, created = FCMDeviceToken._base_manager.update_or_create(
                 fcm_token=fcm_token,
                 defaults={
                     'user': user,
@@ -2066,7 +2079,7 @@ def mobile_fcm_token_delete(request):
     try:
         fcm_token = request.data.get('fcm_token', '').strip()
         if fcm_token:
-            FCMDeviceToken.objects.filter(
+            FCMDeviceToken._base_manager.filter(
                 user=request.user,
                 fcm_token=fcm_token
             ).delete()
@@ -2342,7 +2355,7 @@ def mobile_notifications_list(request):
     """جلب إشعارات المستخدم الحالي"""
     from accounts.fcm_models import NotificationLog
 
-    qs = NotificationLog.objects.filter(user=request.user).order_by('-id')[:50]
+    qs = NotificationLog._base_manager.filter(user=request.user).order_by('-id')[:50]
     notifications = []
     for n in qs:
         notifications.append({
@@ -2355,7 +2368,7 @@ def mobile_notifications_list(request):
             'created_at': timezone.localtime(n.created_at).isoformat(),
         })
 
-    unread_count = NotificationLog.objects.filter(user=request.user, is_read=False).count()
+    unread_count = NotificationLog._base_manager.filter(user=request.user, is_read=False).count()
 
     return Response({
         'success': True,
@@ -2374,7 +2387,7 @@ def mobile_notifications_mark_read(request):
     notification_id = request.data.get('id')
 
     if notification_id:
-        updated = NotificationLog.objects.filter(
+        updated = NotificationLog._base_manager.filter(
             user=request.user,
             id=notification_id
         ).update(is_read=True)
@@ -2384,7 +2397,7 @@ def mobile_notifications_mark_read(request):
             'message': 'تم تحديث الإشعار' if updated else 'الإشعار غير موجود'
         }, status=200 if updated else 404)
 
-    updated = NotificationLog.objects.filter(
+    updated = NotificationLog._base_manager.filter(
         user=request.user,
         is_read=False
     ).update(is_read=True)
@@ -2414,7 +2427,7 @@ def mobile_charter_get(request):
     if not company:
         return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
 
-    charter = WorkCharter.objects.filter(company=company, is_active=True).first()
+    charter = WorkCharter._base_manager.filter(company=company, is_active=True).first()
 
     if not charter:
         return Response({
@@ -2430,7 +2443,7 @@ def mobile_charter_get(request):
     accepted_at = None
 
     if employee:
-        acceptance = CharterAcceptance.objects.filter(employee=employee, charter=charter).first()
+        acceptance = CharterAcceptance._base_manager.filter(employee=employee, charter=charter).first()
         if acceptance:
             accepted = True
             accepted_at = acceptance.accepted_at.isoformat() if acceptance.accepted_at else None
@@ -2469,7 +2482,7 @@ def mobile_charter_accept(request):
     if not company:
         return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
 
-    charter = WorkCharter.objects.filter(company=company, is_active=True).first()
+    charter = WorkCharter._base_manager.filter(company=company, is_active=True).first()
 
     if not charter:
         return Response({'success': False, 'error': 'لا توجد لائحة فعالة'}, status=404)
@@ -2479,7 +2492,7 @@ def mobile_charter_accept(request):
     if not employee:
         return Response({'success': False, 'error': 'لم يتم العثور على الموظف'}, status=404)
 
-    acceptance, created = CharterAcceptance.objects.get_or_create(
+    acceptance, created = CharterAcceptance._base_manager.get_or_create(
         employee=employee,
         charter=charter,
         defaults={
@@ -2493,9 +2506,9 @@ def mobile_charter_accept(request):
         emp_name = user.get_full_name() or user.username
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        managers = User.objects.filter(is_staff=True, is_active=True)
+        managers = User._base_manager.filter(is_staff=True, is_active=True)
         for mgr in managers:
-            NotificationLog.objects.create(
+            NotificationLog._base_manager.create(
                 user=mgr,
                 title='✅ موافقة على اللائحة',
                 body=f'الموظف {emp_name} وافق على: {charter.title}',
@@ -2530,7 +2543,7 @@ def mobile_charter_acceptances(request):
     if not company:
         return Response({'success': False, 'error': 'لا توجد شركة'}, status=400)
 
-    charter = WorkCharter.objects.filter(company=company, is_active=True).first()
+    charter = WorkCharter._base_manager.filter(company=company, is_active=True).first()
     if not charter:
         return Response({'success': False, 'error': 'لا توجد لائحة'}, status=404)
 
@@ -2540,7 +2553,7 @@ def mobile_charter_acceptances(request):
 
     acceptances = {
         a.employee_id: a
-        for a in CharterAcceptance.objects.filter(charter=charter)
+        for a in CharterAcceptance._base_manager.filter(charter=charter)
     }
 
     accepted_list = []
@@ -2594,7 +2607,7 @@ def mobile_charter_update(request):
     if not company:
         return Response({"success": False, "error": "لا توجد شركة"}, status=400)
 
-    charter = WorkCharter.objects.filter(company=company).first()
+    charter = WorkCharter._base_manager.filter(company=company).first()
 
     attachment_file = request.FILES.get('attachment')
     remove_attachment = str(request.data.get('remove_attachment', '')).strip().lower() in ['1', 'true', 'yes', 'on']
@@ -2616,7 +2629,7 @@ def mobile_charter_update(request):
             }, status=400)
 
     if not charter:
-        charter = WorkCharter.objects.create(
+        charter = WorkCharter._base_manager.create(
             company=company,
             title=request.data.get("title", "لائحة الشركة"),
             content=request.data.get("content", ""),
@@ -2691,7 +2704,7 @@ def mobile_charter_update(request):
     if content_changed:
         charter.version += 1
         charter.save()
-        deleted = CharterAcceptance.objects.filter(charter=charter).delete()
+        deleted = CharterAcceptance._base_manager.filter(charter=charter).delete()
 
         return Response({
             "success": True,

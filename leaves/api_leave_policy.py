@@ -407,7 +407,7 @@ def _save_policy_details(policy, data):
     if "tiers" in data:
         policy.tiers.all().delete()
         for tier in data["tiers"]:
-            LeavePolicyTier.objects.create(
+            LeavePolicyTier._base_manager.create(
                 policy=policy,
                 from_months=int(tier.get("from_months", 0)),
                 to_months=tier.get("to_months") or None,
@@ -418,7 +418,7 @@ def _save_policy_details(policy, data):
     if "type_rules" in data:
         policy.type_rules.all().delete()
         for rule in data["type_rules"]:
-            LeavePolicyTypeRule.objects.create(
+            LeavePolicyTypeRule._base_manager.create(
                 policy=policy,
                 leave_type_id=int(rule["leave_type_id"]),
                 enabled=bool(rule.get("enabled", True)),

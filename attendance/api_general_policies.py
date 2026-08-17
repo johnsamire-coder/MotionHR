@@ -72,9 +72,9 @@ def _set_scope(policy, data, company):
     policy.department = None
     _m2m_set_ids(policy, company, [])
     if scope == 'branch' and data.get('branch_id'):
-        policy.branch = Branch.objects.get(id=data['branch_id'], company=company)
+        policy.branch = Branch._base_manager.get(id=data['branch_id'], company=company)
     elif scope == 'department' and data.get('department_id'):
-        policy.department = Department.objects.get(id=data['department_id'], company=company)
+        policy.department = Department._base_manager.get(id=data['department_id'], company=company)
     elif scope == 'employees':
         _m2m_set_ids(policy, company, data.get('employee_ids') or [])
 

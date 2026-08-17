@@ -284,7 +284,7 @@ def get_company_working_days(company, year, month):
     }
     try:
         from .company_policy_models import CompanyWorkPolicy
-        policy = CompanyWorkPolicy.objects.filter(company=company).first()
+        policy = CompanyWorkPolicy._base_manager.filter(company=company).first()
         if policy:
             work_days_map = {
                 0: policy.work_monday,
@@ -657,7 +657,7 @@ def _get_monthly_deductions(employee, year, month, lang='ar'):
 
     try:
         from .company_policy_models import PayrollDeduction
-        qs = PayrollDeduction.objects.filter(
+        qs = PayrollDeduction._base_manager.filter(
             employee=employee,
             is_active=True,
             start_date__lte=last_day,
@@ -690,7 +690,7 @@ def _get_monthly_deductions(employee, year, month, lang='ar'):
 
     try:
         from employees.models import Deduction
-        for item in Deduction.objects.filter(employee=employee, year=year, month=month):
+        for item in Deduction._base_manager.filter(employee=employee, year=year, month=month):
             amount = _safe_float(item.amount)
             dtype = getattr(item, 'deduction_type', '') or ''
             dtype_lower = dtype.strip().lower()
@@ -1046,7 +1046,7 @@ def _get_active_policy(company, target_date, department=None, branch=None):
 
         # قسم أولاً
         if department:
-            dept_assignment = AttendancePolicyAssignment.objects.filter(
+            dept_assignment = AttendancePolicyAssignment._base_manager.filter(
                 date_filter & status_filter & company_filter,
                 assignment_type='department',
                 department=department
@@ -1056,7 +1056,7 @@ def _get_active_policy(company, target_date, department=None, branch=None):
 
         # فرع تانياً
         if branch:
-            branch_assignment = AttendancePolicyAssignment.objects.filter(
+            branch_assignment = AttendancePolicyAssignment._base_manager.filter(
                 date_filter & status_filter & company_filter,
                 assignment_type='branch',
                 branch=branch
@@ -1065,7 +1065,7 @@ def _get_active_policy(company, target_date, department=None, branch=None):
                 return branch_assignment.policy
 
         # شركة أخيراً
-        company_assignment = AttendancePolicyAssignment.objects.filter(
+        company_assignment = AttendancePolicyAssignment._base_manager.filter(
             date_filter & status_filter & company_filter,
             assignment_type='company'
         ).select_related('policy').order_by('priority').first()
@@ -1083,14 +1083,14 @@ def _apply_late_rule(policy, late_minutes, daily_salary):
         return 0.0
     try:
         from attendance.models import LateRule
-        rules = LateRule.objects.filter(
+        rules = LateRule._base_manager.filter(
             policy=policy,
             from_minutes__lte=late_minutes,
             to_minutes__gte=late_minutes
         ).order_by('display_order').first()
 
         if not rules:
-            rules = LateRule.objects.filter(
+            rules = LateRule._base_manager.filter(
                 policy=policy,
                 from_minutes__lte=late_minutes
             ).order_by('-from_minutes').first()
@@ -1331,7 +1331,7 @@ def _apply_absence_rule(policy, absent_days, daily_salary):
         return 0.0
     try:
         from attendance.models import AbsenceRule
-        rule = AbsenceRule.objects.filter(
+        rule = AbsenceRule._base_manager.filter(
             policy=policy,
             absence_type='unexcused'
         ).order_by('display_order').first()
@@ -1354,13 +1354,13 @@ def _apply_overtime_rule(policy, overtime_hours, hourly_rate, overtime_type='aft
         return 0.0
     try:
         from attendance.models import OvertimeRule
-        rule = OvertimeRule.objects.filter(
+        rule = OvertimeRule._base_manager.filter(
             policy=policy,
             overtime_type=overtime_type
         ).order_by('display_order').first()
 
         if not rule:
-            rule = OvertimeRule.objects.filter(
+            rule = OvertimeRule._base_manager.filter(
                 policy=policy,
                 overtime_type='after_shift'
             ).order_by('display_order').first()
@@ -1384,7 +1384,7 @@ def _apply_night_allowance(policy, night_shift_days, daily_salary):
         return 0.0
     try:
         from attendance.models import NightShiftRule
-        rule = NightShiftRule.objects.filter(policy=policy).first()
+        rule = NightShiftRule._base_manager.filter(policy=policy).first()
         if not rule:
             return 0.0
         if rule.allowance_type == 'fixed_amount':
@@ -1402,7 +1402,7 @@ def _apply_weekend_allowance(policy, weekend_work_days, daily_salary):
         return 0.0
     try:
         from attendance.models import WeekendWorkRule
-        rule = WeekendWorkRule.objects.filter(policy=policy).first()
+        rule = WeekendWorkRule._base_manager.filter(policy=policy).first()
         if not rule:
             return round(weekend_work_days * daily_salary * 2, 2)
         if rule.compensation_type == 'overtime_multiplier':

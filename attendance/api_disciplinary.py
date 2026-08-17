@@ -100,7 +100,7 @@ def disciplinary_rules(request, policy_id):
     # POST - إضافة قاعدة
     data = request.data
     try:
-        rule = DisciplinaryRule.objects.create(
+        rule = DisciplinaryRule._base_manager.create(
             policy=policy,
             violation_type=str(data.get("violation_type", "policy_violation")),
             occurrence_from=int(data.get("occurrence_from", 1)),
@@ -130,7 +130,7 @@ def disciplinary_rule_detail(request, policy_id, rule_id):
 
     try:
         policy = AttendancePolicy._base_manager.get(id=policy_id, company=company)
-        rule = DisciplinaryRule.objects.get(id=rule_id, policy=policy)
+        rule = DisciplinaryRule._base_manager.get(id=rule_id, policy=policy)
     except (AttendancePolicy.DoesNotExist, DisciplinaryRule.DoesNotExist):
         return Response({"success": False, "error": "غير موجود"}, status=404)
 

@@ -330,14 +330,14 @@ def policy_assign(request, policy_id):
     priority_map = {"department": 1, "branch": 2, "company": 3}
     priority = priority_map.get(assignment_type, 3)
 
-    AttendancePolicyAssignment.objects.filter(
+    AttendancePolicyAssignment._base_manager.filter(
         policy__company=company,
         assignment_type=assignment_type,
         department_id=department_id,
         branch_id=branch_id,
     ).delete()
 
-    assignment = AttendancePolicyAssignment.objects.create(
+    assignment = AttendancePolicyAssignment._base_manager.create(
         company=company,
         policy=policy,
         assignment_type=assignment_type,
@@ -364,7 +364,7 @@ def _save_policy_rules(policy, data):
     if "late_rules" in data:
         policy.late_rules.all().delete()
         for i, rule in enumerate(data["late_rules"]):
-            LateRule.objects.create(
+            LateRule._base_manager.create(
                 policy=policy,
                 from_minutes=int(rule.get("from_minutes", 0)),
                 to_minutes=int(rule.get("to_minutes", 15)),
@@ -377,7 +377,7 @@ def _save_policy_rules(policy, data):
     if "absence_rules" in data:
         policy.absence_rules.all().delete()
         for i, rule in enumerate(data["absence_rules"]):
-            AbsenceRule.objects.create(
+            AbsenceRule._base_manager.create(
                 policy=policy,
                 absence_type=str(rule.get("absence_type", "unexcused")),
                 consecutive_days=rule.get("consecutive_days"),
@@ -391,7 +391,7 @@ def _save_policy_rules(policy, data):
     if "overtime_rules" in data:
         policy.overtime_rules.all().delete()
         for i, rule in enumerate(data["overtime_rules"]):
-            OvertimeRule.objects.create(
+            OvertimeRule._base_manager.create(
                 policy=policy,
                 overtime_type=str(rule.get("overtime_type", "after_shift")),
                 multiplier=float(rule.get("multiplier", 1.5)),
@@ -406,7 +406,7 @@ def _save_policy_rules(policy, data):
     if "night_shift_rules" in data:
         policy.night_shift_rules.all().delete()
         for rule in data["night_shift_rules"]:
-            NightShiftRule.objects.create(
+            NightShiftRule._base_manager.create(
                 policy=policy,
                 allowance_type=str(rule.get("allowance_type", "fixed_amount")),
                 amount=float(rule.get("amount", 0)),
@@ -419,7 +419,7 @@ def _save_policy_rules(policy, data):
     if "weekend_work_rules" in data:
         policy.weekend_work_rules.all().delete()
         for rule in data["weekend_work_rules"]:
-            WeekendWorkRule.objects.create(
+            WeekendWorkRule._base_manager.create(
                 policy=policy,
                 compensation_type=str(rule.get("compensation_type", "overtime_multiplier")),
                 multiplier=float(rule.get("multiplier", 2.0)),
@@ -430,7 +430,7 @@ def _save_policy_rules(policy, data):
     if "late_repeat_penalties" in data:
         policy.late_repeat_penalties.all().delete()
         for rule in data["late_repeat_penalties"]:
-            LateRepeatPenalty.objects.create(
+            LateRepeatPenalty._base_manager.create(
                 policy=policy,
                 occurrences=int(rule.get("occurrences", 3)),
                 penalty_type=str(rule.get("penalty_type", "warning")),

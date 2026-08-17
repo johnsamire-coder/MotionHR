@@ -260,7 +260,7 @@ def manager_branches(request):
             if not name_ar:
                 return Response({"success": False, "error": "اسم الفرع مطلوب"}, status=400)
 
-            branch = Branch.objects.create(
+            branch = Branch._base_manager.create(
                 company=company,
                 name_ar=name_ar,
                 name_en=(data.get("name_en") or "").strip(),
@@ -281,7 +281,7 @@ def manager_branches(request):
             }, status=201)
 
         # GET - list branches
-        branches = Branch.objects.filter(company=company, is_active=True).order_by("name_ar")
+        branches = Branch._base_manager.filter(company=company, is_active=True).order_by("name_ar")
         data = [{"id": b.id, "name_ar": b.name_ar, "name_en": b.name_en or "", "is_main": b.is_main} for b in branches]
         return Response({"success": True, "branches": data, "count": len(data)})
     except Exception as e:
@@ -312,9 +312,9 @@ def manager_departments(request):
             branch_id = data.get("branch_id") or data.get("branch")
             branch_obj = None
             if branch_id:
-                branch_obj = Branch.objects.filter(id=branch_id, company=company).first()
+                branch_obj = Branch._base_manager.filter(id=branch_id, company=company).first()
 
-            dept = Department.objects.create(
+            dept = Department._base_manager.create(
                 company=company,
                 name_ar=name_ar,
                 name_en=(data.get("name_en") or "").strip(),
@@ -336,7 +336,7 @@ def manager_departments(request):
             }, status=201)
 
         # GET - list departments
-        depts = Department.objects.filter(company=company, is_active=True).order_by("name_ar")
+        depts = Department._base_manager.filter(company=company, is_active=True).order_by("name_ar")
         data = [{
             "id": d.id,
             "name_ar": d.name_ar,
@@ -378,9 +378,9 @@ def manager_job_titles(request):
             branch_obj = None
             dept_obj = None
             if branch_id:
-                branch_obj = Branch.objects.filter(id=branch_id, company=company).first()
+                branch_obj = Branch._base_manager.filter(id=branch_id, company=company).first()
             if department_id:
-                dept_obj = Department.objects.filter(id=department_id, company=company).first()
+                dept_obj = Department._base_manager.filter(id=department_id, company=company).first()
 
             title = JobTitle._base_manager.create(
                 company=company,
@@ -699,7 +699,7 @@ def manager_create_employee(request):
 
         # Username handling
         if username_input:
-            if User.objects.filter(username=username_input).exists():
+            if User._base_manager.filter(username=username_input).exists():
                 return Response({"success": False, "error": f"اسم المستخدم '{username_input}' موجود مسبقاً"}, status=400)
             username = username_input
         else:
@@ -730,7 +730,7 @@ def manager_create_employee(request):
                 _dept_role = None
 
             # Create User
-            user = User.objects.create(
+            user = User._base_manager.create(
                 username=username,
                 first_name=first_name_ar,
                 last_name=last_name_ar,
@@ -747,10 +747,10 @@ def manager_create_employee(request):
             # تعيين الدور الافتراضي للقسم تلقائياً
             if _dept_role:
                 from accounts.permissions_models import UserRole
-                UserRole.objects.get_or_create(user=user, role=_dept_role)
+                UserRole._base_manager.get_or_create(user=user, role=_dept_role)
 
             # Create Employee
-            employee = Employee.objects.create(
+            employee = Employee._base_manager.create(
                 company=company,
                 user=user,
                 employee_code=employee_code_input if employee_code_input else "",  # auto-generated in save() if empty
@@ -1283,7 +1283,7 @@ def manager_company_info(request):
     """جلب بيانات الشركة الكاملة + اللوجو"""
     try:
         from employees.models import Employee
-        requester_employee = Employee.objects.select_related("company").filter(user=request.user).first()
+        requester_employee = Employee._base_manager.select_related("company").filter(user=request.user).first()
         company = getattr(request.user, "company", None)
 
         if requester_employee and requester_employee.company:
@@ -1307,8 +1307,8 @@ def manager_company_info(request):
         employees_count = 0
         try:
             from companies.models import Branch, Department
-            branches_count = Branch.objects.filter(company=company).count()
-            departments_count = Department.objects.filter(company=company).count()
+            branches_count = Branch._base_manager.filter(company=company).count()
+            departments_count = Department._base_manager.filter(company=company).count()
             employees_count = Employee._base_manager.filter(company=company).count()
         except Exception:
             pass
@@ -1356,14 +1356,14 @@ def manager_transfer_employee(request, employee_id):
     from employees.models import Employee
     """نقل موظف: تغيير مدير / إدارة / فرع"""
     try:
-        target_employee = Employee.objects.select_related("user", "company").filter(id=employee_id).first()
+        target_employee = Employee._base_manager.select_related("user", "company").filter(id=employee_id).first()
         if not target_employee:
             return Response(
                 {"success": False, "error": "الموظف غير موجود"},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        requester_employee = Employee.objects.select_related("company").filter(user=request.user).first()
+        requester_employee = Employee._base_manager.select_related("company").filter(user=request.user).first()
 
         allowed_groups = {"company_admin", "hr_manager", "super_admin"}
         is_allowed = request.user.is_superuser or (request.user.role in allowed_groups)
@@ -1397,7 +1397,7 @@ def manager_transfer_employee(request, employee_id):
                     update_fields.append("direct_manager")
                     changes.append("إزالة المدير المباشر")
             else:
-                new_mgr = Employee.objects.filter(
+                new_mgr = Employee._base_manager.filter(
                     id=new_manager_id,
                     company_id=target_employee.company_id
                 ).first()
@@ -1420,7 +1420,7 @@ def manager_transfer_employee(request, employee_id):
         if new_branch_id:
             try:
                 from attendance.models import Branch
-                new_branch = Branch.objects.filter(
+                new_branch = Branch._base_manager.filter(
                     id=new_branch_id,
                     company_id=target_employee.company_id
                 ).first()
@@ -1440,7 +1440,7 @@ def manager_transfer_employee(request, employee_id):
         if new_department_id:
             try:
                 from attendance.models import Department
-                new_dept = Department.objects.filter(
+                new_dept = Department._base_manager.filter(
                     id=new_department_id,
                     company_id=target_employee.company_id
                 ).first()
@@ -1461,15 +1461,15 @@ def manager_transfer_employee(request, employee_id):
                         user = target_employee.user
                         if new_dept.default_role:
                             # امسح الأدوار القديمة المرتبطة بأقسام تانية
-                            old_dept_roles = CustomRole.objects.filter(
+                            old_dept_roles = CustomRole._base_manager.filter(
                                 company=target_employee.company
                             ).values_list('id', flat=True)
-                            UserRole.objects.filter(
+                            UserRole._base_manager.filter(
                                 user=user,
                                 role_id__in=old_dept_roles
                             ).delete()
                             # ضيف الدور الجديد
-                            UserRole.objects.get_or_create(
+                            UserRole._base_manager.get_or_create(
                                 user=user,
                                 role=new_dept.default_role
                             )
@@ -1482,7 +1482,7 @@ def manager_transfer_employee(request, employee_id):
         if new_job_title_id:
             try:
                 from attendance.models import JobTitle
-                new_jt = JobTitle.objects.filter(
+                new_jt = JobTitle._base_manager.filter(
                     id=new_job_title_id,
                     company_id=target_employee.company_id
                 ).first()
@@ -1667,7 +1667,7 @@ def employee_save_location(request):
             recorded_at = timezone.now()
 
         # عدد النقاط الحالية في هذا اليوم
-        point_index = LocationHistory.objects.filter(
+        point_index = LocationHistory._base_manager.filter(
             employee=employee,
             shift_date=shift_date
         ).count()
@@ -1676,7 +1676,7 @@ def employee_save_location(request):
         if point_index >= 24:
             return Response({'success': True, 'message': 'تم الوصول للحد الأقصى من النقاط'})
 
-        loc = LocationHistory.objects.create(
+        loc = LocationHistory._base_manager.create(
             company=employee.company,
             employee=employee,
             latitude=lat,
@@ -2238,11 +2238,11 @@ def manager_job_title_detail(request, title_id):
 
         branch_id = data.get("branch_id") or data.get("branch")
         if branch_id is not None:
-            title.branch = Branch.objects.filter(id=branch_id, company=company).first() if branch_id else None
+            title.branch = Branch._base_manager.filter(id=branch_id, company=company).first() if branch_id else None
 
         department_id = data.get("department_id") or data.get("department")
         if department_id is not None:
-            title.department = Department.objects.filter(id=department_id, company=company).first() if department_id else None
+            title.department = Department._base_manager.filter(id=department_id, company=company).first() if department_id else None
 
         if "is_manager" in data:
             title.is_manager = bool(data.get("is_manager"))

@@ -30,7 +30,7 @@ def _log_notification(user, title, body, data=None):
         notification_type = 'general'
         if isinstance(data, dict) and data.get('type'):
             notification_type = str(data.get('type'))
-        NotificationLog.objects.create(
+        NotificationLog._base_manager.create(
             user=user,
             title=title,
             body=body,

@@ -118,11 +118,11 @@ def allowance_policies_list(request):
             if scope == 'branch':
                 if not data.get('branch_id'):
                     return JsonResponse({'success': False, 'error': 'branch_id مطلوب'}, status=400)
-                branch = Branch.objects.get(id=data['branch_id'], company=company)
+                branch = Branch._base_manager.get(id=data['branch_id'], company=company)
             elif scope == 'department':
                 if not data.get('department_id'):
                     return JsonResponse({'success': False, 'error': 'department_id مطلوب'}, status=400)
-                department = Department.objects.get(id=data['department_id'], company=company)
+                department = Department._base_manager.get(id=data['department_id'], company=company)
 
             policy = CompanyAllowancePolicy._base_manager.create(
                 company=company,
@@ -188,9 +188,9 @@ def allowance_policy_detail(request, policy_id):
                 _m2m_set_ids(policy, company, [])
 
                 if data['scope'] == 'branch' and data.get('branch_id'):
-                    policy.branch = Branch.objects.get(id=data['branch_id'], company=company)
+                    policy.branch = Branch._base_manager.get(id=data['branch_id'], company=company)
                 elif data['scope'] == 'department' and data.get('department_id'):
-                    policy.department = Department.objects.get(id=data['department_id'], company=company)
+                    policy.department = Department._base_manager.get(id=data['department_id'], company=company)
                 elif data['scope'] == 'employees':
                     _m2m_set_ids(policy, company, data.get('employee_ids') or [])
 

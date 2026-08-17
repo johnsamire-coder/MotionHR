@@ -49,7 +49,7 @@ def announcements_list(request):
             'total': 0,
         })
 
-    qs = CompanyAnnouncement.objects.filter(
+    qs = CompanyAnnouncement._base_manager.filter(
         company=user.company,
         is_active=True,
         publish_at__lte=now,
@@ -61,7 +61,7 @@ def announcements_list(request):
     read_ids = set()
     if emp:
         read_ids = set(
-            CompanyAnnouncementRead.objects.filter(
+            CompanyAnnouncementRead._base_manager.filter(
                 employee=emp,
                 announcement__in=qs
             ).values_list('announcement_id', flat=True)
@@ -115,17 +115,17 @@ def announcements_mark_read(request):
         return Response({'error': 'announcement_id مطلوب'}, status=400)
 
     try:
-        ann = CompanyAnnouncement.objects.get(id=announcement_id, company=company)
+        ann = CompanyAnnouncement._base_manager.get(id=announcement_id, company=company)
     except CompanyAnnouncement.DoesNotExist:
         return Response({'error': 'الإعلان غير موجود'}, status=404)
 
-    _, created = CompanyAnnouncementRead.objects.get_or_create(
+    _, created = CompanyAnnouncementRead._base_manager.get_or_create(
         employee=emp,
         announcement=ann,
     )
 
     if created:
-        CompanyAnnouncement.objects.filter(id=ann.id).update(
+        CompanyAnnouncement._base_manager.filter(id=ann.id).update(
             total_read=ann.total_read + 1
         )
 
@@ -150,7 +150,7 @@ def manager_create_announcement(request):
     if not title or not message:
         return Response({'error': 'العنوان والمحتوى مطلوبان'}, status=400)
 
-    ann = CompanyAnnouncement.objects.create(
+    ann = CompanyAnnouncement._base_manager.create(
         company=user.company,
         title=title,
         message=message,
@@ -183,7 +183,7 @@ def manager_create_announcement(request):
         except Exception:
             pass
 
-    CompanyAnnouncement.objects.filter(id=ann.id).update(total_sent=sent_count)
+    CompanyAnnouncement._base_manager.filter(id=ann.id).update(total_sent=sent_count)
 
     return Response({
         'success': True,
@@ -210,7 +210,7 @@ def manager_update_announcement(request, pk):
         return Response({'error': 'شركة المستخدم غير موجودة'}, status=400)
 
     try:
-        ann = CompanyAnnouncement.objects.get(id=pk, company=company)
+        ann = CompanyAnnouncement._base_manager.get(id=pk, company=company)
     except CompanyAnnouncement.DoesNotExist:
         return Response({'error': 'الإعلان غير موجود'}, status=404)
 
@@ -292,7 +292,7 @@ def manager_delete_announcement(request, pk):
         return Response({'error': 'شركة المستخدم غير موجودة'}, status=400)
 
     try:
-        ann = CompanyAnnouncement.objects.get(id=pk, company=company)
+        ann = CompanyAnnouncement._base_manager.get(id=pk, company=company)
     except CompanyAnnouncement.DoesNotExist:
         return Response({'error': 'الإعلان غير موجود'}, status=404)
 
@@ -335,11 +335,11 @@ def manager_announcement_stats(request, pk):
         return Response({'error': 'شركة المستخدم غير موجودة'}, status=400)
 
     try:
-        ann = CompanyAnnouncement.objects.get(id=pk, company=company)
+        ann = CompanyAnnouncement._base_manager.get(id=pk, company=company)
     except CompanyAnnouncement.DoesNotExist:
         return Response({'error': 'الإعلان غير موجود'}, status=404)
 
-    reads = CompanyAnnouncementRead.objects.filter(
+    reads = CompanyAnnouncementRead._base_manager.filter(
         announcement=ann
     ).select_related('employee')
 

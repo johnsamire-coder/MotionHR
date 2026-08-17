@@ -110,6 +110,7 @@ urlpatterns = [
 
     # Mobile App APIs
     path('api/mobile/login/', api_mobile.mobile_login, name='mobile_login'),
+    path('api/mobile/logout/', api_mobile.mobile_logout, name='mobile_logout'),
     path('api/mobile/jwt/token/', TokenObtainPairView.as_view(), name='mobile_jwt_token'),
     path('api/mobile/jwt/refresh/', TokenRefreshView.as_view(), name='mobile_jwt_refresh'),
     path('api/mobile/jwt/verify/', TokenVerifyView.as_view(), name='mobile_jwt_verify'),
@@ -577,6 +578,7 @@ from .api_reports import (
     eos_report,
     eos_export_excel,
     eos_export_pdf,
+    payroll_export_excel, payroll_export_pdf,
     reimbursements_report, reimbursements_export_excel, reimbursements_export_pdf,
     bank_transfer_report, bank_transfer_export_excel, bank_transfer_export_pdf,
     insurance_report, insurance_export_excel, insurance_export_pdf,
@@ -601,6 +603,8 @@ urlpatterns += [
     # Reimbursements
     path('api/mobile/manager/reports/reimbursements/', reimbursements_report),
     path('api/mobile/manager/reports/reimbursements/export/', reimbursements_export_excel),
+    path('api/mobile/manager/reports/payroll/export/', payroll_export_excel, name='reports-payroll-export-excel'),
+    path('api/mobile/manager/reports/payroll/export/pdf/', payroll_export_pdf, name='reports-payroll-export-pdf'),
     path('api/mobile/manager/reports/reimbursements/export/pdf/', reimbursements_export_pdf),
 
     # Bank Transfer
