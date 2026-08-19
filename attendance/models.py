@@ -339,6 +339,42 @@ class AttendancePolicy(TenantModel):
 
     """سياسة الحضور والخصم — لكل شركة/فرع/قسم"""
 
+    # === Late Warning System ===
+    late_warning_enabled = models.BooleanField(
+        default=False,
+        verbose_name='تفعيل نظام الإنذارات'
+    )
+    late_warning_threshold = models.PositiveSmallIntegerField(
+        default=2,
+        verbose_name='عدد الإنذارات قبل الخصم'
+    )
+    late_warning_deduction_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('fixed', 'ثابت'),
+            ('progressive', 'تصاعدي بحد أقصى'),
+            ('progressive_step', 'تصاعدي كل عدد مرات'),
+        ],
+        default='fixed',
+        verbose_name='نوع الخصم'
+    )
+    late_warning_deduction_value = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=0.25,
+        verbose_name='قيمة الخصم الأساسية (جزء من اليوم)'
+    )
+    late_warning_max_deduction = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=1.00,
+        verbose_name='الحد الأقصى للخصم (جزء من اليوم)'
+    )
+    late_warning_step_rate = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name='معدل الزيادة كل N مرات'
+    )
+
     STATUS_CHOICES = [
         ('draft', 'مسودة'),
         ('approved', 'معتمد'),
@@ -1936,6 +1972,16 @@ class LateIncident(TenantModel):
     excuse_reason = models.TextField(
         blank=True,
         verbose_name="سبب العذر"
+    )
+    was_deducted = models.BooleanField(
+        default=False,
+        verbose_name="تم الخصم"
+    )
+    deduction_amount = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=0,
+        verbose_name="قيمة الخصم (جزء من اليوم)"
     )
 
     class Meta:

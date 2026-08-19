@@ -2321,3 +2321,114 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
         'daily_details': daily_details,
     }
+
+
+
+def get_late_warning_info(employee, target_date, late_minutes):
+    """
+    يحسب معلومات الإنذار/الخصم للتأخير
+    Returns: {
+        'is_warning_enabled': bool,
+        'incident_number': int,  # رقم الحادثة في الشهر
+        'threshold': int,
+        'should_deduct': bool,
+        'deduction_days': float,
+        'message_ar': str,
+        'message_en': str,
+    }
+    """
+    from attendance.models import AttendancePolicy, AttendancePolicyAssignment, LateIncident
+    from django.db.models import Q
+    
+    default = {
+        'is_warning_enabled': False,
+        'incident_number': 0,
+        'threshold': 0,
+        'should_deduct': False,
+        'deduction_days': 0.0,
+        'message_ar': '',
+        'message_en': '',
+    }
+    
+    if late_minutes <= 0:
+        return default
+    
+    # نلاقي السياسة النشطة
+    policy = _get_active_policy(
+        getattr(employee, 'company', None),
+        target_date,
+        department=getattr(employee, 'department', None),
+        branch=getattr(employee, 'branch', None),
+    )
+    
+    if not policy or not getattr(policy, 'late_warning_enabled', False):
+        return default
+    
+    # نجيب دورة المرتب (شهر أو حسب سياسة الشركة)
+    company = getattr(employee, 'company', None)
+    if company and hasattr(company, 'payroll_cycle_type'):
+        cycle_start, cycle_end = get_payroll_period_bounds(company, target_date.year, target_date.month)
+    else:
+        cycle_start, cycle_end = _period_bounds(target_date.year, target_date.month)
+    
+    # نعد عدد التأخيرات في الدورة الحالية (بما فيهم اليوم ده)
+    incidents_count = LateIncident._base_manager.filter(
+        employee=employee,
+        date__gte=cycle_start,
+        date__lte=cycle_end,
+        late_minutes__gt=0,
+    ).count() + 1  # +1 للحادثة الحالية
+    
+    threshold = int(getattr(policy, 'late_warning_threshold', 2) or 2)
+    should_deduct = incidents_count > threshold
+    
+    deduction_days = 0.0
+    if should_deduct:
+        deduction_type = getattr(policy, 'late_warning_deduction_type', 'fixed')
+        base_value = float(getattr(policy, 'late_warning_deduction_value', 0.25) or 0.25)
+        max_value = float(getattr(policy, 'late_warning_max_deduction', 1.0) or 1.0)
+        step_rate = int(getattr(policy, 'late_warning_step_rate', 1) or 1)
+        
+        # رقم مرة الخصم (بعد الـ threshold)
+        deduction_number = incidents_count - threshold
+        
+        if deduction_type == 'fixed':
+            deduction_days = base_value
+        elif deduction_type == 'progressive':
+            # يزيد كل مرة لحد الحد الأقصى
+            deduction_days = min(base_value * deduction_number, max_value)
+        elif deduction_type == 'progressive_step':
+            # يزيد كل N مرات
+            step_number = ((deduction_number - 1) // step_rate) + 1
+            deduction_days = min(base_value * step_number, max_value)
+    
+    # نبني الرسالة
+    if should_deduct:
+        message_ar = (
+            f"🚨 تم خصم {deduction_days} من يوم عمل بسبب تكرار التأخير.\n"
+            f"عدد مرات التأخير هذا الشهر: {incidents_count}"
+        )
+        message_en = (
+            f"🚨 {deduction_days} of a day deducted due to repeated lateness.\n"
+            f"Late count this month: {incidents_count}"
+        )
+    else:
+        remaining = threshold - incidents_count + 1
+        message_ar = (
+            f"⚠️ هذا هو الإنذار رقم {incidents_count} من {threshold} هذا الشهر.\n"
+            f"بعد {remaining} مرة أخرى سيتم الخصم من راتبك."
+        )
+        message_en = (
+            f"⚠️ Warning {incidents_count} of {threshold} this month.\n"
+            f"{remaining} more time(s) before deduction."
+        )
+    
+    return {
+        'is_warning_enabled': True,
+        'incident_number': incidents_count,
+        'threshold': threshold,
+        'should_deduct': should_deduct,
+        'deduction_days': round(deduction_days, 2),
+        'message_ar': message_ar,
+        'message_en': message_en,
+    }

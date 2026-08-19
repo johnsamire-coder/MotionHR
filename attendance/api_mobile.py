@@ -1036,6 +1036,16 @@ def mobile_attendance_action(request):
     elif late_permission and late_minutes > 0:
         check_in_note = "مدة التأخير أكبر من مدة الإذن المعتمد"
 
+    # === Late Warning System ===
+    late_warning_info = None
+    if action == 'check_in' and late_minutes > 0 and not late_permission_covers:
+        try:
+            from attendance.payroll_rules import get_late_warning_info
+            late_warning_info = get_late_warning_info(employee, today, late_minutes)
+        except Exception as e:
+            print(f'late_warning_info error: {e}')
+            late_warning_info = None
+
     # ═══════════════════════════════════════════════════
     # الكود ده القديم اتنقل للـ Worker Type Check (فوق)
     # اللي بيفحص حسب نوع الموظف (office/field_free/field_assigned)
@@ -1079,6 +1089,50 @@ def mobile_attendance_action(request):
             attendance.check_in_notes = check_in_note
             attendance.status = check_in_status
             attendance.save()
+
+        # === Save LateIncident + Deduction ===
+        if late_warning_info and late_warning_info.get('is_warning_enabled') and late_minutes > 0 and not late_permission_covers:
+            try:
+                from attendance.models import LateIncident
+                from employees.models import Deduction
+                LateIncident._base_manager.update_or_create(
+                    employee=employee,
+                    date=today,
+                    defaults={
+                        'company': employee.company,
+                        'attendance': attendance,
+                        'late_minutes': late_minutes,
+                        'shift_start_time': active_shift.start_time if active_shift else None,
+                        'actual_checkin_time': timezone.localtime(now).time(),
+                        'grace_period_used': int(getattr(active_shift, 'grace_period', 0) or 0),
+                        'month': today.month,
+                        'year': today.year,
+                        'incident_number_in_month': late_warning_info['incident_number'],
+                        'was_deducted': late_warning_info['should_deduct'],
+                        'deduction_amount': late_warning_info['deduction_days'],
+                    }
+                )
+                # لو فيه خصم فعلي، سجله في جدول الخصومات
+                if late_warning_info['should_deduct'] and late_warning_info['deduction_days'] > 0:
+                    try:
+                        daily_salary = float(getattr(employee, 'basic_salary', 0) or 0) / 30.0
+                        deduction_amount = daily_salary * late_warning_info['deduction_days']
+                        Deduction._base_manager.create(
+                            company=employee.company,
+                            employee=employee,
+                            deduction_type='late',
+                            amount=round(deduction_amount, 2),
+                            date=today,
+                            reason=f"تأخير متكرر - المرة رقم {late_warning_info['incident_number']} هذا الشهر",
+                            month=today.month,
+                            year=today.year,
+                            is_visible_to_employee=True,
+                            notes=f"خصم {late_warning_info['deduction_days']} من يوم عمل",
+                        )
+                    except Exception as _de:
+                        print(f'Deduction save error: {_de}')
+            except Exception as _le:
+                print(f'LateIncident save error: {_le}')
 
         # ── on_mission flag ──
         try:
@@ -1168,6 +1222,19 @@ def mobile_attendance_action(request):
             ),
             "today": attendance_to_dict(attendance),
         }
+
+        # === Late Warning Alert ===
+        if late_warning_info and late_warning_info.get('is_warning_enabled'):
+            response_data['late_warning'] = {
+                'show': True,
+                'incident_number': late_warning_info['incident_number'],
+                'threshold': late_warning_info['threshold'],
+                'should_deduct': late_warning_info['should_deduct'],
+                'deduction_days': late_warning_info['deduction_days'],
+                'message_ar': late_warning_info['message_ar'],
+                'message_en': late_warning_info['message_en'],
+                'type': 'deduction' if late_warning_info['should_deduct'] else 'warning',
+            }
 
         # Push + Notification center
         try:
