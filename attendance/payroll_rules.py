@@ -1325,13 +1325,9 @@ def _apply_permission_balance(employee, late_minutes, reference_date, policy):
     remaining_late = max(0, late_minutes - minutes_to_convert)
     return minutes_to_convert, remaining_late
 
-def _apply_absence_rule(policy, absent_days, daily_salary, consecutive_days=0, occurrences=0):
+def _apply_absence_rule(policy, absent_days, daily_salary, employee=None, consecutive_days=0, occurrences=0):
     """
-    يطبق قواعد خصم الغياب بدقة عالية مع دعم التدرج حسب التكرار خلال الشهر:
-    - المرة 1: إنذار
-    - المرة 2: خصم 0.5 يوم
-    - المرة 3: خصم 1.0 يوم
-    - المرة 4+: خصم 2.0 يوم
+    يطبق قواعد الخصم بدقة حسب البند المستهدف للموظف (فرع/قسم/شركة)
     """
     if not policy or absent_days <= 0:
         return 0.0, 0.0
@@ -1342,33 +1338,32 @@ def _apply_absence_rule(policy, absent_days, daily_salary, consecutive_days=0, o
     try:
         from attendance.models import AbsenceRule
 
-        # 1. فحص وجود قواعد متدرجة حسب المرات في الشهر (repeated / occurrence)
-        occ_rules = AbsenceRule._base_manager.filter(
-            policy=policy,
-            absence_type__in=['repeated', 'occurrence']
-        ).order_by('occurrences_in_month')
+        emp_branch_id = getattr(employee, 'branch_id', None)
+        emp_dept_id = getattr(employee, 'department_id', None)
 
+        # جلب القواعد الخاصة بسياسة الحضور
+        all_rules = AbsenceRule._base_manager.filter(policy=policy)
+
+        # فلترة القواعد الأنسب للموظف (قسم > فرع > عام)
+        def _get_best_rule(absence_type_filter):
+            qs = all_rules.filter(absence_type=absence_type_filter)
+            if emp_dept_id and qs.filter(department_id=emp_dept_id).exists():
+                return qs.filter(department_id=emp_dept_id).order_by('display_order').first()
+            if emp_branch_id and qs.filter(branch_id=emp_branch_id).exists():
+                return qs.filter(branch_id=emp_branch_id).order_by('display_order').first()
+            return qs.filter(branch__isnull=True, department__isnull=True).order_by('display_order').first()
+
+        # 1. تدرج المرات
+        occ_rules = all_rules.filter(absence_type__in=['repeated', 'occurrence'])
         if occ_rules.exists():
             total_deduction_amount = 0.0
             total_deducted_days = 0.0
-
-            # إنشاء قاموس للقواعد حسب رقم المرة
-            rule_map = {}
-            for r in occ_rules:
-                if r.occurrences_in_month:
-                    rule_map[r.occurrences_in_month] = r
-
-            # حساب الخصم لكل يوم غياب بحسب رقم تكراره في الشهر
             for occ in range(1, total_absent_count + 1):
-                rule = rule_map.get(occ)
-                if not rule:
-                    # أخذ أحدث قاعدة مطابقة لأعلى تكرار
-                    rule = occ_rules.filter(occurrences_in_month__lte=occ).order_by('-occurrences_in_month').first()
-
+                rule = _get_best_rule('repeated') or _get_best_rule('occurrence')
                 if rule:
                     val = float(rule.deduction_value or 0)
                     if rule.deduction_type == 'warning':
-                        pass  # إنذار بدون خصم مالي
+                        pass
                     elif rule.deduction_type in ['day_fraction', 'full_day']:
                         total_deducted_days += val
                         total_deduction_amount += (val * daily_sal)
@@ -1376,19 +1371,13 @@ def _apply_absence_rule(policy, absent_days, daily_salary, consecutive_days=0, o
                         total_deduction_amount += val
                         total_deducted_days += (val / daily_sal) if daily_sal > 0 else 0
                 else:
-                    # افتراضي: خصم يوم عن كل يوم
                     total_deducted_days += 1.0
                     total_deduction_amount += daily_sal
-
             return round(total_deduction_amount, 2), round(total_deducted_days, 2)
 
-        # 2. فحص قواعد الغياب المتتالي (consecutive)
+        # 2. غياب متتالي
         if consecutive_days > 1:
-            rule_c = AbsenceRule._base_manager.filter(
-                policy=policy,
-                absence_type='consecutive',
-                consecutive_days__lte=consecutive_days
-            ).order_by('-consecutive_days', 'display_order').first()
+            rule_c = _get_best_rule('consecutive')
             if rule_c:
                 mult = float(rule_c.deduction_value)
                 if rule_c.deduction_type in ['day_fraction', 'full_day']:
@@ -1396,12 +1385,8 @@ def _apply_absence_rule(policy, absent_days, daily_salary, consecutive_days=0, o
                 elif rule_c.deduction_type == 'fixed':
                     return round(total_absent_count * mult, 2), float(total_absent_count)
 
-        # 3. القاعدة العامة للغياب بدون إذن (unexcused)
-        rule_u = AbsenceRule._base_manager.filter(
-            policy=policy,
-            absence_type='unexcused'
-        ).order_by('display_order').first()
-
+        # 3. غياب عادي
+        rule_u = _get_best_rule('unexcused')
         if rule_u:
             mult = float(rule_u.deduction_value)
             if rule_u.deduction_type in ['day_fraction', 'full_day']:
@@ -1414,7 +1399,6 @@ def _apply_absence_rule(policy, absent_days, daily_salary, consecutive_days=0, o
     except Exception:
         pass
 
-    # الافتراضي عند عدم وجود أي قواعد: خصم يوم عن كل يوم غياب
     return round(total_absent_count * daily_sal, 2), float(total_absent_count)
 
 

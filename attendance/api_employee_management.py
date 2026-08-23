@@ -1,3 +1,24 @@
+
+def _sync_policy_assignments(policy, company, assignment_type, branch_ids, department_ids):
+    from attendance.models import AttendancePolicyAssignment
+    AttendancePolicyAssignment._base_manager.filter(policy=policy).delete()
+
+    if assignment_type == 'branch' and branch_ids:
+        for b_id in branch_ids:
+            AttendancePolicyAssignment._base_manager.create(
+                company=company, policy=policy, assignment_type='branch', branch_id=b_id
+            )
+    elif assignment_type == 'department' and department_ids:
+        for d_id in department_ids:
+            AttendancePolicyAssignment._base_manager.create(
+                company=company, policy=policy, assignment_type='department', department_id=d_id
+            )
+    else:
+        AttendancePolicyAssignment._base_manager.create(
+            company=company, policy=policy, assignment_type='company'
+        )
+
+
 """
 Phase 8: Employee Creation from Manager App
 - Manager can create employee user directly from mobile

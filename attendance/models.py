@@ -460,6 +460,16 @@ class AttendancePolicyAssignment(TenantModel):
 
 
 class LateRule(models.Model):
+    # LateRule_branch_added
+    branch = models.ForeignKey(
+        'companies.Branch', on_delete=models.CASCADE,
+        blank=True, null=True, verbose_name='الفرع المستهدف'
+    )
+    department = models.ForeignKey(
+        'companies.Department', on_delete=models.CASCADE,
+        blank=True, null=True, verbose_name='القسم المستهدف'
+    )
+
     """قواعد خصم التأخير"""
 
     DEDUCTION_TYPE_CHOICES = [
@@ -496,6 +506,16 @@ class LateRule(models.Model):
 
 
 class AbsenceRule(models.Model):
+    # AbsenceRule_branch_added
+    branch = models.ForeignKey(
+        'companies.Branch', on_delete=models.CASCADE,
+        blank=True, null=True, verbose_name='الفرع المستهدف'
+    )
+    department = models.ForeignKey(
+        'companies.Department', on_delete=models.CASCADE,
+        blank=True, null=True, verbose_name='القسم المستهدف'
+    )
+
     """قواعد خصم الغياب"""
 
     ABSENCE_TYPE_CHOICES = [
@@ -544,6 +564,16 @@ class AbsenceRule(models.Model):
 
 
 class OvertimeRule(models.Model):
+    # OvertimeRule_branch_added
+    branch = models.ForeignKey(
+        'companies.Branch', on_delete=models.CASCADE,
+        blank=True, null=True, verbose_name='الفرع المستهدف'
+    )
+    department = models.ForeignKey(
+        'companies.Department', on_delete=models.CASCADE,
+        blank=True, null=True, verbose_name='القسم المستهدف'
+    )
+
     """قواعد الأوفر تايم"""
 
     OVERTIME_TYPE_CHOICES = [
