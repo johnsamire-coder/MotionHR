@@ -240,7 +240,7 @@ def _normalize_religion_value(value):
     return None
 
 
-@api_view(["GET", "POST"])
+@api_view(["GET", "POST", "PUT", "DELETE"])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_branches(request):
@@ -253,12 +253,16 @@ def manager_branches(request):
             return Response({"success": False, "error": "لا توجد شركة مرتبطة"}, status=400)
         from companies.models import Branch
 
-        # POST - create new branch
+        # ── POST: إنشاء فرع جديد ──────────────────────────────
         if request.method == "POST":
             data = request.data
             name_ar = (data.get("name_ar") or "").strip()
             if not name_ar:
-                return Response({"success": False, "error": "اسم الفرع مطلوب"}, status=400)
+                return Response({"success": False, "error": "اسم الفرع بالعربي مطلوب"}, status=400)
+
+            is_main = bool(data.get("is_main", False))
+            if is_main:
+                Branch._base_manager.filter(company=company, is_main=True).update(is_main=False)
 
             branch = Branch._base_manager.create(
                 company=company,
@@ -267,7 +271,7 @@ def manager_branches(request):
                 address=(data.get("address") or "").strip(),
                 phone=(data.get("phone") or "").strip(),
                 is_active=True,
-                is_main=data.get("is_main", False),
+                is_main=is_main,
             )
             return Response({
                 "success": True,
@@ -276,17 +280,92 @@ def manager_branches(request):
                     "id": branch.id,
                     "name_ar": branch.name_ar,
                     "name_en": branch.name_en or "",
+                    "address": branch.address or "",
+                    "phone": branch.phone or "",
                     "is_main": branch.is_main,
                 }
             }, status=201)
 
-        # GET - list branches
+        # ── PUT: تعديل فرع موجود ──────────────────────────────
+        elif request.method == "PUT":
+            data = request.data
+            branch_id = data.get("id") or request.GET.get("id")
+            if not branch_id:
+                return Response({"success": False, "error": "معرف الفرع مطلوب"}, status=400)
+
+            try:
+                branch = Branch._base_manager.get(id=branch_id, company=company)
+            except Branch.DoesNotExist:
+                return Response({"success": False, "error": "الفرع غير موجود"}, status=404)
+
+            name_ar = (data.get("name_ar") or "").strip()
+            if name_ar:
+                branch.name_ar = name_ar
+            if "name_en" in data:
+                branch.name_en = (data.get("name_en") or "").strip()
+            if "address" in data:
+                branch.address = (data.get("address") or "").strip()
+            if "phone" in data:
+                branch.phone = (data.get("phone") or "").strip()
+
+            if "is_main" in data:
+                is_main = bool(data.get("is_main"))
+                if is_main:
+                    Branch._base_manager.filter(company=company, is_main=True).exclude(id=branch.id).update(is_main=False)
+                branch.is_main = is_main
+
+            branch.save()
+            return Response({
+                "success": True,
+                "message": "تم تعديل بيانات الفرع بنجاح",
+                "branch": {
+                    "id": branch.id,
+                    "name_ar": branch.name_ar,
+                    "name_en": branch.name_en or "",
+                    "address": branch.address or "",
+                    "phone": branch.phone or "",
+                    "is_main": branch.is_main,
+                }
+            })
+
+        # ── DELETE: حذف / تعطيل فرع ────────────────────────────
+        elif request.method == "DELETE":
+            branch_id = request.data.get("id") or request.GET.get("id")
+            if not branch_id:
+                return Response({"success": False, "error": "معرف الفرع مطلوب"}, status=400)
+
+            try:
+                branch = Branch._base_manager.get(id=branch_id, company=company)
+            except Branch.DoesNotExist:
+                return Response({"success": False, "error": "الفرع غير موجود"}, status=404)
+
+            # التحقق إن كان مربوط بموظفين
+            from employees.models import Employee
+            has_employees = Employee._base_manager.filter(branch=branch, status="active").exists()
+            if has_employees:
+                return Response({
+                    "success": False,
+                    "error": "لا يمكن حذف هذا الفرع لوجود موظفين نشطين مسجلين عليه"
+                }, status=400)
+
+            branch.delete()
+            return Response({"success": True, "message": "تم حذف الفرع بنجاح"})
+
+        # ── GET: قائمة الفروع ─────────────────────────────────
         branches = Branch._base_manager.filter(company=company, is_active=True).order_by("name_ar")
-        data = [{"id": b.id, "name_ar": b.name_ar, "name_en": b.name_en or "", "is_main": b.is_main} for b in branches]
+        data = [{
+            "id": b.id,
+            "name_ar": b.name_ar,
+            "name_en": b.name_en or "",
+            "address": b.address or "",
+            "phone": b.phone or "",
+            "is_main": b.is_main
+        } for b in branches]
         return Response({"success": True, "branches": data, "count": len(data)})
     except Exception as e:
         logger.exception("manager_branches error")
         return Response({"success": False, "error": str(e)}, status=500)
+
 
 
 @api_view(["GET", "POST"])
