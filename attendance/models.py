@@ -133,6 +133,26 @@ class Shift(TenantModel):
         help_text='الوقت المسموح للتأخير بدون احتساب تأخير'
     )
 
+    # مرونة الانصراف (مفيدة لمهندسي المواقع والميدانيين)
+    early_checkout_allowed = models.BooleanField(
+        default=False,
+        verbose_name='السماح بالانصراف المبكر'
+    )
+    early_checkout_minutes = models.IntegerField(
+        default=0,
+        verbose_name='الانصراف المبكر المسموح (دقائق)',
+        help_text='مثال: 60 = السماح بالانصراف قبل ميعاد الشيفت بساعة'
+    )
+    late_checkout_allowed = models.BooleanField(
+        default=False,
+        verbose_name='السماح بالانصراف المتأخر'
+    )
+    late_checkout_minutes = models.IntegerField(
+        default=0,
+        verbose_name='الانصراف المتأخر المسموح (دقائق)',
+        help_text='مثال: 180 = السماح بالانصراف بعد ميعاد الشيفت بـ 3 ساعات'
+    )
+
     grace_early_leave = models.IntegerField(
         default=0,
         verbose_name='فترة السماح للانصراف المبكر (دقيقة)',

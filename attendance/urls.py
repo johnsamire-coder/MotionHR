@@ -1,3 +1,4 @@
+from .api_attendance_adjustment import manager_adjust_attendance
 from attendance import api_reminders
 from attendance import api_employee_profile
 from attendance import api_announcements
@@ -53,6 +54,8 @@ from .api_general_policies import deduction_policies_list, deduction_policy_deta
 app_name = 'attendance'
 
 urlpatterns = [
+    path('api/mobile/manager/attendance/<int:attendance_id>/adjust/', manager_adjust_attendance, name='manager_adjust_attendance'),
+
     # سجلات الحضور
     path('check-in/', views.smart_check_in_page, name='check_in'),
     path('', views.attendance_list, name='list'),

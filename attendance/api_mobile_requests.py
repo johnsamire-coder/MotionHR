@@ -230,12 +230,18 @@ def mobile_leave_request(request):
             'message': 'نوع الإجازة وتاريخ البداية والنهاية مطلوبين'
         }, status=400)
 
-    # REQ-1: السبب اختياري - نحط اسم النوع
-    if not reason:
-        try:
-            _lt = LeaveType._base_manager.get(id=leave_type_id, company=employee.company)
-            reason = _lt.name or 'إجازة'
-        except Exception:
+    # التحقق من إجبارية السبب للغياب بعذر
+    try:
+        _check_lt = LeaveType._base_manager.get(id=leave_type_id, company=employee.company)
+        if (getattr(_check_lt, "require_reason", False) or getattr(_check_lt, "is_excused_absence", False)) and not reason:
+            return Response({
+                'success': False,
+                'message': 'يجب كتابة سبب الغياب بالتفصيل لهذا النوع من الإجازات'
+            }, status=400)
+        if not reason:
+            reason = _check_lt.name or 'إجازة'
+    except Exception:
+        if not reason:
             reason = 'إجازة'
 
 

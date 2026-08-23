@@ -1382,7 +1382,18 @@ def mobile_attendance_action(request):
             fallback_session.save()
 
     if shift_end and now < shift_end:
-        early_leave_minutes = int((shift_end - now).total_seconds() // 60)
+        raw_early = int((shift_end - now).total_seconds() // 60)
+        # فحص سماحية الانصراف المبكر للشيفت
+        allowed_early_grace = 0
+        if shift and getattr(shift, 'early_checkout_allowed', False):
+            allowed_early_grace = getattr(shift, 'early_checkout_minutes', 0) or 0
+        elif shift and getattr(shift, 'grace_early_leave', 0):
+            allowed_early_grace = getattr(shift, 'grace_early_leave', 0) or 0
+        
+        if raw_early <= allowed_early_grace:
+            early_leave_minutes = 0
+        else:
+            early_leave_minutes = raw_early - allowed_early_grace
 
     attendance.early_leave_minutes = early_leave_minutes
 
