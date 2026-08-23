@@ -294,6 +294,8 @@ class LeaveType(TenantModel):
         help_text="0 = بدون حد"
     )
     is_paid          = models.BooleanField(default=True,  verbose_name="بمرتب")
+    require_reason = models.BooleanField(default=False, verbose_name="السبب إجباري")
+    is_excused_absence = models.BooleanField(default=False, verbose_name="غياب بعذر")
     requires_approval= models.BooleanField(default=True,  verbose_name="تحتاج موافقة")
     requires_document= models.BooleanField(default=False, verbose_name="تحتاج وثيقة")
     carry_forward    = models.BooleanField(default=False, verbose_name="ترحيل للسنة القادمة")
