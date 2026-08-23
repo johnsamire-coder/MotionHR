@@ -1,4 +1,3 @@
-
 def _sync_policy_assignments(policy, company, assignment_type, branch_ids, department_ids):
     from attendance.models import AttendancePolicyAssignment
     AttendancePolicyAssignment._base_manager.filter(policy=policy).delete()
@@ -2302,4 +2301,249 @@ def manager_job_title_detail(request, title_id):
         })
     except Exception as e:
         logger.exception("manager_job_title_detail error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
+
+@api_view(["GET", "POST", "PUT", "DELETE"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_branches(request):
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        company = _get_company(request)
+        if not company:
+            return Response({"success": False, "error": "لا توجد شركة مرتبطة"}, status=400)
+        from companies.models import Branch
+
+        if request.method == "POST":
+            data = request.data
+            name_ar = (data.get("name_ar") or "").strip()
+            if not name_ar:
+                return Response({"success": False, "error": "اسم الفرع بالعربي مطلوب"}, status=400)
+
+            is_main = bool(data.get("is_main", False))
+            if is_main:
+                Branch._base_manager.filter(company=company, is_main=True).update(is_main=False)
+
+            branch = Branch._base_manager.create(
+                company=company,
+                name_ar=name_ar,
+                name_en=(data.get("name_en") or "").strip(),
+                address=(data.get("address") or "").strip(),
+                phone=(data.get("phone") or "").strip(),
+                is_active=True,
+                is_main=is_main,
+            )
+            return Response({
+                "success": True,
+                "message": "تم إنشاء الفرع بنجاح",
+                "branch": {
+                    "id": branch.id,
+                    "name_ar": branch.name_ar,
+                    "name_en": branch.name_en or "",
+                    "address": branch.address or "",
+                    "phone": branch.phone or "",
+                    "is_main": branch.is_main,
+                }
+            }, status=201)
+
+        elif request.method == "PUT":
+            data = request.data
+            branch_id = data.get("id") or request.GET.get("id")
+            if not branch_id:
+                return Response({"success": False, "error": "معرف الفرع مطلوب"}, status=400)
+
+            try:
+                branch = Branch._base_manager.get(id=branch_id, company=company)
+            except Branch.DoesNotExist:
+                return Response({"success": False, "error": "الفرع غير موجود"}, status=404)
+
+            name_ar = (data.get("name_ar") or "").strip()
+            if name_ar:
+                branch.name_ar = name_ar
+            if "name_en" in data:
+                branch.name_en = (data.get("name_en") or "").strip()
+            if "address" in data:
+                branch.address = (data.get("address") or "").strip()
+            if "phone" in data:
+                branch.phone = (data.get("phone") or "").strip()
+
+            if "is_main" in data:
+                is_main = bool(data.get("is_main"))
+                if is_main:
+                    Branch._base_manager.filter(company=company, is_main=True).exclude(id=branch.id).update(is_main=False)
+                branch.is_main = is_main
+
+            branch.save()
+            return Response({
+                "success": True,
+                "message": "تم تعديل بيانات الفرع بنجاح",
+                "branch": {
+                    "id": branch.id,
+                    "name_ar": branch.name_ar,
+                    "name_en": branch.name_en or "",
+                    "address": branch.address or "",
+                    "phone": branch.phone or "",
+                    "is_main": branch.is_main,
+                }
+            })
+
+        elif request.method == "DELETE":
+            branch_id = request.data.get("id") or request.GET.get("id")
+            if not branch_id:
+                return Response({"success": False, "error": "معرف الفرع مطلوب"}, status=400)
+
+            try:
+                branch = Branch._base_manager.get(id=branch_id, company=company)
+            except Branch.DoesNotExist:
+                return Response({"success": False, "error": "الفرع غير موجود"}, status=404)
+
+            from employees.models import Employee
+            if Employee._base_manager.filter(branch=branch, status="active").exists():
+                return Response({"success": False, "error": "لا يمكن حذف هذا الفرع لوجود موظفين نشطين مسجلين عليه"}, status=400)
+
+            branch.delete()
+            return Response({"success": True, "message": "تم حذف الفرع بنجاح"})
+
+        # GET
+        branches = Branch._base_manager.filter(company=company, is_active=True).order_by("name_ar")
+        data = [{
+            "id": b.id,
+            "name_ar": b.name_ar,
+            "name_en": b.name_en or "",
+            "address": b.address or "",
+            "phone": b.phone or "",
+            "is_main": b.is_main
+        } for b in branches]
+        return Response({"success": True, "branches": data, "count": len(data)})
+    except Exception as e:
+        logger.exception("manager_branches error")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
+@api_view(["GET", "POST", "PUT", "DELETE"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_departments(request, dept_id=None):
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        company = _get_company(request)
+        if not company:
+            return Response({"success": False, "error": "لا توجد شركة مرتبطة"}, status=400)
+        from companies.models import Department, Branch
+
+        if request.method == "POST":
+            data = request.data
+            name_ar = (data.get("name_ar") or "").strip()
+            if not name_ar:
+                return Response({"success": False, "error": "اسم القسم بالعربي مطلوب"}, status=400)
+
+            branch_id = data.get("branch_id") or data.get("branch")
+            branch_obj = None
+            if branch_id:
+                branch_obj = Branch._base_manager.filter(id=branch_id, company=company).first()
+
+            dept = Department._base_manager.create(
+                company=company,
+                name_ar=name_ar,
+                name_en=(data.get("name_en") or "").strip(),
+                code=(data.get("code") or "").strip(),
+                description=(data.get("description") or "").strip(),
+                branch=branch_obj,
+                is_active=True,
+            )
+            return Response({
+                "success": True,
+                "message": "تم إنشاء القسم بنجاح",
+                "department": {
+                    "id": dept.id,
+                    "name_ar": dept.name_ar,
+                    "name_en": dept.name_en or "",
+                    "code": dept.code or "",
+                    "branch_id": dept.branch_id,
+                    "branch_name": dept.branch.name_ar if dept.branch else None,
+                }
+            }, status=201)
+
+        elif request.method == "PUT":
+            data = request.data
+            target_id = dept_id or data.get("id") or request.GET.get("id")
+            if not target_id:
+                return Response({"success": False, "error": "معرف القسم مطلوب"}, status=400)
+
+            try:
+                dept = Department._base_manager.get(id=target_id, company=company)
+            except Department.DoesNotExist:
+                return Response({"success": False, "error": "القسم غير موجود"}, status=404)
+
+            name_ar = (data.get("name_ar") or "").strip()
+            if name_ar:
+                dept.name_ar = name_ar
+            if "name_en" in data:
+                dept.name_en = (data.get("name_en") or "").strip()
+            if "code" in data:
+                dept.code = (data.get("code") or "").strip()
+            if "description" in data:
+                dept.description = (data.get("description") or "").strip()
+
+            if "branch_id" in data or "branch" in data:
+                b_id = data.get("branch_id") or data.get("branch")
+                dept.branch = Branch._base_manager.filter(id=b_id, company=company).first() if b_id else None
+
+            dept.save()
+            return Response({
+                "success": True,
+                "message": "تم تعديل بيانات القسم بنجاح",
+                "department": {
+                    "id": dept.id,
+                    "name_ar": dept.name_ar,
+                    "name_en": dept.name_en or "",
+                    "code": dept.code or "",
+                    "branch_id": dept.branch_id,
+                    "branch_name": dept.branch.name_ar if dept.branch else None,
+                }
+            })
+
+        elif request.method == "DELETE":
+            target_id = dept_id or request.data.get("id") or request.GET.get("id")
+            if not target_id:
+                return Response({"success": False, "error": "معرف القسم مطلوب"}, status=400)
+
+            try:
+                dept = Department._base_manager.get(id=target_id, company=company)
+            except Department.DoesNotExist:
+                return Response({"success": False, "error": "القسم غير موجود"}, status=404)
+
+            from employees.models import Employee
+            if Employee._base_manager.filter(department=dept, status="active").exists():
+                return Response({"success": False, "error": "لا يمكن حذف هذا القسم لوجود موظفين نشطين مسجلين عليه"}, status=400)
+
+            dept.delete()
+            return Response({"success": True, "message": "تم حذف القسم بنجاح"})
+
+        # GET
+        branch_filter = request.GET.get("branch_id")
+        depts = Department._base_manager.filter(company=company, is_active=True)
+        if branch_filter:
+            depts = depts.filter(branch_id=branch_filter)
+
+        depts = depts.order_by("name_ar")
+        data = [{
+            "id": d.id,
+            "name_ar": d.name_ar,
+            "name_en": d.name_en or "",
+            "code": d.code or "",
+            "description": d.description or "",
+            "branch_id": d.branch_id,
+            "branch_name": d.branch.name_ar if d.branch else None,
+        } for d in depts]
+        return Response({"success": True, "departments": data, "count": len(data)})
+
+    except Exception as e:
+        logger.exception("manager_departments error")
         return Response({"success": False, "error": str(e)}, status=500)
