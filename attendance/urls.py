@@ -280,6 +280,7 @@ urlpatterns += [
     # Phase 8
     path('api/mobile/manager/branches/', api_employee_management.manager_branches),
     path('api/mobile/manager/departments/', api_employee_management.manager_departments),
+    path('api/mobile/manager/departments/<int:dept_id>/', api_employee_management.manager_departments),
     path('api/mobile/manager/job-titles/', api_employee_management.manager_job_titles),
     path('api/mobile/manager/job-titles/<int:title_id>/', api_employee_management.manager_job_title_detail),
     path('api/mobile/manager/employees/simple/', api_employee_management.manager_employees_simple),
