@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
-from django.http import JsonResponse, FileResponse
+from django.http import HttpResponse, JsonResponse, FileResponse
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.utils import timezone as tz
