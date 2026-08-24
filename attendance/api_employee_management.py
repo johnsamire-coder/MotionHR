@@ -273,7 +273,6 @@ def manager_departments(request, dept_id=None):
             return Response({"success": False, "error": "لا توجد شركة مرتبطة"}, status=400)
         from companies.models import Department, Branch
 
-        # ── POST: إنشاء قسم جديد ──────────────────────────────
         if request.method == "POST":
             data = request.data
             name_ar = (data.get("name_ar") or "").strip()
@@ -307,7 +306,6 @@ def manager_departments(request, dept_id=None):
                 }
             }, status=201)
 
-        # ── PUT: تعديل قسم موجود ──────────────────────────────
         elif request.method == "PUT":
             data = request.data
             target_id = dept_id or data.get("id") or request.GET.get("id")
@@ -347,7 +345,6 @@ def manager_departments(request, dept_id=None):
                 }
             })
 
-        # ── DELETE: حذف قسم ──────────────────────────────────
         elif request.method == "DELETE":
             target_id = dept_id or request.data.get("id") or request.GET.get("id")
             if not target_id:
@@ -365,7 +362,7 @@ def manager_departments(request, dept_id=None):
             dept.delete()
             return Response({"success": True, "message": "تم حذف القسم بنجاح"})
 
-        # ── GET: قائمة الأقسام ─────────────────────────────────
+        # GET
         branch_filter = request.GET.get("branch_id")
         depts = Department._base_manager.filter(company=company, is_active=True)
         if branch_filter:
@@ -2547,3 +2544,5 @@ def manager_departments(request, dept_id=None):
     except Exception as e:
         logger.exception("manager_departments error")
         return Response({"success": False, "error": str(e)}, status=500)
+
+
