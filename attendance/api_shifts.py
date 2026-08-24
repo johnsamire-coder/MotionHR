@@ -318,6 +318,14 @@ def get_effective_shift(employee, target_date):
     if default_shift:
         return default_shift, 'company_default'
 
+    # Fallback تلقائي: أخذ أول شيفت نشط في الشركة حتى لا يمنع الموظف من استخدام التطبيق
+    first_active_shift = Shift._base_manager.filter(
+        company=employee.company,
+        is_active=True
+    ).order_by('id').first()
+    if first_active_shift:
+        return first_active_shift, 'company_first_active_fallback'
+
     return None, None
 
 
