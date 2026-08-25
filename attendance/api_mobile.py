@@ -1668,17 +1668,9 @@ def mobile_attendance_status(request):
 
             # fallback للشيفت العادي
             elif shift.start_time and shift.end_time:
-                start_dt = datetime.combine(today, shift.start_time)
-                end_dt = datetime.combine(today, shift.end_time)
-                if end_dt <= start_dt:
-                    end_dt += timedelta(days=1)
-
-                tz = timezone.get_current_timezone()
-                effective_start_dt = timezone.make_aware(start_dt, tz) if timezone.is_naive(start_dt) else start_dt
-                effective_end_dt = timezone.make_aware(end_dt, tz) if timezone.is_naive(end_dt) else end_dt
-
-                shift_start_str = shift.start_time.strftime('%I:%M %p')
-                shift_end_str = shift.end_time.strftime('%I:%M %p')
+                effective_start_dt, effective_end_dt = get_shift_bounds(shift, att_date)
+                shift_start_str = shift.start_time.strftime('%I:%M %p') if shift.start_time else ''
+                shift_end_str = shift.end_time.strftime('%I:%M %p') if shift.end_time else '' 
 
             if effective_start_dt and effective_end_dt:
                 shift_duration_seconds = int((effective_end_dt - effective_start_dt).total_seconds())
