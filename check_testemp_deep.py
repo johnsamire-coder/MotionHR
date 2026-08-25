@@ -5,52 +5,62 @@ django.setup()
 from django.contrib.auth import get_user_model
 from employees.models import Employee
 from attendance.models import Attendance, Shift
-from attendance.api_mobile import get_active_shift, get_shift_bounds, get_shift_periods
+from attendance.api_mobile import get_active_shift, get_shift_bounds
 from django.utils import timezone
-from django.db.models import Q
-
-User = get_user_model()
 
 print('='*70)
-print('🔍 [فحص شامل لليوزرات الاختبارية في قاعدة البيانات المباشرة]')
+print('🔍 [فحص عميق وشامل لبيانات وشيفت الموظف testemp]')
 
-users = User.objects.filter(
-    Q(username__icontains='testemp') | 
-    Q(username__icontains='mwzf') | 
-    Q(first_name__icontains='تجريبي') | 
-    Q(first_name__icontains='اختباري')
-)
+emp = Employee._base_manager.filter(user__username__icontains='testemp').first()
+if not emp:
+    emp = Employee._base_manager.filter(first_name__icontains='تجريبي').first()
 
-print(f'عدد اليوزرات المكتشفة المطابقة: {users.count()}')
-
-for u in users:
-    print(f'\n👤 اليوزر: {u.username} (اسم: {u.get_full_name() or "بدون"}) | ID={u.id}')
-    if hasattr(u, 'employee') and u.employee:
-        emp = u.employee
-        today = timezone.localdate()
-        now = timezone.now()
+if not emp:
+    print('❌ لم نجد الموظف المربوط باليوزر testemp بشكل مباشر!')
+    print('قائمة الموظفين الأوائل في النظام:')
+    for e in Employee._base_manager.all()[:10]:
+        uname = e.user.username if e.user else 'بدون يوزر'
+        print(f' - ID: {e.id}, User: {uname}, Name: {e.get_full_name()}')
+else:
+    u = emp.user
+    today = timezone.localdate()
+    now = timezone.now()
+    
+    print(f'✅ تم العثور على الموظف: ID={emp.id} | Name={emp.get_full_name()} | User={u.username if u else "None"}')
+    print(f'🏢 الشركة: {emp.company.name if emp.company else "بدون"} (ID={emp.company_id})')
+    print(f'📅 اليوم المحلي بالسيرفر: {today} | الوقت الحالي (now): {now}')
+    
+    att = Attendance._base_manager.filter(employee=emp).order_by('-id').first()
+    if att:
+        print(f'📊 آخر سجل حضور:')
+        print(f'   - ID السجل: {att.id}')
+        print(f'   - تاريخ السجل (att.date): {att.date}')
+        print(f'   - check_in_time: {att.check_in_time}')
+        print(f'   - check_out_time: {att.check_out_time}')
+    else:
+        print('📊 لا يوجد أي سجل حضور لهذا الموظف!')
         
-        att = Attendance._base_manager.filter(employee=emp).order_by('-id').first()
-        if att:
-            print(f'   📊 آخر سجل حضور: ID={att.id} | التاريخ={att.date} | حضور={att.check_in_time} | انصراف={att.check_out_time}')
-        else:
-            print('   📊 لا يوجد سجل حضور سابق!')
-            
-        shift = get_active_shift(emp, att.date if att else today)
-        print(f'   ⚙️ الشيفت المكتشف: {shift}')
-        if shift:
-            print(f'      - بداية: {shift.start_time} | نهاية: {shift.end_time}')
-            print(f'      - crosses_midnight: {getattr(shift, "crosses_midnight", False)}')
-            print(f'      - shift_mode: {getattr(shift, "shift_mode", "fixed")}')
-            
-            s_start, s_end = get_shift_bounds(shift, att.date if att else today)
-            print(f'      - s_start المحسوب: {s_start}')
-            print(f'      - s_end المحسوب: {s_end}')
-            
-            if s_end:
-                diff_secs = (s_end - now).total_seconds()
-                hours = int(diff_secs // 3600)
-                mins = int((diff_secs % 3600) // 60)
-                print(f'      - [الفرق الحسابي المباشر الان]: {diff_secs:.1f} ثانية')
-                print(f'      - [الرسالة المتوقعة للموبايل]: فاضل {hours} ساعة و {mins} دقيقة')
+    att_date = att.date if (att and att.date) else today
+    shift = get_active_shift(emp, att_date)
+    print(f'⚙️ الشيفت المكتشف لـ {att_date}: {shift}')
+    
+    if shift:
+        print(f'   - ID الشيفت: {shift.id}')
+        print(f'   - اسم الشيفت: {shift.name}')
+        print(f'   - start_time: {shift.start_time}')
+        print(f'   - end_time: {shift.end_time}')
+        print(f'   - crosses_midnight: {getattr(shift, "crosses_midnight", False)}')
+        print(f'   - shift_mode: {getattr(shift, "shift_mode", "fixed")}')
+        
+        s_start, s_end = get_shift_bounds(shift, att_date)
+        print(f'   - s_start (get_shift_bounds): {s_start}')
+        print(f'   - s_end (get_shift_bounds): {s_end}')
+        
+        if s_end:
+            diff_secs = (s_end - now).total_seconds()
+            print(f'   - (s_end - now) بالثواني: {diff_secs:.1f}')
+            print(f'   - الساعات المتبقية: {round(diff_secs / 3600.0, 2)} ساعة')
+            h = int(diff_secs // 3600)
+            m = int((diff_secs % 3600) // 60)
+            print(f'   - [النتيجة المعروضة للموبايل]: فاضل {h} ساعة و {m} دقيقة')
 print('='*70)
