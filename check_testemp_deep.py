@@ -16,17 +16,14 @@ if not emp:
     emp = Employee._base_manager.filter(first_name__icontains='تجريبي').first()
 
 if not emp:
-    print('❌ لم نجد الموظف المربوط باليوزر testemp بشكل مباشر!')
-    print('قائمة الموظفين الأوائل في النظام:')
-    for e in Employee._base_manager.all()[:10]:
-        uname = e.user.username if e.user else 'بدون يوزر'
-        print(f' - ID: {e.id}, User: {uname}, Name: {e.get_full_name()}')
+    print('❌ لم نجد الموظف testemp!')
 else:
     u = emp.user
     today = timezone.localdate()
     now = timezone.now()
+    emp_name = f"{getattr(emp, 'first_name', '')} {getattr(emp, 'last_name', '')}".strip()
     
-    print(f'✅ تم العثور على الموظف: ID={emp.id} | Name={emp.get_full_name()} | User={u.username if u else "None"}')
+    print(f'✅ تم العثور على الموظف: ID={emp.id} | Name={emp_name} | User={u.username if u else "None"}')
     print(f'🏢 الشركة: {emp.company.name if emp.company else "بدون"} (ID={emp.company_id})')
     print(f'📅 اليوم المحلي بالسيرفر: {today} | الوقت الحالي (now): {now}')
     
