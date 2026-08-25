@@ -785,7 +785,12 @@ def mobile_attendance_action(request):
     today = timezone.localdate()
     now = timezone.now()
 
-    attendance = Attendance._base_manager.filter(employee=employee, date=today).first()
+    if action == 'check_out':
+        attendance = Attendance._base_manager.filter(employee=employee, check_out_time__isnull=True).order_by('-id').first()
+        if not attendance:
+            attendance = Attendance._base_manager.filter(employee=employee, date=today).first()
+    else:
+        attendance = Attendance._base_manager.filter(employee=employee, date=today).first()
 
     # ── حماية الإجازات مع دعم الاستدعاء ──
     from leaves.models import LeaveRequest, LeaveRecallRequest
