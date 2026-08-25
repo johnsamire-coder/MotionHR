@@ -16,13 +16,13 @@ from accounts.permissions_models import UserRole
 def _is_allowed(user, permission_code):
     if user.is_superuser or user.role in ['super_admin', 'company_admin']:
         return True
-    override = UserPermissionOverride.objects.filter(
+    override = UserPermissionOverride._base_manager.filter(
         user=user, permission=permission_code
     ).first()
     if override:
         return override.is_granted
-    user_roles = UserRole.objects.filter(user=user).values_list('role_id', flat=True)
-    return RolePermission.objects.filter(
+    user_roles = UserRole._base_manager.filter(user=user).values_list('role_id', flat=True)
+    return RolePermission._base_manager.filter(
         role_id__in=user_roles,
         permission=permission_code
     ).exists()
@@ -100,7 +100,7 @@ def offboard_employee(request, employee_id):
             emp.user.save(update_fields=['is_active'])
 
             # وقّف الأدوار والصلاحيات
-            UserRole.objects.filter(user=emp.user).delete()
+            UserRole._base_manager.filter(user=emp.user).delete()
 
     return Response({
         'success': True,
@@ -137,7 +137,7 @@ def reactivate_employee(request, employee_id):
 
             # رجّع الدور الافتراضي للقسم لو موجود
             if emp.department and emp.department.default_role:
-                UserRole.objects.get_or_create(
+                UserRole._base_manager.get_or_create(
                     user=emp.user,
                     role=emp.department.default_role
                 )
@@ -333,7 +333,7 @@ def offboard_employee_web(request, employee_id):
                 'retired': 'other',
                 'suspended': 'suspension',
             }
-            EmployeeMovement.objects.create(
+            EmployeeMovement._base_manager.create(
                 company=company,
                 employee=emp,
                 movement_type=type_map.get(termination_type, 'termination'),

@@ -220,7 +220,7 @@ def manager_create_mission(request):
         if not d.get(field):
             return Response({'error': f'الحقل {field} مطلوب'}, status=400)
 
-    mission = Mission.objects.create(
+    mission = Mission._base_manager.create(
         company=company,
         created_by=request.user,
         source='manager',
@@ -239,7 +239,7 @@ def manager_create_mission(request):
 
     # إضافة بيانات العميل التفصيلية
     if any(d.get(f) for f in ['client_company', 'client_position', 'client_email', 'client_address']):
-        MissionClient.objects.create(
+        MissionClient._base_manager.create(
             mission=mission,
             client_name=d.get('client_name', ''),
             company_name=d.get('client_company', ''),
@@ -257,7 +257,7 @@ def manager_create_mission(request):
         is_lead = assignee.get('is_lead', i == 0)
         try:
             emp = Employee._base_manager.get(id=emp_id, company=company)
-            MissionAssignment.objects.create(
+            MissionAssignment._base_manager.create(
                 mission=mission,
                 employee=emp,
                 role_in_mission=role,
@@ -346,7 +346,7 @@ def manager_pending_requests(request):
     """طلبات المهمات من الموظفين في انتظار الموافقة"""
     company = get_company(request.user)
     # المدير يشوف الطلبات الموجهة له فقط
-    requests_qs = MissionRequest.objects.filter(
+    requests_qs = MissionRequest._base_manager.filter(
         mission__company=company,
         manager_approval='pending',
         manager=request.user,
@@ -369,7 +369,7 @@ def manager_pending_requests(request):
             for sub in active_subs:
                 mgr_user = sub.manager_employee.user if sub.manager_employee else None
                 if mgr_user:
-                    extra_qs = MissionRequest.objects.filter(
+                    extra_qs = MissionRequest._base_manager.filter(
                         mission__company=company,
                         manager_approval='pending',
                         manager=mgr_user,
@@ -401,7 +401,7 @@ def manager_approve_request(request, request_id):
     """موافقة/رفض طلب مهمة من موظف"""
     company = get_company(request.user)
     try:
-        req = MissionRequest.objects.get(
+        req = MissionRequest._base_manager.get(
             id=request_id,
             mission__company=company,
             manager=request.user,
@@ -420,7 +420,7 @@ def manager_approve_request(request, request_id):
             req.mission.save()
             # تعيين الموظف الطالب على المهمة
             emp = req.requested_by
-            MissionAssignment.objects.get_or_create(
+            MissionAssignment._base_manager.get_or_create(
                 mission=req.mission,
                 employee=emp,
                 defaults={
@@ -454,7 +454,7 @@ def manager_approve_request(request, request_id):
 def manager_feedback_dashboard(request):
     """داشبورد الفيدباك للمدير"""
     company = get_company(request.user)
-    feedbacks = MissionFeedback.objects.filter(
+    feedbacks = MissionFeedback._base_manager.filter(
         mission__company=company
     ).select_related('mission', 'written_by')
 
@@ -468,7 +468,7 @@ def manager_feedback_dashboard(request):
         f.deal_value for f in feedbacks.filter(contract_signed=True) if f.deal_value
     )
 
-    upcoming_followups = MissionFollowup.objects.filter(
+    upcoming_followups = MissionFollowup._base_manager.filter(
         original_mission__company=company,
         status__in=('pending', 'scheduled'),
         scheduled_date__gte=timezone.now().date()
@@ -584,7 +584,7 @@ def employee_respond_mission(request, assignment_id):
     """قبول أو رفض مهمة"""
     employee = get_employee(request.user)
     try:
-        assignment = MissionAssignment.objects.get(id=assignment_id, employee=employee)
+        assignment = MissionAssignment._base_manager.get(id=assignment_id, employee=employee)
     except MissionAssignment.DoesNotExist:
         return Response({'error': 'التعيين غير موجود'}, status=404)
 
@@ -615,7 +615,7 @@ def employee_start_mission(request, assignment_id):
     """بدء المهمة + Auto Attendance"""
     employee = get_employee(request.user)
     try:
-        assignment = MissionAssignment.objects.get(
+        assignment = MissionAssignment._base_manager.get(
             id=assignment_id, employee=employee, status='accepted'
         )
     except MissionAssignment.DoesNotExist:
@@ -642,7 +642,7 @@ def employee_start_mission(request, assignment_id):
 
     # تسجيل موقع البداية
     if lat and lng:
-        MissionLocation.objects.create(
+        MissionLocation._base_manager.create(
             assignment=assignment,
             lat=lat,
             lng=lng,
@@ -655,13 +655,13 @@ def employee_start_mission(request, assignment_id):
     try:
         from attendance.models import Attendance
         today = now.date()
-        existing = Attendance.objects.filter(
+        existing = Attendance._base_manager.filter(
             employee=employee,
             date=today
         ).first()
 
         if not existing:
-            Attendance.objects.create(
+            Attendance._base_manager.create(
                 employee=employee,
                 company=employee.company,
                 date=today,
@@ -688,7 +688,7 @@ def employee_end_mission(request, assignment_id):
     """إنهاء المهمة"""
     employee = get_employee(request.user)
     try:
-        assignment = MissionAssignment.objects.get(
+        assignment = MissionAssignment._base_manager.get(
             id=assignment_id, employee=employee, status='in_progress'
         )
     except MissionAssignment.DoesNotExist:
@@ -718,7 +718,7 @@ def employee_end_mission(request, assignment_id):
 
     # تسجيل موقع النهاية
     if lat and lng:
-        MissionLocation.objects.create(
+        MissionLocation._base_manager.create(
             assignment=assignment,
             lat=lat,
             lng=lng,
@@ -742,7 +742,7 @@ def employee_update_location(request, assignment_id):
     """تحديث الموقع أثناء المهمة (لو تحرك مع العميل)"""
     employee = get_employee(request.user)
     try:
-        assignment = MissionAssignment.objects.get(
+        assignment = MissionAssignment._base_manager.get(
             id=assignment_id, employee=employee, status='in_progress'
         )
     except MissionAssignment.DoesNotExist:
@@ -755,7 +755,7 @@ def employee_update_location(request, assignment_id):
     if not lat or not lng:
         return Response({'error': 'lat و lng مطلوبان'}, status=400)
 
-    loc = MissionLocation.objects.create(
+    loc = MissionLocation._base_manager.create(
         assignment=assignment,
         lat=lat,
         lng=lng,
@@ -783,7 +783,7 @@ def employee_upload_attachment(request, assignment_id):
     """رفع صور إثبات للمهمة"""
     employee = get_employee(request.user)
     try:
-        assignment = MissionAssignment.objects.get(
+        assignment = MissionAssignment._base_manager.get(
             id=assignment_id, employee=employee
         )
     except MissionAssignment.DoesNotExist:
@@ -794,7 +794,7 @@ def employee_upload_attachment(request, assignment_id):
         return Response({'error': 'لم يتم إرسال ملف'}, status=400)
 
     caption = request.data.get('caption', '')
-    attachment = MissionAttachment.objects.create(
+    attachment = MissionAttachment._base_manager.create(
         assignment=assignment,
         file=file,
         caption=caption,
@@ -828,7 +828,7 @@ def employee_request_mission(request):
             return Response({'error': f'الحقل {field} مطلوب'}, status=400)
 
     # إنشاء المهمة بحالة pending_approval
-    mission = Mission.objects.create(
+    mission = Mission._base_manager.create(
         company=employee.company,
         created_by=request.user,
         source='employee_request',
@@ -848,7 +848,7 @@ def employee_request_mission(request):
     # إنشاء طلب للموافقة — مربوط بالمدير المباشر
     direct_manager = getattr(employee, 'direct_manager', None)
     manager_user = direct_manager.user if direct_manager and getattr(direct_manager, 'user', None) else None
-    MissionRequest.objects.create(
+    MissionRequest._base_manager.create(
         mission=mission,
         requested_by=employee,
         manager=manager_user,
@@ -870,8 +870,8 @@ def employee_submit_feedback(request, mission_id):
     """كتابة فيدباك بعد المهمة"""
     employee = get_employee(request.user)
     try:
-        mission = Mission.objects.get(id=mission_id, company=employee.company)
-        assignment = MissionAssignment.objects.get(
+        mission = Mission._base_manager.get(id=mission_id, company=employee.company)
+        assignment = MissionAssignment._base_manager.get(
             mission=mission, employee=employee, is_lead=True
         )
     except (Mission.DoesNotExist, MissionAssignment.DoesNotExist):
@@ -881,7 +881,7 @@ def employee_submit_feedback(request, mission_id):
         return Response({'error': 'يجب إنهاء المهمة أولاً قبل كتابة الفيدباك'}, status=400)
 
     # لو فيه فيدباك موجود → تحديثه
-    feedback, created = MissionFeedback.objects.get_or_create(
+    feedback, created = MissionFeedback._base_manager.get_or_create(
         mission=mission,
         defaults={'written_by': employee}
     )
@@ -907,7 +907,7 @@ def employee_submit_feedback(request, mission_id):
     followup_owner_id = d.get('followup_owner_id')
     if followup_owner_id:
         try:
-            feedback.followup_owner = Employee.objects.get(id=followup_owner_id)
+            feedback.followup_owner = Employee._base_manager.get(id=followup_owner_id)
         except Employee.DoesNotExist:
             pass
 
@@ -915,7 +915,7 @@ def employee_submit_feedback(request, mission_id):
 
     # إنشاء متابعة لو مطلوب
     if feedback.needs_followup and feedback.followup_date:
-        MissionFollowup.objects.get_or_create(
+        MissionFollowup._base_manager.get_or_create(
             original_mission=mission,
             defaults={
                 'scheduled_date': feedback.followup_date,
@@ -939,10 +939,10 @@ def employee_add_feedback_note(request, mission_id):
     """مشارك آخر يضيف ملاحظة على الفيدباك"""
     employee = get_employee(request.user)
     try:
-        mission = Mission.objects.get(id=mission_id, company=employee.company)
+        mission = Mission._base_manager.get(id=mission_id, company=employee.company)
         feedback = mission.feedback
         # تأكد أنه مشارك في المهمة
-        MissionAssignment.objects.get(mission=mission, employee=employee)
+        MissionAssignment._base_manager.get(mission=mission, employee=employee)
     except (Mission.DoesNotExist, MissionFeedback.DoesNotExist, MissionAssignment.DoesNotExist):
         return Response({'error': 'غير مصرح لك بإضافة ملاحظة'}, status=403)
 
@@ -950,7 +950,7 @@ def employee_add_feedback_note(request, mission_id):
     if not note:
         return Response({'error': 'الملاحظة مطلوبة'}, status=400)
 
-    addendum = MissionFeedbackAddendum.objects.create(
+    addendum = MissionFeedbackAddendum._base_manager.create(
         feedback=feedback,
         added_by=employee,
         note=note,
@@ -974,7 +974,7 @@ def mission_feedback_detail(request, mission_id):
     """عرض الفيدباك الكامل لمهمة"""
     employee = get_employee(request.user)
     try:
-        mission = Mission.objects.get(id=mission_id, company=employee.company)
+        mission = Mission._base_manager.get(id=mission_id, company=employee.company)
         feedback = mission.feedback
     except (Mission.DoesNotExist, MissionFeedback.DoesNotExist):
         return Response({'error': 'الفيدباك غير موجود'}, status=404)
@@ -1023,7 +1023,7 @@ def mission_locations_timeline(request, assignment_id):
     """Timeline الحركة لتعيين معين"""
     employee = get_employee(request.user)
     try:
-        assignment = MissionAssignment.objects.get(id=assignment_id)
+        assignment = MissionAssignment._base_manager.get(id=assignment_id)
         # المدير أو الموظف نفسه
         if assignment.employee != employee and not is_manager_or_hr(request.user):
             return Response({'error': 'غير مصرح'}, status=403)
@@ -1077,7 +1077,7 @@ def manager_reassign_employee(request, mission_id):
 
     # جيب التعيين القديم
     try:
-        old_assignment = MissionAssignment.objects.get(
+        old_assignment = MissionAssignment._base_manager.get(
             mission=mission, employee__id=old_emp_id
         )
     except MissionAssignment.DoesNotExist:
@@ -1089,7 +1089,7 @@ def manager_reassign_employee(request, mission_id):
 
     # جيب الموظف الجديد
     try:
-        new_emp = Employee.objects.get(id=new_emp_id, company=company)
+        new_emp = Employee._base_manager.get(id=new_emp_id, company=company)
     except Employee.DoesNotExist:
         return Response({'error': 'الموظف الجديد غير موجود'}, status=404)
 
@@ -1101,7 +1101,7 @@ def manager_reassign_employee(request, mission_id):
     old_assignment.delete()
 
     # أنشئ تعيين جديد للموظف الجديد
-    new_assignment, created = MissionAssignment.objects.get_or_create(
+    new_assignment, created = MissionAssignment._base_manager.get_or_create(
         mission=mission,
         employee=new_emp,
         defaults={
@@ -1145,7 +1145,7 @@ def employee_withdraw_request(request, assignment_id):
         return Response({'error': 'لم يتم العثور على بيانات الموظف'}, status=400)
 
     try:
-        assignment = MissionAssignment.objects.get(
+        assignment = MissionAssignment._base_manager.get(
             id=assignment_id, employee=employee
         )
     except MissionAssignment.DoesNotExist:
@@ -1189,7 +1189,7 @@ def manager_withdraw_requests(request):
     if not company:
         return Response({'error': 'لم يتم العثور على بيانات الشركة'}, status=400)
 
-    assignments = MissionAssignment.objects.filter(
+    assignments = MissionAssignment._base_manager.filter(
         mission__company=company,
         rejection_reason__startswith='[WITHDRAW_REQUEST]'
     ).exclude(status='rejected').select_related('mission', 'employee')
@@ -1229,7 +1229,7 @@ def manager_respond_withdraw(request, assignment_id):
         return Response({'error': 'لم يتم العثور على بيانات الشركة'}, status=400)
 
     try:
-        assignment = MissionAssignment.objects.get(
+        assignment = MissionAssignment._base_manager.get(
             id=assignment_id,
             mission__company=company,
             rejection_reason__startswith='[WITHDRAW_REQUEST]'

@@ -21,7 +21,7 @@ def _check_manager(user):
 def _get_lang(user):
     try:
         from accounts.fcm_models import FCMDeviceToken
-        token = FCMDeviceToken.objects.filter(user=user, is_active=True).first()
+        token = FCMDeviceToken._base_manager.filter(user=user, is_active=True).first()
         lang = getattr(token, 'preferred_language', 'ar')
         return lang if lang in ('ar', 'en') else 'ar'
     except Exception:

@@ -47,7 +47,7 @@ def list_roles(request):
     if not is_company_admin(request.user):
         return Response({'error': 'غير مصرح'}, status=403)
 
-    roles = CustomRole.objects.filter(
+    roles = CustomRole._base_manager.filter(
         company=request.user.company, is_active=True
     ).prefetch_related('permissions')
 
@@ -83,10 +83,10 @@ def create_role(request):
     if not name:
         return Response({'error': 'اسم الدور مطلوب'}, status=400)
 
-    if CustomRole.objects.filter(company=request.user.company, name=name).exists():
+    if CustomRole._base_manager.filter(company=request.user.company, name=name).exists():
         return Response({'error': 'الدور موجود بالفعل'}, status=400)
 
-    role = CustomRole.objects.create(company=request.user.company, name=name)
+    role = CustomRole._base_manager.create(company=request.user.company, name=name)
 
     permissions = request.data.get('permissions', [])
     for perm in permissions:
@@ -97,7 +97,7 @@ def create_role(request):
         if code in valid_codes and scope in valid_scopes:
             if code in SOVEREIGN_PERMISSIONS:
                 continue  # منع الصلاحيات السيادية في الأدوار المخصصة
-            RolePermission.objects.create(role=role, permission=code, scope=scope)
+            RolePermission._base_manager.create(role=role, permission=code, scope=scope)
 
     return Response({'success': True, 'role_id': role.id, 'message': 'تم إنشاء الدور بنجاح'})
 
@@ -110,7 +110,7 @@ def update_role(request, role_id):
     if not is_company_admin(request.user):
         return Response({'error': 'غير مصرح'}, status=403)
 
-    role = CustomRole.objects.filter(id=role_id, company=request.user.company).first()
+    role = CustomRole._base_manager.filter(id=role_id, company=request.user.company).first()
     if not role:
         return Response({'error': 'الدور غير موجود'}, status=404)
 
@@ -128,7 +128,7 @@ def update_role(request, role_id):
             code = perm.get('code')
             scope = perm.get('scope', 'company')
             if code in valid_codes and scope in valid_scopes and code not in SOVEREIGN_PERMISSIONS:
-                RolePermission.objects.create(role=role, permission=code, scope=scope)
+                RolePermission._base_manager.create(role=role, permission=code, scope=scope)
 
     return Response({'success': True, 'message': 'تم تحديث الدور'})
 
@@ -141,7 +141,7 @@ def delete_role(request, role_id):
     if not is_company_admin(request.user):
         return Response({'error': 'غير مصرح'}, status=403)
 
-    role = CustomRole.objects.filter(id=role_id, company=request.user.company).first()
+    role = CustomRole._base_manager.filter(id=role_id, company=request.user.company).first()
     if not role:
         return Response({'error': 'الدور غير موجود'}, status=404)
 
@@ -167,15 +167,15 @@ def assign_role_to_user(request):
     if not user_id or not role_id:
         return Response({'error': 'user_id و role_id مطلوبين'}, status=400)
 
-    target_user = User.objects.filter(id=user_id, company=request.user.company).first()
+    target_user = User._base_manager.filter(id=user_id, company=request.user.company).first()
     if not target_user:
         return Response({'error': 'المستخدم غير موجود'}, status=404)
 
-    role = CustomRole.objects.filter(id=role_id, company=request.user.company, is_active=True).first()
+    role = CustomRole._base_manager.filter(id=role_id, company=request.user.company, is_active=True).first()
     if not role:
         return Response({'error': 'الدور غير موجود'}, status=404)
 
-    ur, created = UserRole.objects.get_or_create(user=target_user, role=role)
+    ur, created = UserRole._base_manager.get_or_create(user=target_user, role=role)
     msg = 'تم تعيين الدور' if created else 'الدور معيّن بالفعل'
     return Response({'success': True, 'message': msg})
 
@@ -191,7 +191,7 @@ def remove_role_from_user(request):
     user_id = request.data.get('user_id')
     role_id = request.data.get('role_id')
 
-    UserRole.objects.filter(
+    UserRole._base_manager.filter(
         user_id=user_id,
         role_id=role_id,
         role__company=request.user.company
@@ -211,7 +211,7 @@ def user_permissions(request, user_id):
     if not is_company_admin(request.user):
         return Response({'error': 'غير مصرح'}, status=403)
 
-    target_user = User.objects.filter(id=user_id, company=request.user.company).first()
+    target_user = User._base_manager.filter(id=user_id, company=request.user.company).first()
     if not target_user:
         return Response({'error': 'المستخدم غير موجود'}, status=404)
 
@@ -275,11 +275,11 @@ def set_user_override(request):
     if scope not in valid_scopes:
         return Response({'error': 'نطاق غير صحيح'}, status=400)
 
-    target_user = User.objects.filter(id=user_id, company=request.user.company).first()
+    target_user = User._base_manager.filter(id=user_id, company=request.user.company).first()
     if not target_user:
         return Response({'error': 'المستخدم غير موجود'}, status=404)
 
-    ov, created = UserPermissionOverride.objects.update_or_create(
+    ov, created = UserPermissionOverride._base_manager.update_or_create(
         user=target_user,
         permission=permission,
         defaults={'scope': scope, 'is_granted': is_granted}
@@ -299,7 +299,7 @@ def remove_user_override(request):
     user_id = request.data.get('user_id')
     permission = request.data.get('permission')
 
-    UserPermissionOverride.objects.filter(
+    UserPermissionOverride._base_manager.filter(
         user_id=user_id,
         user__company=request.user.company,
         permission=permission
@@ -319,7 +319,7 @@ def company_users_list(request):
     if not is_company_admin(request.user):
         return Response({'error': 'غير مصرح'}, status=403)
 
-    users = User.objects.filter(
+    users = User._base_manager.filter(
         company=request.user.company,
         is_active=True
     ).exclude(is_superuser=True)
@@ -348,7 +348,7 @@ def api_export_permissions(request):
 
     token_key = auth_header.split(' ')[1]
     try:
-        token = Token.objects.select_related('user').get(key=token_key)
+        token = Token._base_manager.select_related('user').get(key=token_key)
         user = token.user
     except Token.DoesNotExist:
         return JsonResponse({'error': 'token غير صالح'}, status=401)
@@ -371,18 +371,18 @@ def api_export_permissions(request):
     company = user.company
 
     if target_type == 'role':
-        role = CustomRole.objects.filter(id=target_id, company=company).first()
+        role = CustomRole._base_manager.filter(id=target_id, company=company).first()
         if not role: return JsonResponse({'error': 'role not found'}, status=404)
         return export_role_pdf(role) if format_type == 'pdf' else export_role_excel(role)
 
     elif target_type == 'user':
         # جرّب User ID أولاً، وإذا لم يوجد جرّب Employee ID
-        target_user = User.objects.filter(id=target_id, company=company).first()
+        target_user = User._base_manager.filter(id=target_id, company=company).first()
         if not target_user:
             from employees.models import Employee
             emp = Employee._base_manager.filter(id=target_id, company=company).first()
             if emp and emp.user_id:
-                target_user = User.objects.filter(id=emp.user_id, company=company).first()
+                target_user = User._base_manager.filter(id=emp.user_id, company=company).first()
         if not target_user:
             return JsonResponse({'error': 'user not found'}, status=404)
         return export_user_pdf(target_user) if format_type == 'pdf' else export_user_excel(target_user)
@@ -484,7 +484,7 @@ def set_role_default_override(request):
     valid_codes = [p[0] for p in PERMISSION_CHOICES]
 
     if target_type == 'user':
-        target_user = User.objects.filter(
+        target_user = User._base_manager.filter(
             id=target_id, company=request.user.company
         ).first()
         if not target_user:
@@ -521,7 +521,7 @@ def set_role_default_override(request):
             if code not in valid_codes:
                 continue
 
-            UserPermissionOverride.objects.update_or_create(
+            UserPermissionOverride._base_manager.update_or_create(
                 user=user,
                 permission=code,
                 defaults={'scope': scope, 'is_granted': is_granted}
@@ -576,7 +576,7 @@ def target_permissions_summary(request):
         return Response({'error': 'id مطلوب'}, status=400)
 
     if target_type == 'user':
-        target_user = User.objects.filter(
+        target_user = User._base_manager.filter(
             id=target_id, company=request.user.company
         ).first()
         if not target_user:

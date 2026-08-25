@@ -1,9 +1,10 @@
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
-from django.http import JsonResponse, FileResponse
+from django.http import HttpResponse, JsonResponse, FileResponse
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.utils import timezone as tz
@@ -1484,27 +1485,112 @@ import os
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def download_employee_template(request):
-    """تنزيل شيت استيراد الموظفين"""
-    if request.user.role not in ['super_admin', 'company_admin', 'hr_manager'] and not request.user.is_superuser:
+    """
+    توليد وتنزيل شيت إكسيل ديناميكي للموظفين خاص بشركة المستخدم فقط
+    """
+    user = request.user
+    if user.role not in ['super_admin', 'company_admin', 'hr_manager'] and not user.is_superuser:
         return Response({'success': False, 'message': 'غير مصرح لك بهذا الإجراء'}, status=403)
 
-    from django.core.management import call_command
-    import os
+    from openpyxl import Workbook
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from io import BytesIO
+    from companies.models import Branch, Department
+    from employees.models import JobTitle
 
-    template_path = os.path.join(settings.MEDIA_ROOT, 'employee_import_template.xlsx')
+    company = getattr(user, 'company', None)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "الموظفين"
 
-    if not os.path.exists(template_path):
-        call_command('generate_employee_template', output=template_path)
+    # رأس الجدول (Headers)
+    headers = [
+        "كود الموظف (employee_code) *",
+        "الاسم الأول بالعربي (first_name_ar) *",
+        "اسم العائلة بالعربي (last_name_ar) *",
+        "الرقم القومي (national_id) *",
+        "الفرع / الموقع (branch_name) *",
+        "القسم / الإدارة (department_name) *",
+        "المسمى الوظيفي (job_title_name) *",
+        "المرتب الأساسي (basic_salary) *",
+        "تاريخ التعيين (hire_date) *",
+        "رقم الهاتف (phone)",
+        "نوع العامل (worker_type: office/field)"
+    ]
 
-    response = FileResponse(
-        open(template_path, 'rb'),
-        as_attachment=True,
-        filename='employee_import_template.xlsx'
+    # تنسيق الهيدر
+    fill = PatternFill(start_color="1A1B4B", end_color="1A1B4B", fill_type="solid")
+    font = Font(name="Cairo", size=11, bold=True, color="FFFFFF")
+    align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    ws.append(headers)
+    ws.row_dimensions[1].height = 28
+
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = fill
+        cell.font = font
+        cell.alignment = align
+
+    # جلب فروع وأقسام ومسميات الشركة الحالية فقط!
+    branches = list(Branch._base_manager.filter(company=company, is_active=True).values_list('name_ar', flat=True)) if company else []
+    depts = list(Department._base_manager.filter(company=company, is_active=True).values_list('name_ar', flat=True)) if company else []
+    titles = list(JobTitle._base_manager.filter(company=company, is_active=True).values_list('name_ar', flat=True)) if company else []
+
+    # صف أمثلة تجريبي خاص بالشركة
+    sample_branch = branches[0] if branches else "الفرع الرئيسي - مدينة نصر"
+    sample_dept = depts[0] if depts else "الحسابات والمالية"
+    sample_title = titles[0] if titles else "محاسب عام"
+
+    ws.append([
+        "HEEMA-01", "أحمد", "عبد الله", "29501011234567",
+        sample_branch, sample_dept, sample_title,
+        10000, "2026-01-01", "01012345678", "office"
+    ])
+
+    # إضافة القوائم المنسدلة (Data Validation) للفروع والأقسام الخاصة بالشركة
+    if branches:
+        dv_b = DataValidation(type="list", formula1=f'"{",".join(branches)}"', allow_blank=True)
+        ws.add_data_validation(dv_b)
+        dv_b.add("E2:E500")
+
+    if depts:
+        dv_d = DataValidation(type="list", formula1=f'"{",".join(depts)}"', allow_blank=True)
+        ws.add_data_validation(dv_d)
+        dv_d.add("F2:F500")
+
+    if titles:
+        dv_t = DataValidation(type="list", formula1=f'"{",".join(titles)}"', allow_blank=True)
+        ws.add_data_validation(dv_t)
+        dv_t.add("G2:G500")
+
+    # قائمة نوع العامل
+    dv_w = DataValidation(type="list", formula1='"office,field"', allow_blank=True)
+    ws.add_data_validation(dv_w)
+    dv_w.add("K2:K500")
+
+    # ضبط عروض الأعمدة
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = col[0].column_letter
+        ws.column_dimensions[col_letter].width = max(max_len + 5, 18)
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    filename = f"employee_import_template_{company.id if company else 'company'}.xlsx"
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
 
 
 @api_view(['POST'])

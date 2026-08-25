@@ -1,0 +1,21 @@
+name: MotionHR API Automated Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test_api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Newman
+        run: npm install -g newman
+
+      - name: Run Smoke Tests
+        run: |
+          newman run motionhr_smoke_test.json \
+          --reporters cli

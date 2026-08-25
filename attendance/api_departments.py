@@ -21,14 +21,14 @@ def _is_allowed(user, permission_code):
         return True
     # شيك على الصلاحيات المخصصة
     # شيك استثناء شخصي
-    override = UserPermissionOverride.objects.filter(
+    override = UserPermissionOverride._base_manager.filter(
         user=user, permission=permission_code
     ).first()
     if override:
         return override.is_granted
     # شيك أدوار
-    user_roles = UserRole.objects.filter(user=user).values_list('role_id', flat=True)
-    return RolePermission.objects.filter(
+    user_roles = UserRole._base_manager.filter(user=user).values_list('role_id', flat=True)
+    return RolePermission._base_manager.filter(
         role_id__in=user_roles,
         permission=permission_code
     ).exists()
@@ -48,7 +48,7 @@ def list_departments(request):
     if not company:
         return Response({'error': 'مفيش شركة مرتبطة بحسابك'}, status=400)
 
-    depts = Department.objects.filter(company=company, is_active=True).order_by('name_ar')
+    depts = Department._base_manager.filter(company=company, is_active=True).order_by('name_ar')
     data = []
     for d in depts:
         employees_count = Employee._base_manager.filter(department=d, status='active').count()
@@ -90,19 +90,19 @@ def add_department(request):
     if not name_ar:
         return Response({'error': 'اسم القسم بالعربي مطلوب'}, status=400)
 
-    if Department.objects.filter(company=company, name_ar=name_ar, is_active=True).exists():
+    if Department._base_manager.filter(company=company, name_ar=name_ar, is_active=True).exists():
         return Response({'error': 'القسم موجود بالفعل'}, status=400)
 
     parent = None
     if parent_id:
-        parent = Department.objects.filter(id=parent_id, company=company).first()
+        parent = Department._base_manager.filter(id=parent_id, company=company).first()
 
     from accounts.permissions_models import CustomRole
     default_role = None
     if default_role_id:
-        default_role = CustomRole.objects.filter(id=default_role_id, company=company).first()
+        default_role = CustomRole._base_manager.filter(id=default_role_id, company=company).first()
 
-    dept = Department.objects.create(
+    dept = Department._base_manager.create(
         company=company,
         name_ar=name_ar,
         name_en=name_en or None,
@@ -130,7 +130,7 @@ def edit_department(request, dept_id):
         return Response({'error': 'غير مصرح'}, status=403)
 
     company = request.user.company
-    dept = Department.objects.filter(id=dept_id, company=company, is_active=True).first()
+    dept = Department._base_manager.filter(id=dept_id, company=company, is_active=True).first()
     if not dept:
         return Response({'error': 'القسم غير موجود'}, status=404)
 
@@ -151,7 +151,7 @@ def edit_department(request, dept_id):
         if default_role_id == 0 or default_role_id == '':
             dept.default_role = None
         else:
-            role = CustomRole.objects.filter(id=default_role_id, company=company).first()
+            role = CustomRole._base_manager.filter(id=default_role_id, company=company).first()
             if role:
                 dept.default_role = role
 
@@ -170,7 +170,7 @@ def delete_department(request, dept_id):
         return Response({'error': 'غير مصرح'}, status=403)
 
     company = request.user.company
-    dept = Department.objects.filter(id=dept_id, company=company, is_active=True).first()
+    dept = Department._base_manager.filter(id=dept_id, company=company, is_active=True).first()
     if not dept:
         return Response({'error': 'القسم غير موجود'}, status=404)
 
@@ -185,7 +185,7 @@ def delete_department(request, dept_id):
 
     with transaction.atomic():
         if transfer_to_id and employees.exists():
-            new_dept = Department.objects.filter(
+            new_dept = Department._base_manager.filter(
                 id=transfer_to_id, company=company, is_active=True
             ).first()
             if not new_dept:
@@ -197,9 +197,9 @@ def delete_department(request, dept_id):
 
                 # تغيير الدور تلقائي
                 if new_dept.default_role and emp.user:
-                    old_roles = UserRole.objects.filter(user=emp.user)
+                    old_roles = UserRole._base_manager.filter(user=emp.user)
                     old_roles.delete()
-                    UserRole.objects.get_or_create(user=emp.user, role=new_dept.default_role)
+                    UserRole._base_manager.get_or_create(user=emp.user, role=new_dept.default_role)
 
         dept.is_active = False
         dept.save(update_fields=['is_active'])
@@ -229,7 +229,7 @@ def transfer_employees_between_departments(request):
     if not to_dept_id:
         return Response({'error': 'لازم تحدد القسم الجديد'}, status=400)
 
-    new_dept = Department.objects.filter(id=to_dept_id, company=company, is_active=True).first()
+    new_dept = Department._base_manager.filter(id=to_dept_id, company=company, is_active=True).first()
     if not new_dept:
         return Response({'error': 'القسم غير موجود'}, status=404)
 
@@ -245,8 +245,8 @@ def transfer_employees_between_departments(request):
 
             # تغيير الدور تلقائي
             if new_dept.default_role and emp.user:
-                UserRole.objects.filter(user=emp.user).delete()
-                UserRole.objects.get_or_create(user=emp.user, role=new_dept.default_role)
+                UserRole._base_manager.filter(user=emp.user).delete()
+                UserRole._base_manager.get_or_create(user=emp.user, role=new_dept.default_role)
 
     return Response({
         'success': True,

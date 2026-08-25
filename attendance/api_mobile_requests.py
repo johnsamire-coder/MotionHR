@@ -141,35 +141,65 @@ def mobile_leave_types(request):
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_leave_substitutes(request):
-    """قائمة الموظفين المتاحين كبديل — من نفس الشركة عدا الموظف نفسه"""
+    """قائمة البديل بمنطق ذكي (على مستوى الشركة كلها):
+    - الموظف العادي → كل الموظفين العاديين في الشركة (نفس المستوى)
+    - المدير → كل المديرين في الشركة + المدير الأعلى منه
+    """
     employee = get_employee_for_user(request.user)
     if not employee:
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
-    # exclude_employee_id → نستثني موظف معين (صاحب الإجازة)
-    exclude_id = request.query_params.get('exclude_employee_id')
-
     from employees.models import Employee
-    qs = Employee._base_manager.filter(
-        company=employee.company,
-        status='active',
-    ).exclude(id=employee.id)
 
-    if exclude_id:
-        try:
-            qs = qs.exclude(id=int(exclude_id))
-        except (ValueError, TypeError):
-            pass
+    # هل الموظف مدير؟
+    is_manager = False
+    if employee.job_title and getattr(employee.job_title, 'is_manager', False):
+        is_manager = True
 
-    qs = qs.order_by('first_name_ar', 'last_name_ar')
+    if is_manager:
+        # المدير: كل المديرين في الشركة (بنفس المستوى)
+        qs = Employee._base_manager.filter(
+            company=employee.company,
+            status='active',
+            job_title__is_manager=True,
+        ).exclude(id=employee.id)
+
+        # نضيف المدير الأعلى منه لو موجود
+        if employee.direct_manager and employee.direct_manager.status == 'active':
+            senior_ids = {employee.direct_manager.id}
+        else:
+            senior_ids = set()
+
+        # نضيف company_admin / hr_manager كخيار إداري
+        admins_ids = set(Employee._base_manager.filter(
+            company=employee.company,
+            status='active',
+            user__role__in=['company_admin', 'hr_manager'],
+        ).exclude(id=employee.id).values_list('id', flat=True))
+
+        all_ids = set(qs.values_list('id', flat=True)) | senior_ids | admins_ids
+    else:
+        # الموظف العادي: كل الموظفين العاديين في الشركة
+        qs = Employee._base_manager.filter(
+            company=employee.company,
+            status='active',
+            job_title__is_manager=False,
+        ).exclude(id=employee.id)
+        all_ids = set(qs.values_list('id', flat=True))
+
+    all_ids.discard(employee.id)
+
+    final_qs = Employee._base_manager.filter(
+        id__in=all_ids,
+    ).order_by('first_name_ar', 'last_name_ar')
 
     result = []
-    for emp in qs:
+    for emp in final_qs:
         full_name = f"{emp.first_name_ar or ''} {emp.last_name_ar or ''}".strip()
         result.append({
             'id': emp.id,
             'name': full_name or emp.user.username,
-            'job_title': getattr(getattr(emp, 'job_title', None), 'name', '') or '',
+            'job_title': getattr(getattr(emp, 'job_title', None), 'name_ar', '') or getattr(getattr(emp, 'job_title', None), 'name', '') or '',
             'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
             'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
         })
@@ -1138,14 +1168,14 @@ def mobile_manager_action(request):
                 from accounts.fcm_models import NotificationLog
                 if employee_user:
                     if action == 'approve':
-                        NotificationLog.objects.create(
+                        NotificationLog._base_manager.create(
                             user=employee_user,
                             title='✅ تمت الموافقة على إجازتك',
                             body=f'تمت الموافقة على طلب {leave_type_name}',
                             notification_type='leave_approved',
                         )
                     else:
-                        NotificationLog.objects.create(
+                        NotificationLog._base_manager.create(
                             user=employee_user,
                             title='❌ تم رفض طلب إجازتك',
                             body=f'تم رفض طلب {leave_type_name}' + (f' - السبب: {notes}' if notes else ''),
@@ -1310,14 +1340,14 @@ def mobile_manager_action(request):
                 from accounts.fcm_models import NotificationLog
                 if employee_user:
                     if action == 'approve':
-                        NotificationLog.objects.create(
+                        NotificationLog._base_manager.create(
                             user=employee_user,
                             title='✅ تمت الموافقة على طلبك',
                             body=f'تمت الموافقة على {request_type_name}: {request_title}',
                             notification_type='request_approved',
                         )
                     else:
-                        NotificationLog.objects.create(
+                        NotificationLog._base_manager.create(
                             user=employee_user,
                             title='❌ تم رفض طلبك',
                             body=f'تم رفض {request_type_name}: {request_title}' + (f' - السبب: {notes}' if notes else ''),

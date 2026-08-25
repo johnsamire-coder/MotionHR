@@ -78,3 +78,8 @@ rebuild_pgpass_*.py
 *.pgpass
 
 find_gps_users.py
+
+# Backups
+backups/
+*.bak_*
+*.py.bad_*

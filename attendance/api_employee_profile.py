@@ -116,7 +116,7 @@ def _build_summary(emp):
     month_start = today.replace(day=1)
 
     # إحصائيات الحضور للشهر الحالي
-    attendance_qs = Attendance.objects.filter(
+    attendance_qs = Attendance._base_manager.filter(
         employee=emp,
         date__gte=month_start,
         date__lte=today,
@@ -144,7 +144,7 @@ def _build_summary(emp):
     try:
         from leaves.models import LeaveBalance
         year = today.year
-        balances = LeaveBalance.objects.filter(employee=emp, year=year).select_related("leave_type")
+        balances = LeaveBalance._base_manager.filter(employee=emp, year=year).select_related("leave_type")
         for b in balances:
             leave_balances.append({
                 "leave_type": _name_of(b.leave_type),
@@ -160,7 +160,7 @@ def _build_summary(emp):
     requests_summary = {"pending": 0, "approved": 0, "rejected": 0, "total": 0}
     try:
         from requests_app.models import EmployeeRequest
-        reqs = EmployeeRequest.objects.filter(employee=emp)
+        reqs = EmployeeRequest._base_manager.filter(employee=emp)
         requests_summary["total"] = reqs.count()
         requests_summary["pending"] = reqs.filter(status="pending").count()
         requests_summary["approved"] = reqs.filter(status="approved").count()
@@ -173,7 +173,7 @@ def _build_summary(emp):
     leaves_list = []
     try:
         from leaves.models import LeaveRequest
-        lrs = LeaveRequest.objects.filter(employee=emp)
+        lrs = LeaveRequest._base_manager.filter(employee=emp)
         leaves_summary["total"] = lrs.count()
         leaves_summary["pending"] = lrs.filter(status="pending").count()
         leaves_summary["approved"] = lrs.filter(status="approved").count()
@@ -197,7 +197,7 @@ def _build_summary(emp):
     requests_list = []
     try:
         from requests_app.models import EmployeeRequest
-        for req in EmployeeRequest.objects.filter(employee=emp).select_related("request_type").order_by("-created_at")[:100]:
+        for req in EmployeeRequest._base_manager.filter(employee=emp).select_related("request_type").order_by("-created_at")[:100]:
             requests_list.append({
                 "id": req.id,
                 "type_name": _name_of(getattr(req, "request_type", None)) or "",

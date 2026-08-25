@@ -82,7 +82,7 @@ def _get_user_lang(user, employee=None):
     # أولاً من FCMDeviceToken
     try:
         from accounts.fcm_models import FCMDeviceToken
-        token = FCMDeviceToken.objects.filter(user=user, is_active=True).first()
+        token = FCMDeviceToken._base_manager.filter(user=user, is_active=True).first()
         lang = getattr(token, 'preferred_language', None)
         if lang in ('ar', 'en'):
             return lang
@@ -123,8 +123,8 @@ def _get_active_geofence(employee):
         from .models import Geofence
         company = getattr(employee, 'company', None)
         if company:
-            return Geofence.objects.filter(company=company, is_active=True).first()
-        return Geofence.objects.filter(is_active=True).first()
+            return Geofence._base_manager.filter(company=company, is_active=True).first()
+        return Geofence._base_manager.filter(is_active=True).first()
     except Exception:
         return None
 

@@ -35,7 +35,7 @@ def _get_active_policy(employee):
 
     # الأولوية: قسم > فرع > شركة
     for assignment_type in ['department', 'branch', 'company']:
-        assignments = AttendancePolicyAssignment.objects.filter(
+        assignments = AttendancePolicyAssignment._base_manager.filter(
             policy__company=company,
             policy__status='active',
             policy__effective_from__lte=today,

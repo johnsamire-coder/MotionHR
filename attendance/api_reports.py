@@ -583,6 +583,7 @@ def export_report_pdf(request):
         'requests': requests_report,
         'leaves': leaves_report,
         'work-hours': work_hours_report,
+        'payroll': payroll_report,
     }
 
     view_func = view_map.get(report_type)
@@ -1469,18 +1470,42 @@ def location_tracking_report(request):
         checkin_time = att.check_in_time if att and att.check_in_time else None
         checkout_time = att.check_out_time if att and att.check_out_time else None
 
-        # location logs في نطاق الحضور
-        logs_qs = LocationLog._base_manager.filter(
-            employee=emp,
-            timestamp__date=target_date,
-        ).order_by('timestamp')
+        worker_type = getattr(emp, 'worker_type', 'office') or 'office'
+        is_office = worker_type == 'office'
 
-        if checkin_time:
-            logs_qs = logs_qs.filter(timestamp__gte=checkin_time)
-        if checkout_time:
-            logs_qs = logs_qs.filter(timestamp__lte=checkout_time)
+        logs = []
 
-        logs = list(logs_qs.values('timestamp', 'latitude', 'longitude', 'address', 'accuracy'))
+        if is_office:
+            # المكتبي: نعرض نقطة الحضور + نقطة الانصراف فقط
+            if att and att.check_in_latitude and att.check_in_longitude:
+                logs.append({
+                    'timestamp': att.check_in_time,
+                    'latitude': att.check_in_latitude,
+                    'longitude': att.check_in_longitude,
+                    'address': getattr(att, 'check_in_address', '') or 'نقطة الحضور',
+                    'accuracy': 0,
+                })
+            if att and att.check_out_latitude and att.check_out_longitude:
+                logs.append({
+                    'timestamp': att.check_out_time,
+                    'latitude': att.check_out_latitude,
+                    'longitude': att.check_out_longitude,
+                    'address': getattr(att, 'check_out_address', '') or 'نقطة الانصراف',
+                    'accuracy': 0,
+                })
+        else:
+            # الميداني: نعرض كل الـ location logs
+            logs_qs = LocationLog._base_manager.filter(
+                employee=emp,
+                timestamp__date=target_date,
+            ).order_by('timestamp')
+
+            if checkin_time:
+                logs_qs = logs_qs.filter(timestamp__gte=checkin_time)
+            if checkout_time:
+                logs_qs = logs_qs.filter(timestamp__lte=checkout_time)
+
+            logs = list(logs_qs.values('timestamp', 'latitude', 'longitude', 'address', 'accuracy'))
 
         first_log = logs[0] if logs else None
         last_log = logs[-1] if logs else None
@@ -2085,6 +2110,58 @@ def _make_report_views(report_key, data_func, title, columns, needs_year_month=F
 # Generate all views
 # ═══════════════════════════════════════════════════
 
+def _payroll_data(user, year, month):
+    """داتا الرواتب للـ PDF/Excel الاحترافي"""
+    from attendance.payroll_rules import calculate_effective_payroll
+    from attendance.api_payroll import _get_payroll_settings
+    
+    employees = _get_manager_scope_employees(user)
+    settings = _get_payroll_settings(user)
+    lang = 'ar'
+    
+    rows = []
+    for emp in employees:
+        try:
+            p = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+            rows.append({
+                'employee_code': getattr(emp, 'employee_code', '') or '',
+                'employee_name': _employee_name(emp),
+                'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+                'basic_salary': round(p.get('basic_salary', 0), 2),
+                'allowances_total': round(p.get('allowances_total', 0), 2),
+                'bonuses_total': round(p.get('bonuses_total', 0), 2),
+                'overtime_bonus': round(p.get('overtime_bonus', 0), 2),
+                'gross_salary': round(p.get('gross_salary', 0), 2),
+                'late_deduction': round(p.get('late_deduction', 0), 2),
+                'absence_deduction': round(p.get('absence_deduction', 0), 2),
+                'insurance_deduction': round(p.get('insurance_deduction', 0), 2),
+                'total_deductions': round(p.get('total_deductions', 0), 2),
+                'net_salary': round(p.get('net_salary', 0), 2),
+            })
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f'_payroll_data error for {emp}: {e}')
+    return rows
+
+
+payroll_report_json, payroll_export_excel, payroll_export_pdf = _make_report_views(
+    'payroll', _payroll_data, 'تقرير المرتبات',
+    columns=[
+        ('employee_code', 'الكود', 12),
+        ('employee_name', 'الموظف', 25),
+        ('department', 'القسم', 20),
+        ('basic_salary', 'الأساسي', 12),
+        ('allowances_total', 'البدلات', 12),
+        ('bonuses_total', 'المكافآت', 12),
+        ('overtime_bonus', 'الإضافي', 12),
+        ('gross_salary', 'الإجمالي', 14),
+        ('total_deductions', 'الخصومات', 14),
+        ('net_salary', 'الصافي', 14),
+    ],
+    needs_year_month=True,
+)
+
+
 reimbursements_report, reimbursements_export_excel, reimbursements_export_pdf = _make_report_views(
     'reimbursements', _reimbursements_data, 'تقرير رد المصروفات',
     [
@@ -2227,15 +2304,15 @@ def unified_dashboard(request):
     last_month_end = month_start - timedelta(days=1)
 
     # ═══ 1) نبض الشركة النهاردة ═══
-    all_emps = Employee._base_manager.filter(company=company).exclude(
-        user__is_staff=True
-    ).exclude(user__role__in=['company_admin', 'super_admin'])
+    # استخدم scope المدير (لو HR/admin → كل الشركة، لو manager → فريقه فقط)
+    all_emps = _get_manager_scope_employees(user)
+    scope_emp_ids = list(all_emps.values_list('id', flat=True))
 
     active_emps = all_emps.filter(status='active')
     total_active = active_emps.count()
 
     today_att = Attendance._base_manager.filter(
-        employee__company=company, date=today,
+        employee_id__in=scope_emp_ids, date=today,
     )
     present_today = today_att.filter(status='present').count()
     late_today = today_att.filter(status='late').count()
@@ -2255,6 +2332,7 @@ def unified_dashboard(request):
         from django.db.models import Q
         loans = EmployeeRequest._base_manager.filter(
             company=company, status='approved',
+            employee_id__in=scope_emp_ids,
         ).filter(Q(request_type__name__icontains='سلفة') | Q(request_type__name__icontains='قرض'))
         total_active_loans = sum(float(l.amount or 0) for l in loans)
         active_loans_count = loans.count()
@@ -2263,12 +2341,12 @@ def unified_dashboard(request):
 
     # الفرق عن الشهر اللي فات
     last_month_att_count = Attendance._base_manager.filter(
-        employee__company=company,
+        employee_id__in=scope_emp_ids,
         date__gte=last_month_start, date__lte=last_month_end,
         status='present',
     ).count()
     this_month_att_count = Attendance._base_manager.filter(
-        employee__company=company,
+        employee_id__in=scope_emp_ids,
         date__gte=month_start, date__lte=today,
         status='present',
     ).count()
@@ -2280,6 +2358,7 @@ def unified_dashboard(request):
         from requests_app.models import EmployeeRequest
         pending_requests = EmployeeRequest._base_manager.filter(
             company=company, status='pending',
+            employee_id__in=scope_emp_ids,
         ).count()
     except Exception:
         pass
@@ -2288,6 +2367,7 @@ def unified_dashboard(request):
         from leaves.models import LeaveRequest
         pending_leaves = LeaveRequest._base_manager.filter(
             company=company, status='pending',
+            employee_id__in=scope_emp_ids,
         ).count()
     except Exception:
         pass
@@ -2314,7 +2394,7 @@ def unified_dashboard(request):
     for i in range(29, -1, -1):
         d = today - timedelta(days=i)
         count = Attendance._base_manager.filter(
-            employee__company=company, date=d, status='present',
+            employee_id__in=scope_emp_ids, date=d, status='present',
         ).count()
         attendance_trend.append({
             'date': str(d),
@@ -2345,7 +2425,7 @@ def unified_dashboard(request):
             })
 
     # ═══ 6) Turnover الشهر ═══
-    hired_this_month = all_emps.filter(
+    hired_this_month = active_emps.filter(
         hire_date__gte=month_start, hire_date__lte=today,
     ).count()
     terminated_this_month = all_emps.filter(

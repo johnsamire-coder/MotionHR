@@ -1,0 +1,57 @@
+{
+	"info": {
+		"name": "MotionHR Smoke Test",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Login Test",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status 200', function() { pm.response.to.have.status(200); });",
+							"var data = pm.response.json();",
+							"pm.test('Token exists', function() { pm.expect(data.token).to.not.be.undefined; });",
+							"if (data.token) { pm.globals.set('auth_token', data.token); }"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"username\": \"wh_admin\", \"password\": \"12345678\"}"
+				},
+				"url": "https://jssolutions-eg.com/attendance/api/mobile/login/"
+			}
+		},
+		{
+			"name": "2. Attendance Status",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status OK', function() { pm.response.to.have.status(200); });"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Authorization", "value": "Token {{auth_token}}" }
+				],
+				"url": "https://jssolutions-eg.com/attendance/api/mobile/status/"
+			}
+		}
+	]
+}

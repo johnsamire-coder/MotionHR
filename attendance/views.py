@@ -342,7 +342,7 @@ def api_check_out(request):
 @feature_required('location_visits')
 def visits_list(request):
     """قائمة زيارات المواقع"""
-    visits = LocationCheckIn.objects.all().select_related('employee').order_by('-arrival_time')
+    visits = LocationCheckIn._base_manager.all().select_related('employee').order_by('-arrival_time')
     
     paginator = Paginator(visits, 30)
     page_number = request.GET.get('page', 1)
@@ -383,7 +383,7 @@ def visit_add(request):
             
             selected_employee = Employee.objects.get(id=employee_id)
             
-            visit = LocationCheckIn.objects.create(
+            visit = LocationCheckIn._base_manager.create(
                 company=selected_employee.company,
                 employee=selected_employee,
                 visit_type=visit_type,

@@ -91,7 +91,7 @@ def _get_payroll_settings(user):
         from .payroll_settings_model import PayrollSettings
         company = getattr(user, 'company', None)
         if company:
-            s = PayrollSettings.objects.filter(company=company).first()
+            s = PayrollSettings._base_manager.filter(company=company).first()
             if s:
                 return {
                     'late_deduction_per_minute': float(s.late_deduction_per_minute),
@@ -490,7 +490,7 @@ def payroll_settings(request):
         company = getattr(user, 'company', None)
         data = request.data
 
-        obj, created = PayrollSettings.objects.get_or_create(
+        obj, created = PayrollSettings._base_manager.get_or_create(
             company=company,
             defaults={
                 'late_deduction_per_minute': data.get('late_deduction_per_minute', 1.0),
