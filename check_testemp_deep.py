@@ -9,27 +9,28 @@ from attendance.api_mobile import get_active_shift, get_shift_bounds
 from django.utils import timezone
 
 print('='*70)
-print('🔍 [فحص عميق وشامل لبيانات وشيفت الموظف testemp]')
+print('🔍 [فحص عميق لـ testemp - ID 3652]')
 
 emp = Employee._base_manager.filter(user__username__icontains='testemp').first()
 if not emp:
-    emp = Employee._base_manager.filter(first_name__icontains='تجريبي').first()
+    emp = Employee._base_manager.filter(id=3652).first()
 
 if not emp:
-    print('❌ لم نجد الموظف testemp!')
+    print('❌ لم نجد الموظف!')
 else:
     u = emp.user
     today = timezone.localdate()
     now = timezone.now()
-    emp_name = f"{getattr(emp, 'first_name', '')} {getattr(emp, 'last_name', '')}".strip()
+    emp_name = f"{getattr(emp, 'first_name', '')} {getattr(emp, 'last_name', '')}".strip() or (u.username if u else "testemp")
+    company_str = str(emp.company) if emp.company else "بدون شركة"
     
     print(f'✅ تم العثور على الموظف: ID={emp.id} | Name={emp_name} | User={u.username if u else "None"}')
-    print(f'🏢 الشركة: {emp.company.name if emp.company else "بدون"} (ID={emp.company_id})')
+    print(f'🏢 الشركة: {company_str} (ID={emp.company_id})')
     print(f'📅 اليوم المحلي بالسيرفر: {today} | الوقت الحالي (now): {now}')
     
     att = Attendance._base_manager.filter(employee=emp).order_by('-id').first()
     if att:
-        print(f'📊 آخر سجل حضور:')
+        print(f'📊 آخر سجل حضور للموظف:')
         print(f'   - ID السجل: {att.id}')
         print(f'   - تاريخ السجل (att.date): {att.date}')
         print(f'   - check_in_time: {att.check_in_time}')
