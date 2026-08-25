@@ -935,6 +935,10 @@ def mobile_attendance_action(request):
     
     
 
+    # ── إعاده حساب حدود الشيفت بناءً على تاريخ الحضور الأصلي ──
+    if action == 'check_out' and attendance and getattr(attendance, 'date', None) and active_shift:
+        shift_start, shift_end = get_shift_bounds(active_shift, attendance.date)
+
     # ── تحقق من وقت الشيفت (للانصراف) ──
     if action == 'check_out' and active_shift:
         attendance_mode = getattr(employee, 'attendance_mode', 'fixed_shift')
