@@ -128,7 +128,9 @@ def _shift_data(shift, lang='ar'):
         "crosses_midnight": shift.crosses_midnight,
         "grace_period": shift.grace_period or 0,
         "grace_early_leave": shift.grace_early_leave or 0,
-        "early_checkin_minutes": shift.early_checkin_minutes or 30,
+        "early_checkin_minutes": shift.early_checkin_minutes if shift.early_checkin_minutes is not None else 30,
+        "late_checkout_allowed": getattr(shift, "late_checkout_allowed", False),
+        "late_checkout_minutes": getattr(shift, "late_checkout_minutes", 0) or 0,
         "break_duration": shift.break_duration or 0,
         "work_hours": shift.work_hours,
         "work_sunday": shift.work_sunday,
@@ -486,6 +488,8 @@ def manager_shift_create(request):
             grace_period=int(data.get("grace_period", 15)),
             grace_early_leave=int(data.get("grace_early_leave", 0)),
             early_checkin_minutes=int(data.get("early_checkin_minutes", 30)),
+            late_checkout_allowed=bool(data.get("late_checkout_allowed", False)),
+            late_checkout_minutes=int(data.get("late_checkout_minutes", 0) or 0),
             break_duration=int(data.get("break_duration", 60)),
             work_sunday=bool(data.get("work_sunday", True)),
             work_monday=bool(data.get("work_monday", True)),
@@ -555,6 +559,10 @@ def manager_shift_update(request, shift_id):
             shift.grace_early_leave = int(data["grace_early_leave"])
         if "early_checkin_minutes" in data:
             shift.early_checkin_minutes = int(data["early_checkin_minutes"])
+        if "late_checkout_allowed" in data:
+            shift.late_checkout_allowed = bool(data["late_checkout_allowed"])
+        if "late_checkout_minutes" in data:
+            shift.late_checkout_minutes = int(data["late_checkout_minutes"])
         if "break_duration" in data:
             shift.break_duration = int(data["break_duration"])
         for day in ["work_sunday", "work_monday", "work_tuesday", "work_wednesday",

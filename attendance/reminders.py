@@ -698,7 +698,68 @@ def run_all_reminders(reminder_type="all"):
     """
     logger.info(f"=== MotionHR Reminders — type={reminder_type} ===")
 
-    dispatch = {
+    
+# ═══════════════════════════════════════════════════════
+# 7.8  تذكير بداية الشيفت قبل 15 دقيقة
+# ═══════════════════════════════════════════════════════
+def remind_shift_starting_soon():
+    """
+    يفحص الموظفين النشطين الذين يبدأ شيفتهم خلال 15 دقيقة ولم يسجلوا حضوراً بعد.
+    """
+    try:
+        from django.contrib.auth import get_user_model
+        from attendance.models import Attendance, Employee
+        from attendance.api_mobile import get_active_shift, get_shift_bounds
+
+        User = get_user_model()
+        now = timezone.now()
+        today = timezone.localdate()
+
+        employees = Employee._base_manager.filter(
+            status='active'
+        ).select_related('user', 'company')
+
+        for employee in employees:
+            if not employee.user:
+                continue
+
+            has_attendance = Attendance._base_manager.filter(
+                employee=employee,
+                date=today,
+                check_in_time__isnull=False
+            ).exists()
+
+            if has_attendance:
+                continue
+
+            shift = get_active_shift(employee, today)
+            if not shift:
+                continue
+
+            shift_start, shift_end = get_shift_bounds(shift, today)
+            if not shift_start:
+                continue
+
+            diff_mins = (shift_start - now).total_seconds() / 60.0
+
+            if 13 <= diff_mins <= 17:
+                shift_name = getattr(shift, 'name', 'الشيفت')
+                shift_start_str = shift_start.strftime('%I:%M %p')
+                _send_to_users(
+                    User.objects.filter(pk=employee.user.pk),
+                    title="⏰ تذكير — ميعاد الشيفت قريب",
+                    body=f"شيفت {shift_name} يبدأ خلال 15 دقيقة (الساعة {shift_start_str}). يرجى تسجيل الحضور.",
+                    title_en="⏰ Shift Starting Soon",
+                    body_en=f"Your shift ({shift_name}) starts in 15 minutes at {shift_start_str}. Please check in.",
+                    data={"type": "reminder_shift_starting", "shift_id": str(shift.id)},
+                )
+                logger.info(f"remind_shift_starting_soon: Sent to {employee.user.username}")
+
+    except Exception as e:
+        logger.error(f"remind_shift_starting_soon error: {e}")
+
+
+dispatch = {
         "checkin": remind_missing_checkin,
         "checkout": remind_missing_checkout,
         "pending": remind_pending_requests,
@@ -706,6 +767,7 @@ def run_all_reminders(reminder_type="all"):
         "documents": remind_expiring_documents,
         "split_periods": remind_split_fixed_periods,
         "shift_coverage": remind_shift_coverage_gaps,
+        "shift_starting_soon": remind_shift_starting_soon,
     }
 
     if reminder_type == "all":

@@ -935,6 +935,34 @@ def mobile_attendance_action(request):
     
     
 
+    # ── تحقق من وقت الشيفت (للانصراف) ──
+    if action == 'check_out' and active_shift:
+        attendance_mode = getattr(employee, 'attendance_mode', 'fixed_shift')
+        shift_mode = getattr(active_shift, 'shift_mode', 'fixed') or 'fixed'
+        skip_out_check = (
+            attendance_mode in ('flexible_hours', 'field_worker')
+            or shift_mode in ('flex_fixed', 'flex_split')
+        )
+        if not skip_out_check and shift_end:
+            from datetime import timedelta
+            late_checkout_allowed = getattr(active_shift, 'late_checkout_allowed', False)
+            late_checkout_mins = getattr(active_shift, 'late_checkout_minutes', None)
+            
+            if late_checkout_allowed or (late_checkout_mins is not None and late_checkout_mins > 0):
+                late_mins = int(late_checkout_mins or 0)
+                max_checkout_time = shift_end + timedelta(minutes=late_mins)
+                if now > max_checkout_time:
+                    shift_end_str = shift_end.strftime('%I:%M %p')
+                    return Response({
+                        'success': False,
+                        **bilingual_message(
+                            employee,
+                            f'انتهت المهلة المحددة لتسجيل الانصراف لهذا الشيفت (الموعد: {shift_end_str} + سماحية {late_mins} دقيقة).',
+                            f'Check-out time window for this shift has expired (Shift end: {shift_end_str} + {late_mins} min grace).'
+                        ),
+                        'late_checkout_expired': True,
+                    }, status=400)
+
     # ── تحقق من وقت الشيفت (للحضور فقط) ──
     if action == 'check_in' and active_shift:
         attendance_mode = getattr(employee, 'attendance_mode', 'fixed_shift')
@@ -950,7 +978,8 @@ def mobile_attendance_action(request):
         if not skip_time_check and shift_start and shift_end:
             from datetime import timedelta
             # نقرأ فترة السماح للحضور المبكر من الشيفت نفسه
-            early_minutes = int(getattr(active_shift, 'early_checkin_minutes', 30) or 30)
+            early_val = getattr(active_shift, 'early_checkin_minutes', None)
+            early_minutes = int(early_val) if early_val is not None else 30
             allowed_from = shift_start - timedelta(minutes=early_minutes)
 
             if now < allowed_from or now > shift_end:
@@ -1253,22 +1282,22 @@ def mobile_attendance_action(request):
     early_leave_minutes = 0
 
     try:
-        today = timezone.localdate()
-        shift = get_active_shift(employee, today)
+        att_date = attendance.date if (attendance and attendance.date) else timezone.localdate()
+        shift = get_active_shift(employee, att_date)
 
-        if shift and shift.start_time and shift.end_time:
-            start_dt = datetime.combine(today, shift.start_time)
-            end_dt = datetime.combine(today, shift.end_time)
-            if end_dt <= start_dt:
-                end_dt += timedelta(days=1)
-
+        if shift:
+            shift_start, shift_end = get_shift_bounds(shift, att_date)
             mode = getattr(employee, 'attendance_mode', 'fixed_shift')
+            
             if mode == 'flexible_hours' and attendance and attendance.check_in_time:
                 check_in_local = timezone.localtime(attendance.check_in_time)
-                shift_duration = (end_dt - start_dt).total_seconds()
-                end_time_aware = check_in_local + timedelta(seconds=shift_duration)
+                if shift_start and shift_end:
+                    shift_duration = (shift_end - shift_start).total_seconds()
+                    end_time_aware = check_in_local + timedelta(seconds=shift_duration)
+                else:
+                    end_time_aware = check_in_local + timedelta(hours=8)
             else:
-                end_time_aware = timezone.make_aware(end_dt) if timezone.is_naive(end_dt) else end_dt
+                end_time_aware = shift_end
 
             now = timezone.now()
             if now < end_time_aware:

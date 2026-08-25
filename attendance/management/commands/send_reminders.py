@@ -21,7 +21,7 @@ class Command(BaseCommand):
             "--type",
             type=str,
             default="all",
-            choices=["all", "checkin", "checkout", "pending", "charter", "documents", "split_periods", "shift_coverage"],
+            choices=["all", "checkin", "checkout", "pending", "charter", "documents", "split_periods", "shift_coverage", "shift_starting_soon"],
             help="Type of reminder to send",
         )
 
