@@ -478,6 +478,10 @@ def manager_shift_create(request):
         if is_default:
             Shift._base_manager.filter(company=company, is_default=True).update(is_default=False)
 
+        is_default = bool(data.get("is_default", False))
+        if is_default:
+            Shift._base_manager.filter(company=company, is_default=True).update(is_default=False)
+
         shift = Shift._base_manager.create(
             company=company,
             name=name,
@@ -588,6 +592,11 @@ def manager_shift_update(request, shift_id):
             shift.required_daily_hours = float(data["required_daily_hours"])
         if "allow_partial_checkout" in data:
             shift.allow_partial_checkout = bool(data["allow_partial_checkout"])
+        if "is_default" in data:
+            new_def = bool(data["is_default"])
+            if new_def:
+                Shift._base_manager.filter(company=company, is_default=True).exclude(id=shift.id).update(is_default=False)
+            shift.is_default = new_def
         if "max_sessions_per_day" in data:
             shift.max_sessions_per_day = int(data["max_sessions_per_day"])
         if "variable_schedule_type" in data:
