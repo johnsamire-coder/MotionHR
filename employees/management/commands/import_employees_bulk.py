@@ -48,6 +48,14 @@ C = {
     "job_title_name": 9,
     "worker_type": 10,
     "basic_salary": 11,
+    "direct_manager_name": 12,
+}
+
+OP_TYPE_MAP = {
+    "جديد": "new",
+    "تحديث": "update",
+    "new": "new",
+    "update": "update",
 }
 
 
@@ -290,7 +298,8 @@ class Command(BaseCommand):
             if not row or not row[C["operation_type"]]:
                 continue
 
-            op_type  = _str(row, "operation_type").lower()
+            raw_op = _str(row, "operation_type").lower()
+            op_type = OP_TYPE_MAP.get(raw_op, raw_op)
             emp_code = (_str(row, "employee_code") if "employee_code" in C else "")
             nat_id   = _str(row, "national_id")
 
@@ -423,41 +432,57 @@ class Command(BaseCommand):
         return errors
 
     # ─────────────────────────────────────────
-    def _resolve_manager(self, company, manager_name, manager_department=None):
-        if not manager_name:
-            return None
+    def _resolve_manager(self, company, manager_name, department=None, is_manager_job=False):
+        """
+        منطق ذكي لحل المدير المباشر:
+        1. لو كُتب اسم مدير -> يبحث عنه ويطابقه.
+        2. لو لم يُكتب اسم مدير:
+           - لو موظف عادي -> يبحث عن مدير القسم، وإن لم يجد يربطه بـ HR أو صاحب الشركة.
+           - لو مدير -> يربطه تلقائياً بصاحب الشركة / المدير العام.
+        """
+        # 1. إذا حُدد اسم مدير في الشيت
+        if manager_name:
+            # مطابقة بالاسم الكامل أو الاسم الأول والأخير
+            employees = Employee._base_manager.filter(company=company).select_related("department", "user")
+            for e in employees:
+                e_full = f"{e.first_name_ar} {e.middle_name_ar} {e.last_name_ar}".strip().replace("  ", " ")
+                e_short = f"{e.first_name_ar} {e.last_name_ar}".strip()
+                if manager_name in [e_full, e_short, e.employee_code]:
+                    return e
+            # محاولة بحث تقريبية
+            first_word = manager_name.split()[0] if manager_name.split() else manager_name
+            candidate = Employee._base_manager.filter(company=company, first_name_ar__icontains=first_word).first()
+            if candidate:
+                return candidate
 
-        employees = Employee._base_manager.filter(company=company).select_related("department")
+        # 2. في حالة عدم تحديد مدير (تحديد تلقائي ذكي)
+        # البحث عن صاحب الشركة أو HR Manager
+        owner_emp = Employee._base_manager.filter(
+            company=company,
+            user__role__in=['company_admin', 'super_admin']
+        ).first()
 
-        full_matches = [
-            e for e in employees
-            if f"{e.first_name_ar} {e.last_name_ar}".strip() == manager_name
-        ]
+        hr_emp = Employee._base_manager.filter(
+            company=company,
+            user__role='hr_manager'
+        ).first()
 
-        if manager_department:
-            full_matches = [
-                e for e in full_matches
-                if getattr(e.department, "name_ar", None) == manager_department
-            ]
+        # لو الموظف هو نفسه مدير
+        if is_manager_job:
+            return owner_emp or hr_emp
 
-        if len(full_matches) == 1:
-            return full_matches[0]
+        # لو موظف عادي: نبحث أولاً عن مدير القسم
+        if department:
+            dept_mgr = Employee._base_manager.filter(
+                company=company,
+                department=department,
+                job_title__is_manager=True
+            ).first()
+            if dept_mgr:
+                return dept_mgr
 
-        if len(full_matches) > 1:
-            if manager_department:
-                raise ValueError(
-                    f"اسم المدير [{manager_name}] متكرر داخل القسم [{manager_department}] — يرجى المراجعة"
-                )
-            raise ValueError(
-                f"اسم المدير [{manager_name}] متكرر — اكتب قسم المدير المباشر لتحديده"
-            )
-
-        if manager_department:
-            raise ValueError(
-                f"لم يتم العثور على مدير باسم [{manager_name}] داخل القسم [{manager_department}]"
-            )
-
-        raise ValueError(f"لم يتم العثور على مدير باسم [{manager_name}]")
+        # إن لم يوجد مدير قسم -> HR أو صاحب الشركة
+        return hr_emp or owner_emp
         matches = Employee._base_manager.filter(
             company=company,
             first_name_ar__icontains=manager_name.split()[0] if manager_name.split() else manager_name,
@@ -528,7 +553,7 @@ class Command(BaseCommand):
         if job_created:
             created_defs.append(f"صف {idx}: تم إنشاء مسمى وظيفي جديد [{job_name}]")
 
-        manager = self._resolve_manager(company, _str(row, "direct_manager_name"), _str(row, "direct_manager_department"))
+        manager = self._resolve_manager(company, _str(row, "direct_manager_name"), department=dept, is_manager_job=getattr(job, "is_manager", False))
 
         contract_type = _str(row, "contract_type") or "permanent"
         contract_start = _date(row, "contract_start_date") or hire_date
@@ -757,7 +782,7 @@ class Command(BaseCommand):
         if pay_method:
             emp.salary_payment_method = pay_method
 
-        manager = self._resolve_manager(company, _str(row, "direct_manager_name"), _str(row, "direct_manager_department"))
+        manager = self._resolve_manager(company, _str(row, "direct_manager_name"), department=dept, is_manager_job=getattr(job, "is_manager", False))
         if manager:
             emp.direct_manager = manager
 

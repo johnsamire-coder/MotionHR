@@ -1,3 +1,4 @@
+from django.db import models
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -1489,7 +1490,7 @@ import os
 @permission_classes([IsAuthenticated])
 def download_employee_template(request):
     """
-    توليد وتنزيل شيت إكسيل ديناميكي للموظفين خاص بشركة المستخدم ومتوافق 100% مع معالج الاستيراد (Version 2)
+    توليد وتنزيل شيت إكسيل ديناميكي للموظفين خاص بشركة المستخدم ومتوافق 100% مع معالج الاستيراد الذكي (Version 3)
     """
     user = request.user
     if user.role not in ['super_admin', 'company_admin', 'hr_manager'] and not user.is_superuser:
@@ -1500,7 +1501,7 @@ def download_employee_template(request):
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from io import BytesIO
     from companies.models import Branch, Department
-    from employees.models import JobTitle
+    from employees.models import Employee, JobTitle
 
     company = getattr(user, 'company', None)
     wb = Workbook()
@@ -1510,12 +1511,12 @@ def download_employee_template(request):
     # الصف 1: تصنيفات تلميحية مبسطة
     row1 = [
         "نوع العملية", "الاسم بالعربي", "الاسم بالإنجليزي", "الرقم القومي", "الموبايل",
-        "تاريخ الميلاد", "تاريخ التعيين", "الفرع", "القسم", "المسمى الوظيفي", "نوع الموظف", "المرتب"
+        "تاريخ الميلاد", "تاريخ التعيين", "الفرع", "القسم", "المسمى الوظيفي", "نوع الموظف", "المرتب", "المدير المباشر"
     ]
     
     # الصف 2: الهيدر والتعليمات التفصيلية
     row2 = [
-        "نوع العملية (new/update) *",
+        "نوع العملية (جديد/تحديث) *",
         "الاسم بالعربي (ثلاثي أو رباعي) *",
         "الاسم بالإنجليزي (ثلاثي أو رباعي)",
         "الرقم القومي (14 رقم) *",
@@ -1526,22 +1527,23 @@ def download_employee_template(request):
         "اسم القسم / الإدارة *",
         "المسمى الوظيفي *",
         "تصنيف الموظف (مكتبي / ميداني حر / ميداني محدد) *",
-        "المرتب الأساسي (أرقام)"
+        "المرتب الأساسي (أرقام)",
+        "المدير المباشر (اختياري - افتراضي: مدير القسم أو الإدارة)"
     ]
 
-    # الصف 3: المفاتيح البرمجية (المخفية أو الإرشادية للـ Parser)
+    # الصف 3: المفاتيح البرمجية (الإرشادية للـ Parser)
     row3 = [
         "operation_type", "full_name_ar", "full_name_en", "national_id", "phone",
-        "birth_date", "hire_date", "branch_name", "department_name", "job_title_name", "worker_type", "basic_salary"
+        "birth_date", "hire_date", "branch_name", "department_name", "job_title_name", "worker_type", "basic_salary", "direct_manager_name"
     ]
 
     # تنسيق وتلوين الهيدر والصفوف الثلاثة الأولى
-    fill_row1 = PatternFill(start_color="1A0A3E", end_color="1A0A3E", fill_type="solid") # بنفسجي غامق جداً
+    fill_row1 = PatternFill(start_color="1A0A3E", end_color="1A0A3E", fill_type="solid") # بنفسجي غامق
     fill_row2 = PatternFill(start_color="2A1B4E", end_color="2A1B4E", fill_type="solid") # بنفسجي متوسط
-    fill_row3 = PatternFill(start_color="EEEEEE", end_color="EEEEEE", fill_type="solid") # رمادي فاتح للمفاتيح
+    fill_row3 = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid") # رمادي فاتح
 
     font_white = Font(name="Cairo", size=10, bold=True, color="FFFFFF")
-    font_gray = Font(name="Arial", size=9, italic=True, color="666666")
+    font_gray = Font(name="Arial", size=9, italic=True, color="475569")
     align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     ws.append(row1)
@@ -1550,43 +1552,61 @@ def download_employee_template(request):
 
     # ضبط ارتفاعات الصفوف الثلاثة الأولى
     ws.row_dimensions[1].height = 24
-    ws.row_dimensions[2].height = 28
+    ws.row_dimensions[2].height = 30
     ws.row_dimensions[3].height = 20
 
     # تطبيق التنسيق على الخلايا
-    for col_idx in range(1, 13):
-        # الصف الأول
+    for col_idx in range(1, 14):
         c1 = ws.cell(row=1, column=col_idx)
         c1.fill = fill_row1
         c1.font = font_white
         c1.alignment = align_center
-        # الصف الثاني
+
         c2 = ws.cell(row=2, column=col_idx)
         c2.fill = fill_row2
         c2.font = font_white
         c2.alignment = align_center
-        # الصف الثالث
+
         c3 = ws.cell(row=3, column=col_idx)
         c3.fill = fill_row3
         c3.font = font_gray
         c3.alignment = align_center
 
-    # جلب فروع وأقسام ومسميات الشركة الحالية فقط!
+    # جلب فروع وأقسام ومسميات ومديري الشركة الحالية فقط!
     branches = list(Branch._base_manager.filter(company=company, is_active=True).values_list('name_ar', flat=True)) if company else []
     depts = list(Department._base_manager.filter(company=company, is_active=True).values_list('name_ar', flat=True)) if company else []
     titles = list(JobTitle._base_manager.filter(company=company, is_active=True).values_list('name_ar', flat=True)) if company else []
+
+    # جلب المديرين الحاليين في الشركة لقائمة المدير المباشر
+    managers_qs = Employee._base_manager.filter(
+        company=company, status='active'
+    ).filter(
+        models.Q(job_title__is_manager=True) | models.Q(user__role__in=['manager', 'hr_manager', 'company_admin', 'super_admin'])
+    ).select_related('user')
+    
+    manager_names = []
+    for m in managers_qs:
+        name = f"{m.first_name_ar} {m.last_name_ar}".strip()
+        if name and name not in manager_names:
+            manager_names.append(name)
 
     # صف أمثلة تجريبي خاص بالشركة (الصف رقم 4)
     sample_branch = branches[0] if branches else "الفرع الرئيسي"
     sample_dept = depts[0] if depts else "الإدارة العامة"
     sample_title = titles[0] if titles else "موظف"
+    sample_mgr = manager_names[0] if manager_names else ""
 
     ws.append([
-        "new", "أحمد محمد علي عبد الرحمن", "Ahmed Mohamed Ali", "29501011234567", "01012345678",
-        "1995-01-01", "2026-01-01", sample_branch, sample_dept, sample_title, "مكتبي", 8500
+        "جديد", "أحمد محمد علي عبد الرحمن", "Ahmed Mohamed Ali", "29501011234567", "01012345678",
+        "1995-01-01", "2026-01-01", sample_branch, sample_dept, sample_title, "مكتبي", 8500, sample_mgr
     ])
 
-    # إضافة القوائم المنسدلة (Data Validation) للفروع والأقسام الخاصة بالشركة
+    # 1. قائمة منسدلة لنوع العملية (جديد / تحديث)
+    dv_op = DataValidation(type="list", formula1='"جديد,تحديث"', allow_blank=False)
+    ws.add_data_validation(dv_op)
+    dv_op.add("A4:A500")
+
+    # 2. القوائم المنسدلة الخاصة بالشركة
     if branches:
         dv_b = DataValidation(type="list", formula1=f'"{",".join(branches)}"', allow_blank=True)
         ws.add_data_validation(dv_b)
@@ -1602,17 +1622,23 @@ def download_employee_template(request):
         ws.add_data_validation(dv_t)
         dv_t.add("J4:J500")
 
-    # إضافة قائمة منسدلة لتصنيف الموظف
+    # 3. قائمة منسدلة لتصنيف الموظف
     worker_types = ["مكتبي", "ميداني حر", "ميداني محدد"]
     dv_w = DataValidation(type="list", formula1=f'"{",".join(worker_types)}"', allow_blank=True)
     ws.add_data_validation(dv_w)
     dv_w.add("K4:K500")
 
+    # 4. قائمة منسدلة للمديرين
+    if manager_names:
+        dv_m = DataValidation(type="list", formula1=f'"{",".join(manager_names)}"', allow_blank=True)
+        ws.add_data_validation(dv_m)
+        dv_m.add("M4:M500")
+
     # ضبط عروض الأعمدة تلقائياً
     for col in ws.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = col[0].column_letter
-        ws.column_dimensions[col_letter].width = max(max_len + 3, 14)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 15)
 
     # حفظ الملف وإرساله
     output = BytesIO()
