@@ -532,25 +532,19 @@ class Command(BaseCommand):
 
         created_defs = []
 
-        branch, branch_created = Branch._base_manager.get_or_create(
-            company=company,
-            name_ar=branch_name,
-        )
-        if branch_created:
+        branch = Branch._base_manager.filter(company=company, name_ar=branch_name).first() if branch_name else None
+        if not branch and branch_name:
+            branch = Branch._base_manager.create(company=company, name_ar=branch_name)
             created_defs.append(f"صف {idx}: تم إنشاء فرع جديد [{branch_name}]")
 
-        dept, dept_created = Department._base_manager.get_or_create(
-            company=company,
-            name_ar=dept_name,
-        )
-        if dept_created:
+        dept = Department._base_manager.filter(company=company, name_ar=dept_name).first() if dept_name else None
+        if not dept and dept_name:
+            dept = Department._base_manager.create(company=company, name_ar=dept_name)
             created_defs.append(f"صف {idx}: تم إنشاء قسم جديد [{dept_name}]")
 
-        job, job_created = JobTitle._base_manager.get_or_create(
-            company=company,
-            name_ar=job_name,
-        )
-        if job_created:
+        job = JobTitle._base_manager.filter(company=company, name_ar=job_name).first() if job_name else None
+        if not job and job_name:
+            job = JobTitle._base_manager.create(company=company, name_ar=job_name)
             created_defs.append(f"صف {idx}: تم إنشاء مسمى وظيفي جديد [{job_name}]")
 
         manager = self._resolve_manager(company, _str(row, "direct_manager_name"), department=dept, is_manager_job=getattr(job, "is_manager", False))
