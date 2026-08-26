@@ -1489,7 +1489,7 @@ import os
 @permission_classes([IsAuthenticated])
 def download_employee_template(request):
     """
-    توليد وتنزيل شيت إكسيل ديناميكي للموظفين خاص بشركة المستخدم فقط
+    توليد وتنزيل شيت إكسيل ديناميكي للموظفين خاص بشركة المستخدم ومتوافق 100% مع معالج الاستيراد (Version 2)
     """
     user = request.user
     if user.role not in ['super_admin', 'company_admin', 'hr_manager'] and not user.is_superuser:
@@ -1507,92 +1507,125 @@ def download_employee_template(request):
     ws = wb.active
     ws.title = "الموظفين"
 
-    # رأس الجدول (Headers)
-    headers = [
-        "كود الموظف (employee_code) *",
-        "الاسم الأول بالعربي (first_name_ar) *",
-        "اسم العائلة بالعربي (last_name_ar) *",
-        "الرقم القومي (national_id) *",
-        "الفرع / الموقع (branch_name) *",
-        "القسم / الإدارة (department_name) *",
-        "المسمى الوظيفي (job_title_name) *",
-        "المرتب الأساسي (basic_salary) *",
-        "تاريخ التعيين (hire_date) *",
-        "رقم الهاتف (phone)",
-        "نوع العامل (worker_type: office/field)"
+    # الصف 1: تصنيفات تلميحية مبسطة
+    row1 = [
+        "نوع العملية", "الاسم بالعربي", "الاسم بالإنجليزي", "الرقم القومي", "الموبايل",
+        "تاريخ الميلاد", "تاريخ التعيين", "الفرع", "القسم", "المسمى الوظيفي", "نوع الموظف", "المرتب"
+    ]
+    
+    # الصف 2: الهيدر والتعليمات التفصيلية
+    row2 = [
+        "نوع العملية (new/update) *",
+        "الاسم بالعربي (ثلاثي أو رباعي) *",
+        "الاسم بالإنجليزي (ثلاثي أو رباعي)",
+        "الرقم القومي (14 رقم) *",
+        "رقم الهاتف (11 رقم) *",
+        "تاريخ الميلاد (YYYY-MM-DD)",
+        "تاريخ التعيين (YYYY-MM-DD) *",
+        "اسم الفرع / الموقع *",
+        "اسم القسم / الإدارة *",
+        "المسمى الوظيفي *",
+        "تصنيف الموظف (مكتبي / ميداني حر / ميداني محدد) *",
+        "المرتب الأساسي (أرقام)"
     ]
 
-    # تنسيق الهيدر
-    fill = PatternFill(start_color="1A1B4B", end_color="1A1B4B", fill_type="solid")
-    font = Font(name="Cairo", size=11, bold=True, color="FFFFFF")
-    align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    # الصف 3: المفاتيح البرمجية (المخفية أو الإرشادية للـ Parser)
+    row3 = [
+        "operation_type", "full_name_ar", "full_name_en", "national_id", "phone",
+        "birth_date", "hire_date", "branch_name", "department_name", "job_title_name", "worker_type", "basic_salary"
+    ]
 
-    ws.append(headers)
-    ws.row_dimensions[1].height = 28
+    # تنسيق وتلوين الهيدر والصفوف الثلاثة الأولى
+    fill_row1 = PatternFill(start_color="1A0A3E", end_color="1A0A3E", fill_type="solid") # بنفسجي غامق جداً
+    fill_row2 = PatternFill(start_color="2A1B4E", end_color="2A1B4E", fill_type="solid") # بنفسجي متوسط
+    fill_row3 = PatternFill(start_color="EEEEEE", end_color="EEEEEE", fill_type="solid") # رمادي فاتح للمفاتيح
 
-    for col_idx, h in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col_idx)
-        cell.fill = fill
-        cell.font = font
-        cell.alignment = align
+    font_white = Font(name="Cairo", size=10, bold=True, color="FFFFFF")
+    font_gray = Font(name="Arial", size=9, italic=True, color="666666")
+    align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    ws.append(row1)
+    ws.append(row2)
+    ws.append(row3)
+
+    # ضبط ارتفاعات الصفوف الثلاثة الأولى
+    ws.row_dimensions[1].height = 24
+    ws.row_dimensions[2].height = 28
+    ws.row_dimensions[3].height = 20
+
+    # تطبيق التنسيق على الخلايا
+    for col_idx in range(1, 13):
+        # الصف الأول
+        c1 = ws.cell(row=1, column=col_idx)
+        c1.fill = fill_row1
+        c1.font = font_white
+        c1.alignment = align_center
+        # الصف الثاني
+        c2 = ws.cell(row=2, column=col_idx)
+        c2.fill = fill_row2
+        c2.font = font_white
+        c2.alignment = align_center
+        # الصف الثالث
+        c3 = ws.cell(row=3, column=col_idx)
+        c3.fill = fill_row3
+        c3.font = font_gray
+        c3.alignment = align_center
 
     # جلب فروع وأقسام ومسميات الشركة الحالية فقط!
     branches = list(Branch._base_manager.filter(company=company, is_active=True).values_list('name_ar', flat=True)) if company else []
     depts = list(Department._base_manager.filter(company=company, is_active=True).values_list('name_ar', flat=True)) if company else []
     titles = list(JobTitle._base_manager.filter(company=company, is_active=True).values_list('name_ar', flat=True)) if company else []
 
-    # صف أمثلة تجريبي خاص بالشركة
-    sample_branch = branches[0] if branches else "الفرع الرئيسي - مدينة نصر"
-    sample_dept = depts[0] if depts else "الحسابات والمالية"
-    sample_title = titles[0] if titles else "محاسب عام"
+    # صف أمثلة تجريبي خاص بالشركة (الصف رقم 4)
+    sample_branch = branches[0] if branches else "الفرع الرئيسي"
+    sample_dept = depts[0] if depts else "الإدارة العامة"
+    sample_title = titles[0] if titles else "موظف"
 
     ws.append([
-        "HEEMA-01", "أحمد", "عبد الله", "29501011234567",
-        sample_branch, sample_dept, sample_title,
-        10000, "2026-01-01", "01012345678", "office"
+        "new", "أحمد محمد علي عبد الرحمن", "Ahmed Mohamed Ali", "29501011234567", "01012345678",
+        "1995-01-01", "2026-01-01", sample_branch, sample_dept, sample_title, "مكتبي", 8500
     ])
 
     # إضافة القوائم المنسدلة (Data Validation) للفروع والأقسام الخاصة بالشركة
     if branches:
         dv_b = DataValidation(type="list", formula1=f'"{",".join(branches)}"', allow_blank=True)
         ws.add_data_validation(dv_b)
-        dv_b.add("E2:E500")
+        dv_b.add("H4:H500")
 
     if depts:
         dv_d = DataValidation(type="list", formula1=f'"{",".join(depts)}"', allow_blank=True)
         ws.add_data_validation(dv_d)
-        dv_d.add("F2:F500")
+        dv_d.add("I4:I500")
 
     if titles:
         dv_t = DataValidation(type="list", formula1=f'"{",".join(titles)}"', allow_blank=True)
         ws.add_data_validation(dv_t)
-        dv_t.add("G2:G500")
+        dv_t.add("J4:J500")
 
-    # قائمة نوع العامل
-    dv_w = DataValidation(type="list", formula1='"office,field"', allow_blank=True)
+    # إضافة قائمة منسدلة لتصنيف الموظف
+    worker_types = ["مكتبي", "ميداني حر", "ميداني محدد"]
+    dv_w = DataValidation(type="list", formula1=f'"{",".join(worker_types)}"', allow_blank=True)
     ws.add_data_validation(dv_w)
-    dv_w.add("K2:K500")
+    dv_w.add("K4:K500")
 
-    # ضبط عروض الأعمدة
+    # ضبط عروض الأعمدة تلقائياً
     for col in ws.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = col[0].column_letter
-        ws.column_dimensions[col_letter].width = max(max_len + 5, 18)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 14)
 
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
+    # حفظ الملف وإرساله
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
 
-    filename = f"employee_import_template_{company.id if company else 'company'}.xlsx"
+    filename = f"Employee_Template_{company.id if company else 'default'}.xlsx"
     response = HttpResponse(
-        buffer.getvalue(),
+        output.read(),
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
-
-
-
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
 @authentication_classes([TokenAuthentication])
