@@ -2656,7 +2656,7 @@ def mobile_charter_acceptances(request):
         return Response({'success': False, 'error': 'لا توجد لائحة'}, status=404)
 
     all_employees = Employee._base_manager.filter(
-        company=company, is_active=True
+        company=company, status='active'
     ).select_related('user').order_by('user__first_name')
 
     acceptances = {
