@@ -1,67 +1,67 @@
-﻿from django.db import models
+from django.db import models
 from django.core.exceptions import ValidationError
 from datetime import timedelta, datetime, time
 from core.models import TenantModel
 
 
 class Shift(TenantModel):
-    """ط§ظ„ط´ظٹظپطھ - ط£ظˆظ‚ط§طھ ط§ظ„ط¹ظ…ظ„"""
+    """الشيفت - أوقات العمل"""
 
     SHIFT_TYPE_CHOICES = [
-        ('fixed', 'ط«ط§ط¨طھ'),
-        ('flexible', 'ظ…ط±ظ†'),
-        ('rotating', 'ظ…طھط؛ظٹط±'),
-        ('morning', 'طµط¨ط§ط­ظٹ'),
-        ('evening', 'ظ…ط³ط§ط¦ظٹ'),
-        ('night', 'ظ„ظٹظ„ظٹ'),
-        ('split', 'ظ…ظ‚ط³ظ…'),
+        ('fixed', 'ثابت'),
+        ('flexible', 'مرن'),
+        ('rotating', 'متغير'),
+        ('morning', 'صباحي'),
+        ('evening', 'مسائي'),
+        ('night', 'ليلي'),
+        ('split', 'مقسم'),
     ]
 
     name = models.CharField(
         max_length=100,
-        verbose_name='ط§ط³ظ… ط§ظ„ط´ظٹظپطھ'
+        verbose_name='اسم الشيفت'
     )
 
     shift_type = models.CharField(
         max_length=20,
         choices=SHIFT_TYPE_CHOICES,
         default='fixed',
-        verbose_name='ظ†ظˆط¹ ط§ظ„ط´ظٹظپطھ'
+        verbose_name='نوع الشيفت'
     )
 
     # ط§ظ„ظ†ظˆط¹ ط§ظ„ط³ظ„ظˆظƒظٹ ط§ظ„ط­ظ‚ظٹظ‚ظٹ ظ„ظ„ط´ظٹظپطھ (ظ†ط¶ظٹظپظ‡ ظ…ظ† ط؛ظٹط± ظ…ط§ ظ†ظƒط³ط± ط§ظ„ظ‚ط¯ظٹظ…)
     SHIFT_MODE_CHOICES = [
-        ('fixed', 'ط«ط§ط¨طھ'),
-        ('flex_fixed', 'ظ…ط±ظ† ط«ط§ط¨طھ'),
-        ('flex_split', 'ظ…ط±ظ† ظ…ظ‚ط³ظ…'),
-        ('variable_daily', 'ظ…طھط؛ظٹط± ظٹظˆظ…ظٹ'),
-        ('variable_weekly', 'ظ…طھط؛ظٹط± ط£ط³ط¨ظˆط¹ظٹ'),
-        ('variable_weekly_flex', 'ظ…طھط؛ظٹط± ط£ط³ط¨ظˆط¹ظٹ ظ…ط±ظ†'),
-        ('split_fixed', 'ظ…ظ‚ط³ظ… ط«ط§ط¨طھ'),
+        ('fixed', 'ثابت'),
+        ('flex_fixed', 'مرن ثابت'),
+        ('flex_split', 'مرن مقسم'),
+        ('variable_daily', 'متغير يومي'),
+        ('variable_weekly', 'متغير أسبوعي'),
+        ('variable_weekly_flex', 'متغير أسبوعي مرن'),
+        ('split_fixed', 'مقسم ثابت'),
     ]
 
     shift_mode = models.CharField(
         max_length=30,
         choices=SHIFT_MODE_CHOICES,
         default='fixed',
-        verbose_name='ط§ظ„ظ†ظ…ط· ط§ظ„ط³ظ„ظˆظƒظٹ ظ„ظ„ط´ظٹظپطھ',
-        help_text='ط¨ظٹط­ط¯ط¯ ظ…ظ†ط·ظ‚ ط§ظ„ط´ظٹظپطھ: ط«ط§ط¨طھطŒ ظ…ط±ظ†طŒ ظ…طھط؛ظٹط±طŒ ظ…ظ‚ط³ظ…...'
+        verbose_name='النمط السلوكي للشيفت',
+        help_text='بيحدد منطق الشيفت: ثابت، مرن، متغير، مقسم...'
     )
 
     # preset ظ„ظ„طھظˆظ‚ظٹطھ ط§ظ„ط§ظپطھط±ط§ط¶ظٹ ظپظٹ ط§ظ„ظˆط§ط¬ظ‡ط©
     TIME_PRESET_CHOICES = [
-        ('custom', 'ظ…ط®طµطµ'),
-        ('morning', 'طµط¨ط§ط­ظٹ'),
-        ('evening', 'ظ…ط³ط§ط¦ظٹ'),
-        ('night', 'ظ„ظٹظ„ظٹ'),
+        ('custom', 'مخصص'),
+        ('morning', 'صباحي'),
+        ('evening', 'مسائي'),
+        ('night', 'ليلي'),
     ]
 
     time_preset = models.CharField(
         max_length=20,
         choices=TIME_PRESET_CHOICES,
         default='custom',
-        verbose_name='طھظˆظ‚ظٹطھ ط§ظپطھط±ط§ط¶ظٹ',
-        help_text='ظ„ظ„ظˆط§ط¬ظ‡ط© ظپظ‚ط·: طµط¨ط§ط­ظٹ / ظ…ط³ط§ط¦ظٹ / ظ„ظٹظ„ظٹ / ظ…ط®طµطµ'
+        verbose_name='توقيت افتراضي',
+        help_text='للواجهة فقط: صباحي / مسائي / ليلي / مخصص'
     )
 
     # ط¹ط¯ط¯ ط§ظ„ط³ط§ط¹ط§طھ ط§ظ„ظ…ط·ظ„ظˆط¨ط© ظٹظˆظ…ظٹظ‹ط§ ظپظٹ ط§ظ„ط´ظٹظپطھط§طھ ط§ظ„ظ…ط±ظ†ط©
@@ -69,37 +69,37 @@ class Shift(TenantModel):
         max_digits=5,
         decimal_places=2,
         default=8,
-        verbose_name='ط¹ط¯ط¯ ط§ظ„ط³ط§ط¹ط§طھ ط§ظ„ظ…ط·ظ„ظˆط¨ط© ظٹظˆظ…ظٹظ‹ط§',
-        help_text='ظ…ظ‡ظ… ظ„ظ„ظ…ط±ظ† ط§ظ„ط«ط§ط¨طھ ظˆط§ظ„ظ…ط±ظ† ط§ظ„ظ…ظ‚ط³ظ…'
+        verbose_name='عدد الساعات المطلوبة يوميًا',
+        help_text='مهم للمرن الثابت والمرن المقسم'
     )
 
     # ظ‡ظ„ ظ…ط³ظ…ظˆط­ ط¨ط®ط±ظˆط¬ ط¬ط²ط¦ظٹ ط«ظ… ط±ط¬ظˆط¹طں
     allow_partial_checkout = models.BooleanField(
         default=False,
-        verbose_name='ظٹط³ظ…ط­ ط¨ط®ط±ظˆط¬ ط¬ط²ط¦ظٹ',
-        help_text='ظ…ط·ظ„ظˆط¨ ظ„ظ„ظ…ط±ظ† ط§ظ„ظ…ظ‚ط³ظ… ظˆط§ظ„ظ…ظ‚ط³ظ… ط§ظ„ط«ط§ط¨طھ'
+        verbose_name='يسمح بخروج جزئي',
+        help_text='مطلوب للمرن المقسم والمقسم الثابت'
     )
 
     # ط£ظ‚طµظ‰ ط¹ط¯ط¯ ظپطھط±ط§طھ ط´ط؛ظ„ ظپظٹ ط§ظ„ظٹظˆظ…
     max_sessions_per_day = models.PositiveSmallIntegerField(
         default=1,
-        verbose_name='ط£ظ‚طµظ‰ ط¹ط¯ط¯ ظپطھط±ط§طھ ظپظٹ ط§ظ„ظٹظˆظ…',
-        help_text='ظ…ط«ظ„ط§ظ‹ 2 ظ„ظ„ظ…ط±ظ† ط§ظ„ظ…ظ‚ط³ظ… ط£ظˆ ط§ظ„ظ…ظ‚ط³ظ… ط§ظ„ط«ط§ط¨طھ'
+        verbose_name='أقصى عدد فترات في اليوم',
+        help_text='مثلاً 2 للمرن المقسم أو المقسم الثابت'
     )
 
     # ظ†ظˆط¹ ط§ظ„ط¬ط¯ظˆظ„ ط§ظ„ظ…طھط؛ظٹط±
     VARIABLE_SCHEDULE_TYPE_CHOICES = [
-        ('none', 'ظ„ط§ ظٹظˆط¬ط¯'),
-        ('daily', 'ظٹظˆظ…ظٹ'),
-        ('weekly', 'ط£ط³ط¨ظˆط¹ظٹ'),
-        ('weekly_flex', 'ط£ط³ط¨ظˆط¹ظٹ ظ…ط±ظ†'),
+        ('none', 'لا يوجد'),
+        ('daily', 'يومي'),
+        ('weekly', 'أسبوعي'),
+        ('weekly_flex', 'أسبوعي مرن'),
     ]
 
     variable_schedule_type = models.CharField(
         max_length=20,
         choices=VARIABLE_SCHEDULE_TYPE_CHOICES,
         default='none',
-        verbose_name='ظ†ظˆط¹ ط§ظ„ط¬ط¯ظˆظ„ ط§ظ„ظ…طھط؛ظٹط±'
+        verbose_name='نوع الجدول المتغير'
     )
 
     # ط¬ط¯ظˆظ„ ط¯ظٹظ†ط§ظ…ظٹظƒظٹ JSON:
@@ -110,90 +110,91 @@ class Shift(TenantModel):
     schedule_config = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='ط¥ط¹ط¯ط§ط¯ط§طھ ط§ظ„ط¬ط¯ظˆظ„ ط§ظ„ط¯ظٹظ†ط§ظ…ظٹظƒظٹ'
+        verbose_name='إعدادات الجدول الديناميكي'
     )
 
     start_time = models.TimeField(
-        verbose_name='ظˆظ‚طھ ط§ظ„ط¨ط¯ط§ظٹط©'
+        verbose_name='وقت البداية'
     )
 
     end_time = models.TimeField(
-        verbose_name='ظˆظ‚طھ ط§ظ„ظ†ظ‡ط§ظٹط©'
+        verbose_name='وقت النهاية'
     )
 
     crosses_midnight = models.BooleanField(
         default=False,
-        verbose_name='ظٹظ…طھط¯ ظ„ظ„ظٹظˆظ… ط§ظ„طھط§ظ„ظٹ',
-        help_text='ظپط¹ظ‘ظ„ ظ„ظˆ ط§ظ„ط´ظٹظپطھ ط¨ظٹط¨ط¯ط£ ط¨ط§ظ„ظ„ظٹظ„ ظˆط¨ظٹظ†طھظ‡ظٹ ط§ظ„طµط¨ط­'
+        verbose_name='يمتد لليوم التالي',
+        help_text='فعّل لو الشيفت بيبدأ بالليل وبينتهي الصبح'
     )
 
     
     early_checkin_grace = models.IntegerField(default=30, verbose_name="سماحية الحضور المبكر (دقائق)")
     early_checkout_grace = models.IntegerField(default=0, verbose_name="سماحية الانصراف المبكر (دقائق)")
+    grace_period = models.IntegerField(
         default=15,
-        verbose_name='ظپطھط±ط© ط§ظ„ط³ظ…ط§ط­ ظ„ظ„طھط£ط®ظٹط± (ط¯ظ‚ظٹظ‚ط©)',
-        help_text='ط§ظ„ظˆظ‚طھ ط§ظ„ظ…ط³ظ…ظˆط­ ظ„ظ„طھط£ط®ظٹط± ط¨ط¯ظˆظ† ط§ط­طھط³ط§ط¨ طھط£ط®ظٹط±'
+        verbose_name='فترة السماح للتأخير (دقيقة)',
+        help_text='الوقت المسموح للتأخير بدون احتساب تأخير'
     )
 
     # ظ…ط±ظˆظ†ط© ط§ظ„ط§ظ†طµط±ط§ظپ (ظ…ظپظٹط¯ط© ظ„ظ…ظ‡ظ†ط¯ط³ظٹ ط§ظ„ظ…ظˆط§ظ‚ط¹ ظˆط§ظ„ظ…ظٹط¯ط§ظ†ظٹظٹظ†)
     early_checkout_allowed = models.BooleanField(
         default=False,
-        verbose_name='ط§ظ„ط³ظ…ط§ط­ ط¨ط§ظ„ط§ظ†طµط±ط§ظپ ط§ظ„ظ…ط¨ظƒط±'
+        verbose_name='السماح بالانصراف المبكر'
     )
     early_checkout_minutes = models.IntegerField(
         default=0,
-        verbose_name='ط§ظ„ط§ظ†طµط±ط§ظپ ط§ظ„ظ…ط¨ظƒط± ط§ظ„ظ…ط³ظ…ظˆط­ (ط¯ظ‚ط§ط¦ظ‚)',
-        help_text='ظ…ط«ط§ظ„: 60 = ط§ظ„ط³ظ…ط§ط­ ط¨ط§ظ„ط§ظ†طµط±ط§ظپ ظ‚ط¨ظ„ ظ…ظٹط¹ط§ط¯ ط§ظ„ط´ظٹظپطھ ط¨ط³ط§ط¹ط©'
+        verbose_name='الانصراف المبكر المسموح (دقائق)',
+        help_text='مثال: 60 = السماح بالانصراف قبل ميعاد الشيفت بساعة'
     )
     late_checkout_allowed = models.BooleanField(
         default=False,
-        verbose_name='ط§ظ„ط³ظ…ط§ط­ ط¨ط§ظ„ط§ظ†طµط±ط§ظپ ط§ظ„ظ…طھط£ط®ط±'
+        verbose_name='السماح بالانصراف المتأخر'
     )
     late_checkout_minutes = models.IntegerField(
         default=0,
-        verbose_name='ط§ظ„ط§ظ†طµط±ط§ظپ ط§ظ„ظ…طھط£ط®ط± ط§ظ„ظ…ط³ظ…ظˆط­ (ط¯ظ‚ط§ط¦ظ‚)',
-        help_text='ظ…ط«ط§ظ„: 180 = ط§ظ„ط³ظ…ط§ط­ ط¨ط§ظ„ط§ظ†طµط±ط§ظپ ط¨ط¹ط¯ ظ…ظٹط¹ط§ط¯ ط§ظ„ط´ظٹظپطھ ط¨ظ€ 3 ط³ط§ط¹ط§طھ'
+        verbose_name='الانصراف المتأخر المسموح (دقائق)',
+        help_text='مثال: 180 = السماح بالانصراف بعد ميعاد الشيفت بـ 3 ساعات'
     )
 
     grace_early_leave = models.IntegerField(
         default=0,
-        verbose_name='ظپطھط±ط© ط§ظ„ط³ظ…ط§ط­ ظ„ظ„ط§ظ†طµط±ط§ظپ ط§ظ„ظ…ط¨ظƒط± (ط¯ظ‚ظٹظ‚ط©)',
-        help_text='ط§ظ„ظˆظ‚طھ ط§ظ„ظ…ط³ظ…ظˆط­ ظ„ظ„ط§ظ†طµط±ط§ظپ ظ‚ط¨ظ„ ظ†ظ‡ط§ظٹط© ط§ظ„ط´ظٹظپطھ ط¨ط¯ظˆظ† ط§ط­طھط³ط§ط¨ ط§ظ†طµط±ط§ظپ ظ…ط¨ظƒط±'
+        verbose_name='فترة السماح للانصراف المبكر (دقيقة)',
+        help_text='الوقت المسموح للانصراف قبل نهاية الشيفت بدون احتساب انصراف مبكر'
     )
 
     early_checkin_minutes = models.IntegerField(
         default=30,
-        verbose_name='ظ…ط³ظ…ظˆط­ ط§ظ„ط­ط¶ظˆط± ظ‚ط¨ظ„ ط§ظ„ط´ظٹظپطھ (ط¯ظ‚ظٹظ‚ط©)',
-        help_text='ط§ظ„ط­ط¯ ط§ظ„ط£ظ‚طµظ‰ ط§ظ„ظ…ط³ظ…ظˆط­ ظ„طھط³ط¬ظٹظ„ ط§ظ„ط­ط¶ظˆط± ظ‚ط¨ظ„ ط¨ط¯ط§ظٹط© ط§ظ„ط´ظٹظپطھ'
+        verbose_name='مسموح الحضور قبل الشيفت (دقيقة)',
+        help_text='الحد الأقصى المسموح لتسجيل الحضور قبل بداية الشيفت'
     )
 
-    work_sunday = models.BooleanField(default=True, verbose_name='ط§ظ„ط£ط­ط¯')
-    work_monday = models.BooleanField(default=True, verbose_name='ط§ظ„ط§ط«ظ†ظٹظ†')
-    work_tuesday = models.BooleanField(default=True, verbose_name='ط§ظ„ط«ظ„ط§ط«ط§ط،')
-    work_wednesday = models.BooleanField(default=True, verbose_name='ط§ظ„ط£ط±ط¨ط¹ط§ط،')
-    work_thursday = models.BooleanField(default=True, verbose_name='ط§ظ„ط®ظ…ظٹط³')
-    work_friday = models.BooleanField(default=False, verbose_name='ط§ظ„ط¬ظ…ط¹ط©')
-    work_saturday = models.BooleanField(default=False, verbose_name='ط§ظ„ط³ط¨طھ')
+    work_sunday = models.BooleanField(default=True, verbose_name='الأحد')
+    work_monday = models.BooleanField(default=True, verbose_name='الاثنين')
+    work_tuesday = models.BooleanField(default=True, verbose_name='الثلاثاء')
+    work_wednesday = models.BooleanField(default=True, verbose_name='الأربعاء')
+    work_thursday = models.BooleanField(default=True, verbose_name='الخميس')
+    work_friday = models.BooleanField(default=False, verbose_name='الجمعة')
+    work_saturday = models.BooleanField(default=False, verbose_name='السبت')
 
     break_duration = models.IntegerField(
         default=60,
-        verbose_name='ظ…ط¯ط© ط§ظ„ط±ط§ط­ط© (ط¯ظ‚ظٹظ‚ط©)'
+        verbose_name='مدة الراحة (دقيقة)'
     )
 
     is_default = models.BooleanField(
         default=False,
-        verbose_name='ط´ظٹظپطھ ط§ظپطھط±ط§ط¶ظٹ ظ„ظ„ط´ط±ظƒط©',
-        help_text='ظ„ظˆ ظ…ظپظٹط´ ط´ظٹظپطھ ظ…ط­ط¯ط¯ ظ„ظ„ظ…ظˆط¸ظپطŒ ظ‡ظٹط³طھط®ط¯ظ… ط§ظ„ط´ظٹظپطھ ط§ظ„ط§ظپطھط±ط§ط¶ظٹ'
+        verbose_name='شيفت افتراضي للشركة',
+        help_text='لو مفيش شيفت محدد للموظف، هيستخدم الشيفت الافتراضي'
     )
 
     is_active = models.BooleanField(
         default=True,
-        verbose_name='ظ†ط´ط·'
+        verbose_name='نشط'
     )
 
     class Meta:
-        verbose_name = 'ط´ظٹظپطھ'
-        verbose_name_plural = 'ط§ظ„ط´ظٹظپطھط§طھ'
+        verbose_name = 'شيفت'
+        verbose_name_plural = 'الشيفتات'
         ordering = ['name']
         constraints = [
             models.UniqueConstraint(
@@ -234,9 +235,9 @@ class Shift(TenantModel):
 
     def get_shift_periods(self, day):
         """
-        ط¨طھط±ط¬ط¹ ظپطھط±ط§طھ ط§ظ„ط´ظٹظپطھ ظ„ظ„ظٹظˆظ… ط¯ظ‡
-        method wrapper ظ„ظ€ get_shift_periods ظپظٹ api_mobile
-        ط¨طھظپط¹ظ‘ظ„ _calc_split_shift_metrics ظپظٹ payroll_rules
+        بترجع فترات الشيفت لليوم ده
+        method wrapper لـ get_shift_periods في api_mobile
+        بتفعّل _calc_split_shift_metrics في payroll_rules
         """
         try:
             from attendance.api_mobile import get_shift_periods as _get_periods
@@ -248,84 +249,84 @@ class Shift(TenantModel):
 
 class AttendanceSession(TenantModel):
     """
-    ظپطھط±ط© ط­ط¶ظˆط± ظˆط§ط­ط¯ط© â€” ظ„ظ„ط´ظٹظپطھط§طھ ط§ظ„ظ…ظ‚ط³ظ…ط© ظˆط§ظ„ظ…ط±ظ†ط© ط§ظ„ظ…ظ‚ط³ظ…ط©
-    ظƒظ„ ظٹظˆظ… ظ…ظ…ظƒظ† ظٹظƒظˆظ† ظپظٹظ‡ ط£ظƒطھط± ظ…ظ† ظپطھط±ط© (session)
+    فترة حضور واحدة — للشيفتات المقسمة والمرنة المقسمة
+    كل يوم ممكن يكون فيه أكتر من فترة (session)
     """
 
     attendance = models.ForeignKey(
         'Attendance',
         on_delete=models.CASCADE,
         related_name='sessions',
-        verbose_name='ط³ط¬ظ„ ط§ظ„ط­ط¶ظˆط±'
+        verbose_name='سجل الحضور'
     )
 
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='attendance_sessions',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
 
     session_number = models.PositiveSmallIntegerField(
         default=1,
-        verbose_name='ط±ظ‚ظ… ط§ظ„ظپطھط±ط©',
-        help_text='1 ظ„ظ„ظپطھط±ط© ط§ظ„ط£ظˆظ„ظ‰طŒ 2 ظ„ظ„ط«ط§ظ†ظٹط©...'
+        verbose_name='رقم الفترة',
+        help_text='1 للفترة الأولى، 2 للثانية...'
     )
 
     check_in_time = models.DateTimeField(
-        verbose_name='ظˆظ‚طھ ط¯ط®ظˆظ„ ط§ظ„ظپطھط±ط©'
+        verbose_name='وقت دخول الفترة'
     )
 
     check_out_time = models.DateTimeField(
         blank=True,
         null=True,
-        verbose_name='ظˆظ‚طھ ط®ط±ظˆط¬ ط§ظ„ظپطھط±ط©'
+        verbose_name='وقت خروج الفترة'
     )
 
     check_in_latitude = models.DecimalField(
         max_digits=10, decimal_places=7,
         blank=True, null=True,
-        verbose_name='ط®ط· ط¹ط±ط¶ ط§ظ„ط¯ط®ظˆظ„'
+        verbose_name='خط عرض الدخول'
     )
 
     check_in_longitude = models.DecimalField(
         max_digits=10, decimal_places=7,
         blank=True, null=True,
-        verbose_name='ط®ط· ط·ظˆظ„ ط§ظ„ط¯ط®ظˆظ„'
+        verbose_name='خط طول الدخول'
     )
 
     check_out_latitude = models.DecimalField(
         max_digits=10, decimal_places=7,
         blank=True, null=True,
-        verbose_name='ط®ط· ط¹ط±ط¶ ط§ظ„ط®ط±ظˆط¬'
+        verbose_name='خط عرض الخروج'
     )
 
     check_out_longitude = models.DecimalField(
         max_digits=10, decimal_places=7,
         blank=True, null=True,
-        verbose_name='ط®ط· ط·ظˆظ„ ط§ظ„ط®ط±ظˆط¬'
+        verbose_name='خط طول الخروج'
     )
 
-    on_mission = models.BooleanField(default=False, verbose_name='ظپظٹ ظ…ط£ظ…ظˆط±ظٹط©')
+    on_mission = models.BooleanField(default=False, verbose_name='في مأمورية')
     is_partial = models.BooleanField(
         default=False,
-        verbose_name='ط®ط±ظˆط¬ ط¬ط²ط¦ظٹ',
-        help_text='True ظ„ظˆ ط§ظ„ظ…ظˆط¸ظپ ط®ط±ط¬ ظˆط±ط¬ط¹ طھط§ظ†ظٹ'
+        verbose_name='خروج جزئي',
+        help_text='True لو الموظف خرج ورجع تاني'
     )
 
     worked_minutes = models.IntegerField(
         default=0,
-        verbose_name='ط¯ظ‚ط§ط¦ظ‚ ط§ظ„ط¹ظ…ظ„ ظپظٹ ط§ظ„ظپطھط±ط© ط¯ظٹ'
+        verbose_name='دقائق العمل في الفترة دي'
     )
 
     notes = models.TextField(
         blank=True,
-        verbose_name='ظ…ظ„ط§ط­ط¸ط§طھ'
+        verbose_name='ملاحظات'
     )
 
     class Meta:
-        verbose_name = 'ظپطھط±ط© ط­ط¶ظˆط±'
-        verbose_name_plural = 'ظپطھط±ط§طھ ط§ظ„ط­ط¶ظˆط±'
+        verbose_name = 'فترة حضور'
+        verbose_name_plural = 'فترات الحضور'
         ordering = ['attendance', 'session_number']
         unique_together = [['attendance', 'session_number']]
 
@@ -333,7 +334,7 @@ class AttendanceSession(TenantModel):
         return f"{self.employee} - ظٹظˆظ… {self.attendance.date} - ظپطھط±ط© {self.session_number}"
 
     def calculate_worked_minutes(self):
-        """ط¨ظٹط­ط³ط¨ ط¯ظ‚ط§ط¦ظ‚ ط§ظ„ط¹ظ…ظ„ ظ„ظˆ ظپظٹظ‡ check_out"""
+        """بيحسب دقائق العمل لو فيه check_out"""
         if self.check_in_time and self.check_out_time:
             delta = self.check_out_time - self.check_in_time
             self.worked_minutes = int(delta.total_seconds() / 60)
@@ -342,7 +343,7 @@ class AttendanceSession(TenantModel):
 
     @property
     def is_complete(self):
-        """ظ‡ظ„ ط§ظ„ظپطھط±ط© ط§ظƒطھظ…ظ„طھ (ظپظٹظ‡ط§ ط¯ط®ظˆظ„ ظˆط®ط±ظˆط¬)"""
+        """هل الفترة اكتملت (فيها دخول وخروج)"""
         return self.check_in_time is not None and self.check_out_time is not None
 
 
@@ -355,70 +356,70 @@ class AttendancePolicy(TenantModel):
     permission_fraction_as_full = models.BooleanField(default=False)
     permission_reset_cycle = models.CharField(
         max_length=20, 
-        choices=[('calendar', 'ط´ظ‡ط± ظ…ظٹظ„ط§ط¯ظٹ'), ('payroll', 'ط¯ظˆط±ط© ط§ظ„ظ…ط±طھط¨')],
+        choices=[('calendar', 'شهر ميلادي'), ('payroll', 'دورة المرتب')],
         default='calendar'
     )
 
-    """ط³ظٹط§ط³ط© ط§ظ„ط­ط¶ظˆط± ظˆط§ظ„ط®طµظ… â€” ظ„ظƒظ„ ط´ط±ظƒط©/ظپط±ط¹/ظ‚ط³ظ…"""
+    """سياسة الحضور والخصم — لكل شركة/فرع/قسم"""
 
     # === Late Warning System ===
     late_warning_enabled = models.BooleanField(
         default=False,
-        verbose_name='طھظپط¹ظٹظ„ ظ†ط¸ط§ظ… ط§ظ„ط¥ظ†ط°ط§ط±ط§طھ'
+        verbose_name='تفعيل نظام الإنذارات'
     )
     late_warning_threshold = models.PositiveSmallIntegerField(
         default=2,
-        verbose_name='ط¹ط¯ط¯ ط§ظ„ط¥ظ†ط°ط§ط±ط§طھ ظ‚ط¨ظ„ ط§ظ„ط®طµظ…'
+        verbose_name='عدد الإنذارات قبل الخصم'
     )
     late_warning_deduction_type = models.CharField(
         max_length=20,
         choices=[
-            ('fixed', 'ط«ط§ط¨طھ'),
-            ('progressive', 'طھطµط§ط¹ط¯ظٹ ط¨ط­ط¯ ط£ظ‚طµظ‰'),
-            ('progressive_step', 'طھطµط§ط¹ط¯ظٹ ظƒظ„ ط¹ط¯ط¯ ظ…ط±ط§طھ'),
+            ('fixed', 'ثابت'),
+            ('progressive', 'تصاعدي بحد أقصى'),
+            ('progressive_step', 'تصاعدي كل عدد مرات'),
         ],
         default='fixed',
-        verbose_name='ظ†ظˆط¹ ط§ظ„ط®طµظ…'
+        verbose_name='نوع الخصم'
     )
     late_warning_deduction_value = models.DecimalField(
         max_digits=4,
         decimal_places=2,
         default=0.25,
-        verbose_name='ظ‚ظٹظ…ط© ط§ظ„ط®طµظ… ط§ظ„ط£ط³ط§ط³ظٹط© (ط¬ط²ط، ظ…ظ† ط§ظ„ظٹظˆظ…)'
+        verbose_name='قيمة الخصم الأساسية (جزء من اليوم)'
     )
     late_warning_max_deduction = models.DecimalField(
         max_digits=4,
         decimal_places=2,
         default=1.00,
-        verbose_name='ط§ظ„ط­ط¯ ط§ظ„ط£ظ‚طµظ‰ ظ„ظ„ط®طµظ… (ط¬ط²ط، ظ…ظ† ط§ظ„ظٹظˆظ…)'
+        verbose_name='الحد الأقصى للخصم (جزء من اليوم)'
     )
     late_warning_step_rate = models.PositiveSmallIntegerField(
         default=1,
-        verbose_name='ظ…ط¹ط¯ظ„ ط§ظ„ط²ظٹط§ط¯ط© ظƒظ„ N ظ…ط±ط§طھ'
+        verbose_name='معدل الزيادة كل N مرات'
     )
 
     STATUS_CHOICES = [
-        ('draft', 'ظ…ط³ظˆط¯ط©'),
-        ('approved', 'ظ…ط¹طھظ…ط¯'),
-        ('active', 'ظ†ط´ط·'),
-        ('archived', 'ظ…ط¤ط±ط´ظپ'),
+        ('draft', 'مسودة'),
+        ('approved', 'معتمد'),
+        ('active', 'نشط'),
+        ('archived', 'مؤرشف'),
     ]
 
-    name = models.CharField(max_length=200, verbose_name='ط§ط³ظ… ط§ظ„ط³ظٹط§ط³ط©')
-    effective_from = models.DateField(verbose_name='ط³ط§ط±ظٹط© ظ…ظ†')
-    effective_to = models.DateField(blank=True, null=True, verbose_name='ط³ط§ط±ظٹط© ظ„ط­ط¯')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', verbose_name='ط§ظ„ط­ط§ظ„ط©')
+    name = models.CharField(max_length=200, verbose_name='اسم السياسة')
+    effective_from = models.DateField(verbose_name='سارية من')
+    effective_to = models.DateField(blank=True, null=True, verbose_name='سارية لحد')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', verbose_name='الحالة')
     approved_by = models.ForeignKey(
         'accounts.User', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='approved_policies',
-        verbose_name='ظˆط§ظپظ‚ ط¨ظˆط§ط³ط·ط©'
+        verbose_name='وافق بواسطة'
     )
     approved_at = models.DateTimeField(null=True, blank=True)
-    notes = models.TextField(blank=True, verbose_name='ظ…ظ„ط§ط­ط¸ط§طھ')
+    notes = models.TextField(blank=True, verbose_name='ملاحظات')
 
     class Meta:
-        verbose_name = 'ط³ظٹط§ط³ط© ط­ط¶ظˆط±'
-        verbose_name_plural = 'ط³ظٹط§ط³ط§طھ ط§ظ„ط­ط¶ظˆط±'
+        verbose_name = 'سياسة حضور'
+        verbose_name_plural = 'سياسات الحضور'
         ordering = ['-effective_from']
 
     def __str__(self):
@@ -426,81 +427,81 @@ class AttendancePolicy(TenantModel):
 
 
 class AttendancePolicyAssignment(TenantModel):
-    """ط±ط¨ط· ط§ظ„ط³ظٹط§ط³ط© ط¨ط´ط±ظƒط©/ظپط±ط¹/ظ‚ط³ظ…"""
+    """ربط السياسة بشركة/فرع/قسم"""
 
     ASSIGNMENT_TYPE_CHOICES = [
-        ('company', 'ط´ط±ظƒط©'),
-        ('branch', 'ظپط±ط¹'),
-        ('department', 'ظ‚ط³ظ…'),
+        ('company', 'شركة'),
+        ('branch', 'فرع'),
+        ('department', 'قسم'),
     ]
 
     policy = models.ForeignKey(
         AttendancePolicy, on_delete=models.CASCADE,
-        related_name='assignments', verbose_name='ط§ظ„ط³ظٹط§ط³ط©'
+        related_name='assignments', verbose_name='السياسة'
     )
     assignment_type = models.CharField(
         max_length=20, choices=ASSIGNMENT_TYPE_CHOICES,
-        default='company', verbose_name='ظ†ظˆط¹ ط§ظ„طھط¹ظٹظٹظ†'
+        default='company', verbose_name='نوع التعيين'
     )
     branch = models.ForeignKey(
         'companies.Branch', on_delete=models.CASCADE,
-        blank=True, null=True, verbose_name='ط§ظ„ظپط±ط¹'
+        blank=True, null=True, verbose_name='الفرع'
     )
     department = models.ForeignKey(
         'companies.Department', on_delete=models.CASCADE,
-        blank=True, null=True, verbose_name='ط§ظ„ظ‚ط³ظ…'
+        blank=True, null=True, verbose_name='القسم'
     )
     priority = models.IntegerField(
         default=3,
-        help_text='1=ظ‚ط³ظ…, 2=ظپط±ط¹, 3=ط´ط±ظƒط©',
-        verbose_name='ط§ظ„ط£ظˆظ„ظˆظٹط©'
+        help_text='1=قسم, 2=فرع, 3=شركة',
+        verbose_name='الأولوية'
     )
 
     class Meta:
-        verbose_name = 'طھط¹ظٹظٹظ† ط³ظٹط§ط³ط©'
-        verbose_name_plural = 'طھط¹ظٹظٹظ†ط§طھ ط§ظ„ط³ظٹط§ط³ط§طھ'
+        verbose_name = 'تعيين سياسة'
+        verbose_name_plural = 'تعيينات السياسات'
 
 
 class LateRule(models.Model):
     # LateRule_branch_added
     branch = models.ForeignKey(
         'companies.Branch', on_delete=models.CASCADE,
-        blank=True, null=True, verbose_name='ط§ظ„ظپط±ط¹ ط§ظ„ظ…ط³طھظ‡ط¯ظپ'
+        blank=True, null=True, verbose_name='الفرع المستهدف'
     )
     department = models.ForeignKey(
         'companies.Department', on_delete=models.CASCADE,
-        blank=True, null=True, verbose_name='ط§ظ„ظ‚ط³ظ… ط§ظ„ظ…ط³طھظ‡ط¯ظپ'
+        blank=True, null=True, verbose_name='القسم المستهدف'
     )
 
-    """ظ‚ظˆط§ط¹ط¯ ط®طµظ… ط§ظ„طھط£ط®ظٹط±"""
+    """قواعد خصم التأخير"""
 
     DEDUCTION_TYPE_CHOICES = [
-        ('none', 'ظ„ط§ ط®طµظ…'),
-        ('day_fraction', 'ظ†ط³ط¨ط© ظ…ظ† ط§ظ„ظٹظˆظ…'),
-        ('fixed_amount', 'ظ…ط¨ظ„ط؛ ط«ط§ط¨طھ'),
-        ('per_minute', 'ظ„ظƒظ„ ط¯ظ‚ظٹظ‚ط©'),
+        ('none', 'لا خصم'),
+        ('day_fraction', 'نسبة من اليوم'),
+        ('fixed_amount', 'مبلغ ثابت'),
+        ('per_minute', 'لكل دقيقة'),
     ]
 
     policy = models.ForeignKey(
         AttendancePolicy, on_delete=models.CASCADE,
-        related_name='late_rules', verbose_name='ط§ظ„ط³ظٹط§ط³ط©'
+        related_name='late_rules', verbose_name='السياسة'
     )
-    from_minutes = models.IntegerField(default=0, verbose_name='ظ…ظ† ط¯ظ‚ظٹظ‚ط©')
-    to_minutes = models.IntegerField(default=15, verbose_name='ط¥ظ„ظ‰ ط¯ظ‚ظٹظ‚ط©')
+    from_minutes = models.IntegerField(default=0, verbose_name='من دقيقة')
+    to_minutes = models.IntegerField(default=15, verbose_name='إلى دقيقة')
     deduction_type = models.CharField(
         max_length=20, choices=DEDUCTION_TYPE_CHOICES,
-        default='none', verbose_name='ظ†ظˆط¹ ط§ظ„ط®طµظ…'
+        default='none', verbose_name='نوع الخصم'
     )
     deduction_value = models.DecimalField(
         max_digits=8, decimal_places=4, default=0,
-        verbose_name='ظ‚ظٹظ…ط© ط§ظ„ط®طµظ…',
-        help_text='0.25 = ط±ط¨ط¹ ظٹظˆظ… / 50 = ظ…ط¨ظ„ط؛ ط«ط§ط¨طھ / 1 = ظ„ظƒظ„ ط¯ظ‚ظٹظ‚ط©'
+        verbose_name='قيمة الخصم',
+        help_text='0.25 = ربع يوم / 50 = مبلغ ثابت / 1 = لكل دقيقة'
     )
-    display_order = models.IntegerField(default=0, verbose_name='ط§ظ„طھط±طھظٹط¨')
+    display_order = models.IntegerField(default=0, verbose_name='الترتيب')
 
     class Meta:
-        verbose_name = 'ظ‚ط§ط¹ط¯ط© طھط£ط®ظٹط±'
-        verbose_name_plural = 'ظ‚ظˆط§ط¹ط¯ ط§ظ„طھط£ط®ظٹط±'
+        verbose_name = 'قاعدة تأخير'
+        verbose_name_plural = 'قواعد التأخير'
         ordering = ['display_order', 'from_minutes']
 
     def __str__(self):
@@ -511,57 +512,57 @@ class AbsenceRule(models.Model):
     # AbsenceRule_branch_added
     branch = models.ForeignKey(
         'companies.Branch', on_delete=models.CASCADE,
-        blank=True, null=True, verbose_name='ط§ظ„ظپط±ط¹ ط§ظ„ظ…ط³طھظ‡ط¯ظپ'
+        blank=True, null=True, verbose_name='الفرع المستهدف'
     )
     department = models.ForeignKey(
         'companies.Department', on_delete=models.CASCADE,
-        blank=True, null=True, verbose_name='ط§ظ„ظ‚ط³ظ… ط§ظ„ظ…ط³طھظ‡ط¯ظپ'
+        blank=True, null=True, verbose_name='القسم المستهدف'
     )
 
-    """ظ‚ظˆط§ط¹ط¯ ط®طµظ… ط§ظ„ط؛ظٹط§ط¨"""
+    """قواعد خصم الغياب"""
 
     ABSENCE_TYPE_CHOICES = [
-        ('unexcused', 'ط¨ط¯ظˆظ† ط¥ط°ظ†'),
-        ('consecutive', 'ظ…طھطھط§ظ„ظٹ'),
-        ('repeated', 'ظ…طھظƒط±ط± ظپظٹ ط§ظ„ط´ظ‡ط±'),
+        ('unexcused', 'بدون إذن'),
+        ('consecutive', 'متتالي'),
+        ('repeated', 'متكرر في الشهر'),
     ]
 
     DEDUCTION_TYPE_CHOICES = [
-        ('day_fraction', 'ظ†ط³ط¨ط© ظ…ظ† ط§ظ„ظٹظˆظ…'),
-        ('fixed_amount', 'ظ…ط¨ظ„ط؛ ط«ط§ط¨طھ'),
-        ('warning', 'ط¥ظ†ط°ط§ط± ظپظ‚ط·'),
+        ('day_fraction', 'نسبة من اليوم'),
+        ('fixed_amount', 'مبلغ ثابت'),
+        ('warning', 'إنذار فقط'),
     ]
 
     policy = models.ForeignKey(
         AttendancePolicy, on_delete=models.CASCADE,
-        related_name='absence_rules', verbose_name='ط§ظ„ط³ظٹط§ط³ط©'
+        related_name='absence_rules', verbose_name='السياسة'
     )
     absence_type = models.CharField(
         max_length=20, choices=ABSENCE_TYPE_CHOICES,
-        default='unexcused', verbose_name='ظ†ظˆط¹ ط§ظ„ط؛ظٹط§ط¨'
+        default='unexcused', verbose_name='نوع الغياب'
     )
     consecutive_days = models.IntegerField(
         default=1, null=True, blank=True,
-        verbose_name='ط¹ط¯ط¯ ط§ظ„ط£ظٹط§ظ… ط§ظ„ظ…طھطھط§ظ„ظٹط©'
+        verbose_name='عدد الأيام المتتالية'
     )
     occurrences_in_month = models.IntegerField(
         default=1, null=True, blank=True,
-        verbose_name='ط¹ط¯ط¯ ط§ظ„ظ…ط±ط§طھ ظپظٹ ط§ظ„ط´ظ‡ط±'
+        verbose_name='عدد المرات في الشهر'
     )
     deduction_type = models.CharField(
         max_length=20, choices=DEDUCTION_TYPE_CHOICES,
-        default='day_fraction', verbose_name='ظ†ظˆط¹ ط§ظ„ط®طµظ…'
+        default='day_fraction', verbose_name='نوع الخصم'
     )
     deduction_value = models.DecimalField(
         max_digits=8, decimal_places=4, default=1,
-        verbose_name='ظ‚ظٹظ…ط© ط§ظ„ط®طµظ…',
-        help_text='1 = ظٹظˆظ… ظƒط§ظ…ظ„ / 1.5 = ظٹظˆظ… ظˆظ†طµ / 50 = ظ…ط¨ظ„ط؛ ط«ط§ط¨طھ'
+        verbose_name='قيمة الخصم',
+        help_text='1 = يوم كامل / 1.5 = يوم ونص / 50 = مبلغ ثابت'
     )
-    display_order = models.IntegerField(default=0, verbose_name='ط§ظ„طھط±طھظٹط¨')
+    display_order = models.IntegerField(default=0, verbose_name='الترتيب')
 
     class Meta:
-        verbose_name = 'ظ‚ط§ط¹ط¯ط© ط؛ظٹط§ط¨'
-        verbose_name_plural = 'ظ‚ظˆط§ط¹ط¯ ط§ظ„ط؛ظٹط§ط¨'
+        verbose_name = 'قاعدة غياب'
+        verbose_name_plural = 'قواعد الغياب'
         ordering = ['display_order']
 
 
@@ -569,179 +570,179 @@ class OvertimeRule(models.Model):
     # OvertimeRule_branch_added
     branch = models.ForeignKey(
         'companies.Branch', on_delete=models.CASCADE,
-        blank=True, null=True, verbose_name='ط§ظ„ظپط±ط¹ ط§ظ„ظ…ط³طھظ‡ط¯ظپ'
+        blank=True, null=True, verbose_name='الفرع المستهدف'
     )
     department = models.ForeignKey(
         'companies.Department', on_delete=models.CASCADE,
-        blank=True, null=True, verbose_name='ط§ظ„ظ‚ط³ظ… ط§ظ„ظ…ط³طھظ‡ط¯ظپ'
+        blank=True, null=True, verbose_name='القسم المستهدف'
     )
 
-    """ظ‚ظˆط§ط¹ط¯ ط§ظ„ط£ظˆظپط± طھط§ظٹظ…"""
+    """قواعد الأوفر تايم"""
 
     OVERTIME_TYPE_CHOICES = [
-        ('regular', 'ط¹ط§ط¯ظٹ'),
-        ('after_shift', 'ط¨ط¹ط¯ ط§ظ„ط´ظٹظپطھ'),
-        ('weekend', 'ظٹظˆظ… ط±ط§ط­ط©'),
-        ('holiday', 'ط¥ط¬ط§ط²ط© ط±ط³ظ…ظٹط©'),
+        ('regular', 'عادي'),
+        ('after_shift', 'بعد الشيفت'),
+        ('weekend', 'يوم راحة'),
+        ('holiday', 'إجازة رسمية'),
     ]
 
     policy = models.ForeignKey(
         AttendancePolicy, on_delete=models.CASCADE,
-        related_name='overtime_rules', verbose_name='ط§ظ„ط³ظٹط§ط³ط©'
+        related_name='overtime_rules', verbose_name='السياسة'
     )
     overtime_type = models.CharField(
         max_length=20, choices=OVERTIME_TYPE_CHOICES,
-        default='after_shift', verbose_name='ظ†ظˆط¹ ط§ظ„ط£ظˆظپط± طھط§ظٹظ…'
+        default='after_shift', verbose_name='نوع الأوفر تايم'
     )
     multiplier = models.DecimalField(
         max_digits=4, decimal_places=2, default=1.5,
-        verbose_name='ط§ظ„ظ…ط¶ط§ط¹ظپ',
-        help_text='1.5 = ظ…ط±ط© ظˆظ†طµ / 2.0 = ط¶ط¹ظپظٹظ†'
+        verbose_name='المضاعف',
+        help_text='1.5 = مرة ونص / 2.0 = ضعفين'
     )
     min_minutes = models.IntegerField(
         default=30,
-        verbose_name='ط£ظ‚ظ„ ظˆظ‚طھ ظٹطھط­ط³ط¨ (ط¯ظ‚ظٹظ‚ط©)'
+        verbose_name='أقل وقت يتحسب (دقيقة)'
     )
     max_hours_per_day = models.IntegerField(
         default=4, null=True, blank=True,
-        verbose_name='ط£ظ‚طµظ‰ ط³ط§ط¹ط§طھ ظپظٹ ط§ظ„ظٹظˆظ…'
+        verbose_name='أقصى ساعات في اليوم'
     )
     max_hours_per_month = models.IntegerField(
         default=40, null=True, blank=True,
-        verbose_name='ط£ظ‚طµظ‰ ط³ط§ط¹ط§طھ ظپظٹ ط§ظ„ط´ظ‡ط±'
+        verbose_name='أقصى ساعات في الشهر'
     )
     requires_approval = models.BooleanField(
-        default=False, verbose_name='ظٹط­طھط§ط¬ ظ…ظˆط§ظپظ‚ط© ظ…ط³ط¨ظ‚ط©'
+        default=False, verbose_name='يحتاج موافقة مسبقة'
     )
-    display_order = models.IntegerField(default=0, verbose_name='ط§ظ„طھط±طھظٹط¨')
+    display_order = models.IntegerField(default=0, verbose_name='الترتيب')
 
     class Meta:
-        verbose_name = 'ظ‚ط§ط¹ط¯ط© ط£ظˆظپط± طھط§ظٹظ…'
-        verbose_name_plural = 'ظ‚ظˆط§ط¹ط¯ ط§ظ„ط£ظˆظپط± طھط§ظٹظ…'
+        verbose_name = 'قاعدة أوفر تايم'
+        verbose_name_plural = 'قواعد الأوفر تايم'
         ordering = ['display_order']
 
 
 class NightShiftRule(models.Model):
-    """ظ‚ظˆط§ط¹ط¯ ط¨ط¯ظ„ ط§ظ„ط´ظٹظپطھ ط§ظ„ظ„ظٹظ„ظٹ"""
+    """قواعد بدل الشيفت الليلي"""
 
     ALLOWANCE_TYPE_CHOICES = [
-        ('fixed_amount', 'ظ…ط¨ظ„ط؛ ط«ط§ط¨طھ'),
-        ('percentage', 'ظ†ط³ط¨ط© ظ…ظ† ط§ظ„ظٹظˆظ…ظٹ'),
+        ('fixed_amount', 'مبلغ ثابت'),
+        ('percentage', 'نسبة من اليومي'),
     ]
 
     policy = models.ForeignKey(
         AttendancePolicy, on_delete=models.CASCADE,
-        related_name='night_shift_rules', verbose_name='ط§ظ„ط³ظٹط§ط³ط©'
+        related_name='night_shift_rules', verbose_name='السياسة'
     )
     allowance_type = models.CharField(
         max_length=20, choices=ALLOWANCE_TYPE_CHOICES,
-        default='fixed_amount', verbose_name='ظ†ظˆط¹ ط§ظ„ط¨ط¯ظ„'
+        default='fixed_amount', verbose_name='نوع البدل'
     )
     amount = models.DecimalField(
         max_digits=10, decimal_places=2, default=50,
-        verbose_name='ط§ظ„ظ…ط¨ظ„ط؛ ط§ظ„ط«ط§ط¨طھ'
+        verbose_name='المبلغ الثابت'
     )
     percentage = models.DecimalField(
         max_digits=5, decimal_places=2, default=10,
-        verbose_name='ط§ظ„ظ†ط³ط¨ط© ط§ظ„ظ…ط¦ظˆظٹط© ظ…ظ† ط§ظ„ط£ط¬ط± ط§ظ„ظٹظˆظ…ظٹ'
+        verbose_name='النسبة المئوية من الأجر اليومي'
     )
     night_start_hour = models.IntegerField(
-        default=20, verbose_name='ط¨ط¯ط§ظٹط© ط§ظ„ظ„ظٹظ„ (ط³ط§ط¹ط©)',
-        help_text='20 = 8 ظ…ط³ط§ط،ظ‹'
+        default=20, verbose_name='بداية الليل (ساعة)',
+        help_text='20 = 8 مساءً'
     )
     min_night_hours = models.IntegerField(
-        default=4, verbose_name='ط£ظ‚ظ„ ط³ط§ط¹ط§طھ ظ„ظٹظ„ظٹط© ظ„ظ„ط§ط³طھط­ظ‚ط§ظ‚'
+        default=4, verbose_name='أقل ساعات ليلية للاستحقاق'
     )
 
     class Meta:
-        verbose_name = 'ظ‚ط§ط¹ط¯ط© ط¨ط¯ظ„ ظ„ظٹظ„ظٹ'
-        verbose_name_plural = 'ظ‚ظˆط§ط¹ط¯ ط§ظ„ط¨ط¯ظ„ ط§ظ„ظ„ظٹظ„ظٹ'
+        verbose_name = 'قاعدة بدل ليلي'
+        verbose_name_plural = 'قواعد البدل الليلي'
 
 
 class WeekendWorkRule(models.Model):
-    """ظ‚ظˆط§ط¹ط¯ ط§ظ„ط¹ظ…ظ„ ظٹظˆظ… ط§ظ„ط±ط§ط­ط©"""
+    """قواعد العمل يوم الراحة"""
 
     COMPENSATION_TYPE_CHOICES = [
-        ('overtime_multiplier', 'ظ†ط³ط¨ط© ظ…ظ† ط§ظ„ظ…ط±طھط¨'),
-        ('fixed_amount', 'ظ…ط¨ظ„ط؛ ط«ط§ط¨طھ'),
-        ('day_off', 'ظٹظˆظ… ط¥ط¬ط§ط²ط© ط¨ط¯ظٹظ„'),
+        ('overtime_multiplier', 'نسبة من المرتب'),
+        ('fixed_amount', 'مبلغ ثابت'),
+        ('day_off', 'يوم إجازة بديل'),
     ]
 
     policy = models.ForeignKey(
         AttendancePolicy, on_delete=models.CASCADE,
-        related_name='weekend_work_rules', verbose_name='ط§ظ„ط³ظٹط§ط³ط©'
+        related_name='weekend_work_rules', verbose_name='السياسة'
     )
     compensation_type = models.CharField(
         max_length=30, choices=COMPENSATION_TYPE_CHOICES,
-        default='overtime_multiplier', verbose_name='ظ†ظˆط¹ ط§ظ„طھط¹ظˆظٹط¶'
+        default='overtime_multiplier', verbose_name='نوع التعويض'
     )
     multiplier = models.DecimalField(
         max_digits=4, decimal_places=2, default=2.0,
-        verbose_name='ط§ظ„ظ…ط¶ط§ط¹ظپ'
+        verbose_name='المضاعف'
     )
     amount = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,
-        null=True, blank=True, verbose_name='ط§ظ„ظ…ط¨ظ„ط؛ ط§ظ„ط«ط§ط¨طھ'
+        null=True, blank=True, verbose_name='المبلغ الثابت'
     )
 
     class Meta:
-        verbose_name = 'ظ‚ط§ط¹ط¯ط© ط¹ظ…ظ„ ظٹظˆظ… ط§ظ„ط±ط§ط­ط©'
-        verbose_name_plural = 'ظ‚ظˆط§ط¹ط¯ ط§ظ„ط¹ظ…ظ„ ظٹظˆظ… ط§ظ„ط±ط§ط­ط©'
+        verbose_name = 'قاعدة عمل يوم الراحة'
+        verbose_name_plural = 'قواعد العمل يوم الراحة'
 
 
 class LateRepeatPenalty(models.Model):
-    """ط¬ط²ط§ط، طھظƒط±ط§ط± ط§ظ„طھط£ط®ظٹط± ظپظٹ ط§ظ„ط´ظ‡ط±"""
+    """جزاء تكرار التأخير في الشهر"""
 
     PENALTY_TYPE_CHOICES = [
-        ('warning', 'ط¥ظ†ط°ط§ط±'),
-        ('deduction', 'ط®طµظ…'),
-        ('suspension', 'ظˆظ‚ظپ'),
+        ('warning', 'إنذار'),
+        ('deduction', 'خصم'),
+        ('suspension', 'وقف'),
     ]
 
     policy = models.ForeignKey(
         AttendancePolicy, on_delete=models.CASCADE,
-        related_name='late_repeat_penalties', verbose_name='ط§ظ„ط³ظٹط§ط³ط©'
+        related_name='late_repeat_penalties', verbose_name='السياسة'
     )
     occurrences = models.IntegerField(
-        default=3, verbose_name='ط¹ط¯ط¯ ظ…ط±ط§طھ ط§ظ„طھط£ط®ظٹط± ظپظٹ ط§ظ„ط´ظ‡ط±'
+        default=3, verbose_name='عدد مرات التأخير في الشهر'
     )
     penalty_type = models.CharField(
         max_length=20, choices=PENALTY_TYPE_CHOICES,
-        default='warning', verbose_name='ظ†ظˆط¹ ط§ظ„ط¬ط²ط§ط،'
+        default='warning', verbose_name='نوع الجزاء'
     )
     deduction_value = models.DecimalField(
         max_digits=8, decimal_places=2, default=0,
-        null=True, blank=True, verbose_name='ظ‚ظٹظ…ط© ط§ظ„ط®طµظ…'
+        null=True, blank=True, verbose_name='قيمة الخصم'
     )
-    description = models.TextField(blank=True, verbose_name='ظˆطµظپ ط§ظ„ط¬ط²ط§ط،')
+    description = models.TextField(blank=True, verbose_name='وصف الجزاء')
 
     class Meta:
-        verbose_name = 'ط¬ط²ط§ط، طھظƒط±ط§ط± ط§ظ„طھط£ط®ظٹط±'
-        verbose_name_plural = 'ط¬ط²ط§ط،ط§طھ طھظƒط±ط§ط± ط§ظ„طھط£ط®ظٹط±'
+        verbose_name = 'جزاء تكرار التأخير'
+        verbose_name_plural = 'جزاءات تكرار التأخير'
         ordering = ['occurrences']
 
 
 class ShiftAssignment(TenantModel):
-    """طھط¹ظٹظٹظ† ط§ظ„ط´ظٹظپطھ ط¹ظ„ظ‰ ظ…ط³طھظˆظ‰ ط´ط±ظƒط© / ظپط±ط¹ / ظ‚ط³ظ… / ظ…ظˆط¸ظپ"""
+    """تعيين الشيفت على مستوى شركة / فرع / قسم / موظف"""
 
     ASSIGNMENT_TYPE_CHOICES = [
-        ('company', 'ط´ط±ظƒط©'),
-        ('branch', 'ظپط±ط¹'),
-        ('department', 'ظ‚ط³ظ…'),
-        ('employee', 'ظ…ظˆط¸ظپ'),
+        ('company', 'شركة'),
+        ('branch', 'فرع'),
+        ('department', 'قسم'),
+        ('employee', 'موظف'),
     ]
 
     shift = models.ForeignKey(
         Shift,
         on_delete=models.PROTECT,
         related_name='assignments',
-        verbose_name='ط§ظ„ط´ظٹظپطھ'
+        verbose_name='الشيفت'
     )
 
     assignment_type = models.CharField(
         max_length=20,
         choices=ASSIGNMENT_TYPE_CHOICES,
-        verbose_name='ظ†ظˆط¹ ط§ظ„طھط¹ظٹظٹظ†'
+        verbose_name='نوع التعيين'
     )
 
     branch = models.ForeignKey(
@@ -750,7 +751,7 @@ class ShiftAssignment(TenantModel):
         blank=True,
         null=True,
         related_name='shift_assignments',
-        verbose_name='ط§ظ„ظپط±ط¹'
+        verbose_name='الفرع'
     )
 
     department = models.ForeignKey(
@@ -759,7 +760,7 @@ class ShiftAssignment(TenantModel):
         blank=True,
         null=True,
         related_name='shift_assignments',
-        verbose_name='ط§ظ„ظ‚ط³ظ…'
+        verbose_name='القسم'
     )
 
     employee = models.ForeignKey(
@@ -768,49 +769,49 @@ class ShiftAssignment(TenantModel):
         blank=True,
         null=True,
         related_name='shift_assignments',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
 
     excluded_employees = models.ManyToManyField(
         'employees.Employee',
         blank=True,
         related_name='excluded_from_shift_assignments',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپظˆظ† ط§ظ„ظ…ط³طھط«ظ†ظˆظ†'
+        verbose_name='الموظفون المستثنون'
     )
 
     start_date = models.DateField(
-        verbose_name='طھط§ط±ظٹط® ط§ظ„ط¨ط¯ط§ظٹط©'
+        verbose_name='تاريخ البداية'
     )
 
     end_date = models.DateField(
         blank=True,
         null=True,
-        verbose_name='طھط§ط±ظٹط® ط§ظ„ظ†ظ‡ط§ظٹط©'
+        verbose_name='تاريخ النهاية'
     )
 
     is_active = models.BooleanField(
         default=True,
-        verbose_name='ظ†ط´ط·'
+        verbose_name='نشط'
     )
 
     priority = models.IntegerField(
         default=4,
-        verbose_name='ط§ظ„ط£ظˆظ„ظˆظٹط©',
-        help_text='1=ظ…ظˆط¸ظپ, 2=ظ‚ط³ظ…, 3=ظپط±ط¹, 4=ط´ط±ظƒط©'
+        verbose_name='الأولوية',
+        help_text='1=موظف, 2=قسم, 3=فرع, 4=شركة'
     )
 
     notes = models.TextField(
         blank=True,
-        verbose_name='ظ…ظ„ط§ط­ط¸ط§طھ'
+        verbose_name='ملاحظات'
     )
 
     class Meta:
-        verbose_name = 'طھط¹ظٹظٹظ† ط´ظٹظپطھ'
-        verbose_name_plural = 'طھط¹ظٹظٹظ†ط§طھ ط§ظ„ط´ظٹظپطھط§طھ'
+        verbose_name = 'تعيين شيفت'
+        verbose_name_plural = 'تعيينات الشيفتات'
         ordering = ['priority', '-start_date']
 
     def __str__(self):
-        target = 'ط؛ظٹط± ظ…ط­ط¯ط¯'
+        target = 'غير محدد'
         if self.assignment_type == 'employee' and self.employee:
             target = self.employee.full_name_ar
         elif self.assignment_type == 'department' and self.department:
@@ -823,60 +824,60 @@ class ShiftAssignment(TenantModel):
 
 
 class EmployeeShift(TenantModel):
-    """ط±ط¨ط· ط§ظ„ظ…ظˆط¸ظپ ط¨ط§ظ„ط´ظٹظپطھ"""
+    """ربط الموظف بالشيفت"""
 
     ASSIGNMENT_TYPE_CHOICES = [
-        ('company', 'ط´ط±ظƒط©'),
-        ('branch', 'ظپط±ط¹'),
-        ('department', 'ظ‚ط³ظ…'),
-        ('employee', 'ظ…ظˆط¸ظپ'),
+        ('company', 'شركة'),
+        ('branch', 'فرع'),
+        ('department', 'قسم'),
+        ('employee', 'موظف'),
     ]
 
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='shifts',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
 
     shift = models.ForeignKey(
         Shift,
         on_delete=models.PROTECT,
         related_name='employees',
-        verbose_name='ط§ظ„ط´ظٹظپطھ'
+        verbose_name='الشيفت'
     )
 
     assignment_type = models.CharField(
         max_length=20,
         choices=ASSIGNMENT_TYPE_CHOICES,
         default='employee',
-        verbose_name='ظ†ظˆط¹ ط§ظ„طھط¹ظٹظٹظ†'
+        verbose_name='نوع التعيين'
     )
 
     start_date = models.DateField(
-        verbose_name='طھط§ط±ظٹط® ط§ظ„ط¨ط¯ط§ظٹط©'
+        verbose_name='تاريخ البداية'
     )
 
     end_date = models.DateField(
         blank=True,
         null=True,
-        verbose_name='طھط§ط±ظٹط® ط§ظ„ظ†ظ‡ط§ظٹط©'
+        verbose_name='تاريخ النهاية'
     )
 
     is_active = models.BooleanField(
         default=True,
-        verbose_name='ظ†ط´ط·'
+        verbose_name='نشط'
     )
 
     priority = models.IntegerField(
         default=1,
-        verbose_name='ط§ظ„ط£ظˆظ„ظˆظٹط©',
-        help_text='1=ظ…ظˆط¸ظپ, 2=ظ‚ط³ظ…, 3=ظپط±ط¹, 4=ط´ط±ظƒط©'
+        verbose_name='الأولوية',
+        help_text='1=موظف, 2=قسم, 3=فرع, 4=شركة'
     )
 
     class Meta:
-        verbose_name = 'ط´ظٹظپطھ ظ…ظˆط¸ظپ'
-        verbose_name_plural = 'ط´ظٹظپطھط§طھ ط§ظ„ظ…ظˆط¸ظپظٹظ†'
+        verbose_name = 'شيفت موظف'
+        verbose_name_plural = 'شيفتات الموظفين'
         ordering = ['-start_date']
 
     def __str__(self):
@@ -884,20 +885,20 @@ class EmployeeShift(TenantModel):
 
 
 class ShiftChangeRequest(TenantModel):
-    """ط·ظ„ط¨ طھط؛ظٹظٹط± ط´ظٹظپطھ ظ…ط¹ ظ…ظˆط§ظپظ‚ط§طھ"""
+    """طلب تغيير شيفت مع موافقات"""
 
     STATUS_CHOICES = [
-        ('pending', 'ظپظٹ ط§ظ„ط§ظ†طھط¸ط§ط±'),
-        ('approved', 'ظ…ظˆط§ظپظ‚ ط¹ظ„ظٹظ‡'),
-        ('rejected', 'ظ…ط±ظپظˆط¶'),
-        ('cancelled', 'ظ…ظ„ط؛ظٹ'),
+        ('pending', 'في الانتظار'),
+        ('approved', 'موافق عليه'),
+        ('rejected', 'مرفوض'),
+        ('cancelled', 'ملغي'),
     ]
 
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='shift_change_requests',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
 
     requested_by = models.ForeignKey(
@@ -905,7 +906,7 @@ class ShiftChangeRequest(TenantModel):
         on_delete=models.SET_NULL,
         null=True,
         related_name='shift_changes_requested',
-        verbose_name='ط·ظ„ط¨ ط¨ظˆط§ط³ط·ط©'
+        verbose_name='طلب بواسطة'
     )
 
     old_shift = models.ForeignKey(
@@ -914,36 +915,36 @@ class ShiftChangeRequest(TenantModel):
         null=True,
         blank=True,
         related_name='old_change_requests',
-        verbose_name='ط§ظ„ط´ظٹظپطھ ط§ظ„ظ‚ط¯ظٹظ…'
+        verbose_name='الشيفت القديم'
     )
 
     new_shift = models.ForeignKey(
         Shift,
         on_delete=models.PROTECT,
         related_name='new_change_requests',
-        verbose_name='ط§ظ„ط´ظٹظپطھ ط§ظ„ط¬ط¯ظٹط¯'
+        verbose_name='الشيفت الجديد'
     )
 
     effective_from = models.DateField(
-        verbose_name='طھط§ط±ظٹط® ط¨ط¯ط§ظٹط© ط§ظ„ط³ط±ظٹط§ظ†'
+        verbose_name='تاريخ بداية السريان'
     )
 
     effective_to = models.DateField(
         blank=True,
         null=True,
-        verbose_name='طھط§ط±ظٹط® ظ†ظ‡ط§ظٹط© ط§ظ„ط³ط±ظٹط§ظ†'
+        verbose_name='تاريخ نهاية السريان'
     )
 
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default='pending',
-        verbose_name='ط§ظ„ط­ط§ظ„ط©'
+        verbose_name='الحالة'
     )
 
     requires_approval = models.BooleanField(
         default=True,
-        verbose_name='ظٹط­طھط§ط¬ ظ…ظˆط§ظپظ‚ط©'
+        verbose_name='يحتاج موافقة'
     )
 
     approved_by = models.ForeignKey(
@@ -952,26 +953,26 @@ class ShiftChangeRequest(TenantModel):
         null=True,
         blank=True,
         related_name='shift_changes_approved',
-        verbose_name='ظˆط§ظپظ‚ ط¨ظˆط§ط³ط·ط©'
+        verbose_name='وافق بواسطة'
     )
 
     rejection_reason = models.TextField(
         blank=True,
-        verbose_name='ط³ط¨ط¨ ط§ظ„ط±ظپط¶'
+        verbose_name='سبب الرفض'
     )
 
     reason = models.TextField(
         blank=True,
-        verbose_name='ط³ط¨ط¨ ط·ظ„ط¨ ط§ظ„طھط؛ظٹظٹط±'
+        verbose_name='سبب طلب التغيير'
     )
 
-    notified_manager = models.BooleanField(default=False, verbose_name='طھظ… ط¥ط¨ظ„ط§ط؛ ط§ظ„ظ…ط¯ظٹط±')
-    notified_hr = models.BooleanField(default=False, verbose_name='طھظ… ط¥ط¨ظ„ط§ط؛ HR')
-    notified_employee = models.BooleanField(default=False, verbose_name='طھظ… ط¥ط¨ظ„ط§ط؛ ط§ظ„ظ…ظˆط¸ظپ')
+    notified_manager = models.BooleanField(default=False, verbose_name='تم إبلاغ المدير')
+    notified_hr = models.BooleanField(default=False, verbose_name='تم إبلاغ HR')
+    notified_employee = models.BooleanField(default=False, verbose_name='تم إبلاغ الموظف')
 
     class Meta:
-        verbose_name = 'ط·ظ„ط¨ طھط؛ظٹظٹط± ط´ظٹظپطھ'
-        verbose_name_plural = 'ط·ظ„ط¨ط§طھ طھط؛ظٹظٹط± ط§ظ„ط´ظٹظپطھط§طھ'
+        verbose_name = 'طلب تغيير شيفت'
+        verbose_name_plural = 'طلبات تغيير الشيفتات'
         ordering = ['-created_at']
 
     def __str__(self):
@@ -979,34 +980,34 @@ class ShiftChangeRequest(TenantModel):
 
 
 class ShiftOverride(TenantModel):
-    """ط§ط³طھط«ظ†ط§ط، ط´ظٹظپطھ ظ„ظٹظˆظ… ظ…ط¹ظٹظ†"""
+    """استثناء شيفت ليوم معين"""
 
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='shift_overrides',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
 
     override_date = models.DateField(
-        verbose_name='طھط§ط±ظٹط® ط§ظ„ط§ط³طھط«ظ†ط§ط،'
+        verbose_name='تاريخ الاستثناء'
     )
 
     shift = models.ForeignKey(
         Shift,
         on_delete=models.PROTECT,
         related_name='overrides',
-        verbose_name='ط§ظ„ط´ظٹظپطھ ط§ظ„ط¨ط¯ظٹظ„'
+        verbose_name='الشيفت البديل'
     )
 
     reason = models.TextField(
         blank=True,
-        verbose_name='ط³ط¨ط¨ ط§ظ„ط§ط³طھط«ظ†ط§ط،'
+        verbose_name='سبب الاستثناء'
     )
 
     class Meta:
-        verbose_name = 'ط§ط³طھط«ظ†ط§ط، ط´ظٹظپطھ'
-        verbose_name_plural = 'ط§ط³طھط«ظ†ط§ط،ط§طھ ط§ظ„ط´ظٹظپطھط§طھ'
+        verbose_name = 'استثناء شيفت'
+        verbose_name_plural = 'استثناءات الشيفتات'
         ordering = ['-override_date']
         unique_together = [['employee', 'override_date']]
 
@@ -1015,15 +1016,15 @@ class ShiftOverride(TenantModel):
 
 
 class ShiftRotation(TenantModel):
-    """ط¯ظˆط±ط© ط§ظ„طھظ†ط§ظˆط¨"""
-    name = models.CharField(max_length=100, verbose_name='ط§ط³ظ… ط§ظ„طھظ†ط§ظˆط¨')
-    cycle_length_days = models.PositiveSmallIntegerField(default=7, verbose_name='ط·ظˆظ„ ط§ظ„ط¯ظˆط±ط© (ط£ظٹط§ظ…)')
-    start_date = models.DateField(verbose_name='طھط§ط±ظٹط® ط¨ط¯ط§ظٹط© ط§ظ„طھظ†ط§ظˆط¨ ط§ظ„ظ…ط±ط¬ط¹ظٹ')
-    is_active = models.BooleanField(default=True, verbose_name='ظ†ط´ط·')
+    """دورة التناوب"""
+    name = models.CharField(max_length=100, verbose_name='اسم التناوب')
+    cycle_length_days = models.PositiveSmallIntegerField(default=7, verbose_name='طول الدورة (أيام)')
+    start_date = models.DateField(verbose_name='تاريخ بداية التناوب المرجعي')
+    is_active = models.BooleanField(default=True, verbose_name='نشط')
 
     class Meta:
-        verbose_name = 'طھظ†ط§ظˆط¨ ط´ظٹظپطھط§طھ'
-        verbose_name_plural = 'طھظ†ط§ظˆط¨ط§طھ ط§ظ„ط´ظٹظپطھط§طھ'
+        verbose_name = 'تناوب شيفتات'
+        verbose_name_plural = 'تناوبات الشيفتات'
         ordering = ['-start_date']
 
     def __str__(self):
@@ -1031,19 +1032,19 @@ class ShiftRotation(TenantModel):
 
 
 class ShiftRotationSlot(TenantModel):
-    """ظپطھط±ط§طھ ط§ظ„ط´ظٹظپطھط§طھ ط¯ط§ط®ظ„ ط§ظ„ط¯ظˆط±ط©"""
+    """فترات الشيفتات داخل الدورة"""
     rotation = models.ForeignKey(
         ShiftRotation,
         on_delete=models.CASCADE,
         related_name='slots',
-        verbose_name='ط§ظ„طھظ†ط§ظˆط¨'
+        verbose_name='التناوب'
     )
     start_day_index = models.PositiveSmallIntegerField(
-        verbose_name='ظ…ظ† ظٹظˆظ… ط±ظ‚ظ…',
-        help_text='0 = ط£ظˆظ„ ظٹظˆظ… ظپظٹ ط§ظ„ط¯ظˆط±ط©'
+        verbose_name='من يوم رقم',
+        help_text='0 = أول يوم في الدورة'
     )
     end_day_index = models.PositiveSmallIntegerField(
-        verbose_name='ط¥ظ„ظ‰ ظٹظˆظ… ط±ظ‚ظ…'
+        verbose_name='إلى يوم رقم'
     )
     shift = models.ForeignKey(
         Shift,
@@ -1051,163 +1052,163 @@ class ShiftRotationSlot(TenantModel):
         null=True,
         blank=True,
         related_name='rotation_slots',
-        verbose_name='ط§ظ„ط´ظٹظپطھ (ظپط§ط±ط؛ = ط¥ط¬ط§ط²ط©)'
+        verbose_name='الشيفت (فارغ = إجازة)'
     )
 
     class Meta:
         ordering = ['start_day_index']
 
     def __str__(self):
-        shift_name = self.shift.name if self.shift else 'ط±ط§ط­ط©'
+        shift_name = self.shift.name if self.shift else 'راحة'
         return f"ظٹظˆظ… {self.start_day_index} - {self.end_day_index}: {shift_name}"
 
 
 class ShiftRotationAssignment(TenantModel):
-    """طھط¹ظٹظٹظ† ط§ظ„طھظ†ط§ظˆط¨ ط¹ظ„ظ‰ ط§ظ„ظ…ظˆط¸ظپظٹظ†/ط§ظ„ط£ظ‚ط³ط§ظ…/ط§ظ„ظپط±ظˆط¹"""
+    """تعيين التناوب على الموظفين/الأقسام/الفروع"""
     ASSIGNMENT_TYPE_CHOICES = [
-        ('company', 'ط´ط±ظƒط©'),
-        ('branch', 'ظپط±ط¹'),
-        ('department', 'ظ‚ط³ظ…'),
-        ('employee', 'ظ…ظˆط¸ظپ'),
+        ('company', 'شركة'),
+        ('branch', 'فرع'),
+        ('department', 'قسم'),
+        ('employee', 'موظف'),
     ]
     rotation = models.ForeignKey(
         ShiftRotation,
         on_delete=models.CASCADE,
         related_name='assignments',
-        verbose_name='ط§ظ„طھظ†ط§ظˆط¨'
+        verbose_name='التناوب'
     )
     assignment_type = models.CharField(
         max_length=20,
         choices=ASSIGNMENT_TYPE_CHOICES,
-        verbose_name='ظ†ظˆط¹ ط§ظ„طھط¹ظٹظٹظ†'
+        verbose_name='نوع التعيين'
     )
     branch = models.ForeignKey(
         'companies.Branch',
         on_delete=models.CASCADE,
         blank=True,
         null=True,
-        verbose_name='ط§ظ„ظپط±ط¹'
+        verbose_name='الفرع'
     )
     department = models.ForeignKey(
         'companies.Department',
         on_delete=models.CASCADE,
         blank=True,
         null=True,
-        verbose_name='ط§ظ„ظ‚ط³ظ…'
+        verbose_name='القسم'
     )
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         blank=True,
         null=True,
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
-    start_date = models.DateField(verbose_name='طھط§ط±ظٹط® ط§ظ„ط¨ط¯ط§ظٹط©')
-    end_date = models.DateField(blank=True, null=True, verbose_name='طھط§ط±ظٹط® ط§ظ„ظ†ظ‡ط§ظٹط©')
+    start_date = models.DateField(verbose_name='تاريخ البداية')
+    end_date = models.DateField(blank=True, null=True, verbose_name='تاريخ النهاية')
     priority = models.IntegerField(
         default=4,
-        verbose_name='ط§ظ„ط£ظˆظ„ظˆظٹط©',
-        help_text='1=ظ…ظˆط¸ظپ, 2=ظ‚ط³ظ…, 3=ظپط±ط¹, 4=ط´ط±ظƒط©'
+        verbose_name='الأولوية',
+        help_text='1=موظف, 2=قسم, 3=فرع, 4=شركة'
     )
-    is_active = models.BooleanField(default=True, verbose_name='ظ†ط´ط·')
+    is_active = models.BooleanField(default=True, verbose_name='نشط')
 
     class Meta:
         ordering = ['priority', '-start_date']
 
 class Attendance(TenantModel):
-    """ط³ط¬ظ„ ط§ظ„ط­ط¶ظˆط± ط§ظ„ظٹظˆظ…ظٹ"""
+    """سجل الحضور اليومي"""
     
     STATUS_CHOICES = [
-        ('present', 'ط­ط§ط¶ط±'),
-        ('absent', 'ط؛ط§ط¦ط¨'),
-        ('late', 'ظ…طھط£ط®ط±'),
-        ('early_leave', 'ط§ظ†طµط±ط§ظپ ظ…ط¨ظƒط±'),
-        ('on_leave', 'ظپظٹ ط¥ط¬ط§ط²ط©'),
-        ('holiday', 'ط¹ط·ظ„ط© ط±ط³ظ…ظٹط©'),
-        ('weekend', 'ط¥ط¬ط§ط²ط© ط£ط³ط¨ظˆط¹ظٹط©'),
+        ('present', 'حاضر'),
+        ('absent', 'غائب'),
+        ('late', 'متأخر'),
+        ('early_leave', 'انصراف مبكر'),
+        ('on_leave', 'في إجازة'),
+        ('holiday', 'عطلة رسمية'),
+        ('weekend', 'إجازة أسبوعية'),
     ]
     
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='attendances',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
     
     date = models.DateField(
-        verbose_name='ط§ظ„طھط§ط±ظٹط®'
+        verbose_name='التاريخ'
     )
     
     # ط§ظ„ط­ط¶ظˆط±
     check_in_time = models.DateTimeField(
         blank=True,
         null=True,
-        verbose_name='ظˆظ‚طھ ط§ظ„ط­ط¶ظˆط±'
+        verbose_name='وقت الحضور'
     )
     check_in_latitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
         blank=True,
         null=True,
-        verbose_name='ط®ط· ط¹ط±ط¶ ط§ظ„ط­ط¶ظˆط±'
+        verbose_name='خط عرض الحضور'
     )
     check_in_longitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
         blank=True,
         null=True,
-        verbose_name='ط®ط· ط·ظˆظ„ ط§ظ„ط­ط¶ظˆط±'
+        verbose_name='خط طول الحضور'
     )
     check_in_address = models.CharField(
         max_length=500,
         blank=True,
         null=True,
-        verbose_name='ط¹ظ†ظˆط§ظ† ط§ظ„ط­ط¶ظˆط±'
+        verbose_name='عنوان الحضور'
     )
     check_in_within_range = models.BooleanField(
         default=False,
-        verbose_name='ط¯ط§ط®ظ„ ظ†ط·ط§ظ‚ ط§ظ„ظپط±ط¹'
+        verbose_name='داخل نطاق الفرع'
     )
     check_in_notes = models.TextField(
         blank=True,
         null=True,
-        verbose_name='ظ…ظ„ط§ط­ط¸ط§طھ ط§ظ„ط­ط¶ظˆط±'
+        verbose_name='ملاحظات الحضور'
     )
     
     # ط§ظ„ط§ظ†طµط±ط§ظپ
     check_out_time = models.DateTimeField(
         blank=True,
         null=True,
-        verbose_name='ظˆظ‚طھ ط§ظ„ط§ظ†طµط±ط§ظپ'
+        verbose_name='وقت الانصراف'
     )
     check_out_latitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
         blank=True,
         null=True,
-        verbose_name='ط®ط· ط¹ط±ط¶ ط§ظ„ط§ظ†طµط±ط§ظپ'
+        verbose_name='خط عرض الانصراف'
     )
     check_out_longitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
         blank=True,
         null=True,
-        verbose_name='ط®ط· ط·ظˆظ„ ط§ظ„ط§ظ†طµط±ط§ظپ'
+        verbose_name='خط طول الانصراف'
     )
     check_out_address = models.CharField(
         max_length=500,
         blank=True,
         null=True,
-        verbose_name='ط¹ظ†ظˆط§ظ† ط§ظ„ط§ظ†طµط±ط§ظپ'
+        verbose_name='عنوان الانصراف'
     )
     check_out_within_range = models.BooleanField(
         default=False,
-        verbose_name='ط¯ط§ط®ظ„ ظ†ط·ط§ظ‚ ط§ظ„ظپط±ط¹'
+        verbose_name='داخل نطاق الفرع'
     )
     check_out_notes = models.TextField(
         blank=True,
         null=True,
-        verbose_name='ظ…ظ„ط§ط­ط¸ط§طھ ط§ظ„ط§ظ†طµط±ط§ظپ'
+        verbose_name='ملاحظات الانصراف'
     )
     
     # ط§ظ„ط­ط³ط§ط¨ط§طھ
@@ -1215,21 +1216,21 @@ class Attendance(TenantModel):
         max_digits=5,
         decimal_places=2,
         default=0,
-        verbose_name='ط³ط§ط¹ط§طھ ط§ظ„ط¹ظ…ظ„'
+        verbose_name='ساعات العمل'
     )
     late_minutes = models.IntegerField(
         default=0,
-        verbose_name='ط¯ظ‚ط§ط¦ظ‚ ط§ظ„طھط£ط®ظٹط±'
+        verbose_name='دقائق التأخير'
     )
     early_leave_minutes = models.IntegerField(
         default=0,
-        verbose_name='ط¯ظ‚ط§ط¦ظ‚ ط§ظ„ط§ظ†طµط±ط§ظپ ط§ظ„ظ…ط¨ظƒط±'
+        verbose_name='دقائق الانصراف المبكر'
     )
     overtime_hours = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         default=0,
-        verbose_name='ط³ط§ط¹ط§طھ ط§ظ„ط£ظˆظپط± طھط§ظٹظ…'
+        verbose_name='ساعات الأوفر تايم'
     )
     
     # ط§ظ„ط­ط§ظ„ط©
@@ -1237,7 +1238,7 @@ class Attendance(TenantModel):
         max_length=20,
         choices=STATUS_CHOICES,
         default='present',
-        verbose_name='ط§ظ„ط­ط§ظ„ط©'
+        verbose_name='الحالة'
     )
     
     # ط§ظ„ط´ظٹظپطھ ط§ظ„ظ…ط³ظ†ط¯
@@ -1247,25 +1248,25 @@ class Attendance(TenantModel):
         blank=True,
         null=True,
         related_name='attendances',
-        verbose_name='ط§ظ„ط´ظٹظپطھ'
+        verbose_name='الشيفت'
     )
     
     # ظ‡ظ„ طھظ… طھط¹ط¯ظٹظ„ظ‡ ظٹط¯ظˆظٹط§ظ‹
-    on_mission = models.BooleanField(default=False, verbose_name='ظپظٹ ظ…ط£ظ…ظˆط±ظٹط©')
+    on_mission = models.BooleanField(default=False, verbose_name='في مأمورية')
     is_manually_edited = models.BooleanField(
         default=False,
-        verbose_name='ظ…ط¹ط¯ظ„ ظٹط¯ظˆظٹط§ظ‹'
+        verbose_name='معدل يدوياً'
     )
     
     admin_notes = models.TextField(
         blank=True,
         null=True,
-        verbose_name='ظ…ظ„ط§ط­ط¸ط§طھ ط§ظ„ط¥ط¯ط§ط±ط©'
+        verbose_name='ملاحظات الإدارة'
     )
     
     class Meta:
-        verbose_name = 'ط³ط¬ظ„ ط­ط¶ظˆط±'
-        verbose_name_plural = 'ط³ط¬ظ„ط§طھ ط§ظ„ط­ط¶ظˆط±'
+        verbose_name = 'سجل حضور'
+        verbose_name_plural = 'سجلات الحضور'
         ordering = ['-date', '-check_in_time']
         unique_together = [['employee', 'date']]
     
@@ -1273,7 +1274,7 @@ class Attendance(TenantModel):
         return f"{self.employee.full_name_ar} - {self.date}"
     
     def calculate_work_hours(self):
-        """ط­ط³ط§ط¨ ط³ط§ط¹ط§طھ ط§ظ„ط¹ظ…ظ„ - ظٹط¹طھظ…ط¯ ط¹ظ„ظ‰ AttendanceSession ظ„ظˆ ظ…ظˆط¬ظˆط¯ط©"""
+        """حساب ساعات العمل - يعتمد على AttendanceSession لو موجودة"""
         try:
             from attendance.models import AttendanceSession
 
@@ -1309,7 +1310,7 @@ class Attendance(TenantModel):
         return 0
     
     def calculate_late_minutes(self):
-        """ط­ط³ط§ط¨ ط¯ظ‚ط§ط¦ظ‚ ط§ظ„طھط£ط®ظٹط±"""
+        """حساب دقائق التأخير"""
         if self.check_in_time and self.shift:
             shift_start = datetime.combine(
                 self.date,
@@ -1331,31 +1332,31 @@ class Attendance(TenantModel):
 
 class LocationLog(TenantModel):
     """
-    ط³ط¬ظ„ طھطھط¨ط¹ ط§ظ„ظ…ظˆط§ظ‚ط¹ ط§ظ„ظ…ط³طھظ…ط±
-    ظ„ظ„ظ…ظˆط¸ظپظٹظ† ط§ظ„ظ…ظٹط¯ط§ظ†ظٹظٹظ† ط§ظ„ظ„ظٹ ظپط¹ظ‘ط§ظ„ظٹظ† is_field_worker
+    سجل تتبع المواقع المستمر
+    للموظفين الميدانيين اللي فعّالين is_field_worker
     """
     
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='location_logs',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
     
     timestamp = models.DateTimeField(
-        verbose_name='ط§ظ„ظˆظ‚طھ'
+        verbose_name='الوقت'
     )
     
     latitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
-        verbose_name='ط®ط· ط§ظ„ط¹ط±ط¶'
+        verbose_name='خط العرض'
     )
     
     longitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
-        verbose_name='ط®ط· ط§ظ„ط·ظˆظ„'
+        verbose_name='خط الطول'
     )
     
     accuracy = models.DecimalField(
@@ -1363,7 +1364,7 @@ class LocationLog(TenantModel):
         decimal_places=2,
         blank=True,
         null=True,
-        verbose_name='ط¯ظ‚ط© ط§ظ„ظ…ظˆظ‚ط¹ (ظ…طھط±)'
+        verbose_name='دقة الموقع (متر)'
     )
     
     speed = models.DecimalField(
@@ -1371,25 +1372,25 @@ class LocationLog(TenantModel):
         decimal_places=2,
         blank=True,
         null=True,
-        verbose_name='ط§ظ„ط³ط±ط¹ط© (ظƒظ…/ط³)'
+        verbose_name='السرعة (كم/س)'
     )
     
     battery_level = models.IntegerField(
         blank=True,
         null=True,
-        verbose_name='ظ…ط³طھظˆظ‰ ط§ظ„ط¨ط·ط§ط±ظٹط© %'
+        verbose_name='مستوى البطارية %'
     )
     
     address = models.CharField(
         max_length=500,
         blank=True,
         null=True,
-        verbose_name='ط§ظ„ط¹ظ†ظˆط§ظ†'
+        verbose_name='العنوان'
     )
     
     class Meta:
-        verbose_name = 'ط³ط¬ظ„ ظ…ظˆظ‚ط¹'
-        verbose_name_plural = 'ط³ط¬ظ„ط§طھ ط§ظ„ظ…ظˆط§ظ‚ط¹'
+        verbose_name = 'سجل موقع'
+        verbose_name_plural = 'سجلات المواقع'
         ordering = ['-timestamp']
         indexes = [
             models.Index(fields=['employee', '-timestamp']),
@@ -1401,118 +1402,118 @@ class LocationLog(TenantModel):
 
 class LocationCheckIn(TenantModel):
     """
-    Check-in ظپظٹ ظ…ظˆط§ظ‚ط¹ ظ…ط­ط¯ط¯ط©
-    ظ…ظپظٹط¯ ظ„ظ„ظ…ط´طھط±ظٹط§طھطŒ ط§ظ„ظ…ط¨ظٹط¹ط§طھطŒ ط§ظ„طµظٹط§ظ†ط©طŒ ط§ظ„ط®
+    Check-in في مواقع محددة
+    مفيد للمشتريات، المبيعات، الصيانة، الخ
     """
     
     VISIT_TYPE_CHOICES = [
-        ('client_visit', 'ط²ظٹط§ط±ط© ط¹ظ…ظٹظ„'),
-        ('supplier_visit', 'ط²ظٹط§ط±ط© ظ…ظˆط±ط¯'),
-        ('site_inspection', 'ظ…ط¹ط§ظٹظ†ط© ظ…ظˆظ‚ط¹'),
-        ('maintenance', 'طµظٹط§ظ†ط©'),
-        ('delivery', 'طھظˆطµظٹظ„'),
-        ('meeting', 'ط§ط¬طھظ…ط§ط¹'),
-        ('purchase', 'ط´ط±ط§ط،'),
-        ('other', 'ط£ط®ط±ظ‰'),
+        ('client_visit', 'زيارة عميل'),
+        ('supplier_visit', 'زيارة مورد'),
+        ('site_inspection', 'معاينة موقع'),
+        ('maintenance', 'صيانة'),
+        ('delivery', 'توصيل'),
+        ('meeting', 'اجتماع'),
+        ('purchase', 'شراء'),
+        ('other', 'أخرى'),
     ]
     
     STATUS_CHOICES = [
-        ('arrived', 'ظˆطµظ„'),
-        ('in_progress', 'ط¬ط§ط±ظٹ ط§ظ„ط¹ظ…ظ„'),
-        ('completed', 'ظ…ظƒطھظ…ظ„'),
-        ('cancelled', 'ظ…ظ„ط؛ظٹ'),
+        ('arrived', 'وصل'),
+        ('in_progress', 'جاري العمل'),
+        ('completed', 'مكتمل'),
+        ('cancelled', 'ملغي'),
     ]
     
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='location_checkins',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
     
     visit_type = models.CharField(
         max_length=30,
         choices=VISIT_TYPE_CHOICES,
-        verbose_name='ظ†ظˆط¹ ط§ظ„ط²ظٹط§ط±ط©'
+        verbose_name='نوع الزيارة'
     )
     
     location_name = models.CharField(
         max_length=300,
-        verbose_name='ط§ط³ظ… ط§ظ„ظ…ظˆظ‚ط¹/ط§ظ„ط¹ظ…ظٹظ„'
+        verbose_name='اسم الموقع/العميل'
     )
     
     # ظˆظ‚طھ ط§ظ„ظˆطµظˆظ„
     arrival_time = models.DateTimeField(
-        verbose_name='ظˆظ‚طھ ط§ظ„ظˆطµظˆظ„'
+        verbose_name='وقت الوصول'
     )
     arrival_latitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
-        verbose_name='ط®ط· ط¹ط±ط¶ ط§ظ„ظˆطµظˆظ„'
+        verbose_name='خط عرض الوصول'
     )
     arrival_longitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
-        verbose_name='ط®ط· ط·ظˆظ„ ط§ظ„ظˆطµظˆظ„'
+        verbose_name='خط طول الوصول'
     )
     arrival_address = models.CharField(
         max_length=500,
         blank=True,
         null=True,
-        verbose_name='ط¹ظ†ظˆط§ظ† ط§ظ„ظˆطµظˆظ„'
+        verbose_name='عنوان الوصول'
     )
     
     # ظˆظ‚طھ ط§ظ„ظ…ط؛ط§ط¯ط±ط©
     departure_time = models.DateTimeField(
         blank=True,
         null=True,
-        verbose_name='ظˆظ‚طھ ط§ظ„ظ…ط؛ط§ط¯ط±ط©'
+        verbose_name='وقت المغادرة'
     )
     departure_latitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
         blank=True,
         null=True,
-        verbose_name='ط®ط· ط¹ط±ط¶ ط§ظ„ظ…ط؛ط§ط¯ط±ط©'
+        verbose_name='خط عرض المغادرة'
     )
     departure_longitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
         blank=True,
         null=True,
-        verbose_name='ط®ط· ط·ظˆظ„ ط§ظ„ظ…ط؛ط§ط¯ط±ط©'
+        verbose_name='خط طول المغادرة'
     )
     
     # ط§ظ„طھظپط§طµظٹظ„
     purpose = models.TextField(
         blank=True,
         null=True,
-        verbose_name='ط§ظ„ط؛ط±ط¶ ظ…ظ† ط§ظ„ط²ظٹط§ط±ط©'
+        verbose_name='الغرض من الزيارة'
     )
     
     notes = models.TextField(
         blank=True,
         null=True,
-        verbose_name='ظ…ظ„ط§ط­ط¸ط§طھ'
+        verbose_name='ملاحظات'
     )
     
     photo = models.ImageField(
         upload_to='attendance/checkins/',
         blank=True,
         null=True,
-        verbose_name='طµظˆط±ط©'
+        verbose_name='صورة'
     )
     
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default='arrived',
-        verbose_name='ط§ظ„ط­ط§ظ„ط©'
+        verbose_name='الحالة'
     )
     
     class Meta:
-        verbose_name = 'ط²ظٹط§ط±ط© ظ…ظˆظ‚ط¹'
-        verbose_name_plural = 'ط²ظٹط§ط±ط§طھ ط§ظ„ظ…ظˆط§ظ‚ط¹'
+        verbose_name = 'زيارة موقع'
+        verbose_name_plural = 'زيارات المواقع'
         ordering = ['-arrival_time']
     
     def __str__(self):
@@ -1520,7 +1521,7 @@ class LocationCheckIn(TenantModel):
     
     @property
     def duration_minutes(self):
-        """ظ…ط¯ط© ط§ظ„ط²ظٹط§ط±ط© ط¨ط§ظ„ط¯ظ‚ط§ط¦ظ‚"""
+        """مدة الزيارة بالدقائق"""
         if self.arrival_time and self.departure_time:
             duration = self.departure_time - self.arrival_time
             return int(duration.total_seconds() / 60)
@@ -1530,99 +1531,99 @@ class LocationCheckIn(TenantModel):
 
 class DailyAttendanceSummary(TenantModel):
     """
-    ظ…ظ„ط®طµ ظٹظˆظ…ظٹ ظ„ط­ط¶ظˆط± ظƒظ„ ظ…ظˆط¸ظپ.
-    ط¨ظٹطھط­ط³ط¨ ظˆظ‚طھ check_out ظˆظٹطھط­ط¯ط« ط¨ظ€ Cron ظƒظ„ ظ„ظٹظ„ط©.
-    ط¨ظٹط³ط±ظ‘ط¹ ط­ط³ط§ط¨ ط§ظ„ظ…ط±طھط¨ط§طھ ظˆط§ظ„طھظ‚ط§ط±ظٹط±.
+    ملخص يومي لحضور كل موظف.
+    بيتحسب وقت check_out ويتحدث بـ Cron كل ليلة.
+    بيسرّع حساب المرتبات والتقارير.
     """
 
     STATUS_CHOICES = [
-        ('present', 'ط­ط§ط¶ط±'),
-        ('absent', 'ط؛ط§ط¦ط¨'),
-        ('late', 'ظ…طھط£ط®ط±'),
-        ('on_leave', 'ظپظٹ ط¥ط¬ط§ط²ط©'),
-        ('weekend', 'ط¥ط¬ط§ط²ط© ط£ط³ط¨ظˆط¹ظٹط©'),
-        ('mission', 'ظ…ط£ظ…ظˆط±ظٹط©'),
-        ('holiday', 'ط¹ط·ظ„ط© ط±ط³ظ…ظٹط©'),
+        ('present', 'حاضر'),
+        ('absent', 'غائب'),
+        ('late', 'متأخر'),
+        ('on_leave', 'في إجازة'),
+        ('weekend', 'إجازة أسبوعية'),
+        ('mission', 'مأمورية'),
+        ('holiday', 'عطلة رسمية'),
     ]
 
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='daily_summaries',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
 
     date = models.DateField(
-        verbose_name='ط§ظ„طھط§ط±ظٹط®'
+        verbose_name='التاريخ'
     )
 
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default='absent',
-        verbose_name='ط§ظ„ط­ط§ظ„ط©'
+        verbose_name='الحالة'
     )
 
     effective_status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default='absent',
-        verbose_name='ط§ظ„ط­ط§ظ„ط© ط§ظ„ظپط¹ظ„ظٹط© (ط¨ط¹ط¯ ط§ظ„ط£ط°ظˆظ†ط§طھ)'
+        verbose_name='الحالة الفعلية (بعد الأذونات)'
     )
 
     late_minutes = models.IntegerField(
         default=0,
-        verbose_name='ط¯ظ‚ط§ط¦ظ‚ ط§ظ„طھط£ط®ظٹط±'
+        verbose_name='دقائق التأخير'
     )
 
     work_hours = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         default=0,
-        verbose_name='ط³ط§ط¹ط§طھ ط§ظ„ط¹ظ…ظ„'
+        verbose_name='ساعات العمل'
     )
 
     overtime_hours = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         default=0,
-        verbose_name='ط³ط§ط¹ط§طھ ط§ظ„ط£ظˆظپط±طھط§ظٹظ…'
+        verbose_name='ساعات الأوفرتايم'
     )
 
     is_night_shift = models.BooleanField(
         default=False,
-        verbose_name='ط´ظٹظپطھ ظ„ظٹظ„ظٹ'
+        verbose_name='شيفت ليلي'
     )
 
     is_weekend_work = models.BooleanField(
         default=False,
-        verbose_name='ط¹ظ…ظ„ ظپظٹ ظٹظˆظ… ط§ظ„ط±ط§ط­ط©'
+        verbose_name='عمل في يوم الراحة'
     )
 
     early_leave_minutes = models.IntegerField(
         default=0,
-        verbose_name='ط¯ظ‚ط§ط¦ظ‚ ط§ظ„ط§ظ†طµط±ط§ظپ ط§ظ„ظ…ط¨ظƒط±'
+        verbose_name='دقائق الانصراف المبكر'
     )
 
     permission_hours_used = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         default=0,
-        verbose_name='ط³ط§ط¹ط§طھ ط§ظ„ط¥ط°ظ† ط§ظ„ظ…ط³طھط®ط¯ظ…ط©'
+        verbose_name='ساعات الإذن المستخدمة'
     )
 
     flex_delta_hours = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         default=0,
-        verbose_name='ظپط±ظ‚ ط³ط§ط¹ط§طھ ط§ظ„ط´ظٹظپطھ ط§ظ„ظ…ط±ظ†'
+        verbose_name='فرق ساعات الشيفت المرن'
     )
 
     flex_status = models.CharField(
         max_length=10,
         blank=True,
         default='',
-        verbose_name='ط­ط§ظ„ط© طھط³ظˆظٹط© ط§ظ„ط´ظٹظپطھ ط§ظ„ظ…ط±ظ†',
+        verbose_name='حالة تسوية الشيفت المرن',
         help_text='pending / approved / rejected / none'
     )
 
@@ -1632,7 +1633,7 @@ class DailyAttendanceSummary(TenantModel):
         null=True,
         blank=True,
         related_name='daily_summaries',
-        verbose_name='ط§ظ„ط´ظٹظپطھ'
+        verbose_name='الشيفت'
     )
 
     policy = models.ForeignKey(
@@ -1641,12 +1642,12 @@ class DailyAttendanceSummary(TenantModel):
         null=True,
         blank=True,
         related_name='daily_summaries',
-        verbose_name='ط§ظ„ط³ظٹط§ط³ط©'
+        verbose_name='السياسة'
     )
 
     class Meta:
-        verbose_name = 'ظ…ظ„ط®طµ ظٹظˆظ…ظٹ'
-        verbose_name_plural = 'ط§ظ„ظ…ظ„ط®طµط§طھ ط§ظ„ظٹظˆظ…ظٹط©'
+        verbose_name = 'ملخص يومي'
+        verbose_name_plural = 'الملخصات اليومية'
         ordering = ['-date']
         unique_together = [['employee', 'date']]
 
@@ -1656,8 +1657,8 @@ class DailyAttendanceSummary(TenantModel):
     @classmethod
     def compute_for_day(cls, employee, target_date):
         """
-        ظٹط­ط³ط¨ ط£ظˆ ظٹط­ط¯ط« ط§ظ„ظ…ظ„ط®طµ ط§ظ„ظٹظˆظ…ظٹ ظ„ظ…ظˆط¸ظپ ظپظٹ ظٹظˆظ… ظ…ط¹ظٹظ†.
-        ط¨ظٹط³طھط®ط¯ظ… ظ†ظپط³ ط§ظ„ظ…ظ†ط·ظ‚ ط§ظ„ظ„ظٹ ظپظٹ payroll_rules.
+        يحسب أو يحدث الملخص اليومي لموظف في يوم معين.
+        بيستخدم نفس المنطق اللي في payroll_rules.
         """
         try:
             from attendance.payroll_rules import (
@@ -1810,27 +1811,27 @@ class DailyAttendanceSummary(TenantModel):
 
 class FlexDayAdjustment(TenantModel):
     """
-    طھط³ظˆظٹط© ظٹظˆظ…ظٹط© ظ„ظ„ط´ظٹظپطھ ط§ظ„ظ…ط±ظ† (flex_fixed / flex_split).
-    ط¨طھطھظ†ط´ط£ طھظ„ظ‚ط§ط¦ظٹ ظˆظ‚طھ check-out ط£ظˆ compute_for_day.
-    HR ظٹظˆط§ظپظ‚ ط£ظˆ ظٹط±ظپط¶ ظ‚ط¨ظ„ ظ…ط§ طھطھط­ط³ط¨ ظپظٹ ط§ظ„ظ…ط±طھط¨.
+    تسوية يومية للشيفت المرن (flex_fixed / flex_split).
+    بتتنشأ تلقائي وقت check-out أو compute_for_day.
+    HR يوافق أو يرفض قبل ما تتحسب في المرتب.
     """
 
     TYPE_CHOICES = [
-        ('overtime', 'ط³ط§ط¹ط§طھ ط¥ط¶ط§ظپظٹط©'),
-        ('shortage', 'ظ†ظ‚طµ ط³ط§ط¹ط§طھ'),
+        ('overtime', 'ساعات إضافية'),
+        ('shortage', 'نقص ساعات'),
     ]
 
     STATUS_CHOICES = [
-        ('pending',  'ظ‚ظٹط¯ ظ…ط±ط§ط¬ط¹ط© HR'),
-        ('approved', 'ظ…ط¹طھظ…ط¯'),
-        ('rejected', 'ظ…ط±ظپظˆط¶'),
+        ('pending',  'قيد مراجعة HR'),
+        ('approved', 'معتمد'),
+        ('rejected', 'مرفوض'),
     ]
 
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='flex_adjustments',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
 
     attendance = models.ForeignKey(
@@ -1839,7 +1840,7 @@ class FlexDayAdjustment(TenantModel):
         null=True,
         blank=True,
         related_name='flex_adjustments',
-        verbose_name='ط³ط¬ظ„ ط§ظ„ط­ط¶ظˆط±'
+        verbose_name='سجل الحضور'
     )
 
     shift = models.ForeignKey(
@@ -1848,40 +1849,40 @@ class FlexDayAdjustment(TenantModel):
         null=True,
         blank=True,
         related_name='flex_adjustments',
-        verbose_name='ط§ظ„ط´ظٹظپطھ'
+        verbose_name='الشيفت'
     )
 
-    date = models.DateField(verbose_name='ط§ظ„طھط§ط±ظٹط®')
+    date = models.DateField(verbose_name='التاريخ')
 
     required_hours = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        verbose_name='ط§ظ„ط³ط§ط¹ط§طھ ط§ظ„ظ…ط·ظ„ظˆط¨ط©'
+        verbose_name='الساعات المطلوبة'
     )
 
     actual_hours = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        verbose_name='ط§ظ„ط³ط§ط¹ط§طھ ط§ظ„ظپط¹ظ„ظٹط©'
+        verbose_name='الساعات الفعلية'
     )
 
     delta_hours = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        verbose_name='ط§ظ„ظپط±ظ‚ (ظ…ظˆط¬ط¨ = ط²ظٹط§ط¯ط©طŒ ط³ط§ظ„ط¨ = ظ†ظ‚طµ)'
+        verbose_name='الفرق (موجب = زيادة، سالب = نقص)'
     )
 
     adjustment_type = models.CharField(
         max_length=10,
         choices=TYPE_CHOICES,
-        verbose_name='ط§ظ„ظ†ظˆط¹'
+        verbose_name='النوع'
     )
 
     status = models.CharField(
         max_length=10,
         choices=STATUS_CHOICES,
         default='pending',
-        verbose_name='ط§ظ„ط­ط§ظ„ط©'
+        verbose_name='الحالة'
     )
 
     reviewed_by = models.ForeignKey(
@@ -1890,23 +1891,23 @@ class FlexDayAdjustment(TenantModel):
         null=True,
         blank=True,
         related_name='flex_reviews',
-        verbose_name='طھظ…طھ ط§ظ„ظ…ط±ط§ط¬ط¹ط© ط¨ظˆط§ط³ط·ط©'
+        verbose_name='تمت المراجعة بواسطة'
     )
 
     reviewed_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='طھط§ط±ظٹط® ط§ظ„ظ…ط±ط§ط¬ط¹ط©'
+        verbose_name='تاريخ المراجعة'
     )
 
     review_notes = models.TextField(
         blank=True,
-        verbose_name='ظ…ظ„ط§ط­ط¸ط§طھ HR'
+        verbose_name='ملاحظات HR'
     )
 
     class Meta:
-        verbose_name = 'طھط³ظˆظٹط© ط´ظٹظپطھ ظ…ط±ظ†'
-        verbose_name_plural = 'طھط³ظˆظٹط§طھ ط§ظ„ط´ظٹظپطھ ط§ظ„ظ…ط±ظ†'
+        verbose_name = 'تسوية شيفت مرن'
+        verbose_name_plural = 'تسويات الشيفت المرن'
         ordering = ['-date']
         unique_together = [['employee', 'date', 'status']]
 
@@ -1918,25 +1919,25 @@ class FlexDayAdjustment(TenantModel):
 
 
 class AttendanceActionLog(TenantModel):
-    """ط³ط¬ظ„ طھط¹ط¯ظٹظ„ط§طھ ط§ظ„ط­ط¶ظˆط± ظˆط§ظ„ط§ظ†طµط±ط§ظپ"""
+    """سجل تعديلات الحضور والانصراف"""
 
     ACTION_CHOICES = [
-        ("edit", "طھط¹ط¯ظٹظ„"),
-        ("cancel_checkin", "ط¥ظ„ط؛ط§ط، ط­ط¶ظˆط±"),
-        ("cancel_checkout", "ط¥ظ„ط؛ط§ط، ط§ظ†طµط±ط§ظپ"),
-        ("delete", "ط­ط°ظپ ط³ط¬ظ„"),
+        ("edit", "تعديل"),
+        ("cancel_checkin", "إلغاء حضور"),
+        ("cancel_checkout", "إلغاء انصراف"),
+        ("delete", "حذف سجل"),
     ]
 
     attendance = models.ForeignKey(
         "Attendance",
         on_delete=models.CASCADE,
         related_name="action_logs",
-        verbose_name="ط³ط¬ظ„ ط§ظ„ط­ط¶ظˆط±"
+        verbose_name="سجل الحضور"
     )
     action_type = models.CharField(
         max_length=20,
         choices=ACTION_CHOICES,
-        verbose_name="ظ†ظˆط¹ ط§ظ„ط¥ط¬ط±ط§ط،"
+        verbose_name="نوع الإجراء"
     )
     performed_by = models.ForeignKey(
         "accounts.User",
@@ -1944,29 +1945,29 @@ class AttendanceActionLog(TenantModel):
         null=True,
         blank=True,
         related_name="attendance_actions",
-        verbose_name="طھظ… ط¨ظˆط§ط³ط·ط©"
+        verbose_name="تم بواسطة"
     )
     reason = models.TextField(
-        verbose_name="ط³ط¨ط¨ ط§ظ„طھط¹ط¯ظٹظ„"
+        verbose_name="سبب التعديل"
     )
     old_data = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name="ط§ظ„ط¨ظٹط§ظ†ط§طھ ظ‚ط¨ظ„ ط§ظ„طھط¹ط¯ظٹظ„"
+        verbose_name="البيانات قبل التعديل"
     )
     new_data = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name="ط§ظ„ط¨ظٹط§ظ†ط§طھ ط¨ط¹ط¯ ط§ظ„طھط¹ط¯ظٹظ„"
+        verbose_name="البيانات بعد التعديل"
     )
     action_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name="طھط§ط±ظٹط® ط§ظ„ط¥ط¬ط±ط§ط،"
+        verbose_name="تاريخ الإجراء"
     )
 
     class Meta:
-        verbose_name = "ط³ط¬ظ„ طھط¹ط¯ظٹظ„ ط­ط¶ظˆط±"
-        verbose_name_plural = "ط³ط¬ظ„ط§طھ طھط¹ط¯ظٹظ„ط§طھ ط§ظ„ط­ط¶ظˆط±"
+        verbose_name = "سجل تعديل حضور"
+        verbose_name_plural = "سجلات تعديلات الحضور"
         ordering = ["-action_at"]
 
     def __str__(self):
@@ -1978,67 +1979,67 @@ class AttendanceActionLog(TenantModel):
 # â•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گ
 
 class LateIncident(TenantModel):
-    """ط­ط§ط¯ط«ط© طھط£ط®ظٹط±"""
+    """حادثة تأخير"""
 
     employee = models.ForeignKey(
         "employees.Employee",
         on_delete=models.CASCADE,
         related_name="late_incidents",
-        verbose_name="ط§ظ„ظ…ظˆط¸ظپ"
+        verbose_name="الموظف"
     )
     attendance = models.ForeignKey(
         "Attendance",
         on_delete=models.CASCADE,
         related_name="late_incidents",
-        verbose_name="ط³ط¬ظ„ ط§ظ„ط­ط¶ظˆط±",
+        verbose_name="سجل الحضور",
         null=True,
         blank=True
     )
-    date = models.DateField(verbose_name="ط§ظ„طھط§ط±ظٹط®")
+    date = models.DateField(verbose_name="التاريخ")
     late_minutes = models.PositiveSmallIntegerField(
         default=0,
-        verbose_name="ط¯ظ‚ط§ط¦ظ‚ ط§ظ„طھط£ط®ظٹط±"
+        verbose_name="دقائق التأخير"
     )
     shift_start_time = models.TimeField(
         null=True, blank=True,
-        verbose_name="ط¨ط¯ط§ظٹط© ط§ظ„ط´ظٹظپطھ"
+        verbose_name="بداية الشيفت"
     )
     actual_checkin_time = models.TimeField(
         null=True, blank=True,
-        verbose_name="ظˆظ‚طھ ط§ظ„ط­ط¶ظˆط± ط§ظ„ظپط¹ظ„ظٹ"
+        verbose_name="وقت الحضور الفعلي"
     )
     grace_period_used = models.PositiveSmallIntegerField(
         default=0,
-        verbose_name="ط§ظ„ط³ظ…ط§ط­ظٹط© ط§ظ„ظ…ط³طھط®ط¯ظ…ط©"
+        verbose_name="السماحية المستخدمة"
     )
-    month = models.PositiveSmallIntegerField(verbose_name="ط§ظ„ط´ظ‡ط±")
-    year = models.PositiveSmallIntegerField(verbose_name="ط§ظ„ط³ظ†ط©")
+    month = models.PositiveSmallIntegerField(verbose_name="الشهر")
+    year = models.PositiveSmallIntegerField(verbose_name="السنة")
     incident_number_in_month = models.PositiveSmallIntegerField(
         default=1,
-        verbose_name="ط±ظ‚ظ… ط§ظ„ط­ط§ط¯ط«ط© ظپظٹ ط§ظ„ط´ظ‡ط±"
+        verbose_name="رقم الحادثة في الشهر"
     )
     is_excused = models.BooleanField(
         default=False,
-        verbose_name="ظ…ط¹ط°ظˆط±"
+        verbose_name="معذور"
     )
     excuse_reason = models.TextField(
         blank=True,
-        verbose_name="ط³ط¨ط¨ ط§ظ„ط¹ط°ط±"
+        verbose_name="سبب العذر"
     )
     was_deducted = models.BooleanField(
         default=False,
-        verbose_name="طھظ… ط§ظ„ط®طµظ…"
+        verbose_name="تم الخصم"
     )
     deduction_amount = models.DecimalField(
         max_digits=6,
         decimal_places=2,
         default=0,
-        verbose_name="ظ‚ظٹظ…ط© ط§ظ„ط®طµظ… (ط¬ط²ط، ظ…ظ† ط§ظ„ظٹظˆظ…)"
+        verbose_name="قيمة الخصم (جزء من اليوم)"
     )
 
     class Meta:
-        verbose_name = "ط­ط§ط¯ط«ط© طھط£ط®ظٹط±"
-        verbose_name_plural = "ط­ظˆط§ط¯ط« ط§ظ„طھط£ط®ظٹط±"
+        verbose_name = "حادثة تأخير"
+        verbose_name_plural = "حوادث التأخير"
         ordering = ["-date"]
         unique_together = [["employee", "date"]]
 
@@ -2047,86 +2048,86 @@ class LateIncident(TenantModel):
 
 
 class LateNotification(TenantModel):
-    """ط¥ط´ط¹ط§ط± طھط£ط®ظٹط± ظ„ظ€ HR"""
+    """إشعار تأخير لـ HR"""
 
     NOTIFICATION_TYPES = [
-        ("single_late", "طھط£ط®ظٹط± ط¹ط§ط¯ظٹ"),
-        ("threshold_reached", "ظˆطµظ„ ط§ظ„ط­ط¯"),
+        ("single_late", "تأخير عادي"),
+        ("threshold_reached", "وصل الحد"),
     ]
 
     employee = models.ForeignKey(
         "employees.Employee",
         on_delete=models.CASCADE,
         related_name="late_notifications",
-        verbose_name="ط§ظ„ظ…ظˆط¸ظپ"
+        verbose_name="الموظف"
     )
     notification_type = models.CharField(
         max_length=20,
         choices=NOTIFICATION_TYPES,
         default="single_late",
-        verbose_name="ظ†ظˆط¹ ط§ظ„ط¥ط´ط¹ط§ط±"
+        verbose_name="نوع الإشعار"
     )
     title = models.CharField(
         max_length=200,
-        verbose_name="ط§ظ„ط¹ظ†ظˆط§ظ†"
+        verbose_name="العنوان"
     )
     message = models.TextField(
-        verbose_name="ط§ظ„ط±ط³ط§ظ„ط©"
+        verbose_name="الرسالة"
     )
     details = models.TextField(
         blank=True,
-        verbose_name="ط§ظ„طھظپط§طµظٹظ„"
+        verbose_name="التفاصيل"
     )
     suggested_action = models.CharField(
         max_length=100,
         blank=True,
-        verbose_name="ط§ظ„ط¥ط¬ط±ط§ط، ط§ظ„ظ…ظ‚طھط±ط­"
+        verbose_name="الإجراء المقترح"
     )
     incident_count = models.PositiveSmallIntegerField(
         default=1,
-        verbose_name="ط¹ط¯ط¯ ظ…ط±ط§طھ ط§ظ„طھط£ط®ظٹط±"
+        verbose_name="عدد مرات التأخير"
     )
     month = models.PositiveSmallIntegerField(
         default=1,
-        verbose_name="ط§ظ„ط´ظ‡ط±"
+        verbose_name="الشهر"
     )
     year = models.PositiveSmallIntegerField(
         default=2025,
-        verbose_name="ط§ظ„ط³ظ†ط©"
+        verbose_name="السنة"
     )
 
     is_read = models.BooleanField(
         default=False,
-        verbose_name="طھظ… ط§ظ„ظ‚ط±ط§ط،ط©"
+        verbose_name="تم القراءة"
     )
     is_acted_upon = models.BooleanField(
         default=False,
-        verbose_name="طھظ… ط§طھط®ط§ط° ط¥ط¬ط±ط§ط،"
+        verbose_name="تم اتخاذ إجراء"
     )
     action_taken = models.CharField(
         max_length=50,
         blank=True,
-        verbose_name="ط§ظ„ط¥ط¬ط±ط§ط، ط§ظ„ظ…طھط®ط°"
+        verbose_name="الإجراء المتخذ"
     )
     action_by = models.ForeignKey(
         "accounts.User",
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="late_actions_taken",
-        verbose_name="طھظ… ط¨ظˆط§ط³ط·ط©"
+        verbose_name="تم بواسطة"
     )
     action_at = models.DateTimeField(
         null=True, blank=True,
-        verbose_name="ظˆظ‚طھ ط§ظ„ط¥ط¬ط±ط§ط،"
+        verbose_name="وقت الإجراء"
     )
     action_notes = models.TextField(
         blank=True,
-        verbose_name="ظ…ظ„ط§ط­ط¸ط§طھ ط§ظ„ط¥ط¬ط±ط§ط،"
+        verbose_name="ملاحظات الإجراء"
     )
 
     class Meta:
-        verbose_name = "ط¥ط´ط¹ط§ط± طھط£ط®ظٹط±"
-        verbose_name_plural = "ط¥ط´ط¹ط§ط±ط§طھ ط§ظ„طھط£ط®ظٹط±"
+        verbose_name = "إشعار تأخير"
+        verbose_name_plural = "إشعارات التأخير"
         ordering = ["-created_at"]
 
     def __str__(self):
@@ -2134,62 +2135,62 @@ class LateNotification(TenantModel):
 
 
 class DisciplinaryRule(models.Model):
-    """ظ‚ظˆط§ط¹ط¯ ط§ظ„ط¬ط²ط§ط،ط§طھ ط§ظ„طھط£ط¯ظٹط¨ظٹط© ظپظٹ ط§ظ„ط³ظٹط§ط³ط©"""
+    """قواعد الجزاءات التأديبية في السياسة"""
 
     VIOLATION_TYPE_CHOICES = [
-        ("late_repeat", "طھظƒط±ط§ط± ط§ظ„طھط£ط®ظٹط±"),
-        ("absence_repeat", "طھظƒط±ط§ط± ط§ظ„ط؛ظٹط§ط¨"),
-        ("early_leave_repeat", "طھظƒط±ط§ط± ط§ظ„ط§ظ†طµط±ط§ظپ ط§ظ„ظ…ط¨ظƒط±"),
-        ("policy_violation", "ظ…ط®ط§ظ„ظپط© ظ„ط§ط¦ط­ط©"),
-        ("misconduct", "ط³ظˆط، ط³ظ„ظˆظƒ"),
-        ("negligence", "ط¥ظ‡ظ…ط§ظ„"),
-        ("other", "ط£ط®ط±ظ‰"),
+        ("late_repeat", "تكرار التأخير"),
+        ("absence_repeat", "تكرار الغياب"),
+        ("early_leave_repeat", "تكرار الانصراف المبكر"),
+        ("policy_violation", "مخالفة لائحة"),
+        ("misconduct", "سوء سلوك"),
+        ("negligence", "إهمال"),
+        ("other", "أخرى"),
     ]
 
     PENALTY_TYPE_CHOICES = [
-        ("verbal_warning", "ط¥ظ†ط°ط§ط± ط´ظپظ‡ظٹ"),
-        ("written_warning", "ط¥ظ†ط°ط§ط± ظƒطھط§ط¨ظٹ"),
-        ("deduction_days", "ط®طµظ… ط£ظٹط§ظ…"),
-        ("deduction_amount", "ط®طµظ… ظ…ط¨ظ„ط؛"),
-        ("suspension", "ط¥ظٹظ‚ط§ظپ ط¹ظ† ط§ظ„ط¹ظ…ظ„"),
+        ("verbal_warning", "إنذار شفهي"),
+        ("written_warning", "إنذار كتابي"),
+        ("deduction_days", "خصم أيام"),
+        ("deduction_amount", "خصم مبلغ"),
+        ("suspension", "إيقاف عن العمل"),
     ]
 
     policy = models.ForeignKey(
         AttendancePolicy, on_delete=models.CASCADE,
         related_name="disciplinary_rules",
-        verbose_name="ط§ظ„ط³ظٹط§ط³ط©"
+        verbose_name="السياسة"
     )
     violation_type = models.CharField(
         max_length=30, choices=VIOLATION_TYPE_CHOICES,
-        default="policy_violation", verbose_name="ظ†ظˆط¹ ط§ظ„ظ…ط®ط§ظ„ظپط©"
+        default="policy_violation", verbose_name="نوع المخالفة"
     )
     occurrence_from = models.IntegerField(
-        default=1, verbose_name="ظ…ظ† ط§ظ„ظ…ط±ط©"
+        default=1, verbose_name="من المرة"
     )
     occurrence_to = models.IntegerField(
-        default=1, verbose_name="ط¥ظ„ظ‰ ط§ظ„ظ…ط±ط©"
+        default=1, verbose_name="إلى المرة"
     )
     penalty_type = models.CharField(
         max_length=30, choices=PENALTY_TYPE_CHOICES,
-        default="verbal_warning", verbose_name="ظ†ظˆط¹ ط§ظ„ط¬ط²ط§ط،"
+        default="verbal_warning", verbose_name="نوع الجزاء"
     )
     deduction_days = models.DecimalField(
         max_digits=5, decimal_places=2, default=0,
-        verbose_name="ط£ظٹط§ظ… ط§ظ„ط®طµظ…",
-        help_text="0.25=ط±ط¨ط¹ ظٹظˆظ… / 0.5=ظ†طµ ظٹظˆظ… / 1=ظٹظˆظ… ظƒط§ظ…ظ„"
+        verbose_name="أيام الخصم",
+        help_text="0.25=ربع يوم / 0.5=نص يوم / 1=يوم كامل"
     )
     deduction_amount = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,
-        verbose_name="ظ…ط¨ظ„ط؛ ط§ظ„ط®طµظ… ط§ظ„ط«ط§ط¨طھ"
+        verbose_name="مبلغ الخصم الثابت"
     )
     description = models.TextField(
-        blank=True, verbose_name="ظˆطµظپ ط§ظ„ظ‚ط§ط¹ط¯ط©"
+        blank=True, verbose_name="وصف القاعدة"
     )
     display_order = models.IntegerField(default=0)
 
     class Meta:
-        verbose_name = "ظ‚ط§ط¹ط¯ط© ط¬ط²ط§ط، طھط£ط¯ظٹط¨ظٹ"
-        verbose_name_plural = "ظ‚ظˆط§ط¹ط¯ ط§ظ„ط¬ط²ط§ط،ط§طھ ط§ظ„طھط£ط¯ظٹط¨ظٹط©"
+        verbose_name = "قاعدة جزاء تأديبي"
+        verbose_name_plural = "قواعد الجزاءات التأديبية"
         ordering = ["violation_type", "occurrence_from"]
 
     def __str__(self):
@@ -2197,104 +2198,104 @@ class DisciplinaryRule(models.Model):
 
 
 class DisciplinaryAction(TenantModel):
-    """ط¥ط¬ط±ط§ط، طھط£ط¯ظٹط¨ظٹ"""
+    """إجراء تأديبي"""
 
     ACTION_TYPES = [
-        ("verbal_warning", "ط¥ظ†ط°ط§ط± ط´ظپظ‡ظٹ"),
-        ("written_warning", "ط¥ظ†ط°ط§ط± ظƒطھط§ط¨ظٹ"),
-        ("quarter_day_deduction", "ط®طµظ… ط±ط¨ط¹ ظٹظˆظ…"),
-        ("half_day_deduction", "ط®طµظ… ظ†طµظپ ظٹظˆظ…"),
-        ("full_day_deduction", "ط®طµظ… ظٹظˆظ… ظƒط§ظ…ظ„"),
-        ("suspension", "ط¥ظٹظ‚ط§ظپ ط¹ظ† ط§ظ„ط¹ظ…ظ„"),
-        ("termination_warning", "ط¥ظ†ط°ط§ط± ظپطµظ„"),
-        ("dismissed", "طھظ… ط§ظ„ط¥ط¹ظپط§ط، / ط§ظ„طھط¬ط§ظ‡ظ„"),
+        ("verbal_warning", "إنذار شفهي"),
+        ("written_warning", "إنذار كتابي"),
+        ("quarter_day_deduction", "خصم ربع يوم"),
+        ("half_day_deduction", "خصم نصف يوم"),
+        ("full_day_deduction", "خصم يوم كامل"),
+        ("suspension", "إيقاف عن العمل"),
+        ("termination_warning", "إنذار فصل"),
+        ("dismissed", "تم الإعفاء / التجاهل"),
     ]
 
     employee = models.ForeignKey(
         "employees.Employee",
         on_delete=models.CASCADE,
         related_name="disciplinary_actions",
-        verbose_name="ط§ظ„ظ…ظˆط¸ظپ"
+        verbose_name="الموظف"
     )
     action_type = models.CharField(
         max_length=30,
         choices=ACTION_TYPES,
-        verbose_name="ظ†ظˆط¹ ط§ظ„ط¥ط¬ط±ط§ط،"
+        verbose_name="نوع الإجراء"
     )
     reason = models.TextField(
-        verbose_name="ط§ظ„ط³ط¨ط¨"
+        verbose_name="السبب"
     )
     related_notification = models.ForeignKey(
         LateNotification,
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="disciplinary_actions",
-        verbose_name="ط§ظ„ط¥ط´ط¹ط§ط± ط§ظ„ظ…ط±طھط¨ط·"
+        verbose_name="الإشعار المرتبط"
     )
     auto_generated = models.BooleanField(
         default=False,
-        verbose_name="طھظ… طھظ„ظ‚ط§ط¦ظٹظ‹ط§"
+        verbose_name="تم تلقائيًا"
     )
     deduction_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         null=True, blank=True,
-        verbose_name="ظ…ط¨ظ„ط؛ ط§ظ„ط®طµظ…"
+        verbose_name="مبلغ الخصم"
     )
     deduction_created = models.BooleanField(
         default=False,
-        verbose_name="طھظ… ط¥ظ†ط´ط§ط، ط®طµظ… ظپط¹ظ„ظٹ"
+        verbose_name="تم إنشاء خصم فعلي"
     )
     status = models.CharField(
         max_length=20,
         choices=[
-            ("pending", "ظ…ط¹ظ„ظ‚"),
-            ("approved", "ظ…ط¹طھظ…ط¯"),
-            ("rejected", "ظ…ط±ظپظˆط¶"),
-            ("cancelled", "ظ…ظ„ط؛ظٹ"),
+            ("pending", "معلق"),
+            ("approved", "معتمد"),
+            ("rejected", "مرفوض"),
+            ("cancelled", "ملغي"),
         ],
         default="pending",
-        verbose_name="ط§ظ„ط­ط§ظ„ط©"
+        verbose_name="الحالة"
     )
     approved_by = models.ForeignKey(
         "accounts.User",
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="approved_disciplinary_actions",
-        verbose_name="ظˆط§ظپظ‚ ط¨ظˆط§ط³ط·ط©"
+        verbose_name="وافق بواسطة"
     )
     approved_at = models.DateTimeField(
         null=True, blank=True,
-        verbose_name="طھط§ط±ظٹط® ط§ظ„ط§ط¹طھظ…ط§ط¯"
+        verbose_name="تاريخ الاعتماد"
     )
     payroll_month = models.CharField(
         max_length=7, blank=True,
-        verbose_name="ط´ظ‡ط± ط§ظ„ظ…ط±طھط¨",
+        verbose_name="شهر المرتب",
         help_text="YYYY-MM"
     )
     payroll_applied = models.BooleanField(
         default=False,
-        verbose_name="طھظ… طھط·ط¨ظٹظ‚ظ‡ ط¹ظ„ظ‰ ط§ظ„ظ…ط±طھط¨"
+        verbose_name="تم تطبيقه على المرتب"
     )
     performed_by = models.ForeignKey(
         "accounts.User",
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="disciplinary_actions_performed",
-        verbose_name="طھظ… ط¨ظˆط§ط³ط·ط©"
+        verbose_name="تم بواسطة"
     )
     performed_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name="طھط§ط±ظٹط® ط§ظ„ط¥ط¬ط±ط§ط،"
+        verbose_name="تاريخ الإجراء"
     )
     notes = models.TextField(
         blank=True,
-        verbose_name="ظ…ظ„ط§ط­ط¸ط§طھ"
+        verbose_name="ملاحظات"
     )
 
     class Meta:
-        verbose_name = "ط¥ط¬ط±ط§ط، طھط£ط¯ظٹط¨ظٹ"
-        verbose_name_plural = "ط§ظ„ط¥ط¬ط±ط§ط،ط§طھ ط§ظ„طھط£ط¯ظٹط¨ظٹط©"
+        verbose_name = "إجراء تأديبي"
+        verbose_name_plural = "الإجراءات التأديبية"
         ordering = ["-performed_at"]
 
     def __str__(self):
@@ -2306,47 +2307,47 @@ class DisciplinaryAction(TenantModel):
 # â•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گ
 class DailyAssignment(TenantModel):
     """
-    طھظƒظ„ظٹظپ ظٹظˆظ…ظٹ ظ„ظƒظ„ ظ…ظˆط¸ظپ
-    ط¯ظ‡ ط§ظ„ظ„ظٹ ط¨ظٹط­ط¯ط¯ ظ†ظˆط¹ ظٹظˆظ… ط§ظ„ط¹ظ…ظ„ ظˆط·ط±ظٹظ‚ط© طھظ†ظپظٹط°ظ‡
+    تكليف يومي لكل موظف
+    ده اللي بيحدد نوع يوم العمل وطريقة تنفيذه
     """
 
     # â”€â”€ ظ†ظˆط¹ ط§ظ„ظٹظˆظ… â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     DAY_TYPES = [
-        ("work_day", "ظٹظˆظ… ط¹ظ…ظ„"),
-        ("off_day", "ط±ط§ط­ط© ط£ط³ط¨ظˆط¹ظٹط©"),
-        ("leave_day", "ط¥ط¬ط§ط²ط©"),
-        ("holiday", "ط¥ط¬ط§ط²ط© ط±ط³ظ…ظٹط©"),
-        ("mission_day", "ظ…ط£ظ…ظˆط±ظٹط© / ظ…ظ‡ظ…ط©"),
-        ("standby_day", "ط§ط³طھط¯ط¹ط§ط، / on-call"),
-        ("training_day", "ظٹظˆظ… طھط¯ط±ظٹط¨"),
+        ("work_day", "يوم عمل"),
+        ("off_day", "راحة أسبوعية"),
+        ("leave_day", "إجازة"),
+        ("holiday", "إجازة رسمية"),
+        ("mission_day", "مأمورية / مهمة"),
+        ("standby_day", "استدعاء / on-call"),
+        ("training_day", "يوم تدريب"),
     ]
 
     # â”€â”€ ط·ط±ظٹظ‚ط© ط§ظ„طھظ†ظپظٹط° â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     WORK_MODES = [
-        ("fixed", "ط«ط§ط¨طھ"),
-        ("flexible", "ظ…ط±ظ†"),
-        ("split", "ظ…طھظ‚ط³ظ…"),
-        ("field", "ظ…ظٹط¯ط§ظ†ظٹ"),
-        ("remote", "ط¹ظ† ط¨ظڈط¹ط¯"),
-        ("mixed", "ظ…ط®طھظ„ط·"),
+        ("fixed", "ثابت"),
+        ("flexible", "مرن"),
+        ("split", "متقسم"),
+        ("field", "ميداني"),
+        ("remote", "عن بُعد"),
+        ("mixed", "مختلط"),
     ]
 
     # â”€â”€ ط­ط§ظ„ط© ط§ظ„طھظƒظ„ظٹظپ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     STATUS_CHOICES = [
-        ("scheduled", "ظ…ط¬ط¯ظˆظ„"),
-        ("in_progress", "ط¬ط§ط±ظٹ"),
-        ("completed", "ظ…ظƒطھظ…ظ„"),
-        ("cancelled", "ظ…ظ„ط؛ظٹ"),
+        ("scheduled", "مجدول"),
+        ("in_progress", "جاري"),
+        ("completed", "مكتمل"),
+        ("cancelled", "ملغي"),
     ]
 
     employee = models.ForeignKey(
         "employees.Employee",
         on_delete=models.CASCADE,
         related_name="daily_assignments",
-        verbose_name="ط§ظ„ظ…ظˆط¸ظپ"
+        verbose_name="الموظف"
     )
     date = models.DateField(
-        verbose_name="ط§ظ„طھط§ط±ظٹط®"
+        verbose_name="التاريخ"
     )
 
     # â”€â”€ ظ†ظˆط¹ ط§ظ„ظٹظˆظ… ظˆط·ط±ظٹظ‚ط© ط§ظ„ط¹ظ…ظ„ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2354,13 +2355,13 @@ class DailyAssignment(TenantModel):
         max_length=20,
         choices=DAY_TYPES,
         default="work_day",
-        verbose_name="ظ†ظˆط¹ ط§ظ„ظٹظˆظ…"
+        verbose_name="نوع اليوم"
     )
     work_mode = models.CharField(
         max_length=20,
         choices=WORK_MODES,
         default="fixed",
-        verbose_name="ط·ط±ظٹظ‚ط© ط§ظ„طھظ†ظپظٹط°"
+        verbose_name="طريقة التنفيذ"
     )
 
     # â”€â”€ ط£ظˆظ‚ط§طھ ط§ظ„ط¹ظ…ظ„ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2369,86 +2370,86 @@ class DailyAssignment(TenantModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        verbose_name="ط§ظ„ط´ظٹظپطھ"
+        verbose_name="الشيفت"
     )
     start_time = models.TimeField(
         null=True, blank=True,
-        verbose_name="ط¨ط¯ط§ظٹط© ط§ظ„ط¹ظ…ظ„"
+        verbose_name="بداية العمل"
     )
     end_time = models.TimeField(
         null=True, blank=True,
-        verbose_name="ظ†ظ‡ط§ظٹط© ط§ظ„ط¹ظ…ظ„"
+        verbose_name="نهاية العمل"
     )
     expected_hours = models.DecimalField(
         max_digits=4,
         decimal_places=1,
         null=True, blank=True,
-        verbose_name="ط§ظ„ط³ط§ط¹ط§طھ ط§ظ„ظ…طھظˆظ‚ط¹ط©"
+        verbose_name="الساعات المتوقعة"
     )
 
     # â”€â”€ Split Shift (ط¬ط²ط¦ظٹظ†) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     segment_2_start = models.TimeField(
         null=True, blank=True,
-        verbose_name="ط¨ط¯ط§ظٹط© ط§ظ„ط¬ط²ط، ط§ظ„ط«ط§ظ†ظٹ"
+        verbose_name="بداية الجزء الثاني"
     )
     segment_2_end = models.TimeField(
         null=True, blank=True,
-        verbose_name="ظ†ظ‡ط§ظٹط© ط§ظ„ط¬ط²ط، ط§ظ„ط«ط§ظ†ظٹ"
+        verbose_name="نهاية الجزء الثاني"
     )
 
     # â”€â”€ Flags â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     is_replacement = models.BooleanField(
         default=False,
-        verbose_name="ط¨ط¯ظٹظ„ ظ„ط²ظ…ظٹظ„"
+        verbose_name="بديل لزميل"
     )
     replaces_employee = models.ForeignKey(
         "employees.Employee",
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="replaced_assignments",
-        verbose_name="ط¨ط¯ظٹظ„ ط¹ظ†"
+        verbose_name="بديل عن"
     )
     is_extra_shift = models.BooleanField(
         default=False,
-        verbose_name="ط´ظٹظپطھ ط¥ط¶ط§ظپظٹ"
+        verbose_name="شيفت إضافي"
     )
     count_as_overtime = models.BooleanField(
         default=False,
-        verbose_name="ظٹط­ط³ط¨ ط£ظˆظپط± طھط§ظٹظ…"
+        verbose_name="يحسب أوفر تايم"
     )
     count_as_compensatory = models.BooleanField(
         default=False,
-        verbose_name="ظٹظˆظ… طھط¹ظˆظٹط¶ظٹ"
+        verbose_name="يوم تعويضي"
     )
 
     # â”€â”€ ظ…طھط·ظ„ط¨ط§طھ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     requires_tracking = models.BooleanField(
         default=False,
-        verbose_name="ظٹط­طھط§ط¬ طھطھط¨ط¹ GPS"
+        verbose_name="يحتاج تتبع GPS"
     )
     requires_visits = models.BooleanField(
         default=False,
-        verbose_name="ظٹط­طھط§ط¬ طھط³ط¬ظٹظ„ ط²ظٹط§ط±ط§طھ"
+        verbose_name="يحتاج تسجيل زيارات"
     )
     requires_geofence = models.BooleanField(
         default=True,
-        verbose_name="ظٹط­طھط§ط¬ ظ†ط·ط§ظ‚ ط§ظ„ظپط±ط¹"
+        verbose_name="يحتاج نطاق الفرع"
     )
     requires_manager_approval = models.BooleanField(
         default=False,
-        verbose_name="ظٹط­طھط§ط¬ ظ…ظˆط§ظپظ‚ط© ط§ظ„ظ…ط¯ظٹط± ظ…ط³ط¨ظ‚ط§ظ‹"
+        verbose_name="يحتاج موافقة المدير مسبقاً"
     )
 
     # â”€â”€ ط§ظ„ظ…ظ‡ظ…ط© â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     task_title = models.CharField(
         max_length=200,
         blank=True,
-        verbose_name="ط¹ظ†ظˆط§ظ† ط§ظ„ظ…ظ‡ظ…ط©"
+        verbose_name="عنوان المهمة"
     )
     location_name = models.CharField(
         max_length=200,
         blank=True,
-        verbose_name="ط§ط³ظ… ط§ظ„ظ…ظˆظ‚ط¹"
+        verbose_name="اسم الموقع"
     )
 
     # â”€â”€ ط§ظ„ط­ط§ظ„ط© ظˆط§ظ„ط§ط¹طھظ…ط§ط¯ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2456,50 +2457,50 @@ class DailyAssignment(TenantModel):
         max_length=20,
         choices=STATUS_CHOICES,
         default="scheduled",
-        verbose_name="ط§ظ„ط­ط§ظ„ط©"
+        verbose_name="الحالة"
     )
     approved_by = models.ForeignKey(
         "accounts.User",
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="approved_assignments",
-        verbose_name="ط§ط¹طھظ…ط¯ ط¨ظˆط§ط³ط·ط©"
+        verbose_name="اعتمد بواسطة"
     )
 
     # â”€â”€ Exception â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     is_exception = models.BooleanField(
         default=False,
-        verbose_name="ط­ط§ظ„ط© ط§ط³طھط«ظ†ط§ط¦ظٹط©"
+        verbose_name="حالة استثنائية"
     )
     exception_reason = models.TextField(
         blank=True,
-        verbose_name="ط³ط¨ط¨ ط§ظ„ط§ط³طھط«ظ†ط§ط،"
+        verbose_name="سبب الاستثناء"
     )
     exception_status = models.CharField(
         max_length=20,
         blank=True,
         choices=[
-            ("pending_review", "ظ‚ظٹط¯ ط§ظ„ظ…ط±ط§ط¬ط¹ط©"),
-            ("approved", "ظ…ط¹طھظ…ط¯"),
-            ("rejected", "ظ…ط±ظپظˆط¶"),
+            ("pending_review", "قيد المراجعة"),
+            ("approved", "معتمد"),
+            ("rejected", "مرفوض"),
         ],
-        verbose_name="ط­ط§ظ„ط© ط§ظ„ط§ط³طھط«ظ†ط§ط،"
+        verbose_name="حالة الاستثناء"
     )
 
     # â”€â”€ Auto Generated â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     is_auto_generated = models.BooleanField(
         default=False,
-        verbose_name="طھظ… طھظˆظ„ظٹط¯ظ‡ طھظ„ظ‚ط§ط¦ظٹط§ظ‹"
+        verbose_name="تم توليده تلقائياً"
     )
 
     notes = models.TextField(
         blank=True,
-        verbose_name="ظ…ظ„ط§ط­ط¸ط§طھ"
+        verbose_name="ملاحظات"
     )
 
     class Meta:
-        verbose_name = "طھظƒظ„ظٹظپ ظٹظˆظ…ظٹ"
-        verbose_name_plural = "ط§ظ„طھظƒظ„ظٹظپط§طھ ط§ظ„ظٹظˆظ…ظٹط©"
+        verbose_name = "تكليف يومي"
+        verbose_name_plural = "التكليفات اليومية"
         ordering = ["-date"]
         unique_together = [["employee", "date"]]
 
@@ -2531,68 +2532,68 @@ class DailyAssignment(TenantModel):
 
 
 class TrackingAlert(TenantModel):
-    """طھظ†ط¨ظٹظ‡ طھطھط¨ط¹ طµط§ظ…طھ ط¹ظ†ط¯ ط§ظ„ط®ط±ظˆط¬ ظ…ظ† ط§ظ„ظ†ط·ط§ظ‚ ط£ط«ظ†ط§ط، ط§ظ„ط¹ظ…ظ„"""
+    """تنبيه تتبع صامت عند الخروج من النطاق أثناء العمل"""
 
     STATUS_CHOICES = [
-        ("open", "ظ…ظپطھظˆط­"),
-        ("resolved", "طھظ…طھ ط§ظ„ظ…ط¹ط§ظ„ط¬ط©"),
-        ("ignored", "طھظ… ط§ظ„طھط¬ط§ظ‡ظ„"),
+        ("open", "مفتوح"),
+        ("resolved", "تمت المعالجة"),
+        ("ignored", "تم التجاهل"),
     ]
 
     employee = models.ForeignKey(
         "employees.Employee",
         on_delete=models.CASCADE,
         related_name="tracking_alerts",
-        verbose_name="ط§ظ„ظ…ظˆط¸ظپ"
+        verbose_name="الموظف"
     )
     date = models.DateField(
-        verbose_name="ط§ظ„طھط§ط±ظٹط®"
+        verbose_name="التاريخ"
     )
     started_at = models.DateTimeField(
-        verbose_name="ظˆظ‚طھ ط¨ط¯ط§ظٹط© ط§ظ„ط®ط±ظˆط¬ ظ…ظ† ط§ظ„ظ†ط·ط§ظ‚"
+        verbose_name="وقت بداية الخروج من النطاق"
     )
     last_seen_at = models.DateTimeField(
         null=True, blank=True,
-        verbose_name="ط¢ط®ط± ظˆظ‚طھ ط±طµط¯"
+        verbose_name="آخر وقت رصد"
     )
     minutes_outside = models.PositiveSmallIntegerField(
         default=0,
-        verbose_name="ط¹ط¯ط¯ ط§ظ„ط¯ظ‚ط§ط¦ظ‚ ط®ط§ط±ط¬ ط§ظ„ظ†ط·ط§ظ‚"
+        verbose_name="عدد الدقائق خارج النطاق"
     )
 
     last_latitude = models.DecimalField(
         max_digits=10, decimal_places=7,
         null=True, blank=True,
-        verbose_name="ط¢ط®ط± ط®ط· ط¹ط±ط¶"
+        verbose_name="آخر خط عرض"
     )
     last_longitude = models.DecimalField(
         max_digits=10, decimal_places=7,
         null=True, blank=True,
-        verbose_name="ط¢ط®ط± ط®ط· ط·ظˆظ„"
+        verbose_name="آخر خط طول"
     )
     last_address = models.TextField(
         blank=True,
-        verbose_name="ط¢ط®ط± ط¹ظ†ظˆط§ظ†"
+        verbose_name="آخر عنوان"
     )
 
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default="open",
-        verbose_name="ط§ظ„ط­ط§ظ„ط©"
+        verbose_name="الحالة"
     )
 
     notified_manager = models.BooleanField(
         default=False,
-        verbose_name="طھظ… طھظ†ط¨ظٹظ‡ ط§ظ„ظ…ط¯ظٹط±"
+        verbose_name="تم تنبيه المدير"
     )
     notified_hr = models.BooleanField(
         default=False,
-        verbose_name="طھظ… طھظ†ط¨ظٹظ‡ HR"
+        verbose_name="تم تنبيه HR"
     )
     notified_company_admin = models.BooleanField(
         default=False,
-        verbose_name="طھظ… طھظ†ط¨ظٹظ‡ طµط§ط­ط¨ ط§ظ„ط´ط±ظƒط©"
+        verbose_name="تم تنبيه صاحب الشركة"
     )
 
     resolved_by = models.ForeignKey(
@@ -2600,20 +2601,20 @@ class TrackingAlert(TenantModel):
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="resolved_tracking_alerts",
-        verbose_name="طھظ…طھ ط§ظ„ظ…ط¹ط§ظ„ط¬ط© ط¨ظˆط§ط³ط·ط©"
+        verbose_name="تمت المعالجة بواسطة"
     )
     resolved_at = models.DateTimeField(
         null=True, blank=True,
-        verbose_name="ظˆظ‚طھ ط§ظ„ظ…ط¹ط§ظ„ط¬ط©"
+        verbose_name="وقت المعالجة"
     )
     notes = models.TextField(
         blank=True,
-        verbose_name="ظ…ظ„ط§ط­ط¸ط§طھ"
+        verbose_name="ملاحظات"
     )
 
     class Meta:
-        verbose_name = "طھظ†ط¨ظٹظ‡ طھطھط¨ط¹"
-        verbose_name_plural = "طھظ†ط¨ظٹظ‡ط§طھ ط§ظ„طھطھط¨ط¹"
+        verbose_name = "تنبيه تتبع"
+        verbose_name_plural = "تنبيهات التتبع"
         ordering = ["-started_at"]
 
     def __str__(self):
@@ -2624,21 +2625,21 @@ class LocationHistory(TenantModel):
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='location_history',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
-    latitude = models.DecimalField(max_digits=10, decimal_places=7, verbose_name='ط®ط· ط§ظ„ط¹ط±ط¶')
-    longitude = models.DecimalField(max_digits=10, decimal_places=7, verbose_name='ط®ط· ط§ظ„ط·ظˆظ„')
-    accuracy = models.FloatField(null=True, blank=True, verbose_name='ط§ظ„ط¯ظ‚ط©')
-    recorded_at = models.DateTimeField(verbose_name='ظˆظ‚طھ ط§ظ„طھط³ط¬ظٹظ„')
-    shift_date = models.DateField(verbose_name='طھط§ط±ظٹط® ط§ظ„ط´ظٹظپطھ')
-    point_index = models.IntegerField(default=0, verbose_name='ط±ظ‚ظ… ط§ظ„ظ†ظ‚ط·ط©')
-    address = models.CharField(max_length=500, blank=True, verbose_name='ط§ظ„ط¹ظ†ظˆط§ظ†')
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, verbose_name='خط العرض')
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, verbose_name='خط الطول')
+    accuracy = models.FloatField(null=True, blank=True, verbose_name='الدقة')
+    recorded_at = models.DateTimeField(verbose_name='وقت التسجيل')
+    shift_date = models.DateField(verbose_name='تاريخ الشيفت')
+    point_index = models.IntegerField(default=0, verbose_name='رقم النقطة')
+    address = models.CharField(max_length=500, blank=True, verbose_name='العنوان')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['shift_date', 'recorded_at']
-        verbose_name = 'ط³ط¬ظ„ ظ…ظˆظ‚ط¹'
-        verbose_name_plural = 'ط³ط¬ظ„ط§طھ ط§ظ„ظ…ظˆط§ظ‚ط¹'
+        verbose_name = 'سجل موقع'
+        verbose_name_plural = 'سجلات المواقع'
 
     def __str__(self):
         return f"{self.employee} - {self.shift_date} - ظ†ظ‚ط·ط© {self.point_index}"
@@ -2656,7 +2657,7 @@ from .payroll_pro_models import PayrollRun, PayrollLine, PayrollBonus, PayrollPe
 
 class PermissionLedger(TenantModel):
     """
-    ط³ط¬ظ„ ط­ط±ظƒط© ط§ظ„ط£ط°ظˆظ†ط§طھ ظ„ظ„ظ…ظˆط¸ظپ
+    سجل حركة الأذونات للموظف
     """
     ENTRY_TYPE_CHOICES = [
         ('manual_request', 'Manual Permission Request'),
@@ -2690,8 +2691,8 @@ class PermissionLedger(TenantModel):
 # â•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گ
 class EmployeeWorkLocation(TenantModel):
     """
-    ظ…ظˆط§ظ‚ط¹ ط§ظ„ط¹ظ…ظ„ ط§ظ„ظ…ط¹طھظ…ط¯ط© ظ„ظ„ظ…ظˆط¸ظپظٹظ† (Multi-Site System)
-    ط§ظ„ظ…ظˆط¸ظپ ظٹظ‚طھط±ط­ ظ…ظˆظ‚ط¹ â†’ ط§ظ„ظ…ط¯ظٹط±/HR ظٹظˆط§ظپظ‚ â†’ ط§ظ„ظ…ظˆط¸ظپ ظٹظ‚ط¯ط± ظٹط¨طµظ… ظ…ظ†ظ‡
+    مواقع العمل المعتمدة للموظفين (Multi-Site System)
+    الموظف يقترح موقع → المدير/HR يوافق → الموظف يقدر يبصم منه
     """
     
     # ط§ظ„ظ…ظˆط¸ظپظٹظ† ط§ظ„ظ…ط®طµطµ ظ„ظ‡ظ… ط§ظ„ظ…ظˆظ‚ط¹ (Many-to-Many)
@@ -2699,27 +2700,27 @@ class EmployeeWorkLocation(TenantModel):
         'employees.Employee',
         blank=True,
         related_name='assigned_work_locations',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپظٹظ† ط§ظ„ظ…ط®طµطµظٹظ†'
+        verbose_name='الموظفين المخصصين'
     )
 
     LOCATION_TYPE_CHOICES = [
-        ('project', 'ظ…ظˆظ‚ط¹ ظ…ط´ط±ظˆط¹'),
-        ('client', 'ظ…ظˆظ‚ط¹ ط¹ظ…ظٹظ„'),
-        ('warehouse', 'ظ…ط®ط²ظ†'),
-        ('office', 'ظ…ظƒطھط¨ ظپط±ط¹ظٹ'),
-        ('factory', 'ظ…طµظ†ط¹'),
-        ('site', 'ظ…ظˆظ‚ط¹ ط¨ظ†ط§ط،'),
-        ('remote', 'ط¹ظ…ظ„ ط¹ظ† ط¨ط¹ط¯'),
-        ('other', 'ط£ط®ط±ظ‰'),
+        ('project', 'موقع مشروع'),
+        ('client', 'موقع عميل'),
+        ('warehouse', 'مخزن'),
+        ('office', 'مكتب فرعي'),
+        ('factory', 'مصنع'),
+        ('site', 'موقع بناء'),
+        ('remote', 'عمل عن بعد'),
+        ('other', 'أخرى'),
     ]
     
     STATUS_CHOICES = [
-        ('pending_manager', 'ظ‚ظٹط¯ ظ…ظˆط§ظپظ‚ط© ط§ظ„ظ…ط¯ظٹط±'),
-        ('pending_hr',      'ظ‚ظٹط¯ ط§ط¹طھظ…ط§ط¯ HR'),
-        ('approved',        'ظ…ط¹طھظ…ط¯'),
-        ('rejected',        'ظ…ط±ظپظˆط¶'),
-        ('expired',         'ظ…ظ†طھظ‡ظٹ'),
-        ('suspended',       'ظ…ظˆظ‚ظپ ظ…ط¤ظ‚طھط§ظ‹'),
+        ('pending_manager', 'قيد موافقة المدير'),
+        ('pending_hr',      'قيد اعتماد HR'),
+        ('approved',        'معتمد'),
+        ('rejected',        'مرفوض'),
+        ('expired',         'منتهي'),
+        ('suspended',       'موقف مؤقتاً'),
     ]
     
     # â•گâ•گâ•گ ظ…ط¹ظ„ظˆظ…ط§طھ ط£ط³ط§ط³ظٹط© â•گâ•گâ•گ
@@ -2728,105 +2729,105 @@ class EmployeeWorkLocation(TenantModel):
         on_delete=models.CASCADE,
         related_name='work_locations',
         null=True, blank=True,
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ',
-        help_text='ظپط§ط±ط؛ ظ„ظˆ ط§ظ„ظ…ظˆظ‚ط¹ ظ…ط´طھط±ظƒ ط¨ظٹظ† ظ…ظˆط¸ظپظٹظ†'
+        verbose_name='الموظف',
+        help_text='فارغ لو الموقع مشترك بين موظفين'
     )
-    name = models.CharField(max_length=200, verbose_name='ط§ط³ظ… ط§ظ„ظ…ظˆظ‚ط¹')
-    description = models.TextField(blank=True, null=True, verbose_name='ط§ظ„ظˆطµظپ')
+    name = models.CharField(max_length=200, verbose_name='اسم الموقع')
+    description = models.TextField(blank=True, null=True, verbose_name='الوصف')
     location_type = models.CharField(
         max_length=20,
         choices=LOCATION_TYPE_CHOICES,
         default='project',
-        verbose_name='ظ†ظˆط¹ ط§ظ„ظ…ظˆظ‚ط¹'
+        verbose_name='نوع الموقع'
     )
     
     # â•گâ•گâ•گ ط§ظ„ط¥ط­ط¯ط§ط«ظٹط§طھ â•گâ•گâ•گ
     latitude = models.DecimalField(
         max_digits=10, decimal_places=7,
-        verbose_name='ط®ط· ط§ظ„ط¹ط±ط¶'
+        verbose_name='خط العرض'
     )
     longitude = models.DecimalField(
         max_digits=10, decimal_places=7,
-        verbose_name='ط®ط· ط§ظ„ط·ظˆظ„'
+        verbose_name='خط الطول'
     )
     radius = models.PositiveIntegerField(
         default=500,
-        verbose_name='ظ†طµظپ ظ‚ط·ط± ط§ظ„ط³ظ…ط§ط­ (ظ…طھط±)',
-        help_text='ط§ظ„ظ…ط³ط§ظپط© ط§ظ„ظ…ط³ظ…ظˆط­ط© ط­ظˆظ„ ط§ظ„ظ…ظˆظ‚ط¹ ظ„ظ„ط¨طµظ…ط©'
+        verbose_name='نصف قطر السماح (متر)',
+        help_text='المسافة المسموحة حول الموقع للبصمة'
     )
-    address = models.TextField(blank=True, null=True, verbose_name='ط§ظ„ط¹ظ†ظˆط§ظ†')
-    city = models.CharField(max_length=100, blank=True, null=True, verbose_name='ط§ظ„ظ…ط¯ظٹظ†ط©')
-    country = models.CharField(max_length=10, default='EG', verbose_name='ط§ظ„ط¯ظˆظ„ط©')
+    address = models.TextField(blank=True, null=True, verbose_name='العنوان')
+    city = models.CharField(max_length=100, blank=True, null=True, verbose_name='المدينة')
+    country = models.CharField(max_length=10, default='EG', verbose_name='الدولة')
     
     # â•گâ•گâ•گ ظ…ط¹ظ„ظˆظ…ط§طھ ط§ظ„ظ…ط´ط±ظˆط¹/ط§ظ„ط¹ظ…ظٹظ„ â•گâ•گâ•گ
     project_code = models.CharField(
         max_length=50, blank=True, null=True,
-        verbose_name='ظƒظˆط¯ ط§ظ„ظ…ط´ط±ظˆط¹'
+        verbose_name='كود المشروع'
     )
     client_name = models.CharField(
         max_length=200, blank=True, null=True,
-        verbose_name='ط§ط³ظ… ط§ظ„ط¹ظ…ظٹظ„'
+        verbose_name='اسم العميل'
     )
     contact_person = models.CharField(
         max_length=200, blank=True, null=True,
-        verbose_name='ط§ظ„ط´ط®طµ ط§ظ„ظ…ط³ط¦ظˆظ„'
+        verbose_name='الشخص المسئول'
     )
     contact_phone = models.CharField(
         max_length=20, blank=True, null=True,
-        verbose_name='ط±ظ‚ظ… ط§ظ„طھظˆط§طµظ„'
+        verbose_name='رقم التواصل'
     )
     
     # â•گâ•گâ•گ ط§ظ„طµظ„ط§ط­ظٹط§طھ ظˆط§ظ„ظ…ط´ط§ط±ظƒط© â•گâ•گâ•گ
     is_shared = models.BooleanField(
         default=False,
-        verbose_name='ظ…ظˆظ‚ط¹ ظ…ط´طھط±ظƒ',
-        help_text='ظ…طھط§ط­ ظ„ظƒظ„ ظ…ظˆط¸ظپظٹظ† ط§ظ„ط´ط±ظƒط©/ط§ظ„ظپط±ط¹/ط§ظ„ظ‚ط³ظ…'
+        verbose_name='موقع مشترك',
+        help_text='متاح لكل موظفين الشركة/الفرع/القسم'
     )
     shared_with_branch = models.ForeignKey(
         'companies.Branch',
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='shared_work_locations',
-        verbose_name='ظ…ط´طھط±ظƒ ظ…ط¹ ظپط±ط¹'
+        verbose_name='مشترك مع فرع'
     )
     shared_with_department = models.ForeignKey(
         'companies.Department',
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='shared_work_locations',
-        verbose_name='ظ…ط´طھط±ظƒ ظ…ط¹ ظ‚ط³ظ…'
+        verbose_name='مشترك مع قسم'
     )
     requires_checkin_photo = models.BooleanField(
         default=False,
-        verbose_name='ظٹط·ظ„ط¨ طµظˆط±ط© ط¹ظ†ط¯ ط§ظ„ط­ط¶ظˆط±'
+        verbose_name='يطلب صورة عند الحضور'
     )
     allow_checkout_only = models.BooleanField(
         default=False,
-        verbose_name='ظ…ط³ظ…ظˆط­ ط§ظ„ط§ظ†طµط±ط§ظپ ظپظ‚ط·'
+        verbose_name='مسموح الانصراف فقط'
     )
     
     # â•گâ•گâ•گ ط§ظ„ط¬ط¯ظˆظ„ط© ط§ظ„ط²ظ…ظ†ظٹط© â•گâ•گâ•گ
     valid_from = models.DateField(
         null=True, blank=True,
-        verbose_name='طµط§ظ„ط­ ظ…ظ† طھط§ط±ظٹط®'
+        verbose_name='صالح من تاريخ'
     )
     valid_until = models.DateField(
         null=True, blank=True,
-        verbose_name='طµط§ظ„ط­ ط­طھظ‰ طھط§ط±ظٹط®',
-        help_text='ظ„ظ„ظ…ط´ط§ط±ظٹط¹ ط§ظ„ظ…ط¤ظ‚طھط©'
+        verbose_name='صالح حتى تاريخ',
+        help_text='للمشاريع المؤقتة'
     )
     working_days = models.JSONField(
         default=dict, blank=True,
-        verbose_name='ط£ظٹط§ظ… ط§ظ„ط¹ظ…ظ„',
-        help_text='ظ…ط«ط§ظ„: {"sun": true, "mon": true, ...}'
+        verbose_name='أيام العمل',
+        help_text='مثال: {"sun": true, "mon": true, ...}'
     )
     working_hours_start = models.TimeField(
         null=True, blank=True,
-        verbose_name='ط¨ط¯ط§ظٹط© ط§ظ„ط¹ظ…ظ„'
+        verbose_name='بداية العمل'
     )
     working_hours_end = models.TimeField(
         null=True, blank=True,
-        verbose_name='ظ†ظ‡ط§ظٹط© ط§ظ„ط¹ظ…ظ„'
+        verbose_name='نهاية العمل'
     )
     
     # â•گâ•گâ•گ ط§ظ„ظ…ظˆط§ظپظ‚ط§طھ (Workflow) â•گâ•گâ•گ
@@ -2834,94 +2835,94 @@ class EmployeeWorkLocation(TenantModel):
         max_length=20,
         choices=STATUS_CHOICES,
         default='pending_manager',
-        verbose_name='ط§ظ„ط­ط§ظ„ط©'
+        verbose_name='الحالة'
     )
     proposed_by = models.ForeignKey(
         'accounts.User',
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='proposed_work_locations',
-        verbose_name='ظ…ظ‚طھط±ط­ ط¨ظˆط§ط³ط·ط©'
+        verbose_name='مقترح بواسطة'
     )
     proposed_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='طھط§ط±ظٹط® ط§ظ„ط§ظ‚طھط±ط§ط­'
+        verbose_name='تاريخ الاقتراح'
     )
     approved_by = models.ForeignKey(
         'accounts.User',
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='approved_work_locations',
-        verbose_name='ظ…ط¹طھظ…ط¯ ط¨ظˆط§ط³ط·ط©'
+        verbose_name='معتمد بواسطة'
     )
     approved_at = models.DateTimeField(
         null=True, blank=True,
-        verbose_name='طھط§ط±ظٹط® ط§ظ„ط§ط¹طھظ…ط§ط¯'
+        verbose_name='تاريخ الاعتماد'
     )
     rejection_reason = models.TextField(
         blank=True, null=True,
-        verbose_name='ط³ط¨ط¨ ط§ظ„ط±ظپط¶'
+        verbose_name='سبب الرفض'
     )
     approval_notes = models.TextField(
         blank=True, null=True,
-        verbose_name='ظ…ظ„ط§ط­ط¸ط§طھ ط§ظ„ط§ط¹طھظ…ط§ط¯'
+        verbose_name='ملاحظات الاعتماد'
     )
     
     # â•گâ•گâ•گ ط§ظ„ط¥ط­طµط§ط¦ظٹط§طھ â•گâ•گâ•گ
     total_visits_count = models.PositiveIntegerField(
         default=0,
-        verbose_name='ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ط²ظٹط§ط±ط§طھ'
+        verbose_name='إجمالي الزيارات'
     )
     last_visited_at = models.DateTimeField(
         null=True, blank=True,
-        verbose_name='ط¢ط®ط± ط²ظٹط§ط±ط©'
+        verbose_name='آخر زيارة'
     )
     average_visit_duration = models.PositiveIntegerField(
         default=0,
-        verbose_name='ظ…طھظˆط³ط· ظ…ط¯ط© ط§ظ„ط²ظٹط§ط±ط© (ط¯ظ‚ط§ط¦ظ‚)'
+        verbose_name='متوسط مدة الزيارة (دقائق)'
     )
     
     # â•گâ•گâ•گ ط­ط§ظ„ط© ط§ظ„ظ…ظˆظ‚ط¹ â•گâ•گâ•گ
-    is_active = models.BooleanField(default=True, verbose_name='ظ…ظپط¹ظ„')
+    is_active = models.BooleanField(default=True, verbose_name='مفعل')
     suspended_reason = models.TextField(
         blank=True, null=True,
-        verbose_name='ط³ط¨ط¨ ط§ظ„ط¥ظٹظ‚ط§ظپ'
+        verbose_name='سبب الإيقاف'
     )
     priority = models.PositiveIntegerField(
         default=0,
-        verbose_name='ط§ظ„ط£ظˆظ„ظˆظٹط©',
-        help_text='ط§ظ„ط£ط¹ظ„ظ‰ ط±ظ‚ظ… = ط§ظ„ط£ط¹ظ„ظ‰ ط£ظˆظ„ظˆظٹط©'
+        verbose_name='الأولوية',
+        help_text='الأعلى رقم = الأعلى أولوية'
     )
     color_code = models.CharField(
         max_length=7, default='#3498db',
-        verbose_name='ظ„ظˆظ† ط§ظ„طھظ…ظٹظٹط²',
-        help_text='ظ…ط«ط§ظ„: #FF5733'
+        verbose_name='لون التمييز',
+        help_text='مثال: #FF5733'
     )
     icon = models.CharField(
         max_length=50, default='location',
-        verbose_name='ط§ظ„ط£ظٹظ‚ظˆظ†ط©'
+        verbose_name='الأيقونة'
     )
     
     # â•گâ•گâ•گ ظ…ط¹ظ„ظˆظ…ط§طھ ط¥ط¶ط§ظپظٹط© â•گâ•گâ•گ
-    notes = models.TextField(blank=True, null=True, verbose_name='ظ…ظ„ط§ط­ط¸ط§طھ')
+    notes = models.TextField(blank=True, null=True, verbose_name='ملاحظات')
     tags = models.JSONField(
         default=list, blank=True,
         verbose_name='Tags',
-        help_text='ظ…ط«ط§ظ„: ["remote", "high-priority"]'
+        help_text='مثال: ["remote", "high-priority"]'
     )
     photo = models.ImageField(
         upload_to='work_locations/photos/',
         blank=True, null=True,
-        verbose_name='طµظˆط±ط© ط§ظ„ظ…ظˆظ‚ط¹'
+        verbose_name='صورة الموقع'
     )
     metadata = models.JSONField(
         default=dict, blank=True,
-        verbose_name='ط¨ظٹط§ظ†ط§طھ ط¥ط¶ط§ظپظٹط©'
+        verbose_name='بيانات إضافية'
     )
     
     class Meta:
-        verbose_name = 'ظ…ظˆظ‚ط¹ ط¹ظ…ظ„'
-        verbose_name_plural = 'ظ…ظˆط§ظ‚ط¹ ط§ظ„ط¹ظ…ظ„'
+        verbose_name = 'موقع عمل'
+        verbose_name_plural = 'مواقع العمل'
         ordering = ['-priority', '-created_at']
         indexes = [
             models.Index(fields=['company', 'employee', 'status']),
@@ -2929,7 +2930,7 @@ class EmployeeWorkLocation(TenantModel):
         ]
     
     def __str__(self):
-        emp_name = self.employee.first_name_ar if self.employee else 'ظ…ط´طھط±ظƒ'
+        emp_name = self.employee.first_name_ar if self.employee else 'مشترك'
         return f"{self.name} ({emp_name})"
 
 
@@ -2939,95 +2940,95 @@ class EmployeeWorkLocation(TenantModel):
 # â•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گ
 class RouteHistory(TenantModel):
     """
-    طھط§ط±ظٹط® ط§ظ„ط±ط­ظ„ط§طھ ط§ظ„ظ…طھظƒط±ط±ط© ظ„ظ„ظ…ظˆط¸ظپ ط¨ظٹظ† ظ†ظ‚ط·طھظٹظ†
-    ط§ظ„ط³ظٹط³طھظ… ط¨ظٹط³طھط®ط¯ظ…ظ‡ط§ ط¹ط´ط§ظ† ظٹط­ط³ط¨ ط§ظ„ظˆظ‚طھ ط§ظ„ظ…طھظˆظ‚ط¹ ط¨ط¯ظ‚ط© ط£ط¹ظ„ظ‰
+    تاريخ الرحلات المتكررة للموظف بين نقطتين
+    السيستم بيستخدمها عشان يحسب الوقت المتوقع بدقة أعلى
     """
     
     TIME_PERIOD_CHOICES = [
-        ('morning', 'طµط¨ط§ط­ط§ظ‹ (6طµ-12ط¸)'),
-        ('noon', 'ط¸ظ‡ط±ط§ظ‹ (12ط¸-4ط¹)'),
-        ('evening', 'ظ…ط³ط§ط،ظ‹ (4ط¹-8ظ…)'),
-        ('night', 'ظ„ظٹظ„ط§ظ‹ (8ظ…-6طµ)'),
+        ('morning', 'صباحاً (6ص-12ظ)'),
+        ('noon', 'ظهراً (12ظ-4ع)'),
+        ('evening', 'مساءً (4ع-8م)'),
+        ('night', 'ليلاً (8م-6ص)'),
     ]
     
     employee = models.ForeignKey(
         'employees.Employee',
         on_delete=models.CASCADE,
         related_name='route_history',
-        verbose_name='ط§ظ„ظ…ظˆط¸ظپ'
+        verbose_name='الموظف'
     )
     
     # ظ†ظ‚ط·ط© ط§ظ„ط¨ط¯ط§ظٹط©
     from_latitude = models.DecimalField(
         max_digits=10, decimal_places=7,
-        verbose_name='ط®ط· ط¹ط±ط¶ ط§ظ„ط¨ط¯ط§ظٹط©'
+        verbose_name='خط عرض البداية'
     )
     from_longitude = models.DecimalField(
         max_digits=10, decimal_places=7,
-        verbose_name='ط®ط· ط·ظˆظ„ ط§ظ„ط¨ط¯ط§ظٹط©'
+        verbose_name='خط طول البداية'
     )
     from_location_name = models.CharField(
         max_length=300,
         blank=True, null=True,
-        verbose_name='ط§ط³ظ… ظ…ظˆظ‚ط¹ ط§ظ„ط¨ط¯ط§ظٹط©'
+        verbose_name='اسم موقع البداية'
     )
     
     # ظ†ظ‚ط·ط© ط§ظ„ظ†ظ‡ط§ظٹط©
     to_latitude = models.DecimalField(
         max_digits=10, decimal_places=7,
-        verbose_name='ط®ط· ط¹ط±ط¶ ط§ظ„ظ†ظ‡ط§ظٹط©'
+        verbose_name='خط عرض النهاية'
     )
     to_longitude = models.DecimalField(
         max_digits=10, decimal_places=7,
-        verbose_name='ط®ط· ط·ظˆظ„ ط§ظ„ظ†ظ‡ط§ظٹط©'
+        verbose_name='خط طول النهاية'
     )
     to_location_name = models.CharField(
         max_length=300,
         blank=True, null=True,
-        verbose_name='ط§ط³ظ… ظ…ظˆظ‚ط¹ ط§ظ„ظ†ظ‡ط§ظٹط©'
+        verbose_name='اسم موقع النهاية'
     )
     
     # ط§ظ„ظ‚ظٹط§ط³ط§طھ
     distance_km = models.DecimalField(
         max_digits=8, decimal_places=2,
-        verbose_name='ط§ظ„ظ…ط³ط§ظپط© (ظƒظ…)'
+        verbose_name='المسافة (كم)'
     )
     travel_time_minutes = models.PositiveIntegerField(
-        verbose_name='ظˆظ‚طھ ط§ظ„طھظ†ظ‚ظ„ (ط¯ظ‚ط§ط¦ظ‚)'
+        verbose_name='وقت التنقل (دقائق)'
     )
     
     # ط§ظ„طھظˆظ‚ظٹطھ
     departed_at = models.DateTimeField(
-        verbose_name='طھط§ط±ظٹط® ظˆظˆظ‚طھ ط§ظ„ظ…ط؛ط§ط¯ط±ط©'
+        verbose_name='تاريخ ووقت المغادرة'
     )
     arrived_at = models.DateTimeField(
-        verbose_name='طھط§ط±ظٹط® ظˆظˆظ‚طھ ط§ظ„ظˆطµظˆظ„'
+        verbose_name='تاريخ ووقت الوصول'
     )
     
     # ظ„ظ„طھط­ظ„ظٹظ„
     time_period = models.CharField(
         max_length=20,
         choices=TIME_PERIOD_CHOICES,
-        verbose_name='ظپطھط±ط© ط§ظ„ظٹظˆظ…'
+        verbose_name='فترة اليوم'
     )
     day_of_week = models.PositiveSmallIntegerField(
-        verbose_name='ظٹظˆظ… ط§ظ„ط£ط³ط¨ظˆط¹ (0=ط§ظ„ط£ط­ط¯, 6=ط§ظ„ط³ط¨طھ)'
+        verbose_name='يوم الأسبوع (0=الأحد, 6=السبت)'
     )
     
     # ظ…ظ„ط§ط­ط¸ط§طھ
     notes = models.TextField(
         blank=True, null=True,
-        verbose_name='ظ…ظ„ط§ط­ط¸ط§طھ'
+        verbose_name='ملاحظات'
     )
     is_verified = models.BooleanField(
         default=True,
-        verbose_name='ط±ط­ظ„ط© ظ…ظˆط«ظˆظ‚ط©',
-        help_text='ظ„ظˆ falseطŒ ظ…ط´ ظ‡طھظڈط³طھط®ط¯ظ… ظپظٹ ط­ط³ط§ط¨ ط§ظ„ظ…طھظˆط³ط·'
+        verbose_name='رحلة موثوقة',
+        help_text='لو false، مش هتُستخدم في حساب المتوسط'
     )
     
     class Meta:
-        verbose_name = 'ط³ط¬ظ„ ط±ط­ظ„ط©'
-        verbose_name_plural = 'ط³ط¬ظ„ط§طھ ط§ظ„ط±ط­ظ„ط§طھ'
+        verbose_name = 'سجل رحلة'
+        verbose_name_plural = 'سجلات الرحلات'
         ordering = ['-arrived_at']
         indexes = [
             models.Index(fields=['employee', 'time_period']),
@@ -3035,8 +3036,7 @@ class RouteHistory(TenantModel):
         ]
     
     def __str__(self):
-        return f"{self.employee}: {self.from_location_name or 'ظ…ظˆظ‚ط¹'} â†’ {self.to_location_name or 'ظ…ظˆظ‚ط¹'} ({self.travel_time_minutes} ط¯)"
+        return f"{self.employee}: {self.from_location_name or 'موقع'} â†’ {self.to_location_name or 'موقع'} ({self.travel_time_minutes} ط¯)"
 
 
 from .company_policy_models import CompanyAllowancePolicy, CompanyDeductionPolicy, CompanyBonusPolicy
-
