@@ -1,3 +1,32 @@
+def _resolve_emp_shift(emp):
+    if not emp:
+        return {"shift_id": None, "shift_name": "غير معين", "shift_timing": ""}
+    try:
+        from attendance.models import EmployeeShift, ShiftAssignment, Shift
+        es = EmployeeShift._base_manager.filter(employee=emp, is_active=True).select_related('shift').first()
+        if es and es.shift and es.shift.is_active:
+            s = es.shift
+            t = f"{str(s.start_time)[:5]} - {str(s.end_time)[:5]}" if s.start_time and s.end_time else ""
+            return {"shift_id": s.id, "shift_name": s.name, "shift_timing": t, "shift_type": s.shift_type}
+        if emp.department:
+            sa = ShiftAssignment._base_manager.filter(company=emp.company, department=emp.department, is_active=True).select_related('shift').first()
+            if sa and sa.shift and sa.shift.is_active:
+                s = sa.shift
+                t = f"{str(s.start_time)[:5]} - {str(s.end_time)[:5]}" if s.start_time and s.end_time else ""
+                return {"shift_id": s.id, "shift_name": s.name, "shift_timing": t, "shift_type": s.shift_type}
+        if emp.branch:
+            sa = ShiftAssignment._base_manager.filter(company=emp.company, branch=emp.branch, is_active=True).select_related('shift').first()
+            if sa and sa.shift and sa.shift.is_active:
+                s = sa.shift
+                t = f"{str(s.start_time)[:5]} - {str(s.end_time)[:5]}" if s.start_time and s.end_time else ""
+                return {"shift_id": s.id, "shift_name": s.name, "shift_timing": t, "shift_type": s.shift_type}
+        s_def = Shift._base_manager.filter(company=emp.company, is_default=True, is_active=True).first()
+        if s_def:
+            t = f"{str(s_def.start_time)[:5]} - {str(s_def.end_time)[:5]}" if s_def.start_time and s_def.end_time else ""
+            return {"shift_id": s_def.id, "shift_name": s_def.name, "shift_timing": t, "shift_type": s_def.shift_type}
+    except Exception:
+        pass
+    return {"shift_id": None, "shift_name": "غير معين", "shift_timing": ""}
 def _sync_policy_assignments(policy, company, assignment_type, branch_ids, department_ids):
     from attendance.models import AttendancePolicyAssignment
     AttendancePolicyAssignment._base_manager.filter(policy=policy).delete()
@@ -2184,6 +2213,9 @@ def manager_employee_detail(request, employee_id):
             "job_title_name_en": getattr(jt, "name_en", "") or getattr(jt, "title_en", "") or "",
             "direct_manager_id": getattr(dm, "id", None),
             "direct_manager_name": _dn(dm),
+            "shift_id": _resolve_emp_shift(employee)["shift_id"],
+            "shift_name": _resolve_emp_shift(employee)["shift_name"],
+            "shift_timing": _resolve_emp_shift(employee)["shift_timing"],
 
             "worker_type": getattr(employee, "worker_type", "office") or "office",
             "is_field_worker": bool(getattr(employee, "is_field_worker", False)),

@@ -1,3 +1,53 @@
+def _get_emp_effective_shift(emp):
+    if not emp:
+        return None
+    try:
+        from attendance.models import EmployeeShift, ShiftAssignment, Shift
+        es = EmployeeShift._base_manager.filter(employee=emp, is_active=True).select_related('shift').first()
+        if es and es.shift and es.shift.is_active:
+            s = es.shift
+            return {
+                "id": s.id,
+                "name": s.name,
+                "start_time": str(s.start_time)[:5] if s.start_time else "",
+                "end_time": str(s.end_time)[:5] if s.end_time else "",
+                "shift_type": s.shift_type,
+            }
+        if emp.department:
+            sa = ShiftAssignment._base_manager.filter(company=emp.company, department=emp.department, is_active=True).select_related('shift').first()
+            if sa and sa.shift and sa.shift.is_active:
+                s = sa.shift
+                return {
+                    "id": s.id,
+                    "name": s.name,
+                    "start_time": str(s.start_time)[:5] if s.start_time else "",
+                    "end_time": str(s.end_time)[:5] if s.end_time else "",
+                    "shift_type": s.shift_type,
+                }
+        if emp.branch:
+            sa = ShiftAssignment._base_manager.filter(company=emp.company, branch=emp.branch, is_active=True).select_related('shift').first()
+            if sa and sa.shift and sa.shift.is_active:
+                s = sa.shift
+                return {
+                    "id": s.id,
+                    "name": s.name,
+                    "start_time": str(s.start_time)[:5] if s.start_time else "",
+                    "end_time": str(s.end_time)[:5] if s.end_time else "",
+                    "shift_type": s.shift_type,
+                }
+        s_def = Shift._base_manager.filter(company=emp.company, is_default=True, is_active=True).first()
+        if s_def:
+            return {
+                "id": s_def.id,
+                "name": s_def.name,
+                "start_time": str(s_def.start_time)[:5] if s_def.start_time else "",
+                "end_time": str(s_def.end_time)[:5] if s_def.end_time else "",
+                "shift_type": s_def.shift_type,
+            }
+    except Exception:
+        pass
+    return None
+
 from employees.visibility import get_visible_employees_qs, can_view_employee
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
@@ -61,6 +111,10 @@ def _serialize_employee_full(emp):
         "status": emp.get_status_display() if hasattr(emp, "get_status_display") else None,
         "worker_type": getattr(emp, "worker_type", "office") or "office",
         "worker_type_display": {"office": "مكتبي", "field_free": "ميداني حر", "field_assigned": "ميداني محدد"}.get(getattr(emp, "worker_type", "office") or "office", "مكتبي"),
+        "shift": _get_emp_effective_shift(emp),
+        "shift_name": _get_emp_effective_shift(emp)["name"] if _get_emp_effective_shift(emp) else "غير معين",
+        "shift_timing": f"{_get_emp_effective_shift(emp)['start_time']} - {_get_emp_effective_shift(emp)['end_time']}" if _get_emp_effective_shift(emp) and _get_emp_effective_shift(emp).get('start_time') else "",
+
     }
 
 
