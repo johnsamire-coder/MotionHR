@@ -1325,13 +1325,11 @@ def _apply_permission_balance(employee, late_minutes, reference_date, policy):
     remaining_late = max(0, late_minutes - minutes_to_convert)
     return minutes_to_convert, remaining_late
 
-<<<<<<< HEAD
 def _apply_absence_rule(policy, absent_days, daily_salary, consecutive_days=0, occurrences=0):
     """
     يطبق قواعد خصم الغياب بدقة:
     - يدعم خصم أكثر من يوم (مثلاً deduction_value = 2.0 يعني يومين خصم عن كل يوم غياب)
     - يدعم الغياب المتتالي (consecutive) والمتكرر (repeated) وبدون إذن (unexcused)
-=======
 def _apply_absence_rule(policy, absent_days, daily_salary, employee=None, consecutive_days=0, occurrences=0):
     """
     يطبق قواعد الخصم بدقة حسب البند المستهدف للموظف (فرع/قسم/شركة)
@@ -1340,7 +1338,6 @@ def _apply_absence_rule(policy, absent_days, daily_salary, employee=None, consec
         return 0.0, 0.0
 
     daily_sal = float(daily_salary)
-<<<<<<< HEAD
     total_absent = float(absent_days)
 
     try:
@@ -1386,7 +1383,6 @@ def _apply_absence_rule(policy, absent_days, daily_salary, employee=None, consec
                 return round(total_absent * daily_sal * mult, 2), round(total_absent * mult, 2)
             elif rule_u.deduction_type == 'fixed_amount':
                 return round(total_absent * mult, 2), total_absent
-=======
     total_absent_count = int(absent_days)
 
     try:
@@ -1447,19 +1443,15 @@ def _apply_absence_rule(policy, absent_days, daily_salary, employee=None, consec
                 return round(total_absent_count * daily_sal * mult, 2), round(total_absent_count * mult, 2)
             elif rule_u.deduction_type == 'fixed':
                 return round(total_absent_count * mult, 2), float(total_absent_count)
->>>>>>> 15e61bffed7eefba4b18ba2198d5b4edbb7006e0
             elif rule_u.deduction_type == 'warning':
                 return 0.0, 0.0
 
     except Exception:
         pass
 
-<<<<<<< HEAD
     # الافتراضي: خصم يوم بيوم (1.0)
     return round(total_absent * daily_sal, 2), total_absent
-=======
     return round(total_absent_count * daily_sal, 2), float(total_absent_count)
->>>>>>> 15e61bffed7eefba4b18ba2198d5b4edbb7006e0
 
 
 
