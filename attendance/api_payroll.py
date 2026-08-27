@@ -658,7 +658,7 @@ def payroll_runs_list(request):
         return Response({'success': False, 'error': 'صلاحية غير كافية'}, status=403)
 
     try:
-        from attendance.payroll_pro_models import PayrollRun
+        from attendance.payroll_pro_models import PayrollRun, PayrollLine
         company = getattr(user, 'company', None)
         if not company:
             return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
@@ -679,7 +679,7 @@ def payroll_runs_list(request):
                     'approved': 'معتمد',
                     'locked': 'مقفول',
                 }.get(r.status, r.status),
-                'total_employees': r.lines.count(),
+                'total_employees': PayrollLine._base_manager.filter(payroll_run=r).count(),
                 'approved_by': r.approved_by.get_full_name() if r.approved_by else None,
                 'approved_at': str(r.approved_at)[:16] if r.approved_at else None,
                 'created_at': str(r.created_at)[:16] if r.created_at else None,
