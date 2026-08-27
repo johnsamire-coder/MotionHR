@@ -183,6 +183,33 @@ def payroll_summary(request):
         cached_result['_from_cache'] = True
         return Response(cached_result)
 
+    # التحقق من تاريخ بدء تشغيل النظام المحدد للشركة من قِبل Super Admin
+    from companies.models import Company
+    import datetime
+    company_obj = Company.objects.filter(id=company_id).first()
+    
+    if company_obj and getattr(company_obj, 'system_start_date', None):
+        start_month = datetime.date(company_obj.system_start_date.year, company_obj.system_start_date.month, 1)
+        req_month = datetime.date(year, month, 1)
+        
+        # إذا كان الشهر المطلوب قبل تاريخ بدء تشغيل الشركة المحدد، نرجع 0
+        if req_month < start_month:
+            return Response({
+                'year': year,
+                'month': month,
+                'lang': lang,
+                'total_employees': 0,
+                'grand_total_salary': 0.0,
+                'grand_total_allowances': 0.0,
+                'grand_total_overtime': 0.0,
+                'grand_total_bonuses': 0.0,
+                'grand_total_deductions': 0.0,
+                'grand_total_net': 0.0,
+                'payroll_settings': {},
+                'employees': [],
+                '_from_cache': False
+            })
+
     employees = _get_company_employees(user)
     settings = _get_payroll_settings(user)
 
@@ -194,7 +221,17 @@ def payroll_summary(request):
     grand_total_deductions = 0
     grand_total_net = 0
 
+    import calendar, datetime
+    _, last_day = calendar.monthrange(year, month)
+    month_start = datetime.date(year, month, 1)
+    month_end = datetime.date(year, month, last_day)
+
     for emp in employees:
+        if emp.hire_date and emp.hire_date > month_end:
+            continue
+        if getattr(emp, 'termination_date', None) and emp.termination_date < month_start:
+            continue
+
         payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
         results.append(_serialize_summary_row(payroll))
 
@@ -664,6 +701,9 @@ def payroll_run_create(request):
     """
     تشغيل المرتبات لشهر معين
     بيحسب مرتب كل موظف ويحفظه في PayrollLine
+    مع قواعد:
+    - ممنوع شهر مستقبلي
+    - ممنوع قبل system_start_date للشركة
     """
     user = request.user
     if not _check_manager(user):
@@ -672,19 +712,49 @@ def payroll_run_create(request):
     try:
         from attendance.payroll_pro_models import PayrollRun, PayrollLine
         from employees.models import Employee
+        from companies.models import Company
+        from django.utils import timezone
+        import datetime
 
         company = getattr(user, 'company', None)
         if not company:
             return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
 
         data = request.data
-        year = int(data.get('year', datetime.now().year))
-        month = int(data.get('month', datetime.now().month))
+        year = int(data.get('year', timezone.localdate().year))
+        month = int(data.get('month', timezone.localdate().month))
         notes = data.get('notes', '')
         lang = data.get('lang', 'ar')
 
         if month < 1 or month > 12:
             return Response({'success': False, 'error': 'شهر غير صحيح'}, status=400)
+
+        # ===== قواعد محاسبية صارمة =====
+        today = timezone.localdate()
+        current_month_start = datetime.date(today.year, today.month, 1)
+        requested_month_start = datetime.date(year, month, 1)
+
+        # 1) ممنوع شهر مستقبلي
+        if requested_month_start > current_month_start:
+            return Response({
+                'success': False,
+                'error': f'لا يمكن تشغيل مسير رواتب لشهر مستقبلي ({year}-{month:02d}). الشهر الحالي هو {today.year}-{today.month:02d}.'
+            }, status=400)
+
+        # 2) ممنوع قبل تاريخ بدء تشغيل الشركة (Super Admin)
+        company_obj = Company.objects.filter(id=company.id).first()
+        if company_obj and getattr(company_obj, 'system_start_date', None):
+            go_live_month = datetime.date(
+                company_obj.system_start_date.year,
+                company_obj.system_start_date.month,
+                1
+            )
+            if requested_month_start < go_live_month:
+                return Response({
+                    'success': False,
+                    'error': f'لا يمكن تشغيل مسير قبل تاريخ بدء تشغيل الشركة ({company_obj.system_start_date}).'
+                }, status=400)
+        # ===== نهاية القواعد =====
 
         # لو فيه run موجود لنفس الشهر وحالته draft → نمسحه ونعيد الحساب
         existing = PayrollRun._base_manager.filter(
@@ -750,24 +820,17 @@ def payroll_run_create(request):
                     late_days=payroll.get('late_days', 0),
                     mission_days=payroll.get('mission_days', 0),
                     on_leave_days=payroll.get('on_leave_days', 0),
-                    overtime_hours=payroll.get('overtime_hours', 0),
                     late_minutes=payroll.get('total_late_minutes', 0),
+                    overtime_hours=payroll.get('overtime_hours', 0),
                     currency=payroll.get('currency', 'EGP'),
                     created_by=user,
                 )
-
-                grand_net += float(payroll.get('net_salary', 0))
-                results.append({
-                    'employee_id': emp.id,
-                    'employee_name': payroll.get('employee_name', ''),
-                    'net_salary': payroll.get('net_salary', 0),
-                    'currency': payroll.get('currency', 'EGP'),
-                })
-
+                grand_net += float(payroll.get('net_salary', 0) or 0)
+                results.append(emp.id)
             except Exception as emp_err:
                 errors.append({
                     'employee_id': emp.id,
-                    'employee_name': getattr(emp, 'full_name_ar', str(emp)),
+                    'employee_name': f'{getattr(emp, "first_name_ar", "")} {getattr(emp, "last_name_ar", "")}'.strip(),
                     'error': str(emp_err),
                 })
 
@@ -776,17 +839,97 @@ def payroll_run_create(request):
             'run_id': run.id,
             'year': year,
             'month': month,
-            'status': 'draft',
+            'status': run.status,
             'total_employees': len(results),
             'grand_net': round(grand_net, 2),
             'errors_count': len(errors),
             'errors': errors,
             'message': f'تم حساب مرتبات {len(results)} موظف بنجاح',
         })
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def payroll_run_detail(request, run_id):
+    """تفاصيل تشغيل رواتب معين + كل السطور (الموظفين) بتاعته"""
+    user = request.user
+    if not _check_manager(user):
+        return Response({'success': False, 'error': 'صلاحية غير كافية'}, status=403)
+
+    try:
+        from attendance.payroll_pro_models import PayrollRun
+
+        company = getattr(user, 'company', None)
+        if not company:
+            return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
+
+        run = PayrollRun._base_manager.filter(
+            id=run_id, company=company
+        ).select_related('approved_by').first()
+
+        if not run:
+            return Response({'success': False, 'error': 'تشغيل الرواتب غير موجود'}, status=404)
+
+        lines = run.lines.select_related('employee', 'employee__user').all()
+
+        lines_data = []
+        for line in lines:
+            emp = line.employee
+            lines_data.append({
+                'line_id': line.id,
+                'employee_id': emp.id,
+                'employee_name': f'{getattr(emp, "first_name_ar", "")} {getattr(emp, "last_name_ar", "")}'.strip(),
+                'basic_salary': float(line.basic_salary),
+                'allowances_total': float(line.allowances_total),
+                'overtime_total': float(line.overtime_total),
+                'bonuses_total': float(line.bonuses_total),
+                'gross_salary': float(line.gross_salary),
+                'late_deduction': float(line.late_deduction),
+                'absence_deduction': float(line.absence_deduction),
+                'insurance_deduction': float(line.insurance_deduction),
+                'installments_total': float(line.installments_total),
+                'penalties_total': float(line.penalties_total),
+                'extra_deductions_total': float(line.extra_deductions_total),
+                'total_deductions': float(line.total_deductions),
+                'net_salary': float(line.net_salary),
+                'currency': line.currency,
+                'working_days': line.working_days,
+                'attended_days': line.attended_days,
+                'absent_days': line.absent_days,
+                'late_days': line.late_days,
+                'mission_days': line.mission_days,
+                'on_leave_days': line.on_leave_days,
+                'late_minutes': line.late_minutes,
+                'overtime_hours': float(line.overtime_hours),
+            })
+
+        return Response({
+            'success': True,
+            'run': {
+                'id': run.id,
+                'year': run.year,
+                'month': run.month,
+                'status': run.status,
+                'status_label': {
+                    'draft': 'مسودة',
+                    'approved': 'معتمد',
+                    'locked': 'مقفول',
+                }.get(run.status, run.status),
+                'notes': run.notes or '',
+                'approved_by': run.approved_by.get_full_name() if run.approved_by else None,
+                'approved_at': str(run.approved_at)[:16] if run.approved_at else None,
+            },
+            'lines': lines_data,
+            'total_employees': len(lines_data),
+            'grand_net': round(sum(l['net_salary'] for l in lines_data), 2),
+        })
 
     except Exception as e:
         import logging
-        logging.getLogger(__name__).exception('payroll_run_create error')
+        logging.getLogger(__name__).exception('payroll_run_detail error')
         return Response({'success': False, 'error': str(e)}, status=500)
 
 
@@ -794,7 +937,7 @@ def payroll_run_create(request):
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def payroll_run_approve(request, run_id):
-    """اعتماد تشغيل المرتبات — صاحب الشركة وHR فقط"""
+    """اعتماد تشغيل رواتب — يقفل التعديل عليه"""
     user = request.user
     if not _check_manager(user):
         return Response({'success': False, 'error': 'صلاحية غير كافية'}, status=403)
@@ -804,17 +947,21 @@ def payroll_run_approve(request, run_id):
         from django.utils import timezone
 
         company = getattr(user, 'company', None)
+        if not company:
+            return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
 
-        try:
-            run = PayrollRun._base_manager.get(id=run_id, company=company)
-        except PayrollRun.DoesNotExist:
-            return Response({'success': False, 'error': 'التشغيل غير موجود'}, status=404)
+        run = PayrollRun._base_manager.filter(
+            id=run_id, company=company
+        ).first()
 
-        if run.status == 'locked':
-            return Response({'success': False, 'error': 'التشغيل مقفول ولا يمكن تعديله'}, status=400)
+        if not run:
+            return Response({'success': False, 'error': 'تشغيل الرواتب غير موجود'}, status=404)
 
         if run.status == 'approved':
-            return Response({'success': False, 'error': 'التشغيل معتمد مسبقاً'}, status=400)
+            return Response({'success': False, 'error': 'التشغيل معتمد بالفعل'}, status=400)
+
+        if run.status == 'locked':
+            return Response({'success': False, 'error': 'التشغيل مقفول ولا يمكن اعتماده مرة أخرى'}, status=400)
 
         run.status = 'approved'
         run.approved_by = user
@@ -823,87 +970,14 @@ def payroll_run_approve(request, run_id):
 
         return Response({
             'success': True,
-            'message': f'تم اعتماد مرتبات {run.month}/{run.year} بنجاح',
             'run_id': run.id,
-            'approved_by': user.get_full_name() or user.username,
+            'status': run.status,
+            'approved_by': user.get_full_name(),
+            'approved_at': str(run.approved_at)[:16],
+            'message': 'تم اعتماد تشغيل الرواتب بنجاح',
         })
 
     except Exception as e:
         import logging
         logging.getLogger(__name__).exception('payroll_run_approve error')
-        return Response({'success': False, 'error': str(e)}, status=500)
-
-
-@api_view(['GET'])
-@authentication_classes([TokenAuthentication, JWTAuthentication])
-@permission_classes([IsAuthenticated])
-def payroll_run_detail(request, run_id):
-    """تفاصيل تشغيل مرتبات محدد"""
-    user = request.user
-    if not _check_manager(user):
-        return Response({'success': False, 'error': 'صلاحية غير كافية'}, status=403)
-
-    try:
-        from attendance.payroll_pro_models import PayrollRun
-
-        company = getattr(user, 'company', None)
-
-        try:
-            run = PayrollRun._base_manager.get(id=run_id, company=company)
-        except PayrollRun.DoesNotExist:
-            return Response({'success': False, 'error': 'التشغيل غير موجود'}, status=404)
-
-        lines = run.lines.select_related('employee').all()
-        lines_data = []
-        grand_net = 0.0
-
-        for line in lines:
-            emp = line.employee
-            grand_net += float(line.net_salary or 0)
-            lines_data.append({
-                'employee_id': emp.id if emp else None,
-                'employee_name': getattr(emp, 'full_name_ar', '') if emp else '',
-                'employee_code': getattr(emp, 'employee_code', '') if emp else '',
-                'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') if emp else '',
-                'department': getattr(getattr(emp, 'department', None), 'name_ar', '') if emp else '',
-                'basic_salary': float(line.basic_salary or 0),
-                'allowances_total': float(line.allowances_total or 0),
-                'overtime_total': float(line.overtime_total or 0),
-                'bonuses_total': float(line.bonuses_total or 0),
-                'gross_salary': float(line.gross_salary or 0),
-                'late_deduction': float(line.late_deduction or 0),
-                'absence_deduction': float(line.absence_deduction or 0),
-                'insurance_deduction': float(line.insurance_deduction or 0),
-                'installments_total': float(line.installments_total or 0),
-                'penalties_total': float(line.penalties_total or 0),
-                'extra_deductions_total': float(line.extra_deductions_total or 0),
-                'total_deductions': float(line.total_deductions or 0),
-                'net_salary': float(line.net_salary or 0),
-                'currency': line.currency or 'EGP',
-                'working_days': line.working_days or 0,
-                'attended_days': line.attended_days or 0,
-                'absent_days': line.absent_days or 0,
-                'late_days': line.late_days or 0,
-                'late_minutes': line.late_minutes or 0,
-                'overtime_hours': float(line.overtime_hours or 0),
-            })
-
-        return Response({
-            'success': True,
-            'run_id': run.id,
-            'year': run.year,
-            'month': run.month,
-            'status': run.status,
-            'status_label': {'draft': 'مسودة', 'approved': 'معتمد', 'locked': 'مقفول'}.get(run.status, run.status),
-            'total_employees': len(lines_data),
-            'grand_net': round(grand_net, 2),
-            'approved_by': run.approved_by.get_full_name() if run.approved_by else None,
-            'approved_at': str(run.approved_at)[:16] if run.approved_at else None,
-            'notes': run.notes or '',
-            'lines': lines_data,
-        })
-
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).exception('payroll_run_detail error')
         return Response({'success': False, 'error': str(e)}, status=500)
