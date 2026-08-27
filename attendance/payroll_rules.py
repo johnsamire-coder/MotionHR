@@ -1335,7 +1335,6 @@ def _apply_absence_rule(policy, absent_days, daily_salary, consecutive_days=0, o
 def _apply_absence_rule(policy, absent_days, daily_salary, employee=None, consecutive_days=0, occurrences=0):
     """
     يطبق قواعد الخصم بدقة حسب البند المستهدف للموظف (فرع/قسم/شركة)
->>>>>>> 15e61bffed7eefba4b18ba2198d5b4edbb7006e0
     """
     if not policy or absent_days <= 0:
         return 0.0, 0.0
