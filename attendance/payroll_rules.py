@@ -284,7 +284,7 @@ def get_company_working_days(company, year, month):
     }
     try:
         from .company_policy_models import CompanyWorkPolicy
-        policy = CompanyWorkPolicy._base_manager.filter(company=company).first()
+        policy = CompanyWorkPolicy.objects.filter(company=company).first()
         if policy:
             work_days_map = {
                 0: policy.work_monday,
@@ -657,7 +657,7 @@ def _get_monthly_deductions(employee, year, month, lang='ar'):
 
     try:
         from .company_policy_models import PayrollDeduction
-        qs = PayrollDeduction._base_manager.filter(
+        qs = PayrollDeduction.objects.filter(
             employee=employee,
             is_active=True,
             start_date__lte=last_day,
@@ -690,7 +690,7 @@ def _get_monthly_deductions(employee, year, month, lang='ar'):
 
     try:
         from employees.models import Deduction
-        for item in Deduction._base_manager.filter(employee=employee, year=year, month=month):
+        for item in Deduction.objects.filter(employee=employee, year=year, month=month):
             amount = _safe_float(item.amount)
             dtype = getattr(item, 'deduction_type', '') or ''
             dtype_lower = dtype.strip().lower()
@@ -1046,7 +1046,7 @@ def _get_active_policy(company, target_date, department=None, branch=None):
 
         # قسم أولاً
         if department:
-            dept_assignment = AttendancePolicyAssignment._base_manager.filter(
+            dept_assignment = AttendancePolicyAssignment.objects.filter(
                 date_filter & status_filter & company_filter,
                 assignment_type='department',
                 department=department
@@ -1056,7 +1056,7 @@ def _get_active_policy(company, target_date, department=None, branch=None):
 
         # فرع تانياً
         if branch:
-            branch_assignment = AttendancePolicyAssignment._base_manager.filter(
+            branch_assignment = AttendancePolicyAssignment.objects.filter(
                 date_filter & status_filter & company_filter,
                 assignment_type='branch',
                 branch=branch
@@ -1065,7 +1065,7 @@ def _get_active_policy(company, target_date, department=None, branch=None):
                 return branch_assignment.policy
 
         # شركة أخيراً
-        company_assignment = AttendancePolicyAssignment._base_manager.filter(
+        company_assignment = AttendancePolicyAssignment.objects.filter(
             date_filter & status_filter & company_filter,
             assignment_type='company'
         ).select_related('policy').order_by('priority').first()
@@ -1083,14 +1083,14 @@ def _apply_late_rule(policy, late_minutes, daily_salary):
         return 0.0
     try:
         from attendance.models import LateRule
-        rules = LateRule._base_manager.filter(
+        rules = LateRule.objects.filter(
             policy=policy,
             from_minutes__lte=late_minutes,
             to_minutes__gte=late_minutes
         ).order_by('display_order').first()
 
         if not rules:
-            rules = LateRule._base_manager.filter(
+            rules = LateRule.objects.filter(
                 policy=policy,
                 from_minutes__lte=late_minutes
             ).order_by('-from_minutes').first()
@@ -1325,134 +1325,27 @@ def _apply_permission_balance(employee, late_minutes, reference_date, policy):
     remaining_late = max(0, late_minutes - minutes_to_convert)
     return minutes_to_convert, remaining_late
 
-def _apply_absence_rule(policy, absent_days, daily_salary, consecutive_days=0, occurrences=0):
-    """
-    يطبق قواعد خصم الغياب بدقة:
-    - يدعم خصم أكثر من يوم (مثلاً deduction_value = 2.0 يعني يومين خصم عن كل يوم غياب)
-    - يدعم الغياب المتتالي (consecutive) والمتكرر (repeated) وبدون إذن (unexcused)
-def _apply_absence_rule(policy, absent_days, daily_salary, employee=None, consecutive_days=0, occurrences=0):
-    """
-    يطبق قواعد الخصم بدقة حسب البند المستهدف للموظف (فرع/قسم/شركة)
-    """
+def _apply_absence_rule(policy, absent_days, daily_salary):
+    """يطبق قاعدة الخصم على أيام الغياب"""
     if not policy or absent_days <= 0:
-        return 0.0, 0.0
-
-    daily_sal = float(daily_salary)
-    total_absent = float(absent_days)
-
+        return 0.0
     try:
         from attendance.models import AbsenceRule
-        
-        # 1. البحث عن قاعدة الغياب المتتالي أولاً إن وجدت
-        if consecutive_days > 1:
-            rule_c = AbsenceRule._base_manager.filter(
-                policy=policy,
-                absence_type='consecutive',
-                consecutive_days__lte=consecutive_days
-            ).order_by('-consecutive_days', 'display_order').first()
-            if rule_c:
-                mult = float(rule_c.deduction_value)
-                if rule_c.deduction_type == 'day_fraction':
-                    return round(total_absent * daily_sal * mult, 2), round(total_absent * mult, 2)
-                elif rule_c.deduction_type == 'fixed_amount':
-                    return round(total_absent * mult, 2), total_absent
-
-        # 2. البحث عن قاعدة الغياب المتكرر في الشهر
-        if occurrences > 1:
-            rule_r = AbsenceRule._base_manager.filter(
-                policy=policy,
-                absence_type='repeated',
-                occurrences_in_month__lte=occurrences
-            ).order_by('-occurrences_in_month', 'display_order').first()
-            if rule_r:
-                mult = float(rule_r.deduction_value)
-                if rule_r.deduction_type == 'day_fraction':
-                    return round(total_absent * daily_sal * mult, 2), round(total_absent * mult, 2)
-                elif rule_r.deduction_type == 'fixed_amount':
-                    return round(total_absent * mult, 2), total_absent
-
-        # 3. القاعدة العامة (بدون إذن - unexcused)
-        rule_u = AbsenceRule._base_manager.filter(
+        rule = AbsenceRule.objects.filter(
             policy=policy,
             absence_type='unexcused'
         ).order_by('display_order').first()
 
-        if rule_u:
-            mult = float(rule_u.deduction_value)
-            if rule_u.deduction_type == 'day_fraction':
-                return round(total_absent * daily_sal * mult, 2), round(total_absent * mult, 2)
-            elif rule_u.deduction_type == 'fixed_amount':
-                return round(total_absent * mult, 2), total_absent
-    total_absent_count = int(absent_days)
+        if not rule:
+            return round(absent_days * daily_salary, 2)
 
-    try:
-        from attendance.models import AbsenceRule
-
-        emp_branch_id = getattr(employee, 'branch_id', None)
-        emp_dept_id = getattr(employee, 'department_id', None)
-
-        # جلب القواعد الخاصة بسياسة الحضور
-        all_rules = AbsenceRule._base_manager.filter(policy=policy)
-
-        # فلترة القواعد الأنسب للموظف (قسم > فرع > عام)
-        def _get_best_rule(absence_type_filter):
-            qs = all_rules.filter(absence_type=absence_type_filter)
-            if emp_dept_id and qs.filter(department_id=emp_dept_id).exists():
-                return qs.filter(department_id=emp_dept_id).order_by('display_order').first()
-            if emp_branch_id and qs.filter(branch_id=emp_branch_id).exists():
-                return qs.filter(branch_id=emp_branch_id).order_by('display_order').first()
-            return qs.filter(branch__isnull=True, department__isnull=True).order_by('display_order').first()
-
-        # 1. تدرج المرات
-        occ_rules = all_rules.filter(absence_type__in=['repeated', 'occurrence'])
-        if occ_rules.exists():
-            total_deduction_amount = 0.0
-            total_deducted_days = 0.0
-            for occ in range(1, total_absent_count + 1):
-                rule = _get_best_rule('repeated') or _get_best_rule('occurrence')
-                if rule:
-                    val = float(rule.deduction_value or 0)
-                    if rule.deduction_type == 'warning':
-                        pass
-                    elif rule.deduction_type in ['day_fraction', 'full_day']:
-                        total_deducted_days += val
-                        total_deduction_amount += (val * daily_sal)
-                    elif rule.deduction_type == 'fixed':
-                        total_deduction_amount += val
-                        total_deducted_days += (val / daily_sal) if daily_sal > 0 else 0
-                else:
-                    total_deducted_days += 1.0
-                    total_deduction_amount += daily_sal
-            return round(total_deduction_amount, 2), round(total_deducted_days, 2)
-
-        # 2. غياب متتالي
-        if consecutive_days > 1:
-            rule_c = _get_best_rule('consecutive')
-            if rule_c:
-                mult = float(rule_c.deduction_value)
-                if rule_c.deduction_type in ['day_fraction', 'full_day']:
-                    return round(total_absent_count * daily_sal * mult, 2), round(total_absent_count * mult, 2)
-                elif rule_c.deduction_type == 'fixed':
-                    return round(total_absent_count * mult, 2), float(total_absent_count)
-
-        # 3. غياب عادي
-        rule_u = _get_best_rule('unexcused')
-        if rule_u:
-            mult = float(rule_u.deduction_value)
-            if rule_u.deduction_type in ['day_fraction', 'full_day']:
-                return round(total_absent_count * daily_sal * mult, 2), round(total_absent_count * mult, 2)
-            elif rule_u.deduction_type == 'fixed':
-                return round(total_absent_count * mult, 2), float(total_absent_count)
-            elif rule_u.deduction_type == 'warning':
-                return 0.0, 0.0
-
+        if rule.deduction_type == 'day_fraction':
+            return round(absent_days * daily_salary * float(rule.deduction_value), 2)
+        elif rule.deduction_type == 'fixed_amount':
+            return round(absent_days * float(rule.deduction_value), 2)
     except Exception:
         pass
-
-    # الافتراضي: خصم يوم بيوم (1.0)
-    return round(total_absent * daily_sal, 2), total_absent
-    return round(total_absent_count * daily_sal, 2), float(total_absent_count)
-
+    return round(absent_days * daily_salary, 2)
 
 
 def _apply_overtime_rule(policy, overtime_hours, hourly_rate, overtime_type='after_shift'):
@@ -1461,13 +1354,13 @@ def _apply_overtime_rule(policy, overtime_hours, hourly_rate, overtime_type='aft
         return 0.0
     try:
         from attendance.models import OvertimeRule
-        rule = OvertimeRule._base_manager.filter(
+        rule = OvertimeRule.objects.filter(
             policy=policy,
             overtime_type=overtime_type
         ).order_by('display_order').first()
 
         if not rule:
-            rule = OvertimeRule._base_manager.filter(
+            rule = OvertimeRule.objects.filter(
                 policy=policy,
                 overtime_type='after_shift'
             ).order_by('display_order').first()
@@ -1491,7 +1384,7 @@ def _apply_night_allowance(policy, night_shift_days, daily_salary):
         return 0.0
     try:
         from attendance.models import NightShiftRule
-        rule = NightShiftRule._base_manager.filter(policy=policy).first()
+        rule = NightShiftRule.objects.filter(policy=policy).first()
         if not rule:
             return 0.0
         if rule.allowance_type == 'fixed_amount':
@@ -1509,7 +1402,7 @@ def _apply_weekend_allowance(policy, weekend_work_days, daily_salary):
         return 0.0
     try:
         from attendance.models import WeekendWorkRule
-        rule = WeekendWorkRule._base_manager.filter(policy=policy).first()
+        rule = WeekendWorkRule.objects.filter(policy=policy).first()
         if not rule:
             return round(weekend_work_days * daily_salary * 2, 2)
         if rule.compensation_type == 'overtime_multiplier':
@@ -2427,115 +2320,4 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'legacy_deduction_items': deductions['legacy_items'],
 
         'daily_details': daily_details,
-    }
-
-
-
-def get_late_warning_info(employee, target_date, late_minutes):
-    """
-    يحسب معلومات الإنذار/الخصم للتأخير
-    Returns: {
-        'is_warning_enabled': bool,
-        'incident_number': int,  # رقم الحادثة في الشهر
-        'threshold': int,
-        'should_deduct': bool,
-        'deduction_days': float,
-        'message_ar': str,
-        'message_en': str,
-    }
-    """
-    from attendance.models import AttendancePolicy, AttendancePolicyAssignment, LateIncident
-    from django.db.models import Q
-    
-    default = {
-        'is_warning_enabled': False,
-        'incident_number': 0,
-        'threshold': 0,
-        'should_deduct': False,
-        'deduction_days': 0.0,
-        'message_ar': '',
-        'message_en': '',
-    }
-    
-    if late_minutes <= 0:
-        return default
-    
-    # نلاقي السياسة النشطة
-    policy = _get_active_policy(
-        getattr(employee, 'company', None),
-        target_date,
-        department=getattr(employee, 'department', None),
-        branch=getattr(employee, 'branch', None),
-    )
-    
-    if not policy or not getattr(policy, 'late_warning_enabled', False):
-        return default
-    
-    # نجيب دورة المرتب (شهر أو حسب سياسة الشركة)
-    company = getattr(employee, 'company', None)
-    if company and hasattr(company, 'payroll_cycle_type'):
-        cycle_start, cycle_end = get_payroll_period_bounds(company, target_date.year, target_date.month)
-    else:
-        cycle_start, cycle_end = _period_bounds(target_date.year, target_date.month)
-    
-    # نعد عدد التأخيرات في الدورة الحالية (بما فيهم اليوم ده)
-    incidents_count = LateIncident._base_manager.filter(
-        employee=employee,
-        date__gte=cycle_start,
-        date__lte=cycle_end,
-        late_minutes__gt=0,
-    ).count() + 1  # +1 للحادثة الحالية
-    
-    threshold = int(getattr(policy, 'late_warning_threshold', 2) or 2)
-    should_deduct = incidents_count > threshold
-    
-    deduction_days = 0.0
-    if should_deduct:
-        deduction_type = getattr(policy, 'late_warning_deduction_type', 'fixed')
-        base_value = float(getattr(policy, 'late_warning_deduction_value', 0.25) or 0.25)
-        max_value = float(getattr(policy, 'late_warning_max_deduction', 1.0) or 1.0)
-        step_rate = int(getattr(policy, 'late_warning_step_rate', 1) or 1)
-        
-        # رقم مرة الخصم (بعد الـ threshold)
-        deduction_number = incidents_count - threshold
-        
-        if deduction_type == 'fixed':
-            deduction_days = base_value
-        elif deduction_type == 'progressive':
-            # يزيد كل مرة لحد الحد الأقصى
-            deduction_days = min(base_value * deduction_number, max_value)
-        elif deduction_type == 'progressive_step':
-            # يزيد كل N مرات
-            step_number = ((deduction_number - 1) // step_rate) + 1
-            deduction_days = min(base_value * step_number, max_value)
-    
-    # نبني الرسالة
-    if should_deduct:
-        message_ar = (
-            f"🚨 تم خصم {deduction_days} من يوم عمل بسبب تكرار التأخير.\n"
-            f"عدد مرات التأخير هذا الشهر: {incidents_count}"
-        )
-        message_en = (
-            f"🚨 {deduction_days} of a day deducted due to repeated lateness.\n"
-            f"Late count this month: {incidents_count}"
-        )
-    else:
-        remaining = threshold - incidents_count + 1
-        message_ar = (
-            f"⚠️ هذا هو الإنذار رقم {incidents_count} من {threshold} هذا الشهر.\n"
-            f"بعد {remaining} مرة أخرى سيتم الخصم من راتبك."
-        )
-        message_en = (
-            f"⚠️ Warning {incidents_count} of {threshold} this month.\n"
-            f"{remaining} more time(s) before deduction."
-        )
-    
-    return {
-        'is_warning_enabled': True,
-        'incident_number': incidents_count,
-        'threshold': threshold,
-        'should_deduct': should_deduct,
-        'deduction_days': round(deduction_days, 2),
-        'message_ar': message_ar,
-        'message_en': message_en,
     }
