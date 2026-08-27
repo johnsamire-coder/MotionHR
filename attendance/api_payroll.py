@@ -873,7 +873,8 @@ def payroll_run_detail(request, run_id):
         if not run:
             return Response({'success': False, 'error': 'تشغيل الرواتب غير موجود'}, status=404)
 
-        lines = run.lines.select_related('employee', 'employee__user').all()
+        from attendance.payroll_pro_models import PayrollLine
+        lines = PayrollLine._base_manager.filter(payroll_run=run).select_related('employee', 'employee__user')
 
         lines_data = []
         for line in lines:
