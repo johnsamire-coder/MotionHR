@@ -228,6 +228,8 @@ from .api_payroll import (
     payroll_run_create,
     payroll_run_approve,
     payroll_run_detail,
+    payroll_run_export_excel,
+    payroll_run_export_pdf,
 )
 
 urlpatterns += [
@@ -256,6 +258,8 @@ urlpatterns += [
     path('api/mobile/manager/payroll/run/create/', payroll_run_create, name='payroll-run-create'),
     path('api/mobile/manager/payroll/runs/<int:run_id>/', payroll_run_detail, name='payroll-run-detail'),
     path('api/mobile/manager/payroll/runs/<int:run_id>/approve/', payroll_run_approve, name='payroll-run-approve'),
+    path('api/mobile/manager/payroll/runs/<int:run_id>/export/excel/', payroll_run_export_excel, name='payroll-run-export-excel'),
+    path('api/mobile/manager/payroll/runs/<int:run_id>/export/pdf/', payroll_run_export_pdf, name='payroll-run-export-pdf'),
 
     # ─── المرحلة 7: التذكيرات ───
     path("api/mobile/manager/reminders/trigger/", api_reminders.trigger_reminder),

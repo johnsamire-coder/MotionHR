@@ -982,3 +982,99 @@ def payroll_run_approve(request, run_id):
         import logging
         logging.getLogger(__name__).exception('payroll_run_approve error')
         return Response({'success': False, 'error': str(e)}, status=500)
+
+
+def _payroll_run_lines_data(run):
+    """تجهيز بيانات سطور مسير رواتب معين للتصدير"""
+    from attendance.payroll_pro_models import PayrollLine
+    lines = PayrollLine._base_manager.filter(payroll_run=run).select_related('employee')
+    rows = []
+    for line in lines:
+        emp = line.employee
+        rows.append({
+            'employee_code': getattr(emp, 'employee_code', '') or '',
+            'employee_name': f'{getattr(emp, "first_name_ar", "")} {getattr(emp, "last_name_ar", "")}'.strip(),
+            'basic_salary': float(line.basic_salary),
+            'allowances_total': float(line.allowances_total),
+            'overtime_total': float(line.overtime_total),
+            'bonuses_total': float(line.bonuses_total),
+            'gross_salary': float(line.gross_salary),
+            'late_deduction': float(line.late_deduction),
+            'absence_deduction': float(line.absence_deduction),
+            'insurance_deduction': float(line.insurance_deduction),
+            'total_deductions': float(line.total_deductions),
+            'net_salary': float(line.net_salary),
+        })
+    return rows
+
+
+_PAYROLL_RUN_EXPORT_COLUMNS = [
+    ('employee_code', 'كود الموظف', 15),
+    ('employee_name', 'اسم الموظف', 25),
+    ('basic_salary', 'الراتب الأساسي', 15),
+    ('allowances_total', 'إجمالي البدلات', 15),
+    ('overtime_total', 'الأوفرتايم', 15),
+    ('bonuses_total', 'المكافآت', 15),
+    ('gross_salary', 'إجمالي المرتب', 15),
+    ('late_deduction', 'خصم التأخير', 15),
+    ('absence_deduction', 'خصم الغياب', 15),
+    ('insurance_deduction', 'خصم التأمين', 15),
+    ('total_deductions', 'إجمالي الخصومات', 15),
+    ('net_salary', 'صافي المرتب', 15),
+]
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def payroll_run_export_excel(request, run_id):
+    """تصدير Excel لمسير رواتب معين"""
+    from attendance.payroll_pro_models import PayrollRun
+    from attendance.report_export_helper import export_to_excel
+
+    user = request.user
+    if not _check_manager(user):
+        return Response({'success': False, 'error': 'صلاحية غير كافية'}, status=403)
+
+    company = getattr(user, 'company', None)
+    run = PayrollRun._base_manager.filter(id=run_id, company=company).first()
+    if not run:
+        return Response({'success': False, 'error': 'تشغيل الرواتب غير موجود'}, status=404)
+
+    rows = _payroll_run_lines_data(run)
+    if not rows:
+        rows = [{'info': 'لا توجد بيانات'}]
+        cols = [('info', 'ملاحظة', 40)]
+    else:
+        cols = _PAYROLL_RUN_EXPORT_COLUMNS
+
+    title = f'مسير رواتب {run.month}-{run.year}'
+    return export_to_excel(title=title, columns=cols, rows=rows, user=user, filename=f'payroll_run_{run.year}_{run.month}.xlsx')
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def payroll_run_export_pdf(request, run_id):
+    """تصدير PDF لمسير رواتب معين"""
+    from attendance.payroll_pro_models import PayrollRun
+    from attendance.report_export_helper import export_to_pdf
+
+    user = request.user
+    if not _check_manager(user):
+        return Response({'success': False, 'error': 'صلاحية غير كافية'}, status=403)
+
+    company = getattr(user, 'company', None)
+    run = PayrollRun._base_manager.filter(id=run_id, company=company).first()
+    if not run:
+        return Response({'success': False, 'error': 'تشغيل الرواتب غير موجود'}, status=404)
+
+    rows = _payroll_run_lines_data(run)
+    if not rows:
+        rows = [{'info': 'لا توجد بيانات'}]
+        cols = [('info', 'ملاحظة', 40)]
+    else:
+        cols = _PAYROLL_RUN_EXPORT_COLUMNS
+
+    title = f'مسير رواتب {run.month}-{run.year}'
+    return export_to_pdf(title=title, columns=cols, rows=rows, user=user, filename=f'payroll_run_{run.year}_{run.month}.pdf')
