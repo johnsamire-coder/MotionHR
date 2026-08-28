@@ -853,3 +853,308 @@ def manager_attendance_export_pdf(request):
     ]
     subtitle = f"تاريخ: {target_date.strftime('%Y-%m-%d')}"
     return export_to_pdf(title="تقرير الحضور اليومي", columns=columns, rows=rows, user=request.user, filename="attendance.pdf", subtitle=subtitle)
+
+
+def _leaves_export_data(request):
+    """داتا الإجازات (خام - status بالإنجليزي) - للتصدير والقائمة"""
+    from leaves.models import LeaveRequest
+
+    company = getattr(request.user, "company", None)
+    status_filter = request.GET.get("status", "").strip()
+    all_pending = request.GET.get("all_pending", "").strip()
+    year = request.GET.get("year", "").strip()
+    month = request.GET.get("month", "").strip()
+
+    qs = LeaveRequest._base_manager.filter(employee__company=company).select_related(
+        "employee", "employee__department", "leave_type"
+    ).order_by("-start_date")
+
+    if status_filter and status_filter != "all":
+        qs = qs.filter(status=status_filter)
+
+    # لو all_pending مفعّل، نتجاهل فلتر الشهر/السنة عشان يطابق الداشبورد
+    if not (status_filter == "pending" and all_pending):
+        if year and month:
+            try:
+                from datetime import date
+                from calendar import monthrange
+                y, m = int(year), int(month)
+                first_day = date(y, m, 1)
+                last_day = date(y, m, monthrange(y, m)[1])
+                qs = qs.filter(start_date__gte=first_day, start_date__lte=last_day)
+            except (ValueError, TypeError):
+                pass
+        elif year:
+            try:
+                y = int(year)
+                qs = qs.filter(start_date__year=y)
+            except (ValueError, TypeError):
+                pass
+
+    rows = []
+    for lv in qs:
+        emp = lv.employee
+        days = int(getattr(lv, "days_count", 0) or 0)
+        if days == 0:
+            try:
+                days = (lv.end_date - lv.start_date).days + 1
+            except Exception:
+                days = 1
+        rows.append({
+            "employee_name": _name_of(emp) if emp else "",
+            "department": _name_of(emp.department) if emp and emp.department else "",
+            "leave_type": str(lv.leave_type) if lv.leave_type else "",
+            "from_date": str(lv.start_date) if lv.start_date else "",
+            "to_date": str(lv.end_date) if lv.end_date else "",
+            "days": days,
+            "status": lv.status,
+        })
+    return rows
+
+
+_LEAVE_STATUS_LABELS_AR = {
+    "pending": "معلق", "approved": "مقبول",
+    "rejected": "مرفوض", "cancelled": "ملغي",
+}
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_leaves_export_excel(request):
+    """تصدير تقرير الإجازات Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+
+    rows = _leaves_export_data(request)
+    for r in rows:
+        r["status"] = _LEAVE_STATUS_LABELS_AR.get(r["status"], r["status"])
+
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 18),
+        ("leave_type", "النوع", 16),
+        ("from_date", "من", 14),
+        ("to_date", "إلى", 14),
+        ("days", "أيام", 10),
+        ("status", "الحالة", 12),
+    ]
+    return export_to_excel(title="تقرير الإجازات", columns=columns, rows=rows, user=request.user, filename="leaves.xlsx")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_leaves_export_pdf(request):
+    """تصدير تقرير الإجازات PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+
+    rows = _leaves_export_data(request)
+    for r in rows:
+        r["status"] = _LEAVE_STATUS_LABELS_AR.get(r["status"], r["status"])
+
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 18),
+        ("leave_type", "النوع", 16),
+        ("from_date", "من", 14),
+        ("to_date", "إلى", 14),
+        ("days", "أيام", 10),
+        ("status", "الحالة", 12),
+    ]
+    return export_to_pdf(title="تقرير الإجازات", columns=columns, rows=rows, user=request.user, filename="leaves.pdf")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_leaves_list(request):
+    """قائمة الإجازات للمدير (لصفحة hr/leaves)"""
+    err = _check_manager(request)
+    if err:
+        return err
+
+    rows = _leaves_export_data(request)
+    stats = {
+        "total": len(rows),
+        "pending": len([r for r in rows if r["status"] == "pending"]),
+        "approved": len([r for r in rows if r["status"] == "approved"]),
+        "rejected": len([r for r in rows if r["status"] == "rejected"]),
+    }
+    return Response({"leaves": rows, "stats": stats, "count": len(rows)})
+
+
+def _requests_export_data(request):
+    """داتا الطلبات لتصدير الإكسل/PDF"""
+    from requests_app.models import EmployeeRequest
+
+    company = getattr(request.user, "company", None)
+    status_filter = request.GET.get("status", "").strip()
+
+    qs = EmployeeRequest._base_manager.filter(employee__company=company).select_related(
+        "employee", "employee__department", "request_type"
+    ).order_by("-created_at")
+
+    if status_filter and status_filter != "all":
+        qs = qs.filter(status=status_filter)
+
+    rows = []
+    for r in qs:
+        emp = r.employee
+        rows.append({
+            "employee_name": _name_of(emp) if emp else "",
+            "department": _name_of(emp.department) if emp and emp.department else "",
+            "request_type": str(r.request_type) if r.request_type else "",
+            "subject": getattr(r, "subject", "") or "",
+            "status": r.status,
+            "created_at": r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
+        })
+    return rows
+
+
+_REQUEST_STATUS_LABELS_AR = {
+    "pending": "قيد الانتظار", "manager_approved": "موافقة المدير",
+    "hr_approved": "موافقة HR", "approved": "موافق عليه",
+    "rejected": "مرفوض", "cancelled": "ملغي",
+}
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_requests_export_excel(request):
+    """تصدير تقرير الطلبات Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+
+    rows = _requests_export_data(request)
+    for r in rows:
+        r["status"] = _REQUEST_STATUS_LABELS_AR.get(r["status"], r["status"])
+
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 18),
+        ("request_type", "نوع الطلب", 20),
+        ("subject", "السبب", 26),
+        ("status", "الحالة", 14),
+        ("created_at", "التاريخ", 14),
+    ]
+    return export_to_excel(title="تقرير الطلبات", columns=columns, rows=rows, user=request.user, filename="requests.xlsx")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_requests_export_pdf(request):
+    """تصدير تقرير الطلبات PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+
+    rows = _requests_export_data(request)
+    for r in rows:
+        r["status"] = _REQUEST_STATUS_LABELS_AR.get(r["status"], r["status"])
+
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 18),
+        ("request_type", "نوع الطلب", 20),
+        ("subject", "السبب", 26),
+        ("status", "الحالة", 14),
+        ("created_at", "التاريخ", 14),
+    ]
+    return export_to_pdf(title="تقرير الطلبات", columns=columns, rows=rows, user=request.user, filename="requests.pdf")
+
+
+def _payroll_export_data(request):
+    """داتا الرواتب لتصدير الإكسل/PDF (نفس منطق payroll_summary)"""
+    from attendance.api_payroll import _get_company_employees, _get_payroll_settings, _parse_month, _get_lang
+    from attendance.payroll_rules import calculate_effective_payroll
+    import calendar
+    from datetime import date
+
+    year, month = _parse_month(request)
+    lang = _get_lang(request)
+    employees = _get_company_employees(request.user)
+    settings = _get_payroll_settings(request.user)
+
+    _, last_day = calendar.monthrange(year, month)
+    month_start = date(year, month, 1)
+    month_end = date(year, month, last_day)
+
+    rows = []
+    for emp in employees:
+        if emp.hire_date and emp.hire_date > month_end:
+            continue
+        if getattr(emp, "termination_date", None) and emp.termination_date < month_start:
+            continue
+        payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+        rows.append({
+            "employee_code": getattr(emp, "employee_code", "") or "",
+            "employee_name": payroll.get("employee_name", ""),
+            "department": payroll.get("department_name", ""),
+            "basic_salary": payroll.get("basic_salary", 0),
+            "allowances_total": payroll.get("allowances_total", 0),
+            "overtime_bonus": payroll.get("overtime_bonus", 0),
+            "total_deductions": payroll.get("total_deductions", 0),
+            "net_salary": payroll.get("net_salary", 0),
+        })
+    return rows, year, month
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_payroll_export_excel(request):
+    """تصدير مسير الرواتب الحالي Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+
+    rows, year, month = _payroll_export_data(request)
+    columns = [
+        ("employee_code", "الكود", 12),
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 16),
+        ("basic_salary", "الأساسي", 12),
+        ("allowances_total", "البدلات", 12),
+        ("overtime_bonus", "إضافي", 12),
+        ("total_deductions", "الخصومات", 12),
+        ("net_salary", "الصافي", 12),
+    ]
+    subtitle = f"{month}/{year}"
+    return export_to_excel(title="مسير الرواتب", columns=columns, rows=rows, user=request.user, filename="payroll.xlsx", subtitle=subtitle)
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_payroll_export_pdf(request):
+    """تصدير مسير الرواتب الحالي PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+
+    rows, year, month = _payroll_export_data(request)
+    columns = [
+        ("employee_code", "الكود", 12),
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 16),
+        ("basic_salary", "الأساسي", 12),
+        ("allowances_total", "البدلات", 12),
+        ("overtime_bonus", "إضافي", 12),
+        ("total_deductions", "الخصومات", 12),
+        ("net_salary", "الصافي", 12),
+    ]
+    subtitle = f"{month}/{year}"
+    return export_to_pdf(title="مسير الرواتب", columns=columns, rows=rows, user=request.user, filename="payroll.pdf", subtitle=subtitle)
