@@ -134,6 +134,8 @@ def _serialize_employee_list(emp):
         "national_id": emp.national_id,
         "status": emp.get_status_display() if hasattr(emp, "get_status_display") else None,
         "status_code": emp.status if hasattr(emp, "status") else None,
+        "hire_date": str(emp.hire_date) if emp.hire_date else None,
+        "basic_salary": float(emp.basic_salary) if emp.basic_salary is not None else None,
     }
 
 
@@ -639,3 +641,81 @@ def manager_employee_requests(request, emp_id):
     except Exception as e:
         logger.exception("manager_employee_requests error")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_employees_export_excel(request):
+    """تصدير كشف الموظفين Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+
+    qs = get_visible_employees_qs(request.user).exclude(user=request.user).select_related("branch", "department", "job_title").order_by("first_name_ar", "last_name_ar")
+
+    rows = []
+    for emp in qs:
+        parts = [emp.first_name_ar or "", emp.last_name_ar or ""]
+        rows.append({
+            "employee_code": emp.employee_code or "",
+            "full_name": " ".join([p for p in parts if p]).strip(),
+            "department": _name_of(emp.department),
+            "job_title": _name_of(emp.job_title),
+            "phone": emp.phone or "",
+            "status": emp.get_status_display() if hasattr(emp, "get_status_display") else "",
+            "hire_date": str(emp.hire_date) if emp.hire_date else "",
+            "basic_salary": float(emp.basic_salary) if emp.basic_salary is not None else "",
+        })
+
+    columns = [
+        ("employee_code", "الكود", 12),
+        ("full_name", "الاسم", 24),
+        ("department", "القسم", 18),
+        ("job_title", "المسمى", 18),
+        ("phone", "الموبايل", 14),
+        ("status", "الحالة", 12),
+        ("hire_date", "تاريخ التعيين", 14),
+        ("basic_salary", "الراتب", 12),
+    ]
+    return export_to_excel(title="كشف الموظفين", columns=columns, rows=rows, user=request.user, filename="employees.xlsx")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_employees_export_pdf(request):
+    """تصدير كشف الموظفين PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+
+    qs = get_visible_employees_qs(request.user).exclude(user=request.user).select_related("branch", "department", "job_title").order_by("first_name_ar", "last_name_ar")
+
+    rows = []
+    for emp in qs:
+        parts = [emp.first_name_ar or "", emp.last_name_ar or ""]
+        rows.append({
+            "employee_code": emp.employee_code or "",
+            "full_name": " ".join([p for p in parts if p]).strip(),
+            "department": _name_of(emp.department),
+            "job_title": _name_of(emp.job_title),
+            "phone": emp.phone or "",
+            "status": emp.get_status_display() if hasattr(emp, "get_status_display") else "",
+            "hire_date": str(emp.hire_date) if emp.hire_date else "",
+            "basic_salary": float(emp.basic_salary) if emp.basic_salary is not None else "",
+        })
+
+    columns = [
+        ("employee_code", "الكود", 12),
+        ("full_name", "الاسم", 24),
+        ("department", "القسم", 18),
+        ("job_title", "المسمى", 18),
+        ("phone", "الموبايل", 14),
+        ("status", "الحالة", 12),
+        ("hire_date", "تاريخ التعيين", 14),
+        ("basic_salary", "الراتب", 12),
+    ]
+    return export_to_pdf(title="كشف الموظفين", columns=columns, rows=rows, user=request.user, filename="employees.pdf")

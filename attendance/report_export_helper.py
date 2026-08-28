@@ -41,32 +41,36 @@ def export_to_excel(title, columns, rows, user, filename=None, subtitle=None):
     from openpyxl.drawing.image import Image as XLImage
     from openpyxl.utils import get_column_letter
 
+    # عكس ترتيب الأعمدة عشان يبقى متوافق مع الاتجاه العربي RTL (أول عمود يظهر يمين)
+    columns = list(reversed(columns))
+
     company = get_company_info(user)
     wb = Workbook()
     ws = wb.active
     ws.title = title[:31]  # Excel limit
     ws.sheet_view.rightToLeft = True
 
-    # صف اللوجو والاسم
+    # اللوجو + اسم الشركة (يمين لأن الشيت RTL)
     row = 1
     logo_added = False
+    last_col_letter = get_column_letter(len(columns))
     if company.get('logo_path'):
         try:
             img = XLImage(company['logo_path'])
-            img.width = 80
-            img.height = 80
-            ws.add_image(img, f'A{row}')
-            ws.row_dimensions[row].height = 65
-            ws.row_dimensions[row + 1].height = 20
+            img.width = 45
+            img.height = 45
+            ws.add_image(img, f'{last_col_letter}{row}')
+            ws.row_dimensions[row].height = 35
             logo_added = True
         except Exception:
             pass
 
-    # اسم الشركة
-    name_col = 'C' if logo_added else 'A'
-    ws[f'{name_col}{row}'] = company.get('name_ar', '') or company.get('name_en', '') or 'MotionHR'
-    ws[f'{name_col}{row}'].font = Font(size=18, bold=True, color='0891B2')
-    ws.merge_cells(f'{name_col}{row}:{get_column_letter(len(columns))}{row}')
+    # اسم الشركة (تحت اللوجو، نفس عمود اللوجو، وسط الصفحة لباقي الأعمدة)
+    name_row = row + (3 if logo_added else 0)
+    ws.cell(row=name_row, column=1, value=company.get('name_ar', '') or company.get('name_en', '') or 'MotionHR')
+    ws.cell(row=name_row, column=1).font = Font(size=16, bold=True, color='0891B2')
+    ws.cell(row=name_row, column=1).alignment = Alignment(horizontal='center')
+    ws.merge_cells(start_row=name_row, start_column=1, end_row=name_row, end_column=len(columns))
 
     # معلومات الاتصال
     info_parts = []
@@ -75,9 +79,14 @@ def export_to_excel(title, columns, rows, user, filename=None, subtitle=None):
     if company.get('email'):
         info_parts.append(f"📧 {company['email']}")
     if info_parts:
-        ws[f'{name_col}{row+1}'] = ' | '.join(info_parts)
-        ws[f'{name_col}{row+1}'].font = Font(size=10, color='6B7280')
-        ws.merge_cells(f'{name_col}{row+1}:{get_column_letter(len(columns))}{row+1}')
+        info_row = name_row + 1
+        ws.cell(row=info_row, column=1, value=' | '.join(info_parts))
+        ws.cell(row=info_row, column=1).font = Font(size=10, color='6B7280')
+        ws.cell(row=info_row, column=1).alignment = Alignment(horizontal='center')
+        ws.merge_cells(start_row=info_row, start_column=1, end_row=info_row, end_column=len(columns))
+        row = info_row
+    else:
+        row = name_row
 
     # عنوان التقرير
     row += 3
@@ -173,6 +182,9 @@ def export_to_pdf(title, columns, rows, user, filename=None, subtitle=None):
 
     company = get_company_info(user)
 
+    # عكس ترتيب الأعمدة عشان يبقى متوافق مع الاتجاه العربي RTL (أول عمود يظهر يمين)
+    columns = list(reversed(columns))
+
     def shape_rtl(value):
         if value is None:
             return ''
@@ -209,75 +221,64 @@ def export_to_pdf(title, columns, rows, user, filename=None, subtitle=None):
     doc = SimpleDocTemplate(
         buffer, pagesize=landscape(A4),
         rightMargin=15*mm, leftMargin=15*mm,
-        topMargin=15*mm, bottomMargin=15*mm,
+        topMargin=45*mm, bottomMargin=15*mm,
     )
+
+    styles = getSampleStyleSheet()
+    company_name = company.get('name_ar') or company.get('name_en') or 'MotionHR'
+
+    def draw_header(canvas, doc_obj):
+        canvas.saveState()
+        page_width = doc_obj.pagesize[0]
+        top_y = doc_obj.pagesize[1] - 15*mm
+
+        # اللوجو (يمين)
+        logo_w, logo_h = 20*mm, 20*mm
+        logo_x = page_width - 15*mm - logo_w
+        logo_y = top_y - logo_h
+        if company.get('logo_path'):
+            try:
+                canvas.drawImage(
+                    company['logo_path'], logo_x, logo_y,
+                    width=logo_w, height=logo_h,
+                    preserveAspectRatio=True, mask='auto',
+                )
+            except Exception:
+                pass
+
+        # اسم الشركة تحت اللوجو
+        canvas.setFont(arabic_font, 11)
+        canvas.setFillColor(colors.HexColor('#0891B2'))
+        canvas.drawCentredString(logo_x + logo_w / 2, logo_y - 5*mm, shape_rtl(company_name))
+
+        info_parts = []
+        if company.get('phone'):
+            info_parts.append(company['phone'])
+        if company.get('email'):
+            info_parts.append(company['email'])
+        if info_parts:
+            canvas.setFont(arabic_font, 7)
+            canvas.setFillColor(colors.HexColor('#6B7280'))
+            canvas.drawCentredString(logo_x + logo_w / 2, logo_y - 9*mm, shape_rtl(' | '.join(info_parts)))
+
+        # عنوان التقرير في نص الصفحة
+        canvas.setFont(arabic_font, 15)
+        canvas.setFillColor(colors.black)
+        canvas.drawCentredString(page_width / 2, top_y - 7*mm, shape_rtl(title))
+
+        if subtitle:
+            canvas.setFont(arabic_font, 10)
+            canvas.setFillColor(colors.HexColor('#6B7280'))
+            canvas.drawCentredString(page_width / 2, top_y - 13*mm, shape_rtl(subtitle))
+
+        export_date = timezone.now().strftime('%Y-%m-%d %H:%M')
+        canvas.setFont(arabic_font, 8)
+        canvas.setFillColor(colors.HexColor('#9CA3AF'))
+        canvas.drawCentredString(page_width / 2, top_y - 18*mm, f'Export Date: {export_date}')
+
+        canvas.restoreState()
 
     story = []
-    styles = getSampleStyleSheet()
-
-    # اللوجو
-    if company.get('logo_path'):
-        try:
-            logo = RLImage(company['logo_path'], width=50*mm, height=50*mm)
-            story.append(logo)
-            story.append(Spacer(1, 5*mm))
-        except Exception:
-            pass
-
-    # اسم الشركة
-    company_name = company.get('name_ar') or company.get('name_en') or 'MotionHR'
-    company_style = ParagraphStyle(
-        'CompanyName', parent=styles['Title'],
-        fontName=arabic_font, fontSize=18,
-        textColor=colors.HexColor('#0891B2'),
-        alignment=TA_CENTER,
-    )
-    story.append(Paragraph(shape_rtl(company_name), company_style))
-
-    # معلومات الاتصال
-    info_parts = []
-    if company.get('phone'):
-        info_parts.append(company['phone'])
-    if company.get('email'):
-        info_parts.append(company['email'])
-
-    if info_parts:
-        info_style = ParagraphStyle(
-            'Info', parent=styles['Normal'],
-            fontName=arabic_font, fontSize=9,
-            textColor=colors.HexColor('#6B7280'),
-            alignment=TA_CENTER,
-        )
-        story.append(Paragraph(shape_rtl(' | '.join(info_parts)), info_style))
-
-    story.append(Spacer(1, 5*mm))
-
-    # عنوان التقرير
-    title_style = ParagraphStyle(
-        'Title', parent=styles['Heading1'],
-        fontName=arabic_font, fontSize=16,
-        alignment=TA_CENTER,
-    )
-    story.append(Paragraph(shape_rtl(title), title_style))
-
-    if subtitle:
-        subtitle_style = ParagraphStyle(
-            'Subtitle', parent=styles['Normal'],
-            fontName=arabic_font, fontSize=11,
-            textColor=colors.HexColor('#6B7280'),
-            alignment=TA_CENTER,
-        )
-        story.append(Paragraph(shape_rtl(subtitle), subtitle_style))
-
-    export_date = timezone.now().strftime('%Y-%m-%d %H:%M')
-    date_style = ParagraphStyle(
-        'Date', parent=styles['Normal'],
-        fontName=arabic_font, fontSize=9,
-        textColor=colors.HexColor('#9CA3AF'),
-        alignment=TA_CENTER,
-    )
-    story.append(Paragraph(f'Export Date: {export_date}', date_style))
-    story.append(Spacer(1, 5*mm))
 
     # الجدول
     table_header_style = ParagraphStyle(
@@ -311,7 +312,7 @@ def export_to_pdf(title, columns, rows, user, filename=None, subtitle=None):
 
     if len(table_data) > 1:
         col_widths = [(doc.width / len(columns))] * len(columns)
-        table = Table(table_data, colWidths=col_widths)
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0891B2')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -330,7 +331,7 @@ def export_to_pdf(title, columns, rows, user, filename=None, subtitle=None):
         no_data_style = ParagraphStyle('NoData', parent=styles['Normal'], fontName=arabic_font, fontSize=11, alignment=TA_CENTER)
         story.append(Paragraph(shape_rtl('لا توجد بيانات'), no_data_style))
 
-    doc.build(story)
+    doc.build(story, onFirstPage=draw_header, onLaterPages=draw_header)
     buffer.seek(0)
 
     if not filename:
