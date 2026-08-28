@@ -719,3 +719,137 @@ def manager_employees_export_pdf(request):
         ("basic_salary", "الراتب", 12),
     ]
     return export_to_pdf(title="كشف الموظفين", columns=columns, rows=rows, user=request.user, filename="employees.pdf")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_attendance_export_excel(request):
+    """تصدير تقرير الحضور اليومي Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+    from attendance.models import Attendance
+    from django.utils import timezone
+    from datetime import datetime
+
+    company = getattr(request.user, "company", None)
+    date_str = request.GET.get("date")
+    if date_str:
+        try:
+            target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            target_date = timezone.localdate()
+    else:
+        target_date = timezone.localdate()
+
+    records = Attendance._base_manager.filter(date=target_date).select_related("employee", "employee__department").order_by("employee__first_name_ar")
+    if company:
+        records = records.filter(company=company)
+
+    def fmt_time(dt):
+        if not dt:
+            return ""
+        try:
+            return timezone.localtime(dt).strftime("%I:%M %p")
+        except Exception:
+            return str(dt)
+
+    status_labels = {
+        "present": "حاضر", "late": "متأخر", "absent": "غائب",
+        "on_leave": "إجازة", "weekend": "عطلة", "mission": "مهمة",
+    }
+
+    rows = []
+    for att in records:
+        emp = att.employee
+        emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip() if emp else ""
+        rows.append({
+            "employee_name": emp_name,
+            "department": _name_of(emp.department) if emp else "",
+            "status": status_labels.get(getattr(att, "status", ""), getattr(att, "status", "")),
+            "check_in": fmt_time(getattr(att, "check_in_time", None)),
+            "check_out": fmt_time(getattr(att, "check_out_time", None)),
+            "late_minutes": getattr(att, "late_minutes", 0) or 0,
+            "work_hours": float(getattr(att, "work_hours", 0) or 0),
+        })
+
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 18),
+        ("status", "الحالة", 12),
+        ("check_in", "حضور", 12),
+        ("check_out", "انصراف", 12),
+        ("late_minutes", "تأخير (د)", 12),
+        ("work_hours", "ساعات العمل", 14),
+    ]
+    subtitle = f"تاريخ: {target_date.strftime('%Y-%m-%d')}"
+    return export_to_excel(title="تقرير الحضور اليومي", columns=columns, rows=rows, user=request.user, filename="attendance.xlsx", subtitle=subtitle)
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_attendance_export_pdf(request):
+    """تصدير تقرير الحضور اليومي PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+    from attendance.models import Attendance
+    from django.utils import timezone
+    from datetime import datetime
+
+    company = getattr(request.user, "company", None)
+    date_str = request.GET.get("date")
+    if date_str:
+        try:
+            target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            target_date = timezone.localdate()
+    else:
+        target_date = timezone.localdate()
+
+    records = Attendance._base_manager.filter(date=target_date).select_related("employee", "employee__department").order_by("employee__first_name_ar")
+    if company:
+        records = records.filter(company=company)
+
+    def fmt_time(dt):
+        if not dt:
+            return ""
+        try:
+            return timezone.localtime(dt).strftime("%I:%M %p")
+        except Exception:
+            return str(dt)
+
+    status_labels = {
+        "present": "حاضر", "late": "متأخر", "absent": "غائب",
+        "on_leave": "إجازة", "weekend": "عطلة", "mission": "مهمة",
+    }
+
+    rows = []
+    for att in records:
+        emp = att.employee
+        emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip() if emp else ""
+        rows.append({
+            "employee_name": emp_name,
+            "department": _name_of(emp.department) if emp else "",
+            "status": status_labels.get(getattr(att, "status", ""), getattr(att, "status", "")),
+            "check_in": fmt_time(getattr(att, "check_in_time", None)),
+            "check_out": fmt_time(getattr(att, "check_out_time", None)),
+            "late_minutes": getattr(att, "late_minutes", 0) or 0,
+            "work_hours": float(getattr(att, "work_hours", 0) or 0),
+        })
+
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 18),
+        ("status", "الحالة", 12),
+        ("check_in", "حضور", 12),
+        ("check_out", "انصراف", 12),
+        ("late_minutes", "تأخير (د)", 12),
+        ("work_hours", "ساعات العمل", 14),
+    ]
+    subtitle = f"تاريخ: {target_date.strftime('%Y-%m-%d')}"
+    return export_to_pdf(title="تقرير الحضور اليومي", columns=columns, rows=rows, user=request.user, filename="attendance.pdf", subtitle=subtitle)
