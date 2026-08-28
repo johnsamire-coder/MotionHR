@@ -866,7 +866,7 @@ def export_company_pdf(company) -> HttpResponse:
     # Roles table
     elements.append(Paragraph(ar_text("الأدوار المخصصة / Custom Roles"), styles["heading"]))
 
-    roles = CustomRole.objects.filter(company=company).order_by('name')
+    roles = CustomRole.objects.filter(company=company).order_by("name")
     if roles.exists():
         role_data = [[
             ar_text("الدور"), "Role",
@@ -882,17 +882,17 @@ def export_company_pdf(company) -> HttpResponse:
             ])
         role_table = Table(role_data, colWidths=[35*mm, 35*mm, 25*mm, 25*mm, 25*mm, 25*mm], repeatRows=1)
         role_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), NAVY),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), PDF_FONT_BOLD_NAME),
-            ('FONTNAME', (0, 1), (-1, -1), PDF_FONT_NAME),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.3, BORDER_GRAY),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, LIGHT_GRAY]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), PDF_FONT_BOLD_NAME),
+            ("FONTNAME", (0, 1), (-1, -1), PDF_FONT_NAME),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.3, BORDER_GRAY),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT_GRAY]),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
         ]))
         elements.append(role_table)
     else:
@@ -905,7 +905,7 @@ def export_company_pdf(company) -> HttpResponse:
 
     from django.contrib.auth import get_user_model
     User = get_user_model()
-    users = User.objects.filter(company=company).order_by('username')
+    users = User.objects.filter(company=company).order_by("username")
 
     if users.exists():
         user_data = [[
@@ -915,7 +915,7 @@ def export_company_pdf(company) -> HttpResponse:
         ]]
         for u in users:
             name = f"{u.first_name} {u.last_name}".strip() or u.username
-            roles_list = ", ".join([ur.role.name for ur in UserRole.objects.filter(user=u).select_related('role')]) or "—"
+            roles_list = ", ".join([ur.role.name for ur in UserRole.objects.filter(user=u).select_related("role")]) or "—"
             user_data.append([
                 ar_text(name), name,
                 u.username, u.username,
@@ -923,17 +923,17 @@ def export_company_pdf(company) -> HttpResponse:
             ])
         user_table = Table(user_data, colWidths=[30*mm, 30*mm, 25*mm, 25*mm, 30*mm, 30*mm], repeatRows=1)
         user_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), NAVY),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), PDF_FONT_BOLD_NAME),
-            ('FONTNAME', (0, 1), (-1, -1), PDF_FONT_NAME),
-            ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.3, BORDER_GRAY),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, LIGHT_GRAY]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), PDF_FONT_BOLD_NAME),
+            ("FONTNAME", (0, 1), (-1, -1), PDF_FONT_NAME),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.3, BORDER_GRAY),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT_GRAY]),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
         ]))
         elements.append(user_table)
     else:
@@ -944,3 +944,6 @@ def export_company_pdf(company) -> HttpResponse:
     resp = HttpResponse(buffer.getvalue(), content_type="application/pdf")
     resp['Content-Disposition'] = f'attachment; filename="company_{company.id}_permissions.pdf"'
     return resp
+
+
+
