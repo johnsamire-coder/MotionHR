@@ -1158,3 +1158,513 @@ def manager_payroll_export_pdf(request):
     ]
     subtitle = f"{month}/{year}"
     return export_to_pdf(title="مسير الرواتب", columns=columns, rows=rows, user=request.user, filename="payroll.pdf", subtitle=subtitle)
+
+
+def _missions_export_data(request):
+    """داتا المهمات لتصدير الإكسل/PDF"""
+    from attendance.missions_models import Mission, MissionAssignment
+    from employees.visibility import get_visible_employees_qs
+    from django.db import models as dj_models
+
+    company = getattr(request.user, "company", None)
+    visible_emps = get_visible_employees_qs(request.user)
+
+    qs = Mission._base_manager.filter(company=company).filter(
+        dj_models.Q(created_by=request.user) |
+        dj_models.Q(assignments__employee__in=visible_emps)
+    ).distinct().prefetch_related("assignments__employee").order_by("-planned_start_time")
+
+    status_filter = request.GET.get("status", "").strip()
+    if status_filter and status_filter != "all":
+        qs = qs.filter(status=status_filter)
+
+    status_labels = {
+        "pending": "معلقة", "assigned": "مسندة", "in_progress": "جارية",
+        "completed": "مكتملة", "cancelled": "ملغاة",
+    }
+
+    rows = []
+    for m in qs:
+        assignees = [f"{a.employee.first_name_ar} {a.employee.last_name_ar}".strip() for a in m.assignments.all() if a.employee]
+        rows.append({
+            "title": m.title or "",
+            "status": status_labels.get(m.status, m.status),
+            "employees": ", ".join(assignees) if assignees else "",
+            "employees_count": len(assignees),
+            "start_date": m.planned_start_time.strftime("%Y-%m-%d %H:%M") if m.planned_start_time else "",
+            "end_date": m.planned_end_time.strftime("%Y-%m-%d %H:%M") if m.planned_end_time else "",
+            "location": m.location_name or "",
+        })
+    return rows
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_missions_export_excel(request):
+    """تصدير تقرير المهمات Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+
+    rows = _missions_export_data(request)
+    columns = [
+        ("title", "المهمة", 26),
+        ("employees", "الموظفين", 26),
+        ("employees_count", "العدد", 10),
+        ("start_date", "البداية", 16),
+        ("end_date", "النهاية", 16),
+        ("location", "الموقع", 20),
+        ("status", "الحالة", 14),
+    ]
+    return export_to_excel(title="تقرير المهمات", columns=columns, rows=rows, user=request.user, filename="missions.xlsx")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_missions_export_pdf(request):
+    """تصدير تقرير المهمات PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+
+    rows = _missions_export_data(request)
+    columns = [
+        ("title", "المهمة", 26),
+        ("employees", "الموظفين", 26),
+        ("employees_count", "العدد", 10),
+        ("start_date", "البداية", 16),
+        ("end_date", "النهاية", 16),
+        ("location", "الموقع", 20),
+        ("status", "الحالة", 14),
+    ]
+    return export_to_pdf(title="تقرير المهمات", columns=columns, rows=rows, user=request.user, filename="missions.pdf")
+
+
+def _absence_export_data(request):
+    """داتا تقرير الغياب لتصدير الإكسل/PDF (نفس منطق absence_report)"""
+    from attendance.api_reports import _get_manager_scope_employees, _employee_name, _parse_month
+    from attendance.models import Attendance
+    from datetime import date, timedelta
+    from calendar import monthrange
+
+    user = request.user
+    year, month = _parse_month(request)
+    employee_id = request.GET.get("employee_id")
+
+    first_day = date(year, month, 1)
+    last_day_num = monthrange(year, month)[1]
+    last_day = date(year, month, last_day_num)
+    today = date.today()
+    upper_bound = min(last_day, today)
+
+    working_dates = []
+    current = first_day
+    while current <= upper_bound:
+        if current.weekday() != 4:
+            working_dates.append(current)
+        current += timedelta(days=1)
+
+    employees = _get_manager_scope_employees(user)
+    if employee_id:
+        employees = employees.filter(id=employee_id)
+
+    rows = []
+    for emp in employees:
+        attended_dates = set(
+            Attendance._base_manager.filter(
+                employee=emp,
+                date__gte=first_day,
+                date__lte=upper_bound,
+                check_in_time__isnull=False,
+            ).values_list("date", flat=True)
+        )
+        absent_dates = [d for d in working_dates if d not in attended_dates]
+        if absent_dates:
+            rows.append({
+                "employee_name": _employee_name(emp),
+                "employee_code": getattr(emp, "employee_code", "") or "",
+                "department": _name_of(emp.department) if emp.department else "",
+                "total_working_days": len(working_dates),
+                "attended_days": len(attended_dates),
+                "absent_days": len(absent_dates),
+            })
+    return rows
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_absence_export_excel(request):
+    """تصدير تقرير الغياب Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+
+    rows = _absence_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("employee_code", "الكود", 12),
+        ("department", "القسم", 18),
+        ("total_working_days", "أيام العمل", 14),
+        ("attended_days", "أيام الحضور", 14),
+        ("absent_days", "أيام الغياب", 14),
+    ]
+    return export_to_excel(title="تقرير الغياب", columns=columns, rows=rows, user=request.user, filename="absence.xlsx")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_absence_export_pdf(request):
+    """تصدير تقرير الغياب PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+
+    rows = _absence_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("employee_code", "الكود", 12),
+        ("department", "القسم", 18),
+        ("total_working_days", "أيام العمل", 14),
+        ("attended_days", "أيام الحضور", 14),
+        ("absent_days", "أيام الغياب", 14),
+    ]
+    return export_to_pdf(title="تقرير الغياب", columns=columns, rows=rows, user=request.user, filename="absence.pdf")
+
+
+def _late_export_data(request):
+    """داتا تقرير التأخير لتصدير الإكسل/PDF"""
+    from attendance.api_reports import _get_manager_scope_employees, _employee_name, _parse_month
+    from attendance.models import Attendance
+    from datetime import date
+    from calendar import monthrange
+
+    user = request.user
+    year, month = _parse_month(request)
+    employee_id = request.GET.get("employee_id")
+
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    employees = _get_manager_scope_employees(user)
+    if employee_id:
+        employees = employees.filter(id=employee_id)
+
+    rows = []
+    for emp in employees:
+        records = Attendance._base_manager.filter(
+            employee=emp, date__gte=first_day, date__lte=last_day,
+            check_in_time__isnull=False,
+        ).order_by("date")
+        late_count = 0
+        total_late_minutes = 0
+        for rec in records:
+            minutes_late = int(rec.late_minutes or 0)
+            if minutes_late > 0:
+                late_count += 1
+                total_late_minutes += minutes_late
+        if late_count:
+            rows.append({
+                "employee_name": _employee_name(emp),
+                "employee_code": getattr(emp, "employee_code", "") or "",
+                "department": _name_of(emp.department) if emp.department else "",
+                "total_late_days": late_count,
+                "total_late_minutes": total_late_minutes,
+                "total_late_hours": round(total_late_minutes / 60, 2),
+            })
+    return rows
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_late_export_excel(request):
+    """تصدير تقرير التأخير Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+
+    rows = _late_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("employee_code", "الكود", 12),
+        ("department", "القسم", 18),
+        ("total_late_days", "أيام التأخير", 14),
+        ("total_late_minutes", "دقائق التأخير", 14),
+        ("total_late_hours", "ساعات التأخير", 14),
+    ]
+    return export_to_excel(title="تقرير التأخير", columns=columns, rows=rows, user=request.user, filename="late.xlsx")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_late_export_pdf(request):
+    """تصدير تقرير التأخير PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+
+    rows = _late_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("employee_code", "الكود", 12),
+        ("department", "القسم", 18),
+        ("total_late_days", "أيام التأخير", 14),
+        ("total_late_minutes", "دقائق التأخير", 14),
+        ("total_late_hours", "ساعات التأخير", 14),
+    ]
+    return export_to_pdf(title="تقرير التأخير", columns=columns, rows=rows, user=request.user, filename="late.pdf")
+
+
+def _work_hours_export_data(request):
+    """داتا تقرير ساعات العمل لتصدير الإكسل/PDF"""
+    from attendance.api_reports import _get_manager_scope_employees, _employee_name, _parse_month
+    from attendance.models import Attendance
+    from datetime import date
+    from calendar import monthrange
+
+    user = request.user
+    year, month = _parse_month(request)
+    employee_id = request.GET.get("employee_id")
+
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    employees = _get_manager_scope_employees(user)
+    if employee_id:
+        employees = employees.filter(id=employee_id)
+
+    rows = []
+    for emp in employees:
+        records = Attendance._base_manager.filter(
+            employee=emp, date__gte=first_day, date__lte=last_day,
+            check_in_time__isnull=False,
+        ).order_by("date")
+        total_hours = 0.0
+        days_worked = 0
+        for rec in records:
+            hours = float(rec.work_hours or 0)
+            if hours > 0:
+                total_hours += hours
+                days_worked += 1
+        rows.append({
+            "employee_name": _employee_name(emp),
+            "employee_code": getattr(emp, "employee_code", "") or "",
+            "department": _name_of(emp.department) if emp.department else "",
+            "total_hours": round(total_hours, 2),
+            "total_days_worked": days_worked,
+            "average_hours_per_day": round(total_hours / days_worked, 2) if days_worked else 0,
+        })
+    return rows
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_work_hours_export_excel(request):
+    """تصدير تقرير ساعات العمل Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+
+    rows = _work_hours_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("employee_code", "الكود", 12),
+        ("department", "القسم", 18),
+        ("total_hours", "إجمالي الساعات", 14),
+        ("total_days_worked", "أيام العمل", 14),
+        ("average_hours_per_day", "متوسط الساعات", 14),
+    ]
+    return export_to_excel(title="تقرير ساعات العمل", columns=columns, rows=rows, user=request.user, filename="work_hours.xlsx")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_work_hours_export_pdf(request):
+    """تصدير تقرير ساعات العمل PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+
+    rows = _work_hours_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("employee_code", "الكود", 12),
+        ("department", "القسم", 18),
+        ("total_hours", "إجمالي الساعات", 14),
+        ("total_days_worked", "أيام العمل", 14),
+        ("average_hours_per_day", "متوسط الساعات", 14),
+    ]
+    return export_to_pdf(title="تقرير ساعات العمل", columns=columns, rows=rows, user=request.user, filename="work_hours.pdf")
+
+
+def _monthly_attendance_export_data(request):
+    """داتا تقرير الحضور الشهري لتصدير الإكسل/PDF"""
+    from attendance.api_reports import _get_manager_scope_employees, _employee_name, _parse_month
+    from attendance.models import Attendance
+    from datetime import date
+    from calendar import monthrange
+
+    user = request.user
+    year, month = _parse_month(request)
+    employee_id = request.GET.get("employee_id")
+
+    first_day = date(year, month, 1)
+    last_day_num = monthrange(year, month)[1]
+    last_day = date(year, month, last_day_num)
+
+    employees = _get_manager_scope_employees(user)
+    if employee_id:
+        employees = employees.filter(id=employee_id)
+
+    rows = []
+    for emp in employees:
+        records = Attendance._base_manager.filter(employee=emp, date__gte=first_day, date__lte=last_day)
+        checkins = records.filter(check_in_time__isnull=False).count()
+        checkouts = records.filter(check_out_time__isnull=False).count()
+        rows.append({
+            "employee_name": _employee_name(emp),
+            "employee_code": getattr(emp, "employee_code", "") or "",
+            "department": _name_of(emp.department) if emp.department else "",
+            "total_checkins": checkins,
+            "total_checkouts": checkouts,
+            "total_month_days": last_day_num,
+        })
+    return rows
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_monthly_attendance_export_excel(request):
+    """تصدير تقرير الحضور الشهري Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+
+    rows = _monthly_attendance_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("employee_code", "الكود", 12),
+        ("department", "القسم", 18),
+        ("total_checkins", "أيام الحضور", 14),
+        ("total_checkouts", "أيام الانصراف", 14),
+        ("total_month_days", "أيام الشهر", 14),
+    ]
+    return export_to_excel(title="تقرير الحضور الشهري", columns=columns, rows=rows, user=request.user, filename="monthly_attendance.xlsx")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_monthly_attendance_export_pdf(request):
+    """تصدير تقرير الحضور الشهري PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+
+    rows = _monthly_attendance_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("employee_code", "الكود", 12),
+        ("department", "القسم", 18),
+        ("total_checkins", "أيام الحضور", 14),
+        ("total_checkouts", "أيام الانصراف", 14),
+        ("total_month_days", "أيام الشهر", 14),
+    ]
+    return export_to_pdf(title="تقرير الحضور الشهري", columns=columns, rows=rows, user=request.user, filename="monthly_attendance.pdf")
+
+
+def _permissions_report_export_data(request):
+    """داتا تقرير الأذونات لتصدير الإكسل/PDF"""
+    from attendance.api_reports import _get_manager_scope_employees, _employee_name, _parse_month
+    from attendance.models import PermissionLedger
+    from requests_app.models import PermissionPolicy
+    from datetime import date
+    from calendar import monthrange
+
+    user = request.user
+    year, month = _parse_month(request)
+
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+    employees = _get_manager_scope_employees(user)
+
+    rows = []
+    for emp in employees:
+        entries = PermissionLedger._base_manager.filter(
+            employee=emp, reference_date__gte=first_day, reference_date__lte=last_day,
+        )
+        total_minutes = sum(int(e.minutes_used or 0) for e in entries)
+        policy = PermissionPolicy._base_manager.filter(company=emp.company).first()
+        max_hours = float(policy.max_hours_per_month) if policy else 0.0
+        max_times = policy.max_times_per_month if policy else 0
+        rows.append({
+            "employee_name": _employee_name(emp),
+            "department": _name_of(emp.department) if emp.department else "",
+            "max_hours_per_month": max_hours,
+            "max_times_per_month": max_times,
+            "used_hours": round(total_minutes / 60, 2),
+            "movements_count": entries.count(),
+        })
+    return rows
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_permissions_report_export_excel(request):
+    """تصدير تقرير الأذونات Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+
+    rows = _permissions_report_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 18),
+        ("max_hours_per_month", "الحد الأقصى (ساعات)", 16),
+        ("max_times_per_month", "الحد الأقصى (مرات)", 16),
+        ("used_hours", "المستخدم (ساعات)", 14),
+        ("movements_count", "عدد الحركات", 12),
+    ]
+    return export_to_excel(title="تقرير الأذونات", columns=columns, rows=rows, user=request.user, filename="permissions_report.xlsx")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_permissions_report_export_pdf(request):
+    """تصدير تقرير الأذونات PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+
+    rows = _permissions_report_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 18),
+        ("max_hours_per_month", "الحد الأقصى (ساعات)", 16),
+        ("max_times_per_month", "الحد الأقصى (مرات)", 16),
+        ("used_hours", "المستخدم (ساعات)", 14),
+        ("movements_count", "عدد الحركات", 12),
+    ]
+    return export_to_pdf(title="تقرير الأذونات", columns=columns, rows=rows, user=request.user, filename="permissions_report.pdf")
