@@ -1887,3 +1887,96 @@ def manager_personal_location_export_pdf(request):
         filename=f"location_{employee.employee_code}_{date_str}.pdf",
         subtitle=f"{data['employee_name']} - {date_str}",
     )
+
+
+def _leaves_enhanced_export_data(request):
+    """داتا تقرير الإجازات المفصل (صف لكل إجازة) لتصدير الإكسل/PDF"""
+    from attendance.api_reports import _get_manager_scope_employees, _employee_name, _parse_month
+    from leaves.models import LeaveRequest
+    from datetime import date
+    from calendar import monthrange
+
+    user = request.user
+    year, month = _parse_month(request)
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    employees = _get_manager_scope_employees(user)
+
+    status_labels = {
+        "pending": "معلق", "approved": "مقبول",
+        "rejected": "مرفوض", "cancelled": "ملغي",
+    }
+
+    rows = []
+    for emp in employees:
+        leaves = LeaveRequest._base_manager.filter(
+            employee=emp, start_date__lte=last_day, end_date__gte=first_day,
+        ).select_related("leave_type").order_by("-start_date")
+
+        for lv in leaves:
+            days = float(lv.days_count or 1)
+            is_unpaid = not getattr(lv.leave_type, "is_paid", True) if lv.leave_type else False
+            is_half = days <= 0.5
+            rows.append({
+                "employee_name": _employee_name(emp),
+                "department": _name_of(emp.department) if emp.department else "",
+                "leave_type": lv.leave_type.name if lv.leave_type else "",
+                "start_date": str(lv.start_date) if lv.start_date else "",
+                "end_date": str(lv.end_date) if lv.end_date else "",
+                "days_count": days,
+                "is_paid": "غير مدفوعة" if is_unpaid else "مدفوعة",
+                "is_half_day": "نصف يوم" if is_half else "يوم كامل",
+                "status": status_labels.get(lv.status, lv.status),
+            })
+    return rows
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_leaves_enhanced_export_excel(request):
+    """تصدير تقرير الإجازات المفصل Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+
+    rows = _leaves_enhanced_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 16),
+        ("leave_type", "نوع الإجازة", 16),
+        ("start_date", "من", 12),
+        ("end_date", "إلى", 12),
+        ("days_count", "الأيام", 10),
+        ("is_paid", "مدفوعة/لا", 12),
+        ("is_half_day", "نصف يوم", 10),
+        ("status", "الحالة", 12),
+    ]
+    return export_to_excel(title="تقرير الإجازات المفصل", columns=columns, rows=rows, user=request.user, filename="leaves_enhanced.xlsx")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_leaves_enhanced_export_pdf(request):
+    """تصدير تقرير الإجازات المفصل PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+
+    rows = _leaves_enhanced_export_data(request)
+    columns = [
+        ("employee_name", "الموظف", 22),
+        ("department", "القسم", 16),
+        ("leave_type", "نوع الإجازة", 16),
+        ("start_date", "من", 12),
+        ("end_date", "إلى", 12),
+        ("days_count", "الأيام", 10),
+        ("is_paid", "مدفوعة/لا", 12),
+        ("is_half_day", "نصف يوم", 10),
+        ("status", "الحالة", 12),
+    ]
+    return export_to_pdf(title="تقرير الإجازات المفصل", columns=columns, rows=rows, user=request.user, filename="leaves_enhanced.pdf")
