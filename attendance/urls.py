@@ -292,6 +292,8 @@ urlpatterns += [
     path('api/mobile/manager/reports/monthly-attendance/export/pdf/', api_employee_profile.manager_monthly_attendance_export_pdf),
     path('api/mobile/manager/reports/permissions-report/export/excel/', api_employee_profile.manager_permissions_report_export_excel),
     path('api/mobile/manager/reports/permissions-report/export/pdf/', api_employee_profile.manager_permissions_report_export_pdf),
+    path('api/mobile/manager/reports/personal-location/export/excel/', api_employee_profile.manager_personal_location_export_excel),
+    path('api/mobile/manager/reports/personal-location/export/pdf/', api_employee_profile.manager_personal_location_export_pdf),
     path('api/mobile/manager/employees/<int:emp_id>/profile/', api_employee_profile.manager_employee_profile),
     path('api/mobile/manager/employees/<int:emp_id>/documents/', api_employee_profile.manager_employee_documents),
     path('api/mobile/manager/employees/<int:emp_id>/movements/', api_employee_profile.manager_employee_movements),

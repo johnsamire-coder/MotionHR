@@ -1668,3 +1668,222 @@ def manager_permissions_report_export_pdf(request):
         ("movements_count", "عدد الحركات", 12),
     ]
     return export_to_pdf(title="تقرير الأذونات", columns=columns, rows=rows, user=request.user, filename="permissions_report.pdf")
+
+
+def _build_personal_location_report(employee, target_date):
+    """
+    تقرير شخصي لموظف واحد: التأخير + تتبع الموقع كل 30 دقيقة
+    مع دمج الفترات المتشابهة (سطر جديد فقط لو تغير المكان لأكثر من 15 دقيقة)
+    """
+    from attendance.models import Attendance, LocationLog, TrackingAlert
+    from attendance.missions_models import MissionAssignment
+    from attendance.payroll_rules import _get_shift_for_date
+    from django.utils import timezone
+    from datetime import datetime, timedelta
+
+    att = Attendance._base_manager.filter(employee=employee, date=target_date).first()
+    shift = _get_shift_for_date(employee, target_date)
+
+    result = {
+        "employee_name": _name_of(employee),
+        "employee_code": getattr(employee, "employee_code", "") or "",
+        "department": _name_of(employee.department) if employee.department else "",
+        "date": str(target_date),
+        "shift_name": shift.name if shift else "",
+        "shift_start": str(shift.start_time) if shift else "",
+        "check_in_time": "",
+        "check_out_time": "",
+        "late_status": "",
+        "timeline": [],
+    }
+
+    if not att or not att.check_in_time:
+        result["late_status"] = "لا يوجد تسجيل حضور"
+        return result
+
+    check_in_local = timezone.localtime(att.check_in_time)
+    result["check_in_time"] = check_in_local.strftime("%H:%M")
+    if att.check_out_time:
+        result["check_out_time"] = timezone.localtime(att.check_out_time).strftime("%H:%M")
+
+    # ===== حساب التأخير والمقارنة بفترة السماح =====
+    if shift and shift.start_time:
+        shift_start_dt = datetime.combine(check_in_local.date(), shift.start_time)
+        if getattr(shift, "crosses_midnight", False) and check_in_local.time() < shift.start_time:
+            shift_start_dt -= timedelta(days=1)
+        check_in_naive = check_in_local.replace(tzinfo=None)
+        late_minutes_raw = int((check_in_naive - shift_start_dt).total_seconds() / 60)
+        grace = int(shift.grace_period or 0)
+        if late_minutes_raw <= 0:
+            result["late_status"] = "في الموعد"
+        elif late_minutes_raw <= grace:
+            result["late_status"] = "داخل فترة السماح"
+        else:
+            result["late_status"] = f"متأخر {late_minutes_raw} دقيقة - خارج فترة السماح"
+    else:
+        result["late_status"] = "لا يوجد شيفت محدد"
+
+    # ===== تتبع الموقع =====
+    end_time = att.check_out_time or timezone.now()
+    logs = list(LocationLog._base_manager.filter(
+        employee=employee,
+        timestamp__gte=att.check_in_time,
+        timestamp__lte=end_time,
+    ).order_by("timestamp"))
+
+    if logs:
+        # تجميع كل 30 دقيقة مع دمج الفترات المتشابهة
+        timeline = []
+        current_address = None
+        segment_start = None
+        for log in logs:
+            addr = log.address
+            if not addr:
+                try:
+                    from attendance.api_mobile import reverse_geocode
+                    addr = reverse_geocode(float(log.latitude), float(log.longitude)) or f"({log.latitude}, {log.longitude})"
+                except Exception:
+                    addr = f"({log.latitude}, {log.longitude})"
+            if current_address is None:
+                current_address = addr
+                segment_start = log.timestamp
+            elif addr != current_address:
+                duration_minutes = (log.timestamp - segment_start).total_seconds() / 60
+                if duration_minutes >= 15:
+                    timeline.append({
+                        "time": timezone.localtime(segment_start).strftime("%H:%M"),
+                        "location": current_address,
+                    })
+                    current_address = addr
+                    segment_start = log.timestamp
+        if segment_start:
+            timeline.append({
+                "time": timezone.localtime(segment_start).strftime("%H:%M"),
+                "location": current_address,
+            })
+        result["timeline"] = timeline
+    else:
+        # مفيش location logs - نتأكد من مهمة أو تنبيه خروج نطاق
+        mission_assignments = MissionAssignment._base_manager.filter(
+            employee=employee,
+            started_at__date=target_date,
+        ).select_related("mission")
+        for ma in mission_assignments:
+            if ma.mission:
+                result["timeline"].append({
+                    "time": timezone.localtime(ma.started_at).strftime("%H:%M") if ma.started_at else "",
+                    "location": f"مهمة: {ma.mission.location_name or ma.mission.title}",
+                })
+
+        alerts = TrackingAlert._base_manager.filter(employee=employee, date=target_date)
+        for alert in alerts:
+            result["timeline"].append({
+                "time": timezone.localtime(alert.started_at).strftime("%H:%M") if alert.started_at else "",
+                "location": f"خارج النطاق: {alert.last_address or '(موقع غير محدد)'} ({alert.minutes_outside} دقيقة)",
+            })
+
+        if not result["timeline"]:
+            result["timeline"].append({
+                "time": result["check_in_time"],
+                "location": "داخل نطاق الشركة (موظف مكتبي)",
+            })
+
+    return result
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_personal_location_export_excel(request):
+    """تصدير تقرير الموقع الشخصي لموظف Excel"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_excel
+    from employees.visibility import get_visible_employees_qs
+    from datetime import date
+
+    employee_id = request.GET.get("employee_id")
+    date_str = request.GET.get("date", str(date.today()))
+    if not employee_id:
+        return Response({"error": "employee_id مطلوب"}, status=400)
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        return Response({"error": "صيغة التاريخ غير صحيحة"}, status=400)
+
+    employee = get_visible_employees_qs(request.user).filter(id=employee_id).first()
+    if not employee:
+        return Response({"error": "الموظف غير موجود"}, status=404)
+
+    data = _build_personal_location_report(employee, target_date)
+
+    rows = [
+        {"info": "الموظف", "value": data["employee_name"]},
+        {"info": "الكود", "value": data["employee_code"]},
+        {"info": "القسم", "value": data["department"]},
+        {"info": "التاريخ", "value": data["date"]},
+        {"info": "الشيفت", "value": f"{data['shift_name']} ({data['shift_start']})"},
+        {"info": "وقت الحضور", "value": data["check_in_time"]},
+        {"info": "وقت الانصراف", "value": data["check_out_time"]},
+        {"info": "حالة الحضور", "value": data["late_status"]},
+    ]
+    for t in data["timeline"]:
+        rows.append({"info": f"الموقع الساعة {t['time']}", "value": t["location"]})
+
+    columns = [("info", "البند", 28), ("value", "التفاصيل", 40)]
+    return export_to_excel(
+        title="تقرير الموقع الشخصي",
+        columns=columns, rows=rows, user=request.user,
+        filename=f"location_{employee.employee_code}_{date_str}.xlsx",
+        subtitle=f"{data['employee_name']} - {date_str}",
+    )
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_personal_location_export_pdf(request):
+    """تصدير تقرير الموقع الشخصي لموظف PDF"""
+    err = _check_manager(request)
+    if err:
+        return err
+    from attendance.report_export_helper import export_to_pdf
+    from employees.visibility import get_visible_employees_qs
+    from datetime import date
+
+    employee_id = request.GET.get("employee_id")
+    date_str = request.GET.get("date", str(date.today()))
+    if not employee_id:
+        return Response({"error": "employee_id مطلوب"}, status=400)
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        return Response({"error": "صيغة التاريخ غير صحيحة"}, status=400)
+
+    employee = get_visible_employees_qs(request.user).filter(id=employee_id).first()
+    if not employee:
+        return Response({"error": "الموظف غير موجود"}, status=404)
+
+    data = _build_personal_location_report(employee, target_date)
+
+    rows = [
+        {"info": "الموظف", "value": data["employee_name"]},
+        {"info": "الكود", "value": data["employee_code"]},
+        {"info": "القسم", "value": data["department"]},
+        {"info": "التاريخ", "value": data["date"]},
+        {"info": "الشيفت", "value": f"{data['shift_name']} ({data['shift_start']})"},
+        {"info": "وقت الحضور", "value": data["check_in_time"]},
+        {"info": "وقت الانصراف", "value": data["check_out_time"]},
+        {"info": "حالة الحضور", "value": data["late_status"]},
+    ]
+    for t in data["timeline"]:
+        rows.append({"info": f"الموقع الساعة {t['time']}", "value": t["location"]})
+
+    columns = [("info", "البند", 28), ("value", "التفاصيل", 40)]
+    return export_to_pdf(
+        title="تقرير الموقع الشخصي",
+        columns=columns, rows=rows, user=request.user,
+        filename=f"location_{employee.employee_code}_{date_str}.pdf",
+        subtitle=f"{data['employee_name']} - {date_str}",
+    )
