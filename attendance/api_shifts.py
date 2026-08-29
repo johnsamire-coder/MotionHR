@@ -411,8 +411,8 @@ def manager_shifts_list(request):
         from attendance.models import Shift
         lang = request.GET.get("lang", "ar")
         shifts = Shift._base_manager.filter(
-            company=company
-        ).order_by('-is_active', '-is_default', 'name')
+            company=company, is_active=True
+        ).order_by('-is_default', 'name')
         data = [_shift_data(s, lang) for s in shifts]
         return Response({"success": True, "shifts": data, "count": len(data)})
     except Exception as e:
