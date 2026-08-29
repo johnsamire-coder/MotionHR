@@ -710,6 +710,11 @@ def mobile_send_location(request):
     except Exception:
         return Response({'success': False, 'message': 'بيانات الموقع غير صحيحة'}, status=400)
 
+    if not _can_track_location(employee):
+        return Response({
+            'success': False,
+            'message': 'تتبع الموقع متاح فقط أثناء وقت الدوام'
+        }, status=403)
     address = reverse_geocode(latitude, longitude)
     LocationLog._base_manager.create(
         company=employee.company,
@@ -2884,3 +2889,38 @@ def _notify_hr_incomplete_data(employee, missing):
     except Exception:
         pass
 
+
+
+def _can_track_location(employee):
+    """
+    يتأكد هل مسموح نسجل موقع الموظف دلوقتي:
+    - الميداني (field_free / field_assigned): مسموح دايماً
+    - المكتبي (office): بس لو عنده حضور مفتوح (لسه ماسجلش انصراف)
+      أو خلال 30 دقيقة قبل بداية شيفته الرسمي
+    """
+    worker_type = getattr(employee, 'worker_type', None)
+    if worker_type != 'office':
+        return True
+    try:
+        from attendance.models import Attendance
+        today = timezone.localdate()
+        att = Attendance._base_manager.filter(employee=employee, date=today).first()
+        if att and att.check_in_time and not att.check_out_time:
+            return True
+        from attendance.payroll_rules import _get_shift_for_date
+        shift = _get_shift_for_date(employee, today)
+        if shift and shift.start_time and shift.end_time:
+            from datetime import datetime, timedelta
+            now_local = timezone.localtime(timezone.now())
+            shift_start_dt = datetime.combine(now_local.date(), shift.start_time)
+            shift_end_dt = datetime.combine(now_local.date(), shift.end_time)
+            if shift_end_dt <= shift_start_dt:
+                shift_end_dt += timedelta(days=1)
+            grace_start = shift_start_dt - timedelta(minutes=30)
+            grace_end = shift_end_dt + timedelta(minutes=30)
+            now_naive = now_local.replace(tzinfo=None)
+            if grace_start <= now_naive <= grace_end:
+                return True
+        return False
+    except Exception:
+        return True
