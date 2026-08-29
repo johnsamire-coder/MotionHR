@@ -570,17 +570,22 @@ def _make_activation_link(user):
     return f"{site_url}/password-reset-confirm/{uid}/{token}/"
 
 
-def _make_wa_link(clean_phone, first_name_ar, username, activation_link):
+def _make_wa_link(clean_phone, first_name_ar, username, activation_link, company_name=""):
     """توليد رابط واتساب بدون كلمة السر"""
+    company_line = f"مرحباً بك في {company_name}%0A" if company_name else ""
     text = (
-        f"مرحباً {first_name_ar}%0A"
-        f"تم إنشاء حسابك في تطبيق MotionHR%0A%0A"
+        f"{company_line}"
+        f"أهلاً {first_name_ar}%0A"
+        f"تم إنشاء حسابك في نظام {company_name or 'MotionHR'}%0A%0A"
         f"اسم المستخدم: {username}%0A%0A"
-        f"رابط تفعيل حسابك وتعيين كلمة المرور:%0A"
-        f"{activation_link}%0A%0A"
-        f"الرابط صالح 48 ساعة فقط%0A"
-        f"بعد التفعيل حمّل التطبيق من هنا:%0A"
-        f"https://jssolutions-eg.com/app/download"
+        f"لتفعيل حسابك وتعيين كلمة المرور اضغط الرابط التالي:%0A"
+        f"{activation_link}%0A"
+        f"(الرابط صالح 48 ساعة فقط)%0A%0A"
+        f"بعد التفعيل، حمّل التطبيق من المتجر المناسب لهاتفك:%0A"
+        f"لأجهزة Android (Google Play):%0A"
+        f"https://play.google.com/store/apps/details?id=com.motionheployee%0A%0A"
+        f"لأجهزة iPhone (App Store):%0A"
+        f"https://apps.apple.com/us/app/motionhr/id6802649776"
     )
     return f"https://wa.me/{clean_phone}?text={text}"
 
@@ -927,8 +932,8 @@ def manager_create_employee(request):
             "whatsapp": {
                 "phone": phone,
                 "clean_phone": clean_phone,
-                "wa_link": _make_wa_link(clean_phone, first_name_ar, username, _make_activation_link(user)),
-                "download_link": "https://jssolutions-eg.com/app/download",
+                "wa_link": _make_wa_link(clean_phone, first_name_ar, username, _make_activation_link(user), company.name_ar),
+                "download_link": "https://jssolutions-eg.com/download/",
             }
         }, status=status.HTTP_201_CREATED)
 
@@ -1018,8 +1023,8 @@ def manager_reset_employee_password(request, employee_id):
             "whatsapp": {
                 "phone": phone,
                 "clean_phone": clean_phone,
-                "wa_link": _make_wa_link(clean_phone, first_name_ar, target_employee.user.username, activation_link),
-                "download_link": "https://jssolutions-eg.com/app/download",
+                "wa_link": _make_wa_link(clean_phone, first_name_ar, target_employee.user.username, activation_link, getattr(target_employee.company, "name_ar", "") if target_employee.company else ""),
+                "download_link": "https://jssolutions-eg.com/download/",
             }
         }, status=status.HTTP_200_OK)
 

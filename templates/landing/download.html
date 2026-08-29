@@ -10,55 +10,68 @@
       background: linear-gradient(135deg, #37474F, #263238);
       color: white;
       text-align: center;
-      padding: 40px;
+      padding: 40px 20px;
       margin: 0;
     }
     .container {
-      max-width: 600px;
+      max-width: 500px;
       margin: 0 auto;
       background: rgba(255,255,255,0.1);
-      padding: 40px;
+      padding: 40px 30px;
       border-radius: 20px;
       backdrop-filter: blur(10px);
     }
-    h1 { font-size: 28px; margin-bottom: 10px; }
-    p { font-size: 18px; opacity: 0.9; }
-    .download-btn {
-      display: inline-block;
+    h1 { font-size: 26px; margin-bottom: 10px; }
+    p { font-size: 16px; opacity: 0.9; }
+    .store-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
       margin-top: 30px;
-      padding: 16px 40px;
-      background: #00C853;
+    }
+    .store-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 14px 24px;
       color: white;
-      font-size: 20px;
+      font-size: 17px;
       font-weight: bold;
-      border-radius: 50px;
+      border-radius: 14px;
       text-decoration: none;
-      box-shadow: 0 8px 20px rgba(0, 200, 83, 0.4);
       transition: all 0.3s;
     }
-    .download-btn:hover {
-      transform: scale(1.05);
-      background: #00B140;
-    }
+    .store-btn:hover { transform: scale(1.03); }
+    .google-play { background: #00C853; box-shadow: 0 8px 20px rgba(0, 200, 83, 0.35); }
+    .google-play:hover { background: #00B140; }
+    .app-store { background: #0A84FF; box-shadow: 0 8px 20px rgba(10, 132, 255, 0.35); }
+    .app-store:hover { background: #0071E3; }
+    .store-icon { font-size: 22px; }
     .warning {
       margin-top: 30px;
-      font-size: 14px;
-      opacity: 0.8;
+      font-size: 13px;
+      opacity: 0.75;
+      line-height: 1.6;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>📱 تحميل تطبيق MotionHR</h1>
-    <p>اضغط على الزر أدناه لتحميل أحدث نسخة من التطبيق</p>
-
-    <a href="/static/motionhr.apk" class="download-btn">
-      ⬇️ تحميل التطبيق (APK)
-    </a>
-
+    <p>اختر متجر التطبيقات المناسب لجهازك</p>
+    <div class="store-buttons">
+      <a href="https://play.google.com/store/apps/details?id=com.motionheployee" class="store-btn google-play" target="_blank" rel="noopener">
+        <span class="store-icon">▶</span>
+        تحميل من Google Play
+      </a>
+      <a href="https://apps.apple.com/us/app/motionhr/id6802649776" class="store-btn app-store" target="_blank" rel="noopener">
+        <span class="store-icon">🍎</span>
+        تحميل من App Store
+      </a>
+    </div>
     <div class="warning">
-      ⚠️ التطبيق للأندرويد فقط<br>
-      بعد التحميل، فعّل "التثبيت من مصادر غير معروفة" في إعدادات هاتفك
+      بعد التحميل، سجّل دخولك ببيانات حسابك اللي استلمتها من شركتك
     </div>
   </div>
 </body>
