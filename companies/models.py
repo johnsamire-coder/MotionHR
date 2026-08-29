@@ -397,13 +397,31 @@ class CompanyLoginSettings(models.Model):
 # ميثاق العمل
 # ════════════════════════════════════════════════════════════
 class WorkCharter(models.Model):
-    """ميثاق العمل — مستند واحد لكل شركة"""
+    """ميثاق العمل — الشركة ممكن يكون عندها أكتر من ميثاق، كل واحد بفئة مستهدفة مختلفة"""
 
-    company = models.OneToOneField(
+    company = models.ForeignKey(
         "Company",
         on_delete=models.CASCADE,
-        related_name="work_charter",
+        related_name="work_charters",
         verbose_name="الشركة"
+    )
+    target_roles = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="الأدوار المستهدفة",
+        help_text="قائمة أدوار (زي manager, employee). فاضية = يستهدف الكل"
+    )
+    target_departments = models.ManyToManyField(
+        "companies.Department",
+        blank=True,
+        related_name="work_charters",
+        verbose_name="الأقسام المستهدفة"
+    )
+    target_branches = models.ManyToManyField(
+        "companies.Branch",
+        blank=True,
+        related_name="work_charters",
+        verbose_name="الفروع المستهدفة"
     )
     title = models.CharField(
         max_length=200,

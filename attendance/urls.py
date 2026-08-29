@@ -1,6 +1,7 @@
 from .api_attendance_adjustment import manager_adjust_attendance
 from attendance import api_reminders
 from attendance import api_employee_profile
+from attendance import api_charters
 from attendance import api_announcements
 from attendance import api_attachments
 from attendance import api_employee_management
@@ -296,6 +297,12 @@ urlpatterns += [
     path('api/mobile/manager/reports/personal-location/export/pdf/', api_employee_profile.manager_personal_location_export_pdf),
     path('api/mobile/manager/reports/leaves-enhanced/export/excel/', api_employee_profile.manager_leaves_enhanced_export_excel),
     path('api/mobile/manager/reports/leaves-enhanced/export/pdf/', api_employee_profile.manager_leaves_enhanced_export_pdf),
+    path('api/mobile/manager/charters/', api_charters.manager_charters_list),
+    path('api/mobile/manager/charters/create/', api_charters.manager_charters_create),
+    path('api/mobile/manager/charters/<int:charter_id>/update/', api_charters.manager_charters_update),
+    path('api/mobile/manager/charters/<int:charter_id>/delete/', api_charters.manager_charters_delete),
+    path('api/mobile/charters/my/', api_charters.my_charters_list),
+    path('api/mobile/charters/<int:charter_id>/accept/', api_charters.my_charter_accept),
     path('api/mobile/manager/employees/<int:emp_id>/profile/', api_employee_profile.manager_employee_profile),
     path('api/mobile/manager/employees/<int:emp_id>/documents/', api_employee_profile.manager_employee_documents),
     path('api/mobile/manager/employees/<int:emp_id>/movements/', api_employee_profile.manager_employee_movements),
