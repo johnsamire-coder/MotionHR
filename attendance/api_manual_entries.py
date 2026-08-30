@@ -14,6 +14,11 @@ from datetime import date
 
 from .company_policy_models import ManualPenalty, ManualBonus, ManualAllowance
 from employees.models import Employee
+from accounts.fcm_service import (
+    notify_manual_entry_approved,
+    notify_manual_entry_rejected,
+    notify_hr_manual_entry_approved,
+)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -285,7 +290,24 @@ def _handle_approve(request, entry_id, ModelClass):
 
     entry.save()
 
-    # TODO: هنا نضيف إشعار للـ HR + الموظف + المدير الطالب
+    # إشعار الموظف المستهدف + المدير الطالب + HR
+    try:
+        emp_name = f'{entry.employee.first_name_ar or ""} {entry.employee.last_name_ar or ""}'.strip() or entry.employee.employee_code
+        notify_manual_entry_approved(
+            user=entry.employee.user if entry.employee else None,
+            category_display=entry.get_category_display(),
+            amount_value=float(entry.amount_value),
+            employee_name=emp_name,
+            requester_user=entry.requested_by,
+        )
+        notify_hr_manual_entry_approved(
+            company=company,
+            category_display=entry.get_category_display(),
+            employee_name=emp_name,
+            amount_value=float(entry.amount_value),
+        )
+    except Exception as e:
+        print(f"Manual entry notification error: {e}")
 
     return JsonResponse({
         'success': True,
@@ -318,6 +340,19 @@ def _handle_reject(request, entry_id, ModelClass):
     entry.rejected_at = timezone.now()
     entry.rejection_reason = reason
     entry.save()
+
+    # إشعار الموظف المستهدف + المدير الطالب
+    try:
+        emp_name = f'{entry.employee.first_name_ar or ""} {entry.employee.last_name_ar or ""}'.strip() or entry.employee.employee_code
+        notify_manual_entry_rejected(
+            user=entry.employee.user if entry.employee else None,
+            category_display=entry.get_category_display(),
+            reason=reason,
+            employee_name=emp_name,
+            requester_user=entry.requested_by,
+        )
+    except Exception as e:
+        print(f"Manual entry notification error: {e}")
 
     return JsonResponse({
         'success': True,

@@ -791,7 +791,7 @@ def manager_create_employee(request):
         # ── Transaction: Create User + Employee ──
         with transaction.atomic():
             # تحديد الدور بناءً على الدور الافتراضي للقسم
-            user_role = "employee"
+            user_role = "manager" if getattr(job_title, "is_manager", False) else "employee"
             if hasattr(department, 'default_role') and department.default_role:
                 from accounts.permissions_models import UserRole
                 _dept_role = department.default_role

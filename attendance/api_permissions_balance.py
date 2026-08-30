@@ -12,6 +12,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from accounts.fcm_service import notify_extra_permission_granted, notify_late_rolled_back
+
 HR_ROLES = {"super_admin", "company_admin", "hr_manager", "manager", "branch_manager"}
 
 
@@ -250,6 +252,12 @@ def grant_extra_permission(request, employee_id):
         notes=f"إذن إضافي من {request.user.get_full_name()}: {notes}",
     )
 
+    if employee.user:
+        try:
+            notify_extra_permission_granted(employee.user, minutes=minutes, count=count)
+        except Exception:
+            pass
+
     return Response({
         "success": True,
         "message": f"تم منح إذن إضافي {minutes} دقيقة / {count} مرة",
@@ -300,6 +308,12 @@ def rollback_late(request, employee_id):
         reference_date=date.today(),
         notes=f"إلغاء تأخير يوم {reference_date} بواسطة {request.user.get_full_name()}: {notes}",
     )
+
+    if employee.user:
+        try:
+            notify_late_rolled_back(employee.user, reference_date)
+        except Exception:
+            pass
 
     return Response({
         "success": True,

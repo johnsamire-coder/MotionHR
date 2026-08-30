@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from attendance.models import Attendance, DailyAttendanceSummary
 from employees.models import EmployeeMovement
+from accounts.fcm_service import notify_attendance_adjusted
 
 
 def _parse_time_str(time_str, record_date):
@@ -116,6 +117,17 @@ def manager_adjust_attendance(request, attendance_id):
         )
     except Exception:
         pass
+
+    # إشعار الموظف بتعديل سجل حضوره
+    if attendance.employee and attendance.employee.user:
+        try:
+            notify_attendance_adjusted(
+                user=attendance.employee.user,
+                date_str=str(attendance.date),
+                changes_summary=', '.join(changes),
+            )
+        except Exception:
+            pass
 
     return Response({
         'success': True,

@@ -10,6 +10,8 @@ from accounts.fcm_service import (
     notify_leave_rejected,
     notify_manager_new_request,
     notify_manager_new_leave,
+    notify_manager_request_cancelled,
+    notify_manager_leave_cancelled,
 )
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
@@ -1741,6 +1743,18 @@ def mobile_cancel_request(request, request_id):
             import logging
             logging.getLogger(__name__).warning(f'PermissionLedger rollback error: {_le}')
 
+    # إشعار المدير بإلغاء الموظف لطلبه
+    try:
+        emp_name = f"{employee.first_name_ar} {employee.last_name_ar}".strip() or employee.user.username
+        notify_manager_request_cancelled(
+            company=employee.company,
+            employee_name=emp_name,
+            request_type_name=req.request_type.name if req.request_type else 'طلب',
+            request_id=req.id,
+        )
+    except Exception:
+        pass
+
     return Response({
         'success': True,
         'message': 'تم إلغاء الطلب بنجاح',
@@ -1814,6 +1828,18 @@ def mobile_cancel_leave(request, leave_id):
 
     leave.status = 'cancelled'
     leave.save()
+
+    # إشعار المدير بإلغاء الموظف لإجازته
+    try:
+        emp_name = f"{employee.first_name_ar} {employee.last_name_ar}".strip() or employee.user.username
+        notify_manager_leave_cancelled(
+            company=employee.company,
+            employee_name=emp_name,
+            leave_type_name=leave.leave_type.name if leave.leave_type else 'إجازة',
+            leave_id=leave.id,
+        )
+    except Exception:
+        pass
 
     return Response({
         'success': True,

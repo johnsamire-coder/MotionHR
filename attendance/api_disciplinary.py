@@ -12,6 +12,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from accounts.fcm_service import notify_disciplinary_action
+
 HR_ROLES = {"super_admin", "company_admin", "hr_manager"}
 
 
@@ -254,5 +256,17 @@ def disciplinary_action_review(request, action_id):
 
     action.notes = str(request.data.get("notes", action.notes))
     action.save()
+
+    # إشعار الموظف بنتيجة الإجراء التأديبي
+    if action.employee and action.employee.user:
+        try:
+            notify_disciplinary_action(
+                user=action.employee.user,
+                action_type_display=action.get_action_type_display(),
+                approved=(decision == "approve"),
+                reason=action.reason,
+            )
+        except Exception:
+            pass
 
     return Response({"success": True, "message": msg, "action": _action_data(action)})

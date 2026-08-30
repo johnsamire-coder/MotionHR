@@ -499,3 +499,320 @@ def notify_work_location_rejected(user, location_name, reason=''):
         body_en=f"Location [{location_name}] has been rejected. Reason: {reason}",
     )
 
+
+# ═══════════════════════════════════════════════════
+# Missions Notifications
+# ═══════════════════════════════════════════════════
+
+def notify_mission_assigned(user, mission_title, mission_id=None):
+    """إشعار للموظف: اتعيّن على مهمة جديدة"""
+    data = {'type': 'mission_assigned', 'screen': 'my_missions'}
+    if mission_id:
+        data['mission_id'] = str(mission_id)
+
+    return send_notification_to_user(
+        user=user,
+        title='📋 مهمة جديدة',
+        body=f'تم تعيينك على مهمة: {mission_title}',
+        data=data,
+        title_en='📋 New Mission',
+        body_en=f'You have been assigned to a mission: {mission_title}',
+    )
+
+
+def notify_mission_cancelled(user, mission_title, mission_id=None):
+    """إشعار للموظف: المهمة اتلغت"""
+    data = {'type': 'mission_cancelled', 'screen': 'my_missions'}
+    if mission_id:
+        data['mission_id'] = str(mission_id)
+
+    return send_notification_to_user(
+        user=user,
+        title='❌ تم إلغاء المهمة',
+        body=f'تم إلغاء المهمة: {mission_title}',
+        data=data,
+        title_en='❌ Mission Cancelled',
+        body_en=f'The mission has been cancelled: {mission_title}',
+    )
+
+
+def notify_mission_request_approved(user, mission_title, mission_id=None):
+    """إشعار للموظف: طلب المهمة اتوافق عليه"""
+    data = {'type': 'mission_request_approved', 'screen': 'my_missions'}
+    if mission_id:
+        data['mission_id'] = str(mission_id)
+
+    return send_notification_to_user(
+        user=user,
+        title='✅ تمت الموافقة على طلب المهمة',
+        body=f'تمت الموافقة على طلبك للمهمة: {mission_title}',
+        data=data,
+        title_en='✅ Mission Request Approved',
+        body_en=f'Your mission request was approved: {mission_title}',
+    )
+
+
+def notify_mission_request_rejected(user, mission_title, mission_id=None):
+    """إشعار للموظف: طلب المهمة اترفض"""
+    data = {'type': 'mission_request_rejected', 'screen': 'my_missions'}
+    if mission_id:
+        data['mission_id'] = str(mission_id)
+
+    return send_notification_to_user(
+        user=user,
+        title='❌ تم رفض طلب المهمة',
+        body=f'تم رفض طلبك للمهمة: {mission_title}',
+        data=data,
+        title_en='❌ Mission Request Rejected',
+        body_en=f'Your mission request was rejected: {mission_title}',
+    )
+
+
+def notify_manager_mission_response(company, employee_name, mission_title, accepted, mission_id=None):
+    """إشعار للمدير: الموظف قبل/رفض المهمة"""
+    data = {'type': 'mission_response', 'screen': 'manager_missions'}
+    if mission_id:
+        data['mission_id'] = str(mission_id)
+
+    if accepted:
+        title = '✅ قبول مهمة'
+        body = f'{employee_name} وافق على المهمة: {mission_title}'
+        title_en = '✅ Mission Accepted'
+        body_en = f'{employee_name} accepted the mission: {mission_title}'
+    else:
+        title = '❌ رفض مهمة'
+        body = f'{employee_name} رفض المهمة: {mission_title}'
+        title_en = '❌ Mission Rejected'
+        body_en = f'{employee_name} rejected the mission: {mission_title}'
+
+    return send_notification_to_managers(
+        company=company,
+        title=title,
+        body=body,
+        data=data,
+        title_en=title_en,
+        body_en=body_en,
+    )
+
+# ═══════════════════════════════════════════════════
+# Manual Entries (Penalty / Bonus / Allowance) Notifications
+# ═══════════════════════════════════════════════════
+
+def notify_manual_entry_approved(user, category_display, amount_value, employee_name='', requester_user=None):
+    """إشعار باعتماد قيد يدوي (خصم/مكافأة/بدل) - للموظف المستهدف والمدير الطالب"""
+    data = {'type': 'manual_entry_approved', 'screen': 'my_payroll'}
+
+    if user:
+        send_notification_to_user(
+            user=user,
+            title='✅ تم اعتماد قيد على راتبك',
+            body=f'تم اعتماد {category_display} بقيمة {amount_value}',
+            data=data,
+            title_en='✅ Payroll Entry Approved',
+            body_en=f'A {category_display} entry of {amount_value} was approved on your payroll',
+        )
+
+    if requester_user:
+        send_notification_to_user(
+            user=requester_user,
+            title='✅ تم اعتماد الطلب',
+            body=f'تم اعتماد طلب {category_display} للموظف {employee_name}',
+            data={'type': 'manual_entry_approved_requester', 'screen': 'manual_entries'},
+            title_en='✅ Request Approved',
+            body_en=f'Your {category_display} request for {employee_name} was approved',
+        )
+
+
+def notify_manual_entry_rejected(user, category_display, reason='', employee_name='', requester_user=None):
+    """إشعار برفض قيد يدوي (خصم/مكافأة/بدل) - للموظف المستهدف والمدير الطالب"""
+    body_ar = f'تم رفض {category_display}'
+    body_en = f'Your {category_display} entry was rejected'
+    if reason:
+        body_ar += f'\nالسبب: {reason}'
+        body_en += f'\nReason: {reason}'
+
+    data = {'type': 'manual_entry_rejected', 'screen': 'my_payroll'}
+
+    if user:
+        send_notification_to_user(
+            user=user,
+            title='❌ تم رفض قيد على راتبك',
+            body=body_ar,
+            data=data,
+            title_en='❌ Payroll Entry Rejected',
+            body_en=body_en,
+        )
+
+    if requester_user:
+        req_body_ar = f'تم رفض طلب {category_display} للموظف {employee_name}'
+        req_body_en = f'Your {category_display} request for {employee_name} was rejected'
+        if reason:
+            req_body_ar += f'\nالسبب: {reason}'
+            req_body_en += f'\nReason: {reason}'
+        send_notification_to_user(
+            user=requester_user,
+            title='❌ تم رفض الطلب',
+            body=req_body_ar,
+            data={'type': 'manual_entry_rejected_requester', 'screen': 'manual_entries'},
+            title_en='❌ Request Rejected',
+            body_en=req_body_en,
+        )
+
+
+def notify_hr_manual_entry_approved(company, category_display, employee_name, amount_value):
+    """إشعار HR باعتماد قيد يدوي (لأن الكود كان بيسجل hr_notified بدون إرسال فعلي)"""
+    from accounts.models import User
+
+    hr_users = User.objects.filter(company=company, role__in=['hr_manager', 'company_admin', 'super_admin'])
+    data = {'type': 'manual_entry_hr_notice', 'screen': 'manual_entries'}
+    for hr_user in hr_users:
+        send_notification_to_user(
+            user=hr_user,
+            title='📋 تم اعتماد قيد راتب',
+            body=f'تم اعتماد {category_display} بقيمة {amount_value} للموظف {employee_name}',
+            data=data,
+            title_en='📋 Payroll Entry Approved',
+            body_en=f'A {category_display} of {amount_value} was approved for {employee_name}',
+        )
+
+# ═══════════════════════════════════════════════════
+# Generic helpers (aliases used by leave-recall and other flows)
+# ═══════════════════════════════════════════════════
+
+def send_push_to_user(user, title, body, data=None, title_en=None, body_en=None):
+    """اسم بديل لـ send_notification_to_user (للتوافق مع استدعاءات قديمة)"""
+    return send_notification_to_user(user, title, body, data, title_en=title_en, body_en=body_en)
+
+
+def send_push_to_role(company, role, title, body, data=None, title_en=None, body_en=None):
+    """إرسال إشعار لكل المستخدمين بدور معين في شركة (مثلاً hr_manager بس)"""
+    from accounts.models import User
+
+    users = User.objects.filter(company=company, role=role)
+    total_sent = 0
+    for u in users:
+        result = send_notification_to_user(u, title, body, data, title_en=title_en, body_en=body_en)
+        total_sent += result.get('sent', 0)
+
+    return {"success": total_sent > 0, "sent": total_sent}
+
+# ═══════════════════════════════════════════════════
+# Disciplinary Actions Notifications
+# ═══════════════════════════════════════════════════
+
+def notify_disciplinary_action(user, action_type_display, approved, reason=''):
+    """إشعار للموظف باعتماد/رفض إجراء تأديبي ضده"""
+    if approved:
+        title = '⚠️ إجراء تأديبي معتمد'
+        body = f'تم اعتماد إجراء تأديبي: {action_type_display}'
+        title_en = '⚠️ Disciplinary Action Approved'
+        body_en = f'A disciplinary action has been approved: {action_type_display}'
+        if reason:
+            body += f'\nالسبب: {reason}'
+            body_en += f'\nReason: {reason}'
+    else:
+        title = 'تم رفض إجراء تأديبي'
+        body = f'تم رفض إجراء تأديبي كان مقترحاً ضدك: {action_type_display}'
+        title_en = 'Disciplinary Action Rejected'
+        body_en = f'A proposed disciplinary action against you was rejected: {action_type_display}'
+
+    return send_notification_to_user(
+        user=user,
+        title=title,
+        body=body,
+        data={'type': 'disciplinary_action', 'screen': 'my_profile'},
+        title_en=title_en,
+        body_en=body_en,
+    )
+
+# ═══════════════════════════════════════════════════
+# Attendance Manual Adjustment Notifications
+# ═══════════════════════════════════════════════════
+
+def notify_attendance_adjusted(user, date_str, changes_summary=''):
+    """إشعار للموظف: تم تعديل سجل حضوره يدوياً"""
+    body_ar = f'تم تعديل سجل حضورك ليوم {date_str} بواسطة الإدارة'
+    body_en = f'Your attendance record for {date_str} was manually adjusted'
+    if changes_summary:
+        body_ar += f'\n{changes_summary}'
+        body_en += f'\n{changes_summary}'
+
+    return send_notification_to_user(
+        user=user,
+        title='📝 تم تعديل سجل حضورك',
+        body=body_ar,
+        data={'type': 'attendance_adjusted', 'screen': 'my_attendance', 'date': date_str},
+        title_en='📝 Attendance Record Adjusted',
+        body_en=body_en,
+    )
+
+# ═══════════════════════════════════════════════════
+# Permission Balance Notifications
+# ═══════════════════════════════════════════════════
+
+def notify_extra_permission_granted(user, minutes=0, count=0):
+    """إشعار للموظف بمنح إذن إضافي"""
+    parts_ar = []
+    parts_en = []
+    if minutes > 0:
+        parts_ar.append(f'{minutes} دقيقة')
+        parts_en.append(f'{minutes} minutes')
+    if count > 0:
+        parts_ar.append(f'{count} مرة')
+        parts_en.append(f'{count} times')
+
+    return send_notification_to_user(
+        user=user,
+        title='🎁 تم منحك إذن إضافي',
+        body=f'تم إضافة {" / ".join(parts_ar)} لرصيد أذوناتك',
+        data={'type': 'extra_permission_granted', 'screen': 'my_permissions'},
+        title_en='🎁 Extra Permission Granted',
+        body_en=f'{" / ".join(parts_en)} was added to your permission balance',
+    )
+
+
+def notify_late_rolled_back(user, reference_date):
+    """إشعار للموظف بإلغاء تأخير مسجل عليه"""
+    return send_notification_to_user(
+        user=user,
+        title='✅ تم إلغاء تأخير مسجل',
+        body=f'تم إلغاء التأخير المسجل عليك يوم {reference_date}',
+        data={'type': 'late_rolled_back', 'screen': 'my_attendance'},
+        title_en='✅ Late Record Cancelled',
+        body_en=f'A late record for {reference_date} has been cancelled',
+    )
+
+# ═══════════════════════════════════════════════════
+# Cancellation Notifications
+# ═══════════════════════════════════════════════════
+
+def notify_manager_request_cancelled(company, employee_name, request_type_name, request_id=None):
+    """إشعار للمدير: الموظف ألغى طلبه بنفسه"""
+    data = {'type': 'request_cancelled_by_employee', 'screen': 'manager_pending'}
+    if request_id:
+        data['request_id'] = str(request_id)
+
+    return send_notification_to_managers(
+        company=company,
+        title='🚫 تم إلغاء طلب',
+        body=f'{employee_name} ألغى طلب: {request_type_name}',
+        data=data,
+        title_en='🚫 Request Cancelled',
+        body_en=f'{employee_name} cancelled their request: {request_type_name}',
+    )
+
+
+def notify_manager_leave_cancelled(company, employee_name, leave_type_name, leave_id=None):
+    """إشعار للمدير: الموظف ألغى إجازته بنفسه"""
+    data = {'type': 'leave_cancelled_by_employee', 'screen': 'manager_pending'}
+    if leave_id:
+        data['leave_id'] = str(leave_id)
+
+    return send_notification_to_managers(
+        company=company,
+        title='🚫 تم إلغاء إجازة',
+        body=f'{employee_name} ألغى إجازة: {leave_type_name}',
+        data=data,
+        title_en='🚫 Leave Cancelled',
+        body_en=f'{employee_name} cancelled their leave: {leave_type_name}',
+    )

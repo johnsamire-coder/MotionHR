@@ -20,6 +20,13 @@ from attendance.missions_models import (
 )
 from employees.models import Employee
 from employees.visibility import get_visible_employees_qs
+from accounts.fcm_service import (
+    notify_mission_assigned,
+    notify_mission_cancelled,
+    notify_mission_request_approved,
+    notify_mission_request_rejected,
+    notify_manager_mission_response,
+)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -265,6 +272,11 @@ def manager_create_mission(request):
                 status='pending',
                 company=company,
             )
+            if emp.user:
+                try:
+                    notify_mission_assigned(emp.user, mission.title, mission.id)
+                except Exception:
+                    pass
         except Employee.DoesNotExist:
             pass
 
@@ -336,6 +348,16 @@ def manager_cancel_mission(request, mission_id):
 
     mission.status = 'cancelled'
     mission.save()
+
+    # إشعار الموظفين المعينين على المهمة الملغاة
+    for assignment in MissionAssignment._base_manager.filter(mission=mission).select_related('employee__user'):
+        emp = assignment.employee
+        if emp and emp.user:
+            try:
+                notify_mission_cancelled(emp.user, mission.title, mission.id)
+            except Exception:
+                pass
+
     return Response({'success': True, 'message': 'تم إلغاء المهمة'})
 
 
@@ -444,6 +466,17 @@ def manager_approve_request(request, request_id):
     req.manager_notes = notes
     req.manager_responded_at = timezone.now()
     req.save()
+
+    # إشعار الموظف بنتيجة طلبه
+    emp = req.requested_by
+    if emp and emp.user and req.mission:
+        try:
+            if action == 'approve':
+                notify_mission_request_approved(emp.user, req.mission.title, req.mission.id)
+            else:
+                notify_mission_request_rejected(emp.user, req.mission.title, req.mission.id)
+        except Exception:
+            pass
 
     return Response({'success': True, 'message': msg})
 
@@ -604,6 +637,19 @@ def employee_respond_mission(request, assignment_id):
 
     assignment.responded_at = timezone.now()
     assignment.save()
+
+    # إشعار المدير بقبول/رفض الموظف
+    try:
+        emp_name = f"{employee.first_name_ar} {employee.last_name_ar}".strip() or employee.user.username
+        notify_manager_mission_response(
+            company=employee.company,
+            employee_name=emp_name,
+            mission_title=assignment.mission.title,
+            accepted=(action == 'accept'),
+            mission_id=assignment.mission.id,
+        )
+    except Exception:
+        pass
 
     return Response({'success': True, 'message': msg})
 
@@ -1298,6 +1344,11 @@ def manager_force_cancel_mission(request, mission_id):
         assignment.rejection_reason = f'[FORCE_CANCEL] {reason}'
         assignment.save()
         cancelled_count += 1
+        if assignment.employee and assignment.employee.user:
+            try:
+                notify_mission_cancelled(assignment.employee.user, mission.title, mission.id)
+            except Exception:
+                pass
 
     return Response({
         'success': True,
