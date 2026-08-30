@@ -368,3 +368,126 @@ def manager_announcement_stats(request, pk):
         'read_percentage': round((total_read / total_sent * 100) if total_sent > 0 else 0, 1),
         'readers': readers,
     })
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_list_announcements(request):
+    """قائمة الإعلانات اللي أنشأها المدير في شركته"""
+    user = request.user
+    if not is_manager(user):
+        return Response({'error': 'غير مصرح'}, status=403)
+
+    announcements = CompanyAnnouncement._base_manager.filter(
+        company=user.company
+    ).order_by('-publish_at', '-created_at')
+
+    data = []
+    for ann in announcements:
+        data.append({
+            'id': ann.id,
+            'title': ann.title,
+            'message': ann.message,
+            'announcement_type': ann.announcement_type,
+            'announcement_type_display': ann.get_announcement_type_display(),
+            'priority': ann.priority,
+            'priority_display': ann.get_priority_display(),
+            'target_type': ann.target_type,
+            'target_type_display': ann.get_target_type_display(),
+            'requires_confirmation': ann.requires_confirmation,
+            'publish_at': ann.publish_at.isoformat() if ann.publish_at else None,
+            'expires_at': ann.expires_at.isoformat() if ann.expires_at else None,
+            'is_active': ann.is_active,
+            'total_sent': ann.total_sent,
+            'total_read': ann.total_read,
+            'created_at': ann.created_at.isoformat() if ann.created_at else None,
+            'created_by': ann.created_by.get_full_name() if ann.created_by else '',
+        })
+
+    return Response({'success': True, 'announcements': data, 'count': len(data)})
+
+
+def _is_announcement_targeted_to_employee(ann, employee):
+    """يتأكد هل الإعلان موجه للموظف ده بناءً على نوع الاستهداف"""
+    if employee.id in ann.excluded_employees.values_list('id', flat=True):
+        return False
+
+    if ann.target_type == 'all':
+        return True
+    elif ann.target_type == 'specific':
+        return ann.target_employees.filter(id=employee.id).exists()
+    elif ann.target_type == 'by_job_title':
+        job_title_name = getattr(employee.job_title, 'name_ar', '') if employee.job_title else ''
+        targets = [t.strip() for t in (ann.target_job_titles or '').split(',')]
+        return job_title_name in targets
+    elif ann.target_type == 'by_department':
+        return ann.target_departments.filter(id=employee.department_id).exists()
+    elif ann.target_type == 'by_branch':
+        return ann.target_branches.filter(id=employee.branch_id).exists()
+    return False
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def my_pending_announcements(request):
+    """الإعلانات النشطة اللي الموظف لسه ما أكدش قراءتها (لعرضها إجبارياً عند فتح التطبيق)"""
+    from employees.models import Employee
+
+    employee = Employee._base_manager.filter(user=request.user).first()
+    if not employee:
+        return Response({'success': True, 'announcements': [], 'count': 0})
+
+    now = timezone.now()
+    active_anns = CompanyAnnouncement._base_manager.filter(
+        company=employee.company,
+        is_active=True,
+        publish_at__lte=now,
+    ).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gte=now)
+    ).order_by('-priority', '-publish_at')
+
+    read_ids = set(
+        CompanyAnnouncementRead._base_manager.filter(employee=employee).values_list('announcement_id', flat=True)
+    )
+
+    pending = []
+    for ann in active_anns:
+        if ann.id in read_ids:
+            continue
+        if not _is_announcement_targeted_to_employee(ann, employee):
+            continue
+        pending.append({
+            'id': ann.id,
+            'title': ann.title,
+            'message': ann.message,
+            'announcement_type': ann.announcement_type,
+            'announcement_type_display': ann.get_announcement_type_display(),
+            'priority': ann.priority,
+            'publish_at': ann.publish_at.isoformat() if ann.publish_at else None,
+        })
+
+    return Response({'success': True, 'announcements': pending, 'count': len(pending)})
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def confirm_announcement_read(request, announcement_id):
+    """الموظف يأكد إنه قرأ الإعلان (يمنع ظهوره تاني)"""
+    from employees.models import Employee
+
+    employee = Employee._base_manager.filter(user=request.user).first()
+    if not employee:
+        return Response({'success': False, 'error': 'الموظف غير موجود'}, status=404)
+
+    ann = CompanyAnnouncement._base_manager.filter(id=announcement_id, company=employee.company).first()
+    if not ann:
+        return Response({'success': False, 'error': 'الإعلان غير موجود'}, status=404)
+
+    CompanyAnnouncementRead._base_manager.get_or_create(employee=employee, announcement=ann)
+    ann.total_read = CompanyAnnouncementRead._base_manager.filter(announcement=ann).count()
+    ann.save(update_fields=['total_read'])
+
+    return Response({'success': True, 'message': 'تم تأكيد القراءة'})

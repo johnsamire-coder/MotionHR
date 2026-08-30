@@ -140,6 +140,7 @@ def trial_signup(request):
                     company=company,
                     name_ar='صاحب الشركة',
                     name_en='Owner',
+                    is_manager=True,
                 )
 
             owner_national_id = str(data.get("national_id", "")).strip() or f"00000000000{company.id:03d}"[-14:]

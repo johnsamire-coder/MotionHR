@@ -160,6 +160,9 @@ urlpatterns = [
     # ─── المرحلة 4.2: الإعلانات ───
     path('api/mobile/announcements/list/', api_announcements.announcements_list),
     path('api/mobile/announcements/mark-read/', api_announcements.announcements_mark_read),
+    path('api/mobile/manager/announcements/', api_announcements.manager_list_announcements),
+    path('api/mobile/my-pending-announcements/', api_announcements.my_pending_announcements),
+    path('api/mobile/announcements/<int:announcement_id>/confirm-read/', api_announcements.confirm_announcement_read),
     path('api/mobile/manager/announcements/create/', api_announcements.manager_create_announcement),
     path('api/mobile/manager/announcements/<int:pk>/update/', api_announcements.manager_update_announcement),
     path('api/mobile/manager/announcements/<int:pk>/delete/', api_announcements.manager_delete_announcement),
