@@ -115,8 +115,11 @@ def send_notification_to_user(user, title, body, data=None, title_en=None, body_
                     priority='high',
                     notification=messaging.AndroidNotification(
                         sound='default',
+                        channel_id='high_importance_channel',
                         default_sound=True,
                         default_vibrate_timings=True,
+                        priority='max',
+                        visibility='public',
                     ),
                 ),
             )
