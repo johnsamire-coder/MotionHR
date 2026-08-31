@@ -1283,7 +1283,7 @@ def mobile_attendance_action(request):
         try:
             emp_name = request.user.get_full_name() or request.user.username
             notify_employee_checkin(request.user, format_time_value(now), address)
-            notify_manager_checkin(employee.company, emp_name, format_time_value(now))
+            notify_manager_checkin(employee.company, emp_name, format_time_value(now), employee=employee)
         except Exception as e:
             print(f"Check-in notification error: {e}")
 

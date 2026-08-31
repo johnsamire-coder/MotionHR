@@ -19,8 +19,8 @@ def send_fcm_notification(user, title, body, data=None, title_en=None, body_en=N
         print(f"FCM Error: {e}")
         return False
 
-def notify_managers(title, body, data=None, company=None, title_en=None, body_en=None):
-    """Wrapper على الخدمة المركزية للمديرين"""
+def notify_managers(title, body, data=None, company=None, title_en=None, body_en=None, employee=None):
+    """Wrapper على الخدمة المركزية للمديرين (HR + Admins + المدير المباشر فقط)"""
     try:
         from accounts.fcm_service import send_notification_to_managers
         return send_notification_to_managers(
@@ -30,6 +30,7 @@ def notify_managers(title, body, data=None, company=None, title_en=None, body_en
             data=data,
             title_en=title_en,
             body_en=body_en,
+            employee=employee,
         )
     except Exception as e:
         print(f"Notify managers error: {e}")
@@ -106,7 +107,7 @@ def notify_employee_checkout(user, time_str, hours_worked=''):
         )
 
 
-def notify_manager_checkin(company, employee_name, time_str):
+def notify_manager_checkin(company, employee_name, time_str, employee=None):
     body = f'{employee_name} {ar_mgr_checkin_body} {time_str}'
     body_en = f'{employee_name} checked in at {time_str}'
     notify_managers(
@@ -115,11 +116,12 @@ def notify_manager_checkin(company, employee_name, time_str):
         data={'type': 'manager_attendance', 'action': 'checkin'},
         company=company,
         title_en='Employee Check-in ✅',
-        body_en=body_en
+        body_en=body_en,
+        employee=employee,
     )
 
 
-def notify_manager_checkout(company, employee_name, time_str, hours_worked=''):
+def notify_manager_checkout(company, employee_name, time_str, hours_worked='', employee=None):
     body = f'{employee_name} {ar_mgr_checkout_body} {time_str}'
     body_en = f'{employee_name} checked out at {time_str}'
     if hours_worked:
@@ -131,11 +133,12 @@ def notify_manager_checkout(company, employee_name, time_str, hours_worked=''):
         data={'type': 'manager_attendance', 'action': 'checkout'},
         company=company,
         title_en='Employee Check-out ✅',
-        body_en=body_en
+        body_en=body_en,
+        employee=employee,
     )
 
 
-def notify_manager_early_leave(company, employee_name, time_str, early_minutes, hours_worked=''):
+def notify_manager_early_leave(company, employee_name, time_str, early_minutes, hours_worked='', employee=None):
     """إشعار المدير إن الموظف انصرف مبكرًا"""
     early_h = early_minutes // 60
     early_m = early_minutes % 60
@@ -160,7 +163,8 @@ def notify_manager_early_leave(company, employee_name, time_str, early_minutes, 
         data={'type': 'manager_attendance', 'action': 'early_leave'},
         company=company,
         title_en='Early Leave ⏰',
-        body_en=body_en
+        body_en=body_en,
+        employee=employee,
     )
 
 

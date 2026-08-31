@@ -149,22 +149,45 @@ def send_notification_to_user(user, title, body, data=None, title_en=None, body_
     }
 
 
-def send_notification_to_managers(company, title, body, data=None, title_en=None, body_en=None):
-    """إرسال إشعار لكل المديرين في شركة معينة"""
+def send_notification_to_managers(company, title, body, data=None, title_en=None, body_en=None, employee=None):
+    """
+    إرسال إشعار لمسؤولي الشركة (HR + Company Admin) والمدير المباشر للموظف فقط.
+    يتم استبعاد مديري الأقسام الأخرى إذا لم يكونوا مديري الموظف المباشرين.
+    """
     from accounts.models import User
+    from django.db.models import Q
 
-    managers = User.objects.filter(
+    # 1. مسؤولو الشركة العامون (HR + Admins)
+    admin_qs = User.objects.filter(
         company=company,
-        role__in=['company_admin', 'hr_manager', 'manager', 'super_admin']
+        role__in=['company_admin', 'hr_manager', 'super_admin'],
+        is_active=True
     )
+    recipients = list(admin_qs)
+
+    # 2. المدير المباشر للموظف (لو محدد)
+    if employee and getattr(employee, 'direct_manager', None):
+        dm_user = getattr(employee.direct_manager, 'user', None)
+        if dm_user and dm_user.is_active and dm_user not in recipients:
+            recipients.append(dm_user)
+    elif not employee:
+        # لو مفيش موظف محدد (إشعار عام للشركة)، نجيب كل المديرين
+        all_managers = User.objects.filter(
+            company=company,
+            role='manager',
+            is_active=True
+        )
+        for m in all_managers:
+            if m not in recipients:
+                recipients.append(m)
 
     total_sent = 0
-    for manager in managers:
+    for manager in recipients:
         result = send_notification_to_user(
             manager, title, body, data,
             title_en=title_en, body_en=body_en
         )
-        total_sent += result['sent']
+        total_sent += result.get('sent', 0)
 
     return {"success": total_sent > 0, "sent": total_sent}
 
