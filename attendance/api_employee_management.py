@@ -1269,6 +1269,8 @@ def manager_update_employee(request, employee_id):
 
             if hasattr(target_employee, "worker_type"):
                 target_employee.worker_type = worker_type
+                if worker_type == 'field_free':
+                    target_employee.assigned_work_locations.clear()
             if hasattr(target_employee, "is_field_worker"):
                 target_employee.is_field_worker = worker_type in ("field_free", "field_assigned")
 
