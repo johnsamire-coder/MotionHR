@@ -1624,17 +1624,18 @@ def mobile_attendance_status(request):
             'action_required': 'تواصل مع الموارد البشرية' if getattr(employee, 'language', 'ar') == 'ar' else 'Contact HR',
         }, status=200)
     
-    # شيفت بعد نص الليل: نبحث في اليوم الحالي واليوم السابق
+    # شيفت بعد نص الليل: نستخدم سجل امبارح بس لو لسه مفتوح (مفيش انصراف مسجل)
     from datetime import timedelta as _td
-    attendance = (
-        Attendance._base_manager.filter(
+    attendance = Attendance._base_manager.filter(employee=employee, date=today).first()
+    if not attendance:
+        _yesterday_open = Attendance._base_manager.filter(
             employee=employee,
-            date__in=[today, today - _td(days=1)],
+            date=today - _td(days=1),
             check_in_time__isnull=False,
-        ).order_by('-date').first()
-        or
-        Attendance._base_manager.filter(employee=employee, date=today).first()
-    )
+            check_out_time__isnull=True,
+        ).first()
+        if _yesterday_open:
+            attendance = _yesterday_open
     today_dict = attendance_to_dict(attendance)
 
     # تاريخ الشيفت الفعلي (ممكن يكون امبارح لو شيفت بعد نص الليل)
