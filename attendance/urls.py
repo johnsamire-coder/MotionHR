@@ -121,6 +121,7 @@ urlpatterns = [
     path('api/mobile/location/', api_mobile.mobile_send_location, name='mobile_location'),
     path('api/mobile/attendance/', api_mobile.mobile_attendance_action, name='mobile_attendance'),
     path('api/mobile/status/', api_mobile.mobile_attendance_status, name='mobile_attendance_status'),
+    path('api/mobile/activate-account/', api_mobile.activate_account),
     path('api/mobile/history/', api_mobile.mobile_attendance_history, name='mobile_attendance_history'),
     path('api/mobile/change-password/', api_mobile.mobile_change_password, name='mobile_change_password'),
 
