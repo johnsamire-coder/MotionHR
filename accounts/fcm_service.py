@@ -122,6 +122,23 @@ def send_notification_to_user(user, title, body, data=None, title_en=None, body_
                         visibility='public',
                     ),
                 ),
+                apns=messaging.APNSConfig(
+                    headers={
+                        'apns-priority': '10',
+                        'apns-push-type': 'alert',
+                    },
+                    payload=messaging.APNSPayload(
+                        aps=messaging.Aps(
+                            alert=messaging.ApsAlert(
+                                title=localized_title,
+                                body=localized_body,
+                            ),
+                            sound='default',
+                            badge=1,
+                            content_available=True,
+                        ),
+                    ),
+                ),
             )
 
             response = messaging.send(message)
