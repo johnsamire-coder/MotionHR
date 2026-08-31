@@ -305,16 +305,66 @@ def absence_report(request):
 
     results = []
     for emp in employees:
+        # بداية الحساب = تاريخ إضافة الموظف في البرنامج (created_at)
+        # لو مش موجود نرجع لـ hire_date ثم أول الشهر
+        emp_start = first_day
+        created_at = getattr(emp, 'created_at', None)
+        if created_at is not None:
+            emp_start = max(first_day, created_at.date())
+        elif getattr(emp, 'hire_date', None):
+            emp_start = max(first_day, emp.hire_date)
+
+        # نهاية الحساب = آخر يوم في النطاق (ومع مراعاة إنهاء الخدمة إن وجد)
+        emp_end = upper_bound
+        term_date = getattr(emp, 'termination_date', None)
+        if term_date:
+            emp_end = min(emp_end, term_date)
+
+        # لو الموظف اتضاف بعد نهاية الفترة → مفيش أيام تتحسب
+        if emp_start > emp_end:
+            continue
+
+        emp_working_dates = [d for d in working_dates if emp_start <= d <= emp_end]
+
         attended_dates = set(
             Attendance._base_manager.filter(
                 employee=emp,
-                date__gte=first_day,
-                date__lte=upper_bound,
+                date__gte=emp_start,
+                date__lte=emp_end,
                 check_in_time__isnull=False,
             ).values_list('date', flat=True)
         )
 
-        absent_dates = [d for d in working_dates if d not in attended_dates]
+        # لا نحتسب اليوم الحالي غياب إلا بعد انتهاء شيفت الموظف
+        effective_working_dates = list(emp_working_dates)
+        if today in effective_working_dates and today not in attended_dates:
+            try:
+                from attendance.api_shifts import get_effective_shift
+                from django.utils import timezone as dj_tz
+                from datetime import datetime as dt, time as dtime
+
+                shift, _src = get_effective_shift(emp, today)
+                now_local = dj_tz.localtime()
+
+                if shift and getattr(shift, 'end_time', None):
+                    shift_end_dt = dt.combine(today, shift.end_time)
+                    # شيفت ليلي يعبر منتصف الليل
+                    if getattr(shift, 'crosses_midnight', False):
+                        shift_end_dt = dt.combine(today + timedelta(days=1), shift.end_time)
+
+                    # لو لسه الشيفت ما انتهاش → استبعد اليوم من الغياب
+                    if now_local.replace(tzinfo=None) < shift_end_dt:
+                        effective_working_dates = [d for d in effective_working_dates if d != today]
+                else:
+                    # مفيش شيفت معروف: استبعد اليوم الحالي حتى نهاية اليوم
+                    if now_local.date() == today:
+                        effective_working_dates = [d for d in effective_working_dates if d != today]
+            except Exception:
+                # في أي خطأ: الأمان عدم احتساب اليوم غياب مبكراً
+                effective_working_dates = [d for d in effective_working_dates if d != today]
+
+        absent_dates = [d for d in effective_working_dates if d not in attended_dates]
+        emp_working_dates = effective_working_dates
 
         if absent_dates:
             results.append({
@@ -322,7 +372,7 @@ def absence_report(request):
                 'employee_name': _employee_name(emp),
                 'username': _employee_username(emp),
                 'employee_code': getattr(emp, 'employee_code', None),
-                'total_working_days': len(working_dates),
+                'total_working_days': len(emp_working_dates),
                 'attended_days': len(attended_dates),
                 'absent_days': len(absent_dates),
                 'absent_dates': [d.isoformat() for d in absent_dates],
@@ -1231,6 +1281,19 @@ def daily_attendance_report(request):
                 'shift_name': att.shift.name if att.shift else '',
             }
         else:
+            # نتأكد إن وقت شيفت الموظف وصل قبل ما نحسبه غائب
+            _shift_not_started = False
+            try:
+                from attendance.api_mobile import get_active_shift
+                _shift = get_active_shift(emp, target_date)
+                if _shift and getattr(_shift, 'start_time', None) and target_date == timezone.localdate():
+                    _now_time = timezone.localtime(timezone.now()).time()
+                    if _now_time < _shift.start_time:
+                        _shift_not_started = True
+            except Exception:
+                pass
+            if _shift_not_started:
+                continue
             status = 'absent'
             row = {
                 'employee_id': emp.id,
