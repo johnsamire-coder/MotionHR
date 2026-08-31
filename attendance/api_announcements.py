@@ -145,7 +145,7 @@ def manager_create_announcement(request):
 
     data = request.data
     title = data.get('title', '').strip()
-    message = data.get('message', '').strip()
+    message = (data.get('message') or data.get('content') or '').strip()
 
     if not title or not message:
         return Response({'error': 'العنوان والمحتوى مطلوبان'}, status=400)
@@ -222,7 +222,8 @@ def manager_update_announcement(request, pk):
             return Response({'error': 'العنوان مطلوب'}, status=400)
         ann.title = title
 
-    if 'message' in data:
+    if 'message' in data or 'content' in data:
+        ann.message = (data.get('message') or data.get('content') or '').strip()
         message = str(data.get('message') or '').strip()
         if not message:
             return Response({'error': 'المحتوى مطلوب'}, status=400)
