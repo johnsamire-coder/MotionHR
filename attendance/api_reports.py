@@ -96,6 +96,35 @@ def _get_manager_scope_employees(user):
         return _get_company_employees(user)
 
 
+def _get_direct_team_employees(user):
+    """
+    دايمًا بيرجع الفريق الهرمي (direct_manager) بغض النظر عن الـ role.
+    مستخدمة في شاشات "فريقي" اللي المفروض تعرض الفريق المباشر بس،
+    حتى لو المستخدم company_admin أو hr_manager.
+    """
+    try:
+        manager_emp = Employee._base_manager.get(user=user)
+        company = getattr(user, 'company', None)
+        collected_ids = set()
+        stack = [manager_emp.id]
+        while stack:
+            current_id = stack.pop()
+            sub_qs = Employee._base_manager.filter(direct_manager_id=current_id)
+            if company:
+                sub_qs = sub_qs.filter(company=company)
+            sub_ids = list(sub_qs.values_list('id', flat=True))
+            for sid in sub_ids:
+                if sid not in collected_ids:
+                    collected_ids.add(sid)
+                    stack.append(sid)
+        qs = Employee._base_manager.filter(id__in=collected_ids).select_related('user', 'company')
+        if company:
+            qs = qs.filter(company=company)
+        return qs.order_by('id')
+    except Exception:
+        return Employee._base_manager.none()
+
+
 def _parse_month(request):
     now = datetime.now()
     try:

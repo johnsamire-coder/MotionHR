@@ -1388,7 +1388,7 @@ def mobile_manager_employees_attendance(request):
         return Response({'success': False, 'message': 'ليس لديك صلاحية'}, status=403)
 
     from attendance.models import Attendance
-    from attendance.api_reports import _get_manager_scope_employees
+    from attendance.api_reports import _get_direct_team_employees
 
     company = getattr(user, 'company', None)
     date_str = request.query_params.get('date')
@@ -1402,7 +1402,7 @@ def mobile_manager_employees_attendance(request):
     else:
         target_date = timezone.localdate()
 
-    scope_employee_ids = list(_get_manager_scope_employees(user).values_list('id', flat=True))
+    scope_employee_ids = list(_get_direct_team_employees(user).values_list('id', flat=True))
 
     records = Attendance._base_manager.filter(
         date=target_date,
