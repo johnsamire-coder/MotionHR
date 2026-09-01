@@ -299,7 +299,7 @@ def notify_leave_rejected(user, leave_type, reason='', leave_id=None):
     )
 
 
-def notify_manager_new_request(company, employee_name, request_type, request_id=None):
+def notify_manager_new_request(company, employee_name, request_type, request_id=None, employee=None):
     data = {
         'type': 'new_request',
         'screen': 'manager_pending',
@@ -314,10 +314,11 @@ def notify_manager_new_request(company, employee_name, request_type, request_id=
         data=data,
         title_en='📩 New Request',
         body_en=f'Employee {employee_name} submitted a request: {request_type}',
+        employee=employee,
     )
 
 
-def notify_manager_new_leave(company, employee_name, leave_type, leave_id=None):
+def notify_manager_new_leave(company, employee_name, leave_type, leave_id=None, employee=None):
     data = {
         'type': 'new_leave',
         'screen': 'manager_pending',
@@ -332,6 +333,7 @@ def notify_manager_new_leave(company, employee_name, leave_type, leave_id=None):
         data=data,
         title_en='📩 New Leave Request',
         body_en=f'Employee {employee_name} submitted a leave request: {leave_type}',
+        employee=employee,
     )
 
 

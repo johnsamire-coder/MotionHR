@@ -386,6 +386,7 @@ def mobile_leave_request(request):
             employee_name=employee_name,
             leave_type=f"{leave_type_name} من {start} إلى {end} ({days_count} يوم)",
             leave_id=leave_request.id,
+            employee=employee,
         )
     except Exception as e:
         print(f"FCM notification error: {e}")
@@ -878,6 +879,7 @@ def mobile_submit_request(request):
             employee_name=employee_name,
             request_type=f"{request_type_name} - {subject}",
             request_id=emp_request.id,
+            employee=employee,
         )
     except Exception as e:
         print(f"FCM notification error: {e}")
@@ -1386,6 +1388,7 @@ def mobile_manager_employees_attendance(request):
         return Response({'success': False, 'message': 'ليس لديك صلاحية'}, status=403)
 
     from attendance.models import Attendance
+    from attendance.api_reports import _get_manager_scope_employees
 
     company = getattr(user, 'company', None)
     date_str = request.query_params.get('date')
@@ -1399,8 +1402,11 @@ def mobile_manager_employees_attendance(request):
     else:
         target_date = timezone.localdate()
 
+    scope_employee_ids = list(_get_manager_scope_employees(user).values_list('id', flat=True))
+
     records = Attendance._base_manager.filter(
-        date=target_date
+        date=target_date,
+        employee_id__in=scope_employee_ids,
     ).select_related('employee').order_by('employee__first_name_ar')
 
     if company:
