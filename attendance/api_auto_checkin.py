@@ -420,6 +420,7 @@ def auto_check_in(request):
             is_active=True,
         ).filter(
             Q(employee=emp) |
+            Q(assigned_employees=emp) |
             Q(is_shared=True, shared_with_branch=None, shared_with_department=None) |
             Q(is_shared=True, shared_with_branch=emp.branch) |
             Q(is_shared=True, shared_with_department=emp.department)
