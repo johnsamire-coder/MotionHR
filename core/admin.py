@@ -158,3 +158,24 @@ class TrialSignupLeadAdmin(admin.ModelAdmin):
         count = queryset.update(status='converted')
         self.message_user(request, f'🎉 تم تحويل {count} طلب لعميل')
     mark_as_converted.short_description = '🎉 تحويل لعميل'
+
+
+from .models import AppVersion
+
+
+@admin.register(AppVersion)
+class AppVersionAdmin(admin.ModelAdmin):
+    list_display = ('platform', 'latest_version_name', 'latest_version_code', 'min_required_version_code', 'is_active', 'updated_at')
+    list_filter = ('platform', 'is_active')
+    fieldsets = (
+        ('المنصة والنسخة', {
+            'fields': ('platform', 'latest_version_name', 'latest_version_code'),
+        }),
+        ('التحديث الإجباري', {
+            'fields': ('min_required_version_code',),
+            'description': 'أي مستخدم عنده رقم نسخة أقل من الرقم ده هيضطر يحدث فورًا. لو عايز التحديث اختياري، خلي الرقم ده يساوي رقم نسخة قديمة (مثلاً 1) عشان محدش يضطر يحدث إجباريًا.',
+        }),
+        ('التفاصيل', {
+            'fields': ('store_url', 'update_message_ar', 'update_message_en', 'is_active'),
+        }),
+    )

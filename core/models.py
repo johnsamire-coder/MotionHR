@@ -202,3 +202,54 @@ class TrialSignupLead(models.Model):
 # Attachment Model - Universal File Attachments (Phase 4)
 # ═════════════════════════════════════════════════════════════
 from .models_attachment import Attachment
+
+
+class AppVersion(models.Model):
+    """
+    إدارة نسخة تطبيق الموبايل — تحديث إجباري أو اختياري.
+    """
+    PLATFORM_CHOICES = [
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+    ]
+
+    platform = models.CharField(
+        max_length=10,
+        choices=PLATFORM_CHOICES,
+        default='android',
+        verbose_name='المنصة'
+    )
+    latest_version_code = models.PositiveIntegerField(
+        verbose_name='آخر رقم نسخة (versionCode)',
+        help_text='رقم النسخة الرقمي (مثال: 3 لو النسخة 1.1.0+3)'
+    )
+    latest_version_name = models.CharField(
+        max_length=30,
+        verbose_name='اسم النسخة',
+        help_text='مثال: 1.1.0'
+    )
+    min_required_version_code = models.PositiveIntegerField(
+        verbose_name='أقل نسخة مسموح تشتغل من غير تحديث إجباري',
+        help_text='أي نسخة أقل من الرقم ده هتضطر المستخدم يحدث فورًا'
+    )
+    store_url = models.URLField(
+        verbose_name='رابط المتجر',
+        default='https://play.google.com/store/apps/details?id=com.motionheployee'
+    )
+    update_message_ar = models.TextField(
+        blank=True, default='يوجد تحديث جديد للتطبيق يحتوي على تحسينات مهمة.',
+        verbose_name='رسالة التحديث بالعربي'
+    )
+    update_message_en = models.TextField(
+        blank=True, default='A new app update is available with important improvements.',
+        verbose_name='رسالة التحديث بالإنجليزي'
+    )
+    is_active = models.BooleanField(default=True, verbose_name='مفعّل')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'نسخة التطبيق'
+        verbose_name_plural = 'إدارة نسخة التطبيق'
+
+    def __str__(self):
+        return f'{self.get_platform_display()} - {self.latest_version_name} (كود {self.latest_version_code})'

@@ -2989,3 +2989,41 @@ def activate_account(request):
     employee.user.save()
 
     return Response({'success': True, 'message': 'تم تفعيل حسابك بنجاح!'})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def check_app_version(request):
+    """
+    يتأكد التطبيق من آخر نسخة متاحة، وهل التحديث إجباري.
+    Query params: platform (android/ios), version_code (رقم النسخة الحالية عند المستخدم)
+    """
+    from core.models import AppVersion
+
+    platform = request.GET.get('platform', 'android')
+    try:
+        current_version_code = int(request.GET.get('version_code', 0))
+    except (TypeError, ValueError):
+        current_version_code = 0
+
+    version = AppVersion.objects.filter(platform=platform, is_active=True).first()
+    if not version:
+        return Response({
+            'success': True,
+            'update_available': False,
+            'force_update': False,
+        })
+
+    update_available = current_version_code < version.latest_version_code
+    force_update = current_version_code < version.min_required_version_code
+
+    return Response({
+        'success': True,
+        'update_available': update_available,
+        'force_update': force_update,
+        'latest_version_name': version.latest_version_name,
+        'latest_version_code': version.latest_version_code,
+        'store_url': version.store_url,
+        'message_ar': version.update_message_ar,
+        'message_en': version.update_message_en,
+    })
