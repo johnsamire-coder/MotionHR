@@ -1072,6 +1072,23 @@ def manager_shift_assign(request):
                 assignment.excluded_employees.set(excluded_employees)
             created_assignments.append(assignment)
 
+        # legacy mirror للموظفين المتأثرين بالتعيين الجماعي (company/branch/department)
+        for emp in grouped_affected.values():
+            EmployeeShift._base_manager.filter(
+                employee=emp,
+                is_active=True,
+                company=company
+            ).update(is_active=False)
+            EmployeeShift._base_manager.create(
+                company=company,
+                employee=emp,
+                shift=shift,
+                assignment_type='employee',
+                priority=1,
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True,
+            )
         # direct employee assignments
         for employee in direct_employees:
             active_direct_assignments = ShiftAssignment._base_manager.filter(
