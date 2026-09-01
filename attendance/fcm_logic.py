@@ -194,7 +194,7 @@ def notify_employee_visit_end(user, location_name, time_str, duration_str):
     )
 
 
-def notify_manager_visit_start(company, employee_name, location_name, time_str):
+def notify_manager_visit_start(company, employee_name, location_name, time_str, employee=None):
     notify_managers(
         'زيارة ميدانية بدأت 📍',
         f'{employee_name} بدأ زيارة لـ {location_name} الساعة {time_str}',
@@ -202,10 +202,11 @@ def notify_manager_visit_start(company, employee_name, location_name, time_str):
         company=company,
         title_en='Field Visit Started 📍',
         body_en=f'{employee_name} started a visit to {location_name} at {time_str}',
+        employee=employee,
     )
 
 
-def notify_manager_visit_end(company, employee_name, location_name, time_str, duration_str, duration_en=''):
+def notify_manager_visit_end(company, employee_name, location_name, time_str, duration_str, duration_en='', employee=None):
     notify_managers(
         'زيارة ميدانية انتهت ✅',
         f'{employee_name} أنهى زيارة {location_name} الساعة {time_str} • مدة: {duration_str}',
@@ -213,5 +214,6 @@ def notify_manager_visit_end(company, employee_name, location_name, time_str, du
         company=company,
         title_en='Field Visit Ended ✅',
         body_en=f'{employee_name} ended visit to {location_name} at {time_str} • Duration: {duration_en or duration_str}',
+        employee=employee,
     )
 

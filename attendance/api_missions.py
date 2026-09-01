@@ -647,6 +647,7 @@ def employee_respond_mission(request, assignment_id):
             mission_title=assignment.mission.title,
             accepted=(action == 'accept'),
             mission_id=assignment.mission.id,
+            employee=employee,
         )
     except Exception:
         pass

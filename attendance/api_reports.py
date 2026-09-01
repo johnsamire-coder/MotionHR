@@ -1993,6 +1993,10 @@ def _turnover_data(user, year):
 
 def _branch_comparison_data(user):
     """مقارنة الفروع والأقسام"""
+    # حجب التقرير عن المديرين وإتاحته للأدمن والـ HR فقط
+    if getattr(user, 'role', None) not in ['company_admin', 'hr_manager', 'super_admin']:
+        return []
+
     from employees.models import Employee
     from companies.models import Branch
     from attendance.models import Attendance

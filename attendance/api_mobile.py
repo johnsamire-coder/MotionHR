@@ -199,6 +199,7 @@ def _notify_missing_period(employee, period, shift, after_grace=False):
                     body=body_ar,
                     title_en=title_en,
                     body_en=body_en,
+                    employee=employee,
                     data={
                         'type': 'employee_missed_period',
                         'screen': 'manager_attendance',
@@ -791,7 +792,13 @@ def mobile_attendance_action(request):
     now = timezone.now()
 
     if action == 'check_out':
-        attendance = Attendance._base_manager.filter(employee=employee, check_out_time__isnull=True).order_by('-id').first()
+        # البحث عن سجل حضور مفتوح حقيقي (تم تسجيل دخول فيه بالفعل)
+        attendance = Attendance._base_manager.filter(
+            employee=employee,
+            check_in_time__isnull=False,
+            check_out_time__isnull=True,
+            date__lte=today
+        ).order_by('-date', '-id').first()
         if not attendance:
             attendance = Attendance._base_manager.filter(employee=employee, date=today).first()
     else:
@@ -1723,14 +1730,14 @@ def mobile_attendance_status(request):
                 request_type__id__in=list(early_leave_types),
                 start_date=today,
                 status='approved'
-            ).order_by('start_time').first()
+            ).order_by('permission_time').first()
             
             if early_req:
                 has_early_leave = True
                 current_time = timezone.localtime(timezone.now()).time()
                 
-                if early_req.start_time:
-                    if current_time >= early_req.start_time:
+                if early_req.permission_time:
+                    if current_time >= early_req.permission_time:
                         can_check_out = True
                 else:
                     can_check_out = True
@@ -2248,6 +2255,7 @@ def mobile_device_register(request):
                         'device_id': device_id[:20],
                         'user_id': str(user.id),
                     },
+                    employee=emp,
                 )
             except Exception:
                 pass
@@ -2308,6 +2316,7 @@ def mobile_device_register(request):
                         'device_id': str(device.id),
                         'user_id': str(user.id),
                     },
+                    employee=emp,
                 )
             except Exception:
                 pass
@@ -2890,6 +2899,7 @@ def _notify_hr_incomplete_data(employee, missing):
             },
             title_en='Employee Data Incomplete',
             body_en=f'[{emp_name}] cannot use the app - missing: {", ".join(missing_labels_en)}',
+            employee=employee,
         )
     except Exception:
         pass

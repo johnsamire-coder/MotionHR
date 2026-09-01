@@ -436,7 +436,7 @@ def mobile_my_leaves(request):
             'reason': lr.reason or '',
             'status': lr.status,
             'status_display': lr.get_status_display(),
-            'created_at': lr.created_at.strftime('%Y-%m-%d %H:%M') if lr.created_at else '',
+            'created_at': timezone.localtime(lr.created_at).strftime('%Y-%m-%d %I:%M %p') if lr.created_at else '',
             'review_notes': lr.review_notes or '',
             'current_approver': _get_leave_approver_info(lr) if lr.status == 'pending' else None,
         })
@@ -934,7 +934,7 @@ def mobile_my_requests(request):
             'amount': float(req.amount) if req.amount else None,
             'status': req.status,
             'status_display': req.get_status_display(),
-            'created_at': req.created_at.strftime('%Y-%m-%d %H:%M') if req.created_at else '',
+            'created_at': timezone.localtime(req.created_at).strftime('%Y-%m-%d %I:%M %p') if req.created_at else '',
             'review_notes': req.review_notes or '',
             'current_approver': get_current_approver_info(req),
         })
@@ -1031,7 +1031,7 @@ def mobile_manager_pending(request):
             'days_count': float(lr.days_count),
             'reason': lr.reason or '',
             'status': lr.status,
-            'created_at': lr.created_at.strftime('%Y-%m-%d %H:%M') if lr.created_at else '',
+            'created_at': timezone.localtime(lr.created_at).strftime('%Y-%m-%d %I:%M %p') if lr.created_at else '',
             'substitute_employee_id': sub_id,
             'substitute_employee_name': sub_name,
         })
@@ -1058,7 +1058,7 @@ def mobile_manager_pending(request):
             'details': req.details or '',
             'amount': float(req.amount) if req.amount else None,
             'status': req.status,
-            'created_at': req.created_at.strftime('%Y-%m-%d %H:%M') if req.created_at else '',
+            'created_at': timezone.localtime(req.created_at).strftime('%Y-%m-%d %I:%M %p') if req.created_at else '',
         })
 
     return Response({
@@ -1757,6 +1757,7 @@ def mobile_cancel_request(request, request_id):
             employee_name=emp_name,
             request_type_name=req.request_type.name if req.request_type else 'طلب',
             request_id=req.id,
+            employee=employee,
         )
     except Exception:
         pass
@@ -1843,6 +1844,7 @@ def mobile_cancel_leave(request, leave_id):
             employee_name=emp_name,
             leave_type_name=leave.leave_type.name if leave.leave_type else 'إجازة',
             leave_id=leave.id,
+            employee=employee,
         )
     except Exception:
         pass

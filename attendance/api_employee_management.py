@@ -583,7 +583,7 @@ def _make_wa_link(clean_phone, first_name_ar, username, activation_link, company
         f"(الرابط صالح 48 ساعة فقط)%0A%0A"
         f"بعد التفعيل، حمّل التطبيق من المتجر المناسب لهاتفك:%0A"
         f"لأجهزة Android (Google Play):%0A"
-        f"https://play.google.com/store/apps/details?id=com.motionheployee%0A%0A"
+        f"https://play.google.com/store/apps/details?id=com.motionheployee %0A%0A"
         f"لأجهزة iPhone (App Store):%0A"
         f"https://apps.apple.com/us/app/motionhr/id6802649776"
     )

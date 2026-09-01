@@ -220,6 +220,7 @@ def propose_work_location(request):
             company=employee.company,
             employee_name=emp_name,
             location_name=name,
+            employee=employee,
         )
     except Exception:
         pass

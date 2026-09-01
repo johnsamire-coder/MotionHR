@@ -410,7 +410,12 @@ def manager_employees_list(request):
         if worker_type_filter:
             qs = qs.filter(worker_type=worker_type_filter)
 
-        page_size = int(request.GET.get("page_size", 25))
+        # إذا كان المستخدم أدمن أو HR، نجعل الحد الافتراضي 1000 ليعرض كل الموظفين دفعة واحدة
+        default_page_size = 25
+        if getattr(request.user, 'role', None) in ['company_admin', 'hr_manager', 'super_admin']:
+            default_page_size = 1000
+            
+        page_size = int(request.GET.get("page_size", default_page_size))
         page = int(request.GET.get("page", 1))
         offset = (page - 1) * page_size
 

@@ -1235,6 +1235,7 @@ def _notify_hr_flex_pending(employee, adj_type, target_date, delta, company):
             },
             title_en=title_en,
             body_en=body_en,
+            employee=employee,
         )
     except Exception as _e:
         import logging

@@ -319,6 +319,7 @@ def field_visit_start(request):
             employee_name=f'{employee.first_name_ar} {employee.last_name_ar}'.strip(),
             location_name=location_name,
             time_str=visit_time,
+            employee=employee,
         )
     except Exception:
         pass
@@ -411,6 +412,7 @@ def field_visit_end(request, visit_id):
             time_str=visit_time,
             duration_str=duration_str,
             duration_en=duration_en,
+            employee=employee,
         )
     except Exception:
         pass
