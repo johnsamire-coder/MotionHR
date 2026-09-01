@@ -1514,9 +1514,10 @@ def mobile_attendance_action(request):
                 emp_name,
                 format_time_value(now),
                 early_leave_minutes,
+                employee=employee,
             )
         else:
-            notify_manager_checkout(employee.company, emp_name, format_time_value(now))
+            notify_manager_checkout(employee.company, emp_name, format_time_value(now), employee=employee)
     except Exception as e:
         print(f"Check-out notification error: {e}")
 
@@ -2541,7 +2542,9 @@ def mobile_charter_get(request):
     if not company:
         return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
 
-    charter = WorkCharter._base_manager.filter(company=company, is_active=True).first()
+    from attendance.api_charters import _charter_applies_to_employee
+    all_charters = WorkCharter._base_manager.filter(company=company, is_active=True)
+    charter = next((c for c in all_charters if _charter_applies_to_employee(c, employee, user)), None)
 
     if not charter:
         return Response({
@@ -2596,12 +2599,13 @@ def mobile_charter_accept(request):
     if not company:
         return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
 
-    charter = WorkCharter._base_manager.filter(company=company, is_active=True).first()
+    employee = Employee._base_manager.filter(user=user).first()
+    from attendance.api_charters import _charter_applies_to_employee
+    all_charters = WorkCharter._base_manager.filter(company=company, is_active=True)
+    charter = next((c for c in all_charters if _charter_applies_to_employee(c, employee, user)), None)
 
     if not charter:
-        return Response({'success': False, 'error': 'لا توجد لائحة فعالة'}, status=404)
-
-    employee = Employee._base_manager.filter(user=user).first()
+        return Response({'success': False, 'error': 'لا توجد لائحة فعالة تخصك'}, status=404)
 
     if not employee:
         return Response({'success': False, 'error': 'لم يتم العثور على الموظف'}, status=404)
