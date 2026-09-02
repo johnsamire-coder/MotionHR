@@ -1222,6 +1222,18 @@ def mobile_manager_action(request):
 
             if action == 'approve':
                 item.status = 'approved'
+                # لو طلب تعديل الاسم الشخصي → نحدث اسم الموظف تلقائياً
+                try:
+                    _type_name_check = (item.request_type.name if item.request_type else '') or ''
+                    if 'تعديل الاسم الشخصي' in _type_name_check or 'Personal Name Change' in _type_name_check:
+                        _new_name = (item.details or '').strip()
+                        if _new_name and item.employee:
+                            _parts = _new_name.split(None, 1)
+                            item.employee.first_name_ar = _parts[0]
+                            item.employee.last_name_ar = _parts[1] if len(_parts) > 1 else ''
+                            item.employee.save()
+                except Exception:
+                    pass
                 # لو طلب تعديل حضور → نطبق التعديل تلقائياً
                 try:
                     _type_name = (item.request_type.name if item.request_type else '') or ''
