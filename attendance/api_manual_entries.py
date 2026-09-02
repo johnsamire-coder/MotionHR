@@ -195,6 +195,8 @@ def _handle_list_create(request, ModelClass):
                 'error': 'مش مصرح لك تطلب للموظف ده (مش تابع لفريقك)',
             }, status=403)
 
+        # لو صاحب الشركة نفسه هو اللي بيضيف، يتعتمد فوراً من غير موافقة إضافية
+        _auto_approve = _is_ceo(request.user)
         entry = ModelClass._base_manager.create(
             company=company,
             employee=employee,
@@ -205,12 +207,16 @@ def _handle_list_create(request, ModelClass):
             reason=data.get('reason', ''),
             target_year=int(data.get('target_year', date.today().year)),
             target_month=int(data.get('target_month', date.today().month)),
-            status='pending',
+            status='approved' if _auto_approve else 'pending',
         )
+        if _auto_approve:
+            entry.approved_by = request.user
+            entry.approved_at = timezone.now()
+            entry.save()
 
         return JsonResponse({
             'success': True,
-            'message': 'تم تقديم الطلب، بانتظار موافقة الإدارة',
+            'message': 'تم الاعتماد فوراً' if _auto_approve else 'تم تقديم الطلب، بانتظار موافقة الإدارة',
             'entry': _entry_to_dict(entry),
         })
     except Exception as e:
