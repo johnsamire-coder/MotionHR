@@ -38,11 +38,24 @@ def _check_manager(user):
     المدير العادي (manager) ممنوع من الوصول للمرتبات لأسباب أمان.
     """
     role = getattr(user, 'role', None)
-    return (
+    base_access = (
         user.is_superuser
         or user.is_staff
         or role in ['company_admin', 'hr_manager']
     )
+    if not base_access:
+        return False
+    # نتأكد مفيش استثناء صريح بمنع عرض المرتبات لهذا المستخدم تحديداً
+    try:
+        from accounts.permissions_models import UserPermissionOverride
+        blocked = UserPermissionOverride.objects.filter(
+            user=user, permission='payroll.view', is_granted=False
+        ).exists()
+        if blocked:
+            return False
+    except Exception:
+        pass
+    return True
 
 
 def _get_company_employees(user):
