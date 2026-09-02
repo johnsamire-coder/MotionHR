@@ -486,7 +486,7 @@ class Employee(TenantModel):
     
     def __str__(self):
         return f"{self.employee_code} - {self.full_name_ar}"
-    
+
     @property
     def full_name_ar(self):
         """الاسم الكامل بالعربي"""
@@ -540,6 +540,12 @@ class Employee(TenantModel):
             
             self.employee_code = f'EMP{new_num:05d}'
         
+        # مزامنة attendance_mode تلقائيًا مع worker_type عشان نضمن اتساق
+        # فحص الحضور (خارج الشيفت / نطاق الجيو) مع تصنيف الموظف الفعلي
+        if self.worker_type in ('field_assigned', 'field_free'):
+            self.attendance_mode = 'field_worker'
+        elif self.worker_type == 'office' and self.attendance_mode == 'field_worker':
+            self.attendance_mode = 'fixed_shift'
         super().save(*args, **kwargs)
 
 
