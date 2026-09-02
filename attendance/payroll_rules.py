@@ -284,7 +284,7 @@ def get_company_working_days(company, year, month):
     }
     try:
         from .company_policy_models import CompanyWorkPolicy
-        policy = CompanyWorkPolicy.objects.filter(company=company).first()
+        policy = CompanyWorkPolicy._base_manager.filter(company=company).first()
         if policy:
             work_days_map = {
                 0: policy.work_monday,
@@ -657,7 +657,7 @@ def _get_monthly_deductions(employee, year, month, lang='ar'):
 
     try:
         from .company_policy_models import PayrollDeduction
-        qs = PayrollDeduction.objects.filter(
+        qs = PayrollDeduction._base_manager.filter(
             employee=employee,
             is_active=True,
             start_date__lte=last_day,
@@ -690,7 +690,7 @@ def _get_monthly_deductions(employee, year, month, lang='ar'):
 
     try:
         from employees.models import Deduction
-        for item in Deduction.objects.filter(employee=employee, year=year, month=month):
+        for item in Deduction._base_manager.filter(employee=employee, year=year, month=month):
             amount = _safe_float(item.amount)
             dtype = getattr(item, 'deduction_type', '') or ''
             dtype_lower = dtype.strip().lower()
@@ -1427,6 +1427,12 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     late_per_min = _safe_float(settings.get('late_deduction_per_minute', 1.0))
     absence_per_day = _safe_float(settings.get('absence_deduction_per_day', 200.0))
     overtime_per_hour = _safe_float(settings.get('overtime_rate_per_hour', 50.0))
+
+    # الأدمن/HR/Super Admin ملهومش نظام حضور وانصراف أصلاً، فمينفعش يتحسبلهم غياب أو تأخير
+    _emp_user_role = getattr(getattr(employee, 'user', None), 'role', None)
+    if _emp_user_role in ('company_admin', 'hr_manager', 'super_admin'):
+        absence_per_day = 0.0
+        late_per_min = 0.0
     insurance_mode = settings.get('insurance_mode', 'none')
     insurance_fixed_amount = _safe_float(settings.get('insurance_fixed_amount', 0))
     insurance_percent = _safe_float(settings.get('insurance_percent', 0))
@@ -1593,7 +1599,11 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     weekend_work_days = 0
 
     # ندمج أيام الشركة مع أي أيام الموظف اشتغلها فعلياً وهي مش أيام عمل للشركة
-    all_eval_dates = sorted(list(set(working_dates) | attended_dates))
+    # الأدمن/HR/Super Admin ملهومش نظام حضور وانصراف أصلاً، فمفيش أيام تتحسب ليهم خالص
+    if _emp_user_role in ('company_admin', 'hr_manager', 'super_admin'):
+        all_eval_dates = []
+    else:
+        all_eval_dates = sorted(list(set(working_dates) | attended_dates))
     for d in all_eval_dates:
         att = attendance_by_date.get(d)
 
