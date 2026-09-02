@@ -1805,6 +1805,19 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 'is_night_shift': False, 'is_weekend_work': True,
             })
             continue
+        # لو النهارده ولسه وقت شيفت الموظف ما جاش، منحسبوش غياب
+        if d == timezone.localdate() and day_shift and getattr(day_shift, 'start_time', None):
+            _now_time = timezone.localtime(timezone.now()).time()
+            if _now_time < day_shift.start_time:
+                daily_details.append({
+                    'date': d.isoformat(), 'status': 'pending',
+                    'effective_status': 'pending', 'check_in': None,
+                    'check_out': None, 'work_hours': 0,
+                    'late_minutes': 0, 'overtime_hours': 0,
+                    'shift_name': day_shift.name if day_shift else '',
+                    'is_night_shift': False, 'is_weekend_work': False,
+                })
+                continue
         absent_days += 1
         daily_details.append({
             'date': d.isoformat(), 'status': 'absent',
