@@ -1602,6 +1602,13 @@ def manager_organization_tree(request):
         from employees.models import Employee
         from companies.models import Branch, Department
 
+        role = getattr(request.user, "role", None)
+        if role not in ("company_admin", "hr_manager", "super_admin") and not request.user.is_superuser:
+            return Response(
+                {"success": False, "error": "الهيكل التنظيمي متاح للأدمن فقط"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         company = getattr(request.user, "company", None)
         if not company:
             return Response(
@@ -2055,6 +2062,12 @@ def manager_hierarchy_tree(request):
     """
     try:
         from employees.models import Employee
+        role = getattr(request.user, "role", None)
+        if role not in ("company_admin", "hr_manager", "super_admin") and not request.user.is_superuser:
+            return Response(
+                {"success": False, "error": "الهيكل التنظيمي متاح للأدمن فقط"},
+                status=403
+            )
         
         company = getattr(request.user, "company", None)
         if not company:
