@@ -1071,12 +1071,44 @@ def mobile_manager_pending(request):
             'created_at': timezone.localtime(req.created_at).strftime('%Y-%m-%d %I:%M %p') if req.created_at else '',
         })
 
+    # المهمات اللي لسه محتاجة موافقة المدير
+    from attendance.missions_models import Mission
+    from accounts.models import User
+    pending_missions = Mission._base_manager.filter(status='pending_approval')
+    if company:
+        pending_missions = pending_missions.filter(company=company)
+    if team_employee_ids is not None:
+        team_user_ids = list(User.objects.filter(employee_profile__id__in=team_employee_ids).values_list('id', flat=True))
+        pending_missions = pending_missions.filter(created_by_id__in=team_user_ids)
+
+    mission_items = []
+    for m in pending_missions.order_by('-created_at')[:50]:
+        emp_name = ''
+        if m.created_by:
+            emp = getattr(m.created_by, 'employee_profile', None)
+            if emp:
+                emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip()
+        mission_items.append({
+            'id': m.id,
+            'type': 'mission',
+            'employee_name': emp_name,
+            'type_name': 'طلب مهمة',
+            'category_name': 'المهمات',
+            'subject': m.title or '',
+            'details': m.description or '',
+            'amount': None,
+            'status': m.status,
+            'created_at': timezone.localtime(m.created_at).strftime('%Y-%m-%d %I:%M %p') if m.created_at else '',
+        })
+
     return Response({
         'success': True,
         'pending_leaves': leave_items,
         'pending_requests': request_items,
-        'total_pending': len(leave_items) + len(request_items),
+        'pending_missions': mission_items,
+        'total_pending': len(leave_items) + len(request_items) + len(mission_items),
     })
+
 
 
 @api_view(['POST'])
@@ -1386,6 +1418,44 @@ def mobile_manager_action(request):
                 'success': True,
                 'message': f'تم {"الموافقة على" if action == "approve" else "رفض"} الطلب',
             })
+        elif item_type == 'mission':
+            from attendance.missions_models import Mission
+            item = Mission._base_manager.get(id=item_id)
+
+            employee_user = item.created_by
+            mission_title = item.title or ''
+
+            if action == 'approve':
+                item.status = 'active'
+                item.save()
+            else:
+                item.status = 'cancelled'
+                item.save()
+
+            try:
+                from accounts.fcm_models import NotificationLog
+                if employee_user:
+                    if action == 'approve':
+                        NotificationLog._base_manager.create(
+                            user=employee_user,
+                            title='✅ تمت الموافقة على مهمتك',
+                            body=f'تمت الموافقة على مهمة: {mission_title}',
+                            notification_type='mission_approved',
+                        )
+                    else:
+                        NotificationLog._base_manager.create(
+                            user=employee_user,
+                            title='❌ تم رفض مهمتك',
+                            body=f'تم رفض مهمة: {mission_title}' + (f' - السبب: {notes}' if notes else ''),
+                            notification_type='mission_rejected',
+                        )
+            except Exception:
+                pass
+
+            return Response({
+                'success': True,
+                'message': f'تم {"الموافقة على" if action == "approve" else "رفض"} المهمة',
+            })
         else:
             return Response({
                 'success': False,
@@ -1394,8 +1464,10 @@ def mobile_manager_action(request):
 
     except (LeaveRequest.DoesNotExist, EmployeeRequest.DoesNotExist):
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
-    except Exception as e:
-        return Response({'success': False, 'message': f'حصل خطأ: {str(e)}'}, status=500)
+    except Exception as _e:
+        if 'Mission matching query does not exist' in str(_e):
+            return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
+        return Response({'success': False, 'message': f'حصل خطأ: {str(_e)}'}, status=500)
 
 
 @api_view(['GET'])
@@ -1475,15 +1547,16 @@ def mobile_manager_employees_attendance(request):
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_manager_live_locations(request):
-    """مواقع الموظفين اللحظية للخريطة"""
+    """مواقع الموظفين اللحظية للخريطة (الموظفون المتواجدون بالعمل حالياً فقط)"""
     user = request.user
     role = getattr(user, 'role', 'employee')
 
     if role not in ['super_admin', 'company_admin', 'hr_manager', 'manager']:
         return Response({'success': False, 'message': 'ليس لديك صلاحية'}, status=403)
 
-    from attendance.models import LocationLog
-    from django.db.models import Max
+    from attendance.models import LocationLog, Attendance
+    from django.utils import timezone
+    from datetime import timedelta
 
     company = getattr(user, 'company', None)
 
@@ -1498,37 +1571,60 @@ def mobile_manager_live_locations(request):
             visible_ids = list(get_visible_employees_qs(user).values_list('id', flat=True))
             employees = employees.filter(id__in=visible_ids)
         except Exception:
-            # fallback: فريق مباشر
             mgr_emp = Employee._base_manager.filter(user=user).first()
             if mgr_emp:
                 employees = employees.filter(direct_manager=mgr_emp)
             else:
                 employees = employees.none()
 
-    from django.utils import timezone
-    from attendance.models import Attendance
     today = timezone.localdate()
 
-    attendance_employee_ids = set(
+    # الحضور الفعلي لليوم وأمس
+    active_attendance_qs = Attendance._base_manager.filter(
+        employee__in=employees,
+        date__in=[today, today - timedelta(days=1)],
+        check_in_time__isnull=False,
+    )
+    # الموظفون المتواجدون على رأس عملهم حالياً (سجلوا حضور ولم ينصرفوا)
+    active_on_duty_ids = set(
+        active_attendance_qs.filter(check_out_time__isnull=True).values_list('employee_id', flat=True)
+    )
+    # الموظفون الذين انصرفوا اليوم
+    checked_out_ids = set(
         Attendance._base_manager.filter(
             employee__in=employees,
             date=today,
-        ).exclude(
-            check_in_time__isnull=True
+            check_in_time__isnull=False,
+            check_out_time__isnull=False
         ).values_list('employee_id', flat=True)
-    )
+    ) - active_on_duty_ids
 
     items = []
     for emp in employees:
-        has_attendance = emp.id in attendance_employee_ids
-        last_log = LocationLog._base_manager.filter(
-            employee=emp
-        ).order_by('-timestamp').first()
-
         emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip()
         dept_name = getattr(getattr(emp, 'department', None), 'name_ar', '') or ''
 
-        if not has_attendance:
+        # 1. انصرف -> إخفاء موقعه فوراً لحماية الخصوصية
+        if emp.id in checked_out_ids:
+            items.append({
+                'employee_id': emp.id,
+                'employee_name': emp_name,
+                'employee_code': emp.employee_code or '',
+                'department': dept_name,
+                'latitude': None,
+                'longitude': None,
+                'accuracy': 0,
+                'address': '',
+                'timestamp': '',
+                'status': 'checked_out',
+                'has_location': False,
+                'attendance_registered': True,
+                'status_note': 'تم تسجيل الانصراف وتوقف التتبع',
+            })
+            continue
+
+        # 2. لم يسجل حضور اليوم
+        if emp.id not in active_on_duty_ids:
             items.append({
                 'employee_id': emp.id,
                 'employee_name': emp_name,
@@ -1545,6 +1641,11 @@ def mobile_manager_live_locations(request):
                 'status_note': 'لم يتم تسجيل حضوره في شيفت اليوم',
             })
             continue
+
+        # 3. متواجد في العمل حالياً -> جلب موقعه المباشر
+        last_log = LocationLog._base_manager.filter(
+            employee=emp
+        ).order_by('-timestamp').first()
 
         if last_log:
             log_date = last_log.timestamp.date() if last_log.timestamp else None
@@ -1584,9 +1685,9 @@ def mobile_manager_live_locations(request):
     return Response({
         'success': True,
         'items': items,
+        'locations': [i for i in items if i.get('has_location')],
         'total': len(items),
     })
-
 
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
