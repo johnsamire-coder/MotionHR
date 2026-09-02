@@ -1398,7 +1398,8 @@ def mobile_manager_employees_attendance(request):
         return Response({'success': False, 'message': 'ليس لديك صلاحية'}, status=403)
 
     from attendance.models import Attendance
-    from attendance.api_reports import _get_direct_team_employees
+    from attendance.api_reports import _get_direct_team_employees, FULL_ACCESS_ROLES
+    from employees.models import Employee as _Emp
 
     company = getattr(user, 'company', None)
     date_str = request.query_params.get('date')
@@ -1413,6 +1414,11 @@ def mobile_manager_employees_attendance(request):
         target_date = timezone.localdate()
 
     scope_employee_ids = list(_get_direct_team_employees(user).values_list('id', flat=True))
+    # لو الأدمن/HR معندهوش فريق مباشر مربوط بيه، يشوف الشركة كلها (زي الداشبورد)
+    if not scope_employee_ids and (user.is_superuser or role in FULL_ACCESS_ROLES):
+        scope_employee_ids = list(
+            _Emp._base_manager.filter(company=company, status='active').values_list('id', flat=True)
+        )
 
     records = Attendance._base_manager.filter(
         date=target_date,
