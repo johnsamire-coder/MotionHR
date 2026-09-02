@@ -2269,6 +2269,11 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     penalties_total = round(deductions['penalties_total'] + penalties_total_new, 2)
     extra_deductions_total = round(deductions['extra_total'] + general_extra_total, 2)
 
+    # لو الشركة مش شغالة بسياسة أوفر تايم خالص (المعدل صفر)، نلغي أي أوفر تايم تمامًا
+    if overtime_per_hour <= 0:
+        overtime_bonus = 0.0
+        total_overtime_hours = 0.0
+
     gross_salary = round(basic_salary + allowances_total + overtime_bonus + bonuses_total + night_allowance + weekend_allowance + field_allowance + meal_allowance + transport_allowance, 2)
 
     total_deductions = round(
