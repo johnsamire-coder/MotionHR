@@ -1604,6 +1604,21 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 on_leave_days += 1
                 continue
 
+        # لو الموظف عنده طلب إجازة معتمد لليوم ده، الأولوية للإجازة
+        # حتى لو فيه summary محفوظة قديمة بحالة "absent" من قبل الموافقة
+        if d in leave_dates:
+            on_leave_days += 1
+            if d in unpaid_leave_dates:
+                unpaid_leave_days += 1
+            daily_details.append({
+                'date': d.isoformat(), 'status': 'on_leave',
+                'effective_status': 'on_leave', 'check_in': None,
+                'check_out': None, 'work_hours': 0,
+                'late_minutes': 0, 'overtime_hours': 0,
+                'shift_name': '', 'is_night_shift': False, 'is_weekend_work': False,
+            })
+            continue
+
         # Hybrid: لو عندنا summary لليوم ده نستخدمها
         _summary = _summaries.get(d)
         if _summary and d not in leave_dates and d not in mission_dates:
