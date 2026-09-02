@@ -1127,8 +1127,10 @@ def activate_employee_account(request):
 
     # البحث عن الموظف (بالموبايل والـ 4 أرقام الأخيرة من القومي)
     # بنعمل filter للموظفين اللي لسه ما دخلوش قبل كده (last_login is null) أو حسابهم عليه علامة "تغيير باسورد إجباري"
+    import re as _re
+    clean_phone = _re.sub(r'\D', '', phone)
     emp = Employee._base_manager.filter(
-        phone=phone,
+        phone__endswith=clean_phone[-10:],
         national_id__endswith=national_id_suffix
     ).select_related('user').first()
 
