@@ -1179,7 +1179,7 @@ def manager_update_employee(request, employee_id):
         if worker_type not in ("office", "field_free", "field_assigned"):
             return Response({"success": False, "error": "قيمة نوع الموظف غير صحيحة"}, status=400)
 
-        if contract_type not in ("permanent", "temporary", "training", "freelance", "part_time"):
+        if contract_type not in ("permanent", "temporary", "training", "freelance", "part_time", "full_time", "consultant"):
             return Response({"success": False, "error": "نوع العقد غير صحيح"}, status=400)
 
         if salary_payment_method not in ("cash", "bank", "instapay", "wallet"):
