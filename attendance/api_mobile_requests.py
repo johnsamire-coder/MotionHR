@@ -959,12 +959,20 @@ def mobile_manager_pending(request):
 
     company = getattr(user, 'company', None)
 
+    # لو مدير فريق عادي (مش HR/Admin)، نقيّد على فريقه المباشر بس
+    from attendance.api_reports import _get_direct_team_employees, FULL_ACCESS_ROLES
+    team_employee_ids = None
+    if role not in FULL_ACCESS_ROLES and not user.is_superuser:
+        team_employee_ids = list(_get_direct_team_employees(user).values_list('id', flat=True))
+
     pending_leaves = LeaveRequest._base_manager.filter(
         status='pending'
     ).select_related('employee', 'leave_type').order_by('-created_at')
 
     if company:
         pending_leaves = pending_leaves.filter(company=company)
+    if team_employee_ids is not None:
+        pending_leaves = pending_leaves.filter(employee_id__in=team_employee_ids)
 
     # لو البديل مدير مؤقت → يشوف طلبات فريق المدير الغايب كمان
     try:
@@ -1042,6 +1050,8 @@ def mobile_manager_pending(request):
 
     if company:
         pending_requests = pending_requests.filter(company=company)
+    if team_employee_ids is not None:
+        pending_requests = pending_requests.filter(employee_id__in=team_employee_ids)
 
     request_items = []
     for req in pending_requests[:50]:
