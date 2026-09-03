@@ -1426,23 +1426,44 @@ def mobile_manager_action(request):
             mission_title = item.title or ''
 
             if action == 'approve':
-                item.status = 'active'
+                # المهمة اللي بتاريخ سابق تتحط "مكتملة" على طول (الموظف مش هيبدأ/ينهي دلوقتي)
+                item.status = 'completed' if item.is_backdated else 'active'
                 item.save()
                 # الموظف اللي طلب المهمة لازم يتعيّن عليها فعليًا عشان تظهر في شاشة مهماته
                 if employee_user:
                     from employees.models import Employee
                     _requester_emp = Employee._base_manager.filter(user=employee_user, company=item.company).first()
                     if _requester_emp:
+                        _assignment_defaults = {
+                            'role_in_mission': 'lead',
+                            'is_lead': True,
+                            'status': 'accepted',
+                            'company': item.company,
+                        }
+                        if item.is_backdated:
+                            _assignment_defaults['status'] = 'completed'
+                            _assignment_defaults['started_at'] = item.planned_start_time
+                            _assignment_defaults['ended_at'] = item.planned_end_time
                         MissionAssignment._base_manager.get_or_create(
                             mission=item,
                             employee=_requester_emp,
-                            defaults={
-                                'role_in_mission': 'lead',
-                                'is_lead': True,
-                                'status': 'accepted',
-                                'company': item.company,
-                            }
+                            defaults=_assignment_defaults,
                         )
+                        # لو كانت في إجازة معتمدة في نفس اليوم، نلغيها ونرجّع الرصيد
+                        if item.is_backdated:
+                            try:
+                                from leaves.models import LeaveRequest
+                                _mission_date = item.planned_start_time.date()
+                                _overlapping_leaves = LeaveRequest._base_manager.filter(
+                                    employee=_requester_emp,
+                                    status='approved',
+                                    start_date__lte=_mission_date,
+                                    end_date__gte=_mission_date,
+                                )
+                                for _lv in _overlapping_leaves:
+                                    _lv.cancel()
+                            except Exception:
+                                pass
             else:
                 item.status = 'cancelled'
                 item.save()

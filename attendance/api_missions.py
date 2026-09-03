@@ -978,6 +978,20 @@ def employee_request_mission(request):
         if not d.get(field):
             return Response({'error': f'الحقل {field} مطلوب'}, status=400)
 
+    # لو تاريخ بداية المهمة في الماضي، لازم يكتب سبب
+    from django.utils.dateparse import parse_datetime
+    from django.utils import timezone as _tz
+    _parsed_start = parse_datetime(str(d['planned_start_time']))
+    _is_backdated = False
+    _backdated_reason = (d.get('backdated_reason') or '').strip()
+    if _parsed_start:
+        if _tz.is_naive(_parsed_start):
+            _parsed_start = _tz.make_aware(_parsed_start)
+        if _parsed_start < _tz.now():
+            _is_backdated = True
+            if not _backdated_reason:
+                return Response({'error': 'المهمة بتاريخ سابق، لازم تكتب سبب اختيار التاريخ ده'}, status=400)
+
     # إنشاء المهمة بحالة pending_approval
     mission = Mission._base_manager.create(
         company=employee.company,
@@ -994,6 +1008,8 @@ def employee_request_mission(request):
         location_lng=d.get('location_lng') or None,
         client_name=d.get('client_name', ''),
         client_phone=d.get('client_phone', ''),
+        is_backdated=_is_backdated,
+        backdated_reason=_backdated_reason if _is_backdated else '',
     )
 
     # إنشاء طلب للموافقة — مربوط بالمدير المباشر

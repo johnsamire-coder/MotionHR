@@ -44,6 +44,8 @@ class Mission(TenantModel):
     )
     source = models.CharField(max_length=30, choices=SOURCE_CHOICES, default='manager')
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='approved')
+    is_backdated = models.BooleanField(default=False, verbose_name='مهمة بتاريخ سابق')
+    backdated_reason = models.TextField(blank=True, verbose_name='سبب اختيار تاريخ سابق')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
