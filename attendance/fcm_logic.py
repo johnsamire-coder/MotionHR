@@ -217,3 +217,103 @@ def notify_manager_visit_end(company, employee_name, location_name, time_str, du
         employee=employee,
     )
 
+
+
+def notify_mission_assigned(user, mission_title, mission_id=None):
+    """إشعار للموظف لما يتكلف بمهمة جديدة"""
+    return send_fcm_notification(
+        user,
+        title='📋 مهمة جديدة',
+        body=f'تم تكليفك بمهمة: {mission_title}',
+        data={'type': 'mission_assigned', 'mission_id': mission_id, 'screen': 'my_missions'},
+        title_en='📋 New Mission',
+        body_en=f'You have been assigned a mission: {mission_title}',
+    )
+
+
+def notify_mission_cancelled(user, mission_title, mission_id=None):
+    """إشعار للموظف لما مهمته تتلغي"""
+    return send_fcm_notification(
+        user,
+        title='❌ تم إلغاء المهمة',
+        body=f'تم إلغاء مهمة: {mission_title}',
+        data={'type': 'mission_cancelled', 'mission_id': mission_id, 'screen': 'my_missions'},
+        title_en='❌ Mission Cancelled',
+        body_en=f'Mission cancelled: {mission_title}',
+    )
+
+
+def notify_mission_request_approved(user, mission_title, mission_id=None):
+    """إشعار للموظف لما طلب مهمته يتوافق عليه"""
+    return send_fcm_notification(
+        user,
+        title='✅ تمت الموافقة على مهمتك',
+        body=f'تمت الموافقة على مهمة: {mission_title}',
+        data={'type': 'mission_request_approved', 'mission_id': mission_id, 'screen': 'my_missions'},
+        title_en='✅ Mission Approved',
+        body_en=f'Your mission request was approved: {mission_title}',
+    )
+
+
+def notify_mission_request_rejected(user, mission_title, mission_id=None, reason=''):
+    """إشعار للموظف لما طلب مهمته يترفض"""
+    body_ar = f'تم رفض مهمة: {mission_title}'
+    body_en = f'Your mission request was rejected: {mission_title}'
+    if reason:
+        body_ar += f'\nالسبب: {reason}'
+        body_en += f'\nReason: {reason}'
+    return send_fcm_notification(
+        user,
+        title='❌ تم رفض مهمتك',
+        body=body_ar,
+        data={'type': 'mission_request_rejected', 'mission_id': mission_id, 'screen': 'my_missions'},
+        title_en='❌ Mission Rejected',
+        body_en=body_en,
+    )
+
+
+def notify_manager_mission_response(company, employee_name, mission_title, accepted, mission_id=None, employee=None):
+    """إشعار للمدير لما الموظف يرد على تكليف مهمة (قبول/رفض)"""
+    if accepted:
+        title = '✅ الموظف وافق على المهمة'
+        body = f'{employee_name} وافق على مهمة: {mission_title}'
+        title_en = '✅ Employee Accepted Mission'
+        body_en = f'{employee_name} accepted mission: {mission_title}'
+    else:
+        title = '❌ الموظف رفض المهمة'
+        body = f'{employee_name} رفض مهمة: {mission_title}'
+        title_en = '❌ Employee Declined Mission'
+        body_en = f'{employee_name} declined mission: {mission_title}'
+    return notify_managers(
+        title,
+        body,
+        data={'type': 'mission_response', 'mission_id': mission_id, 'screen': 'manager_missions'},
+        company=company,
+        title_en=title_en,
+        body_en=body_en,
+        employee=employee,
+    )
+
+
+def notify_mission_updated(user, mission_title, mission_id=None):
+    """إشعار للموظف لما تفاصيل مهمته تتعدل"""
+    return send_fcm_notification(
+        user,
+        title='✏️ تم تعديل مهمتك',
+        body=f'تم تعديل تفاصيل مهمة: {mission_title}',
+        data={'type': 'mission_updated', 'mission_id': mission_id, 'screen': 'my_missions'},
+        title_en='✏️ Mission Updated',
+        body_en=f'Mission details updated: {mission_title}',
+    )
+
+
+def notify_mission_removed(user, mission_title, mission_id=None):
+    """إشعار للموظف لما يتشال من مهمة (استبدال)"""
+    return send_fcm_notification(
+        user,
+        title='ℹ️ تم استبعادك من مهمة',
+        body=f'تم استبعادك من مهمة: {mission_title}',
+        data={'type': 'mission_removed', 'mission_id': mission_id, 'screen': 'my_missions'},
+        title_en='ℹ️ Removed from Mission',
+        body_en=f'You have been removed from mission: {mission_title}',
+    )

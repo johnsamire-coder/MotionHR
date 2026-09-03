@@ -20,12 +20,16 @@ from attendance.missions_models import (
 )
 from employees.models import Employee
 from employees.visibility import get_visible_employees_qs
-from accounts.fcm_service import (
+from attendance.fcm_logic import (
     notify_mission_assigned,
     notify_mission_cancelled,
     notify_mission_request_approved,
     notify_mission_request_rejected,
     notify_manager_mission_response,
+    notify_mission_updated,
+    notify_mission_removed,
+    notify_manager_visit_start,
+    notify_manager_visit_end,
 )
 
 
@@ -324,6 +328,14 @@ def manager_update_mission(request, mission_id):
         if field in d:
             setattr(mission, field, d[field])
     mission.save()
+
+    # إشعار كل الموظفين المكلفين بتعديل المهمة
+    try:
+        for a in MissionAssignment._base_manager.filter(mission=mission).select_related('employee__user'):
+            if a.employee and a.employee.user:
+                notify_mission_updated(a.employee.user, mission.title, mission.id)
+    except Exception:
+        pass
 
     return Response({
         'success': True,
@@ -755,6 +767,14 @@ def employee_start_mission(request, assignment_id):
             auto_checkin_done = True
     except Exception as e:
         pass
+    try:
+        emp_name = f"{employee.first_name_ar} {employee.last_name_ar}".strip()
+        notify_manager_visit_start(
+            employee.company, emp_name, assignment.mission.location_name or assignment.mission.title,
+            now.strftime('%I:%M %p'), employee=employee,
+        )
+    except Exception:
+        pass
 
     return Response({
         'success': True,
@@ -808,6 +828,21 @@ def employee_end_mission(request, assignment_id):
             location_label='موقع نهاية المهمة',
             added_by_employee=True,
         )
+
+    try:
+        emp_name = f"{employee.first_name_ar} {employee.last_name_ar}".strip()
+        duration = now - assignment.started_at if assignment.started_at else None
+        if duration:
+            total_minutes = int(duration.total_seconds() // 60)
+            duration_str = f"{total_minutes // 60} س {total_minutes % 60} د"
+        else:
+            duration_str = ''
+        notify_manager_visit_end(
+            employee.company, emp_name, assignment.mission.location_name or assignment.mission.title,
+            now.strftime('%I:%M %p'), duration_str, employee=employee,
+        )
+    except Exception:
+        pass
 
     return Response({
         'success': True,
@@ -1179,9 +1214,15 @@ def manager_reassign_employee(request, mission_id):
     # حفظ بيانات التعيين القديم
     role = old_assignment.role_in_mission
     is_lead = old_assignment.is_lead
+    old_employee_for_notify = old_assignment.employee
 
     # احذف التعيين القديم
     old_assignment.delete()
+    try:
+        if old_employee_for_notify and old_employee_for_notify.user:
+            notify_mission_removed(old_employee_for_notify.user, mission.title, mission.id)
+    except Exception:
+        pass
 
     # أنشئ تعيين جديد للموظف الجديد
     new_assignment, created = MissionAssignment._base_manager.get_or_create(
@@ -1197,6 +1238,11 @@ def manager_reassign_employee(request, mission_id):
     if not created:
         return Response({'error': 'الموظف الجديد مُعيَّن على هذه المهمة مسبقاً'}, status=400)
 
+    try:
+        if new_emp.user:
+            notify_mission_assigned(new_emp.user, mission.title, mission.id)
+    except Exception:
+        pass
     return Response({
         'success': True,
         'message': f'تم استبدال الموظف بنجاح',
