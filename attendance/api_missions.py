@@ -655,6 +655,39 @@ def employee_my_missions(request):
             'ended_at': a.ended_at.isoformat() if a.ended_at else None,
         })
 
+    # فلتر "الكل" أو "المرفوضة": نضيف المهام اللي طلبها الموظف بنفسه ورُفضت
+    # (دي مفيش MissionAssignment ليها أصلاً، فمش هتظهر في الاستعلام فوق)
+    if filter_type in ('all', 'rejected'):
+        existing_mission_ids = {d['mission_id'] for d in data}
+        rejected_missions = Mission._base_manager.filter(
+            created_by=request.user,
+            status='cancelled',
+        ).exclude(id__in=existing_mission_ids)
+        for m in rejected_missions.order_by('-created_at'):
+            data.append({
+                'assignment_id': None,
+                'mission_id': m.id,
+                'title': m.title,
+                'description': m.description,
+                'priority': m.priority,
+                'priority_display': m.get_priority_display(),
+                'status': 'rejected',
+                'status_display': 'مرفوضة',
+                'mission_status': m.status,
+                'is_lead': True,
+                'role': '',
+                'role_display': '',
+                'planned_start_time': m.planned_start_time.isoformat(),
+                'planned_end_time': m.planned_end_time.isoformat(),
+                'location_name': m.location_name,
+                'location_lat': str(m.location_lat) if m.location_lat else None,
+                'location_lng': str(m.location_lng) if m.location_lng else None,
+                'client_name': m.client_name,
+                'client_phone': m.client_phone,
+                'started_at': None,
+                'ended_at': None,
+            })
+
     return Response({'missions': data, 'count': len(data)})
 
 

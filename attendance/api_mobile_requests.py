@@ -1419,7 +1419,7 @@ def mobile_manager_action(request):
                 'message': f'تم {"الموافقة على" if action == "approve" else "رفض"} الطلب',
             })
         elif item_type == 'mission':
-            from attendance.missions_models import Mission
+            from attendance.missions_models import Mission, MissionAssignment
             item = Mission._base_manager.get(id=item_id)
 
             employee_user = item.created_by
@@ -1428,27 +1428,32 @@ def mobile_manager_action(request):
             if action == 'approve':
                 item.status = 'active'
                 item.save()
+                # الموظف اللي طلب المهمة لازم يتعيّن عليها فعليًا عشان تظهر في شاشة مهماته
+                if employee_user:
+                    from employees.models import Employee
+                    _requester_emp = Employee._base_manager.filter(user=employee_user, company=item.company).first()
+                    if _requester_emp:
+                        MissionAssignment._base_manager.get_or_create(
+                            mission=item,
+                            employee=_requester_emp,
+                            defaults={
+                                'role_in_mission': 'lead',
+                                'is_lead': True,
+                                'status': 'accepted',
+                                'company': item.company,
+                            }
+                        )
             else:
                 item.status = 'cancelled'
                 item.save()
 
             try:
-                from accounts.fcm_models import NotificationLog
+                from attendance.fcm_logic import notify_mission_request_approved, notify_mission_request_rejected
                 if employee_user:
                     if action == 'approve':
-                        NotificationLog._base_manager.create(
-                            user=employee_user,
-                            title='✅ تمت الموافقة على مهمتك',
-                            body=f'تمت الموافقة على مهمة: {mission_title}',
-                            notification_type='mission_approved',
-                        )
+                        notify_mission_request_approved(employee_user, mission_title, item.id)
                     else:
-                        NotificationLog._base_manager.create(
-                            user=employee_user,
-                            title='❌ تم رفض مهمتك',
-                            body=f'تم رفض مهمة: {mission_title}' + (f' - السبب: {notes}' if notes else ''),
-                            notification_type='mission_rejected',
-                        )
+                        notify_mission_request_rejected(employee_user, mission_title, item.id, reason=notes)
             except Exception:
                 pass
 
