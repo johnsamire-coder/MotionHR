@@ -761,6 +761,13 @@ def manager_create_employee(request):
         # Check duplicate national_id in company
         if Employee._base_manager.filter(company=company, national_id=national_id).exists():
             return Response({"success": False, "error": "الرقم القومي مسجل لموظف آخر في نفس الشركة"}, status=400)
+        # Check duplicate phone in company (نقارن آخر 10 أرقام عشان نتجاهل كود الدولة زي +20)
+        if phone:
+            _clean_phone = ''.join(ch for ch in phone if ch.isdigit())
+            if len(_clean_phone) >= 10:
+                _phone_suffix = _clean_phone[-10:]
+                if Employee._base_manager.filter(company=company, phone__endswith=_phone_suffix).exists():
+                    return Response({"success": False, "error": "رقم الموبايل مسجل لموظف آخر في نفس الشركة"}, status=400)
 
         # Check duplicate employee_code if provided
         if employee_code_input and Employee._base_manager.filter(company=company, employee_code=employee_code_input).exists():
@@ -1603,11 +1610,8 @@ def manager_organization_tree(request):
         from companies.models import Branch, Department
 
         role = getattr(request.user, "role", None)
-        if role not in ("company_admin", "hr_manager", "super_admin") and not request.user.is_superuser:
-            return Response(
-                {"success": False, "error": "الهيكل التنظيمي متاح للأدمن فقط"},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        is_hr_level = role in ("company_admin", "hr_manager", "super_admin") or request.user.is_superuser
+        # الجميع مسموح لهم الدخول — الفلترة حسب الدور تحدث لاحقًا
 
         company = getattr(request.user, "company", None)
         if not company:
@@ -1620,6 +1624,57 @@ def manager_organization_tree(request):
             company=company,
             status="active"
         ).select_related("user", "department", "branch", "job_title", "direct_manager")
+
+        # ─── فلترة الهيكل حسب دور المستخدم ───
+        viewer = None
+        try:
+            viewer = request.user.employee_profile
+        except Exception:
+            viewer = None
+
+        restricted_mode = None  # None = كامل (HR/Admin)
+        if viewer and not is_hr_level:
+            if getattr(viewer.user, "role", None) == "manager" or hasattr(viewer, "subordinates_check"):
+                pass
+            has_subordinates = Employee._base_manager.filter(
+                company=company, direct_manager=viewer, status="active"
+            ).exists()
+            if has_subordinates or getattr(viewer.user, "role", None) in ("manager",):
+                restricted_mode = "manager"
+            else:
+                restricted_mode = "employee"
+
+        if restricted_mode == "employee":
+            # الموظف العادي: مديره المباشر + زملاؤه في نفس الفريق (نفس المدير)
+            visible_ids = {viewer.id}
+            dm_id = viewer.direct_manager_id
+            if dm_id:
+                visible_ids.add(dm_id)
+                visible_ids |= set(Employee._base_manager.filter(
+                    company=company, direct_manager_id=dm_id, status="active"
+                ).values_list("id", flat=True))
+            else:
+                # ملوش مدير مباشر → زملاؤه في نفس القسم اللي ملهمش مدير
+                visible_ids |= set(Employee._base_manager.filter(
+                    company=company, department=viewer.department,
+                    direct_manager__isnull=True, status="active"
+                ).values_list("id", flat=True))
+            employees_qs = employees_qs.filter(id__in=visible_ids)
+        elif restricted_mode == "manager":
+            # المدير: فريقه (كل المستويات تحته) + مديره المباشر
+            team_ids = set()
+            frontier = {viewer.id}
+            while frontier:
+                subs = Employee._base_manager.filter(
+                    company=company, direct_manager_id__in=frontier, status="active"
+                ).values_list("id", flat=True)
+                subs = set(subs) - team_ids
+                team_ids |= subs
+                frontier = subs
+            team_ids.add(viewer.id)
+            if viewer.direct_manager_id:
+                team_ids.add(viewer.direct_manager_id)
+            employees_qs = employees_qs.filter(id__in=team_ids)
 
         branches_data = []
 

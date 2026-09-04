@@ -317,3 +317,16 @@ def notify_mission_removed(user, mission_title, mission_id=None):
         title_en='ℹ️ Removed from Mission',
         body_en=f'You have been removed from mission: {mission_title}',
     )
+
+
+def notify_manager_new_mission_request(company, employee_name, mission_title, mission_id=None, employee=None):
+    """إشعار للمدير المباشر لما موظف يطلب مهمة جديدة"""
+    return notify_managers(
+        '📋 طلب مهمة جديد',
+        f'{employee_name} قدّم طلب مهمة: {mission_title}',
+        data={'type': 'mission_request', 'mission_id': mission_id, 'screen': 'manager_missions'},
+        company=company,
+        title_en='📋 New Mission Request',
+        body_en=f'{employee_name} submitted a mission request: {mission_title}',
+        employee=employee,
+    )

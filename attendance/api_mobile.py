@@ -524,17 +524,21 @@ def attendance_to_dict(attendance):
             'check_out_address': '',
         }
 
+    check_in_fmt = format_time_value(getattr(attendance, 'check_in_time', None))
+    check_out_fmt = format_time_value(getattr(attendance, 'check_out_time', None))
     return {
         'date': attendance.date.isoformat() if getattr(attendance, 'date', None) else '',
         'date_display': attendance.date.strftime('%d/%m/%Y') if getattr(attendance, 'date', None) else '',
         'status': getattr(attendance, 'status', '') or '',
         'checked_in': bool(getattr(attendance, 'check_in_time', None)),
-        'check_in_time': format_time_value(getattr(attendance, 'check_in_time', None)),
+        'check_in_time': check_in_fmt,
+        'check_in': check_in_fmt,  # alias لشاشة سجل الأيام في الموبايل
         'check_in_latitude': getattr(attendance, 'check_in_latitude', None),
         'check_in_longitude': getattr(attendance, 'check_in_longitude', None),
         'check_in_address': getattr(attendance, 'check_in_address', '') or '',
         'checked_out': bool(getattr(attendance, 'check_out_time', None)),
-        'check_out_time': format_time_value(getattr(attendance, 'check_out_time', None)),
+        'check_out_time': check_out_fmt,
+        'check_out': check_out_fmt,  # alias لشاشة سجل الأيام في الموبايل
         'check_out_latitude': getattr(attendance, 'check_out_latitude', None),
         'check_out_longitude': getattr(attendance, 'check_out_longitude', None),
         'check_out_address': getattr(attendance, 'check_out_address', '') or '',
@@ -2909,40 +2913,63 @@ def _notify_hr_incomplete_data(employee, missing):
 def _can_track_location(employee):
     """
     يتأكد هل مسموح نسجل موقع الموظف دلوقتي:
-    - الميداني (field_free / field_assigned): مسموح دايماً
-    - المكتبي (office): بس لو عنده حضور مفتوح (لسه ماسجلش انصراف)
-      أو خلال 30 دقيقة قبل بداية شيفته الرسمي
+    - إجازة معتمدة اليوم: ممنوع التتبع تماماً.
+    - بعد تسجيل الانصراف (check_out): ممنوع التتبع فوراً ونهائياً لجميع الموظفين.
+    - الموظف المكتبي (office): مسموح فقط أثناء الدوام بعد تسجيل الحضور وقبل الانصراف.
+    - الموظف الميداني: مسموح أثناء ساعات العمل بشرط عدم تسجيل انصراف اليوم.
     """
-    worker_type = getattr(employee, 'worker_type', None)
-    if worker_type != 'office':
-        return True
     try:
         from attendance.models import Attendance
+        from leaves.models import LeaveRequest
         today = timezone.localdate()
+
+        # 1. إجازة معتمدة اليوم -> ممنوع التتبع نهائياً
+        if LeaveRequest._base_manager.filter(
+            employee=employee, status='approved',
+            start_date__lte=today, end_date__gte=today
+        ).exists():
+            return False
+
+        # فحص سجل الحضور لليوم أو الأمس (للشيفت الليلي)
+        from datetime import timedelta
         att = Attendance._base_manager.filter(employee=employee, date=today).first()
+        if not att:
+            att = Attendance._base_manager.filter(
+                employee=employee, date=today - timedelta(days=1), check_in_time__isnull=False
+            ).first()
+
+        # 2. لو سجل انصراف -> ممنوع التتبع تماماً وبشكل قاطع
+        if att and att.check_out_time:
+            return False
+
+        # 3. لو مسجل حضور ومستمر في العمل (لم ينصرف بعد) -> مسموح بالتتبع
         if att and att.check_in_time and not att.check_out_time:
             return True
+
+        # 4. لو لسه ماسجلش حضور:
+        worker_type = getattr(employee, 'worker_type', 'office') or 'office'
+        # المكتبي: ممنوع التتبع قبل تسجيل الحضور
+        if worker_type == 'office':
+            return False
+
+        # الميداني: مسموح فقط أثناء ساعات الشيفت الرسمية إذا لم ينصرف
         from attendance.payroll_rules import _get_shift_for_date
         shift = _get_shift_for_date(employee, today)
         if shift and shift.start_time and shift.end_time:
-            from datetime import datetime, timedelta
+            from datetime import datetime
             now_local = timezone.localtime(timezone.now())
             shift_start_dt = datetime.combine(now_local.date(), shift.start_time)
             shift_end_dt = datetime.combine(now_local.date(), shift.end_time)
             if shift_end_dt <= shift_start_dt:
                 shift_end_dt += timedelta(days=1)
-            grace_start = shift_start_dt - timedelta(minutes=30)
-            grace_end = shift_end_dt + timedelta(minutes=30)
             now_naive = now_local.replace(tzinfo=None)
-            if grace_start <= now_naive <= grace_end:
+            if shift_start_dt <= now_naive <= shift_end_dt:
                 return True
+
         return False
     except Exception:
-        return True
+        return False
 
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
 def activate_account(request):
     """
     تفعيل حساب الموظف لأول مرة عن طريق رقم الموبايل + آخر 4 أرقام من الرقم القومي.

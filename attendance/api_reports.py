@@ -200,6 +200,16 @@ def attendance_monthly_report(request):
     if employee_id:
         employees = employees.filter(id=employee_id)
 
+    from datetime import timedelta
+    from leaves.models import LeaveRequest
+
+    business_dates = []
+    d = first_day
+    while d <= last_day:
+        if d.weekday() not in (4, 5):
+            business_dates.append(d)
+        d += timedelta(days=1)
+
     results = []
     for emp in employees:
         records = Attendance._base_manager.filter(
@@ -210,16 +220,53 @@ def attendance_monthly_report(request):
 
         checkins = records.filter(check_in_time__isnull=False).count()
         checkouts = records.filter(check_out_time__isnull=False).count()
-        working_days = records.filter(check_in_time__isnull=False).count()
+
+        present_dates = set(
+            records.filter(check_in_time__isnull=False)
+            .values_list('date', flat=True)
+        )
+        working_days = len(present_dates)
+
+        late_days = records.filter(
+            check_in_time__isnull=False,
+            late_minutes__gt=0,
+        ).values('date').distinct().count()
+
+        leave_dates = set()
+        for lv in LeaveRequest._base_manager.filter(
+            employee=emp,
+            status='approved',
+            start_date__lte=last_day,
+            end_date__gte=first_day,
+        ):
+            ld = max(lv.start_date, first_day)
+            le = min(lv.end_date, last_day)
+            while ld <= le:
+                leave_dates.add(ld)
+                ld += timedelta(days=1)
+
+        absent_days = 0
+        for bd in business_dates:
+            if bd not in present_dates and bd not in leave_dates:
+                absent_days += 1
+
+        dept = getattr(emp, 'department', None)
+        dept_name = ''
+        if dept:
+            dept_name = getattr(dept, 'name_ar', None) or getattr(dept, 'name_en', None) or ''
 
         results.append({
             'employee_id': emp.id,
             'employee_name': _employee_name(emp),
             'username': _employee_username(emp),
             'employee_code': getattr(emp, 'employee_code', None),
+            'department': dept_name,
             'total_checkins': checkins,
             'total_checkouts': checkouts,
             'working_days': working_days,
+            'absent_days': absent_days,
+            'late_days': late_days,
+            'approved_leaves': len(leave_dates),
             'total_month_days': last_day_num,
         })
 
