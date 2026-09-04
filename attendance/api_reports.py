@@ -182,19 +182,25 @@ def _employee_username(emp):
 @permission_classes([IsAuthenticated])
 def attendance_monthly_report(request):
     """
-    تقرير الحضور الشهري
+    Monthly attendance report
     GET params: year, month, employee_id(optional)
+    - absence counted only up to today (no future days)
+    - absence starts at employee created_at / hire_date
+    - absence stops at termination_date
+    - today not counted absent before shift end
+    - Friday & Saturday are off
     """
     user = request.user
     if not _check_manager(user):
         return Response({'error': 'صلاحية غير كافية'}, status=403)
-
     year, month = _parse_month(request)
     employee_id = request.GET.get('employee_id')
 
     first_day = date(year, month, 1)
     last_day_num = monthrange(year, month)[1]
     last_day = date(year, month, last_day_num)
+    today = date.today()
+    upper_bound = min(last_day, today)
 
     employees = _get_manager_scope_employees(user)
     if employee_id:
@@ -203,19 +209,43 @@ def attendance_monthly_report(request):
     from datetime import timedelta
     from leaves.models import LeaveRequest
 
+    # business days: month start .. today (Fri/Sat off)
     business_dates = []
     d = first_day
-    while d <= last_day:
+    while d <= upper_bound:
         if d.weekday() not in (4, 5):
             business_dates.append(d)
         d += timedelta(days=1)
 
     results = []
     for emp in employees:
+        # employee window
+        emp_start = first_day
+        created_at = getattr(emp, 'created_at', None)
+        if created_at is not None:
+            cdate = created_at.date() if hasattr(created_at, 'hour') else created_at
+            emp_start = max(first_day, cdate)
+        elif getattr(emp, 'hire_date', None):
+            hdate = emp.hire_date
+            hdate = hdate.date() if hasattr(hdate, 'hour') else hdate
+            emp_start = max(first_day, hdate)
+
+        emp_end = upper_bound
+        term_date = getattr(emp, 'termination_date', None)
+        if term_date is not None:
+            tdate = term_date.date() if hasattr(term_date, 'hour') else term_date
+            emp_end = min(emp_end, tdate)
+
+        # employee outside report period -> skip (same as absence report)
+        if emp_start > emp_end:
+            continue
+
+        emp_business_dates = [x for x in business_dates if emp_start <= x <= emp_end]
+
         records = Attendance._base_manager.filter(
             employee=emp,
-            date__gte=first_day,
-            date__lte=last_day,
+            date__gte=emp_start,
+            date__lte=emp_end,
         )
 
         checkins = records.filter(check_in_time__isnull=False).count()
@@ -245,9 +275,39 @@ def attendance_monthly_report(request):
                 leave_dates.add(ld)
                 ld += timedelta(days=1)
 
+        # only leaves inside the employee window
+        emp_leave_dates = {x for x in leave_dates if emp_start <= x <= emp_end}
+
+        # today not absent before shift end
+        effective_business_dates = list(emp_business_dates)
+        if today in effective_business_dates and today not in present_dates:
+            try:
+                from attendance.api_shifts import get_effective_shift
+                from django.utils import timezone as dj_tz
+                from datetime import datetime as dt
+
+                shift, _src = get_effective_shift(emp, today)
+                now_local = dj_tz.localtime()
+
+                if shift and getattr(shift, 'end_time', None):
+                    shift_end_dt = dt.combine(today, shift.end_time)
+                    if getattr(shift, 'crosses_midnight', False):
+                        shift_end_dt = dt.combine(
+                            today + timedelta(days=1), shift.end_time)
+                    if now_local.replace(tzinfo=None) < shift_end_dt:
+                        effective_business_dates = [
+                            x for x in effective_business_dates if x != today]
+                else:
+                    if now_local.date() == today:
+                        effective_business_dates = [
+                            x for x in effective_business_dates if x != today]
+            except Exception:
+                effective_business_dates = [
+                    x for x in effective_business_dates if x != today]
+
         absent_days = 0
-        for bd in business_dates:
-            if bd not in present_dates and bd not in leave_dates:
+        for bd in effective_business_dates:
+            if bd not in present_dates and bd not in emp_leave_dates:
                 absent_days += 1
 
         dept = getattr(emp, 'department', None)
@@ -266,7 +326,7 @@ def attendance_monthly_report(request):
             'working_days': working_days,
             'absent_days': absent_days,
             'late_days': late_days,
-            'approved_leaves': len(leave_dates),
+            'approved_leaves': len(emp_leave_dates),
             'total_month_days': last_day_num,
         })
 
@@ -275,6 +335,7 @@ def attendance_monthly_report(request):
         'month': month,
         'from': first_day.isoformat(),
         'to': last_day.isoformat(),
+        'counted_until': upper_bound.isoformat(),
         'total_employees': len(results),
         'employees': results,
     })
@@ -1658,25 +1719,25 @@ def location_tracking_report(request):
             'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
             'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
             'worker_type': getattr(emp, 'worker_type', '') or '',
-            'checkin_time': checkin_time.strftime('%H:%M') if checkin_time else '',
-            'checkout_time': checkout_time.strftime('%H:%M') if checkout_time else '',
+            'checkin_time': timezone.localtime(checkin_time).strftime('%H:%M') if checkin_time else '',
+            'checkout_time': timezone.localtime(checkout_time).strftime('%H:%M') if checkout_time else '',
             'has_attendance': bool(att and att.check_in_time),
             'total_logs': len(logs),
             'first_location': {
-                'timestamp': first_log['timestamp'].strftime('%H:%M') if first_log else '',
+                'timestamp': timezone.localtime(first_log['timestamp']).strftime('%H:%M') if first_log else '',
                 'lat': float(first_log['latitude']) if first_log else None,
                 'lng': float(first_log['longitude']) if first_log else None,
                 'address': first_log['address'] if first_log else '',
             } if first_log else None,
             'last_location': {
-                'timestamp': last_log['timestamp'].strftime('%H:%M') if last_log else '',
+                'timestamp': timezone.localtime(last_log['timestamp']).strftime('%H:%M') if last_log else '',
                 'lat': float(last_log['latitude']) if last_log else None,
                 'lng': float(last_log['longitude']) if last_log else None,
                 'address': last_log['address'] if last_log else '',
             } if last_log else None,
             'logs': [
                 {
-                    'timestamp': log['timestamp'].strftime('%H:%M'),
+                    'timestamp': timezone.localtime(log['timestamp']).strftime('%H:%M'),
                     'lat': float(log['latitude']),
                     'lng': float(log['longitude']),
                     'address': log['address'] or '',
