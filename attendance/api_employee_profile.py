@@ -359,7 +359,8 @@ def my_documents(request):
         emp = getattr(request.user, "employee_profile", None)
         if not emp:
             return Response({"documents": []})
-        docs = emp.documents.all().order_by("-created_at")
+        from employees.models import EmployeeDocument
+        docs = EmployeeDocument._base_manager.filter(employee=emp).order_by("-created_at")
         return Response({"documents": [_serialize_document(d) for d in docs]})
     except Exception as e:
         logger.exception("my_documents error")
@@ -522,7 +523,8 @@ def manager_employee_documents(request, emp_id):
         emp = _get_employee_scoped(request, emp_id)
         if not emp:
             return Response({"documents": []})
-        docs = emp.documents.all().order_by("-created_at")
+        from employees.models import EmployeeDocument
+        docs = EmployeeDocument._base_manager.filter(employee=emp).order_by("-created_at")
         return Response({"documents": [_serialize_document(d) for d in docs]})
     except Exception as e:
         logger.exception("manager_employee_documents error")
