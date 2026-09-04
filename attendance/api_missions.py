@@ -112,6 +112,19 @@ def serialize_mission(mission, employee=None):
     except Exception:
         pass
 
+    # بيانات الموظف اللي طلب المهمة بنفسه (مهم لما لسه معلقة ومفيش MissionAssignment ليها)
+    requested_by_name = None
+    requested_by_employee_id = None
+    if mission.source == 'employee_request' and mission.created_by:
+        try:
+            from employees.models import Employee
+            _req_emp = Employee._base_manager.filter(user=mission.created_by, company=mission.company).first()
+            if _req_emp:
+                requested_by_name = f"{_req_emp.first_name_ar} {_req_emp.last_name_ar}".strip()
+                requested_by_employee_id = _req_emp.id
+        except Exception:
+            pass
+
     data = {
         'id': mission.id,
         'title': mission.title,
@@ -121,6 +134,8 @@ def serialize_mission(mission, employee=None):
         'status': mission.status,
         'status_display': mission.get_status_display(),
         'source': mission.source,
+        'requested_by_name': requested_by_name,
+        'requested_by_employee_id': requested_by_employee_id,
         'planned_start_time': mission.planned_start_time.isoformat(),
         'planned_end_time': mission.planned_end_time.isoformat(),
         'location_name': mission.location_name,
@@ -1023,6 +1038,14 @@ def employee_request_mission(request):
         manager_approval='pending',
         final_status='pending',
     )
+    try:
+        from attendance.fcm_logic import notify_manager_new_mission_request
+        emp_name = f"{employee.first_name_ar} {employee.last_name_ar}".strip()
+        notify_manager_new_mission_request(
+            employee.company, emp_name, mission.title, mission.id, employee=employee,
+        )
+    except Exception:
+        pass
 
     return Response({
         'success': True,
