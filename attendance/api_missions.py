@@ -981,13 +981,14 @@ def employee_request_mission(request):
     # لو تاريخ بداية المهمة في الماضي، لازم يكتب سبب
     from django.utils.dateparse import parse_datetime
     from django.utils import timezone as _tz
+    from datetime import timedelta as _timedelta
     _parsed_start = parse_datetime(str(d['planned_start_time']))
     _is_backdated = False
     _backdated_reason = (d.get('backdated_reason') or '').strip()
     if _parsed_start:
         if _tz.is_naive(_parsed_start):
             _parsed_start = _tz.make_aware(_parsed_start)
-        if _parsed_start < _tz.now():
+        if _parsed_start < _tz.now() - _timedelta(minutes=5):
             _is_backdated = True
             if not _backdated_reason:
                 return Response({'error': 'المهمة بتاريخ سابق، لازم تكتب سبب اختيار التاريخ ده'}, status=400)
