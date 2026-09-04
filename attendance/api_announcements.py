@@ -150,18 +150,36 @@ def manager_create_announcement(request):
     if not title or not message:
         return Response({'error': 'العنوان والمحتوى مطلوبان'}, status=400)
 
+    # المدير العادي (مش أدمن/HR) لازم يبعت لفريقه المباشر بس (الموظفين اللي direct_manager بتاعهم هو)، مهما كان اختار إيه في الفورم
+    _is_plain_manager = user.role == 'manager'
+    _target_type = data.get('target_type', 'all')
+    _direct_report_ids = []
+    if _is_plain_manager:
+        from employees.models import Employee
+        _mgr_emp = Employee._base_manager.filter(user=user).first()
+        if _mgr_emp:
+            _direct_report_ids = list(
+                Employee._base_manager.filter(direct_manager=_mgr_emp).values_list('id', flat=True)
+            )
+        if _direct_report_ids:
+            _target_type = 'specific'
+        else:
+            _target_type = 'all'
+
     ann = CompanyAnnouncement._base_manager.create(
         company=user.company,
         title=title,
         message=message,
         announcement_type=data.get('type', 'general'),
         priority=data.get('priority', 'medium'),
-        target_type=data.get('target_type', 'all'),
+        target_type=_target_type,
         requires_confirmation=data.get('requires_confirmation', False),
         send_push=data.get('send_push', True),
         publish_at=timezone.now(),
         created_by=user,
     )
+    if _is_plain_manager and _direct_report_ids:
+        ann.target_employees.add(*_direct_report_ids)
 
     # إرسال Push Notification لكل موظف مستهدف
     sent_count = 0

@@ -182,7 +182,14 @@ class CompanyAnnouncement(models.Model):
 
         # حدد المستهدفين
         if self.target_type == 'specific':
-            qs = qs.filter(id__in=self.target_employees.values_list('id', flat=True))
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT employee_id FROM accounts_companyannouncement_target_employees WHERE companyannouncement_id = %s",
+                    [self.id],
+                )
+                _specific_ids = [row[0] for row in cursor.fetchall()]
+            qs = qs.filter(id__in=_specific_ids)
         elif self.target_type == 'by_job_title':
             titles = [t.strip() for t in self.target_job_titles.split(',') if t.strip()]
             if titles:
