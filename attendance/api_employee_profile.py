@@ -307,6 +307,23 @@ def my_profile(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def my_upload_photo(request):
+    try:
+        emp = getattr(request.user, "employee_profile", None)
+        if not emp:
+            return Response({"success": False, "message": "no employee profile"}, status=status.HTTP_404_NOT_FOUND)
+        photo_file = request.FILES.get("photo")
+        if not photo_file:
+            return Response({"success": False, "message": "لم يتم إرفاق صورة"}, status=status.HTTP_400_BAD_REQUEST)
+        emp.photo = photo_file
+        emp.save(update_fields=["photo"])
+        return Response({"success": True, "photo": emp.photo.url if emp.photo else None})
+    except Exception as e:
+        logger.exception("my_upload_photo error")
+        return Response({"success": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
