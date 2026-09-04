@@ -324,6 +324,33 @@ def my_upload_photo(request):
     except Exception as e:
         logger.exception("my_upload_photo error")
         return Response({"success": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def my_upload_document(request):
+    try:
+        emp = getattr(request.user, "employee_profile", None)
+        if not emp:
+            return Response({"success": False, "message": "no employee profile"}, status=status.HTTP_404_NOT_FOUND)
+        doc_file = request.FILES.get("file")
+        doc_type = request.data.get("document_type", "other")
+        title = request.data.get("title", "")
+        if not doc_file:
+            return Response({"success": False, "message": "لم يتم إرفاق ملف"}, status=status.HTTP_400_BAD_REQUEST)
+        if not title:
+            title = doc_file.name
+        from employees.models import EmployeeDocument
+        doc = EmployeeDocument._base_manager.create(
+            company=emp.company,
+            employee=emp,
+            document_type=doc_type,
+            title=title,
+            file=doc_file,
+        )
+        return Response({"success": True, "document": _serialize_document(doc)})
+    except Exception as e:
+        logger.exception("my_upload_document error")
+        return Response({"success": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])

@@ -275,6 +275,7 @@ urlpatterns += [
     path("api/mobile/employee/movements/", api_employee_profile.my_movements),
     path('api/mobile/employee/summary/', api_employee_profile.my_summary),
     path('api/mobile/employee/upload-photo/', api_employee_profile.my_upload_photo),
+    path('api/mobile/employee/upload-document/', api_employee_profile.my_upload_document),
     path('api/mobile/manager/employees/', api_employee_profile.manager_employees_list),
     path('api/mobile/manager/employees/export/excel/', api_employee_profile.manager_employees_export_excel),
     path('api/mobile/manager/employees/export/pdf/', api_employee_profile.manager_employees_export_pdf),
