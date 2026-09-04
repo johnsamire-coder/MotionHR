@@ -646,6 +646,7 @@ def mobile_login(request):
             'first_name': getattr(employee, 'first_name_ar', ''),
             'gender': getattr(employee, 'gender', 'male'),
             'company': company_name,
+            'job_title': getattr(getattr(employee, 'job_title', None), 'name_ar', '') or '',
             'is_field_worker': is_field_worker,
             'stealth_tracking_enabled': stealth_tracking_enabled,
             'should_track': should_track,
