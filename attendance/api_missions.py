@@ -1267,12 +1267,82 @@ def manager_reassign_employee(request, mission_id):
         return Response({'error': 'old_employee_id و new_employee_id مطلوبان'}, status=400)
 
     # جيب التعيين القديم
+    old_assignment = None
     try:
         old_assignment = MissionAssignment._base_manager.get(
             mission=mission, employee__id=old_emp_id
         )
     except MissionAssignment.DoesNotExist:
-        return Response({'error': 'الموظف القديم غير مُعيَّن على هذه المهمة'}, status=404)
+        old_assignment = None
+
+    # حالة خاصة: مهمة مطلوبة من موظف (معلقة) بدون أي تعيينات
+    # الاستبدال هنا معناه: تعيين الموظف الجديد فورًا + إلغاء طلب الموظف الطالب
+    if old_assignment is None:
+        # نتأكد إن الموظف القديم هو فعلاً الطالب
+        mission_req = None
+        try:
+            mission_req = MissionRequest._base_manager.filter(
+                mission=mission, requested_by__id=old_emp_id
+            ).order_by('-id').first()
+        except Exception:
+            mission_req = None
+
+        if mission_req is None:
+            return Response({'error': 'الموظف القديم غير مُعيَّن على هذه المهمة'}, status=404)
+
+        # جيب الموظف الجديد
+        try:
+            new_emp = Employee._base_manager.get(id=new_emp_id, company=company)
+        except Employee.DoesNotExist:
+            return Response({'error': 'الموظف الجديد غير موجود'}, status=404)
+
+        # الموظف الطالب القديم
+        try:
+            old_emp_obj = Employee._base_manager.get(id=old_emp_id, company=company)
+        except Employee.DoesNotExist:
+            return Response({'error': 'الموظف القديم غير موجود'}, status=404)
+
+        # أنشئ تعيين جديد للموظف الجديد (مهمة تفضل معلقة)
+        new_assignment, created = MissionAssignment._base_manager.get_or_create(
+            mission=mission,
+            employee=new_emp,
+            defaults={
+                'role_in_mission': 'assistant',
+                'is_lead': False,
+                'status': 'pending',
+                'company': company,
+            }
+        )
+        if not created:
+            return Response({'error': 'الموظف الجديد مُعيَّن على هذه المهمة مسبقاً'}, status=400)
+
+        # نقفل طلب الموظف الطالب القديم (مو مستغل)
+        mission_req.final_status = 'rejected'
+        mission_req.save(update_fields=['final_status'])
+
+        # إشعارات
+        try:
+            if new_emp.user:
+                notify_mission_assigned(new_emp.user, mission.title, mission.id)
+        except Exception:
+            pass
+        try:
+            if old_emp_obj.user:
+                notify_mission_removed(old_emp_obj.user, mission.title, mission.id)
+        except Exception:
+            pass
+
+        return Response({
+            'success': True,
+            'message': 'تم تعيين الموظف الجديد على المهمة (المهمة ما زالت في انتظار الموافقة)',
+            'new_assignment': {
+                'id': new_assignment.id,
+                'employee': f"{new_emp.first_name_ar} {new_emp.last_name_ar}",
+                'role': new_assignment.role_in_mission,
+                'is_lead': new_assignment.is_lead,
+                'status': new_assignment.status,
+            }
+        })
 
     # لو الموظف القديم بدأ المهمة فعلاً → لا يمكن الاستبدال
     if old_assignment.status == 'in_progress':
