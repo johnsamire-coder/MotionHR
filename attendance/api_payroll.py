@@ -16,9 +16,11 @@ from .payroll_rules import calculate_effective_payroll
 User = get_user_model()
 
 DEFAULT_SETTINGS = {
-    'late_deduction_per_minute': 1.0,
-    'absence_deduction_per_day': 200.0,
-    'overtime_rate_per_hour': 50.0,
+    # القيم الافتراضية — اضبطها من شاشة إعدادات الرواتب
+    # أي قيمة 0 = بدون (مفيش خصم/إضافي)
+    'late_deduction_per_minute': 1.0,  # خصم الدقيقة (0 = بدون)
+    'absence_deduction_per_day': 0.0,  # خصم يوم الغياب (0 = بدون)
+    'overtime_rate_per_hour': 0.0,     # سعر ساعة الإضافي (0 = بدون)
     'insurance_mode': 'none',
     'insurance_fixed_amount': 0.0,
     'insurance_percent': 0.0,
