@@ -1035,8 +1035,8 @@ def _get_penalties(employee, year, month, lang='ar'):
                     'amount': round(amount, 2),
                     'reason': action.reason or '',
                 })
-                action.payroll_applied = True
-                action.save(update_fields=["payroll_applied"])
+                # commit منفصل بعد الحساب (نمنع side effect أثناء القراءة)
+                # (الـapplied_action_ids بيتمرر للـhelper)
     except Exception:
         logger.exception(
         "payroll_rules error in _get_penalties",
