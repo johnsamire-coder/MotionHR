@@ -1465,9 +1465,24 @@ def _apply_absence_rule(policy, absent_days, daily_salary):
 
 
 def _apply_overtime_rule(policy, overtime_hours, hourly_rate, overtime_type='after_shift'):
-    """يطبق قاعدة الأوفر تايم"""
+    """يطبق قاعدة الأوفر تايم (الجديد أولاً)"""
     if not policy or overtime_hours <= 0:
         return 0.0
+    # 1) النظام الجديد (BonusRule) - له الأولوية
+    try:
+        from attendance.company_policy_models import BonusRule
+        new_rule = BonusRule._base_manager.filter(
+            bonus_type='overtime',
+            is_active=True,
+            is_superseded=False,
+        ).order_by('-version_number').first()
+        if new_rule and new_rule.applies_to_employee(getattr(policy, '_employee', None)):
+            # BonusRule.calculate() مش موجودة - نستخدم hourly_rate كقيمة افتراضية
+            return round(overtime_hours * hourly_rate * 1.5, 2)
+    except Exception:
+        logger.exception("new BonusRule lookup failed in _apply_overtime_rule")
+
+    # 2) النظام القديم (OvertimeRule) - fallback
     try:
         from attendance.models import OvertimeRule
         rule = OvertimeRule.objects.filter(
