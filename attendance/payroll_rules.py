@@ -7,6 +7,8 @@ Mission-aware + Shift-aware + Policy-aware
 from datetime import date, timedelta, datetime
 from calendar import monthrange
 from django.db.models import Q
+import logging
+logger = logging.getLogger(__name__)
 from django.utils import timezone
 from .models import Attendance
 
@@ -233,7 +235,10 @@ def get_payroll_period_bounds(company, year, month):
             return first_day, last_day
 
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in get_payroll_period_bounds",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     # fallback: شهر ميلادي عادي
     first_day = date(year, month, 1)
@@ -296,7 +301,10 @@ def get_company_working_days(company, year, month):
                 6: policy.work_sunday,
             }
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in get_company_working_days",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     company_obj = company if hasattr(company, 'payroll_cycle_type') else None
     if company_obj:
@@ -372,7 +380,10 @@ def get_official_holiday_treatment(employee, year, month):
                 current += timedelta(days=1)
 
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in get_official_holiday_treatment",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     return result
 
@@ -394,7 +405,10 @@ def get_mission_dates(employee, year, month):
         ):
             mission_dates.add(a.date)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in get_mission_dates",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     try:
         try:
@@ -417,7 +431,10 @@ def get_mission_dates(employee, year, month):
                         mission_dates.add(_cur)
                         _cur += timedelta(days=1)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in get_mission_dates",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     return mission_dates
 
@@ -454,7 +471,10 @@ def get_leave_dates(employee, year, month):
                     leave_dates.add(current)
                 current += timedelta(days=1)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in get_leave_dates",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     # استثناء أيام الاستدعاء المعتمدة من أيام الإجازة
     try:
@@ -469,7 +489,10 @@ def get_leave_dates(employee, year, month):
         )
         leave_dates -= recalled_dates
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in get_leave_dates",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     return leave_dates, half_day_dates
 
@@ -503,7 +526,10 @@ def get_approved_permission_minutes(employee, first_day, last_day):
             elif kind == 'early_leave':
                 early_minutes += minutes
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in get_approved_permission_minutes",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
     return late_minutes, early_minutes
 
 def get_unpaid_leave_dates(employee, year, month):
@@ -529,7 +555,10 @@ def get_unpaid_leave_dates(employee, year, month):
                 unpaid_dates.add(current)
                 current += timedelta(days=1)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in get_unpaid_leave_dates",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     try:
         from leaves.models import LeaveRecallRequest
@@ -543,7 +572,10 @@ def get_unpaid_leave_dates(employee, year, month):
         )
         unpaid_dates -= recalled_dates
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in get_unpaid_leave_dates",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     return unpaid_dates
 
@@ -574,7 +606,10 @@ def _get_allowances(employee, first_day, last_day, lang='ar'):
                 'source': 'individual',
             })
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_allowances",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     # 2) بدلات عامة (الشركة / فرع / إدارة / موظفين محددين)
     try:
@@ -603,7 +638,10 @@ def _get_allowances(employee, first_day, last_day, lang='ar'):
                     'scope': policy.scope,
                 })
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_allowances",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     # 3) بدلات يدوية معتمدة من HR (ManualAllowance)
     try:
@@ -633,7 +671,10 @@ def _get_allowances(employee, first_day, last_day, lang='ar'):
                     'reason': entry.reason or '',
                 })
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_allowances",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     return round(total, 2), items
 
@@ -686,7 +727,10 @@ def _get_monthly_deductions(employee, year, month, lang='ar'):
                 extra_total += amount
                 extra_items.append(row)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_monthly_deductions",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     try:
         from employees.models import Deduction
@@ -718,7 +762,10 @@ def _get_monthly_deductions(employee, year, month, lang='ar'):
                 extra_total += amount
                 extra_items.append(row)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_monthly_deductions",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     return {
         'insurance_total': round(insurance_total, 2),
@@ -753,7 +800,10 @@ def _get_bonuses(employee, year, month, lang='ar'):
                 'source': 'individual',
             })
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_bonuses",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     # 2) مكافآت عامة (الشركة / فرع / إدارة / موظفين محددين)
     try:
@@ -789,7 +839,10 @@ def _get_bonuses(employee, year, month, lang='ar'):
                     'bonus_type': policy.bonus_type,
                 })
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_bonuses",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     # 3) مقابل إضافي للعمل في الإجازات الرسمية
     try:
@@ -860,7 +913,10 @@ def _get_bonuses(employee, year, month, lang='ar'):
                     'day_bonus': row['day_bonus'],
                 })
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_bonuses",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     # 4) مكافآت يدوية معتمدة من HR (ManualBonus)
     try:
@@ -888,7 +944,10 @@ def _get_bonuses(employee, year, month, lang='ar'):
                     'source': 'manual_entry',
                 })
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_bonuses",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     return round(total, 2), items
 
@@ -925,7 +984,10 @@ def _get_general_deductions(employee, first_day, last_day, lang='ar'):
                     'scope': policy.scope,
                 })
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_general_deductions",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
     return round(total, 2), items
 
 def _get_penalties(employee, year, month, lang='ar'):
@@ -946,7 +1008,10 @@ def _get_penalties(employee, year, month, lang='ar'):
                 'reason': item.reason or '',
             })
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_penalties",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     # DisciplinaryAction (جزاءات تأديبية معتمدة)
     try:
@@ -974,7 +1039,10 @@ def _get_penalties(employee, year, month, lang='ar'):
                 action.payroll_applied = True
                 action.save(update_fields=["payroll_applied"])
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_penalties",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     # ManualPenalty - جزاءات يدوية معتمدة من HR
     try:
@@ -1002,7 +1070,10 @@ def _get_penalties(employee, year, month, lang='ar'):
                     'source': 'manual_entry',
                 })
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_penalties",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     return round(total, 2), items
 
@@ -1025,7 +1096,10 @@ def _get_installments(employee, year, month):
                     'remaining_amount': round(remaining, 2),
                 })
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_installments",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
     return round(total, 2), items
 
 
@@ -1073,7 +1147,10 @@ def _get_active_policy(company, target_date, department=None, branch=None):
             return company_assignment.policy
 
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _get_active_policy",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
     return None
 
 
@@ -1107,7 +1184,10 @@ def _apply_late_rule(policy, late_minutes, daily_salary):
         elif rules.deduction_type == 'per_minute':
             return round(late_minutes * float(rules.deduction_value), 2)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _apply_late_rule",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
     return 0.0
 
 
@@ -1345,7 +1425,10 @@ def _apply_absence_rule(policy, absent_days, daily_salary):
         elif rule.deduction_type == 'fixed_amount':
             return round(absent_days * float(rule.deduction_value), 2)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _apply_absence_rule",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
     return round(absent_days * daily_salary, 2)
 
 
@@ -1375,7 +1458,10 @@ def _apply_overtime_rule(policy, overtime_hours, hourly_rate, overtime_type='aft
 
         return round(overtime_hours * hourly_rate * float(rule.multiplier), 2)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _apply_overtime_rule",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
     return round(overtime_hours * hourly_rate * 1.5, 2)
 
 
@@ -1393,7 +1479,10 @@ def _apply_night_allowance(policy, night_shift_days, daily_salary):
         elif rule.allowance_type == 'percentage':
             return round(night_shift_days * daily_salary * float(rule.percentage) / 100, 2)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _apply_night_allowance",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
     return 0.0
 
 
@@ -1411,7 +1500,10 @@ def _apply_weekend_allowance(policy, weekend_work_days, daily_salary):
         elif rule.compensation_type == 'fixed_amount':
             return round(weekend_work_days * float(rule.amount or 0), 2)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in _apply_weekend_allowance",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
     return round(weekend_work_days * daily_salary * 2, 2)
 
 def calculate_effective_payroll(employee, year, month, settings=None, lang='ar'):
@@ -1930,7 +2022,10 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         try:
             _d_date = date.fromisoformat(dd['date'])
         except Exception:
-            pass
+            logger.exception(
+        "payroll_rules error in calculate_effective_payroll",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+            )
 
         _dp = _get_day_policy(_d_date) if _d_date else None
         _es = dd.get('effective_status', '')
@@ -2259,7 +2354,10 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                     ).count()
                     field_allowance = visits_count * float(ps.per_visit_allowance or 0)
     except Exception:
-        pass
+        logger.exception(
+        "payroll_rules error in calculate_effective_payroll",
+        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
+        )
 
     field_allowance = round(field_allowance, 2)
     meal_allowance = round(meal_allowance, 2)
