@@ -1506,6 +1506,13 @@ def _apply_weekend_allowance(policy, weekend_work_days, daily_salary):
         )
     return round(weekend_work_days * daily_salary * 2, 2)
 
+
+
+def _is_exempt_from_attendance(role):
+    """هل الموظف معفي من خصم الغياب/التأخير (أدمن/HR)؟"""
+    return role in ('company_admin', 'hr_manager', 'super_admin')
+
+
 def calculate_effective_payroll(employee, year, month, settings=None, lang='ar'):
     """
     الحساب الكامل للراتب:
@@ -1692,7 +1699,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
     # ندمج أيام الشركة مع أي أيام الموظف اشتغلها فعلياً وهي مش أيام عمل للشركة
     # الأدمن/HR/Super Admin ملهومش نظام حضور وانصراف أصلاً، فمفيش أيام تتحسب ليهم خالص
-    if _emp_user_role in ('company_admin', 'hr_manager', 'super_admin'):
+    if _is_exempt_from_attendance(_emp_user_role):
         all_eval_dates = []
     else:
         all_eval_dates = sorted(list(set(working_dates) | attended_dates))
