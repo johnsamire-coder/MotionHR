@@ -26,6 +26,18 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'insecure-fallback-key')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
+
+
+# ═══ CORS Settings ═══
+CORS_ALLOWED_ORIGINS = [
+    "https://app.jssolutions-eg.com",
+    "https://jssolutions-eg.com",
+    "http://localhost:3000",
+    "http://localhost:8000",
+]
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = False
+
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
@@ -52,6 +64,7 @@ INSTALLED_APPS = [
     'landing',
     'subscriptions',
     'rest_framework',
+    'corsheaders',
     'rest_framework.authtoken',
 ]   
 
@@ -59,6 +72,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
