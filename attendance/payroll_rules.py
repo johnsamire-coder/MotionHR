@@ -810,10 +810,10 @@ def _get_bonuses(employee, year, month, lang='ar'):
         from .company_policy_models import CompanyBonusPolicy
         from datetime import date
         first_day = date(year, month, 1)
+        company = getattr(employee, 'company', None)
         _bounds = get_payroll_period_bounds(company, year, month) if company else (date(year, month, 1), date(year, month, 28))
         last_day = _bounds[1]
 
-        company = getattr(employee, 'company', None)
         if company:
             policies = CompanyBonusPolicy._base_manager.filter(
                 company=company,
@@ -1047,6 +1047,7 @@ def _get_penalties(employee, year, month, lang='ar'):
     try:
         from .company_policy_models import ManualPenalty
         import calendar
+        company = getattr(employee, 'company', None)
         _bounds = get_payroll_period_bounds(company, year, month) if company else None
         days_in_month = (_bounds[1] - _bounds[0]).days + 1 if _bounds else calendar.monthrange(year, month)[1]
         manual_penalties = ManualPenalty._base_manager.filter(
