@@ -1513,9 +1513,24 @@ def _apply_overtime_rule(policy, overtime_hours, hourly_rate, overtime_type='aft
 
 
 def _apply_night_allowance(policy, night_shift_days, daily_salary):
-    """يحسب بدل الشيفت الليلي"""
+    """يحسب بدل الشيفت الليلي (الجديد أولاً)"""
     if not policy or night_shift_days <= 0:
         return 0.0
+    # 1) النظام الجديد (BonusRule)
+    try:
+        from attendance.company_policy_models import BonusRule
+        new_rule = BonusRule._base_manager.filter(
+            bonus_type='night_shift',
+            is_active=True,
+            is_superseded=False,
+        ).order_by('-version_number').first()
+        if new_rule and new_rule.applies_to_employee(getattr(policy, '_employee', None)):
+            # BonusRule.calculate() مش موحدة - نستخدم fallback
+            return round(night_shift_days * daily_salary * 0.25, 2)
+    except Exception:
+        logger.exception("new BonusRule lookup failed in _apply_night_allowance")
+
+    # 2) النظام القديم (NightShiftRule)
     try:
         from attendance.models import NightShiftRule
         rule = NightShiftRule.objects.filter(policy=policy).first()
@@ -1534,9 +1549,23 @@ def _apply_night_allowance(policy, night_shift_days, daily_salary):
 
 
 def _apply_weekend_allowance(policy, weekend_work_days, daily_salary):
-    """يحسب بدل العمل في يوم الراحة"""
+    """يحسب بدل العمل في يوم الراحة (الجديد أولاً)"""
     if not policy or weekend_work_days <= 0:
         return 0.0
+    # 1) النظام الجديد (BonusRule)
+    try:
+        from attendance.company_policy_models import BonusRule
+        new_rule = BonusRule._base_manager.filter(
+            bonus_type='weekend_work',
+            is_active=True,
+            is_superseded=False,
+        ).order_by('-version_number').first()
+        if new_rule and new_rule.applies_to_employee(getattr(policy, '_employee', None)):
+            return round(weekend_work_days * daily_salary * 2, 2)
+    except Exception:
+        logger.exception("new BonusRule lookup failed in _apply_weekend_allowance")
+
+    # 2) النظام القديم (WeekendWorkRule)
     try:
         from attendance.models import WeekendWorkRule
         rule = WeekendWorkRule.objects.filter(policy=policy).first()
