@@ -1550,7 +1550,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         from django.db.models import Q
         from datetime import date as _date
 
-        period_end = _date(year, month, 28)
+        period_end = _date(year, month, monthrange(year, month)[1])
 
         # قواعد الجزاءات (Penalty Rules with Tiers)
         # نجيب كل قواعد الجزاءات النشطة، ونخزنها بحسب النوع
@@ -2215,7 +2215,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         from datetime import date as _date
 
         # نجيب السياسات السارية في نهاية الشهر
-        period_end = _date(year, month, 28)  # آخر يوم مضمون في الشهر
+        period_end = _date(year, month, monthrange(year, month)[1])  # آخر يوم مضمون في الشهر
         insurance_policies = CompanyInsurancePolicy._base_manager.filter(
             company=company,
             is_active=True,
@@ -2262,7 +2262,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         from django.db.models import Q
         from datetime import date as _date
 
-        period_end = _date(year, month, 28)
+        period_end = _date(year, month, monthrange(year, month)[1])
         tax_policy = TaxPolicy._base_manager.filter(
             company=company,
             is_active=True,
