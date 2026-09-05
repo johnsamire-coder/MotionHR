@@ -1240,6 +1240,29 @@ def payroll_report(request):
         except Exception as e:
             import logging
             logging.getLogger(__name__).error(f'payroll_report error for {emp}: {e}')
+            # بدل ما الموظف يختفي، نضيف row بصفر + علامة error
+            results.append({
+                'employee_id': emp.id,
+                'employee_code': getattr(emp, 'employee_code', '') or '',
+                'employee_name': _employee_name(emp) + ' [ERROR]',
+                'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+                'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
+                'job_title': getattr(getattr(emp, 'job_title', None), 'name_ar', '') or '',
+                'currency': 'EGP',
+                'basic_salary': 0,
+                'allowances_total': 0, 'overtime_bonus': 0, 'bonuses_total': 0,
+                'night_allowance': 0, 'weekend_allowance': 0, 'gross_salary': 0,
+                'late_deduction': 0, 'absence_deduction': 0,
+                'early_leave_deduction': 0, 'unpaid_leave_deduction': 0,
+                'flex_shortage_deduction': 0, 'insurance_deduction': 0,
+                'installments_total': 0, 'penalties_total': 0,
+                'total_deductions': 0, 'net_salary': 0,
+                'total_working_days': 0, 'attended_days': 0, 'absent_days': 0,
+                'late_days': 0, 'on_leave_days': 0, 'unpaid_leave_days': 0,
+                'total_late_minutes': 0,
+                'policy_name': None,
+                'error': str(e),
+            })
 
     return Response({
         'year': year,
