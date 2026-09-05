@@ -851,6 +851,7 @@ def mobile_submit_request(request):
             }, status=400)
 
 
+    _initial_status = 'pending' if request_type.requires_approval else 'approved'
     emp_request = EmployeeRequest._base_manager.create(
         company=employee.company,
         employee=employee,
@@ -864,9 +865,22 @@ def mobile_submit_request(request):
         amount=parsed_amount,
         duration_hours=Decimal(str(permission_hours)) if permission_hours else None,
         permission_time=parsed_permission_time,
-        status='pending',
-        step_1_status='pending',
+        status=_initial_status,
+        step_1_status=_initial_status,
     )
+    # لو النوع مش محتاج موافقة، نطبّق أثره فورًا (زي تعديل الاسم الشخصي)
+    if not request_type.requires_approval:
+        try:
+            _type_name_check = request_type.name or ''
+            if 'تعديل الاسم الشخصي' in _type_name_check or 'Personal Name Change' in _type_name_check:
+                _new_name = (details or '').strip()
+                if _new_name:
+                    _parts = _new_name.split(None, 1)
+                    employee.first_name_ar = _parts[0]
+                    employee.last_name_ar = _parts[1] if len(_parts) > 1 else ''
+                    employee.save()
+        except Exception:
+            pass
 
     # Permission usage is recorded at actual check-in/check-out after approval.
 
