@@ -1155,9 +1155,25 @@ def _get_active_policy(company, target_date, department=None, branch=None):
 
 
 def _apply_late_rule(policy, late_minutes, daily_salary):
-    """يطبق قاعدة الخصم على دقائق التأخير"""
+    """يطبق قاعدة الخصم على دقائق التأخير (الجديد أولاً)"""
     if not policy or late_minutes <= 0:
         return 0.0
+    # 1) النظام الجديد (PenaltyRule) - له الأولوية
+    try:
+        from attendance.company_policy_models import PenaltyRule
+        new_rule = PenaltyRule._base_manager.filter(
+            policy_company=policy.company if hasattr(policy, 'company') else None,
+            penalty_type='late_arrival',
+            is_active=True,
+            is_superseded=False,
+        ).order_by('-version_number').first()
+        if new_rule and new_rule.applies_to_employee(getattr(policy, '_employee', None)):
+            deduction, tier = new_rule.calculate(late_minutes, daily_salary=daily_salary)
+            return float(deduction)
+    except Exception:
+        logger.exception("new PenaltyRule lookup failed in _apply_late_rule")
+
+    # 2) النظام القديم (LateRule) - fallback
     try:
         from attendance.models import LateRule
         rules = LateRule.objects.filter(
@@ -1407,9 +1423,25 @@ def _apply_permission_balance(employee, late_minutes, reference_date, policy):
     return minutes_to_convert, remaining_late
 
 def _apply_absence_rule(policy, absent_days, daily_salary):
-    """يطبق قاعدة الخصم على أيام الغياب"""
+    """يطبق قاعدة الخصم على أيام الغياب (الجديد أولاً)"""
     if not policy or absent_days <= 0:
         return 0.0
+    # 1) النظام الجديد (PenaltyRule) - له الأولوية
+    try:
+        from attendance.company_policy_models import PenaltyRule
+        new_rule = PenaltyRule._base_manager.filter(
+            policy_company=policy.company if hasattr(policy, 'company') else None,
+            penalty_type='absence',
+            is_active=True,
+            is_superseded=False,
+        ).order_by('-version_number').first()
+        if new_rule and new_rule.applies_to_employee(getattr(policy, '_employee', None)):
+            deduction, tier = new_rule.calculate(absent_days, basic_salary=daily_salary * 30, days_in_month=30)
+            return float(deduction)
+    except Exception:
+        logger.exception("new PenaltyRule lookup failed in _apply_absence_rule")
+
+    # 2) النظام القديم (AbsenceRule) - fallback
     try:
         from attendance.models import AbsenceRule
         rule = AbsenceRule.objects.filter(
