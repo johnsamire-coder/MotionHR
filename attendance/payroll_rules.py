@@ -1513,6 +1513,23 @@ def _is_exempt_from_attendance(role):
     return role in ('company_admin', 'hr_manager', 'super_admin')
 
 
+
+_applies_cache = {}
+
+def _is_policy_applicable(policy, employee, year, month):
+    """بديل memoized لـpolicy.applies_to_employee() لتقليل N+1 queries."""
+    key = (policy.__class__.__name__, policy.id, employee.id)
+    if key in _applies_cache:
+        return _applies_cache[key]
+    try:
+        result = policy.applies_to_employee(employee)
+        _applies_cache[key] = result
+        return result
+    except Exception:
+        logger.exception("applies_to_employee failed for %s on %s", policy, employee)
+        return False
+
+
 def calculate_effective_payroll(employee, year, month, settings=None, lang='ar'):
     """
     الحساب الكامل للراتب:
