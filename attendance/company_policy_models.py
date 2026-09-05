@@ -2178,3 +2178,26 @@ class EndOfServicePolicy(TenantModel):
             'termination_reason': termination_reason,
         }
 
+
+
+class ManualEntryApprovalSetting(TenantModel):
+    """
+    إعداد لكل فئة (جزاء/مكافأة) هل تحتاج موافقة CEO/HR أو تتطبق تلقائيًا
+    الافتراضي: كل الفئات تحتاج موافقة (True) لحد ما الأدمن يغيّرها
+    """
+    ENTRY_TYPE_CHOICES = [
+        ('penalty', 'جزاء'),
+        ('bonus', 'مكافأة'),
+        ('allowance', 'بدل'),
+    ]
+    entry_type = models.CharField(max_length=20, choices=ENTRY_TYPE_CHOICES, verbose_name='نوع الإدخال')
+    category = models.CharField(max_length=25, verbose_name='الفئة')
+    requires_approval = models.BooleanField(default=True, verbose_name='يحتاج موافقة')
+
+    class Meta:
+        verbose_name = 'إعداد موافقة الإدخالات اليدوية'
+        verbose_name_plural = 'إعدادات موافقة الإدخالات اليدوية'
+        unique_together = [('company', 'entry_type', 'category')]
+
+    def __str__(self):
+        return f'{self.company} - {self.entry_type} - {self.category} - {"يحتاج موافقة" if self.requires_approval else "تلقائي"}'

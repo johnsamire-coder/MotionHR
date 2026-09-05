@@ -48,7 +48,7 @@ from .api_manual_entries import (
     manual_penalty_list, manual_penalty_detail, manual_penalty_approve, manual_penalty_reject,
     manual_bonus_list, manual_bonus_detail, manual_bonus_approve, manual_bonus_reject,
     manual_allowance_list, manual_allowance_detail, manual_allowance_approve, manual_allowance_reject,
-    manual_entries_summary,
+    manual_entries_summary, manual_entry_approval_settings,
 )
 from .api_general_policies import deduction_policies_list, deduction_policy_detail, bonus_policies_list, bonus_policy_detail
 
@@ -766,6 +766,7 @@ urlpatterns += [
     path('api/mobile/manager/rules/leave/<int:rule_id>/', leave_rule_detail, name='leave_rule_detail'),
     # Manual Entries
     path('api/mobile/manager/entries/summary/', manual_entries_summary, name='manual_entries_summary'),
+    path('api/mobile/manager/entries/approval-settings/', manual_entry_approval_settings, name='manual_entry_approval_settings'),
     path('api/mobile/manager/entries/penalty/', manual_penalty_list, name='manual_penalty_list'),
     path('api/mobile/manager/entries/penalty/<int:entry_id>/', manual_penalty_detail, name='manual_penalty_detail'),
     path('api/mobile/manager/entries/penalty/<int:entry_id>/approve/', manual_penalty_approve, name='manual_penalty_approve'),

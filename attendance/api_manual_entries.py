@@ -12,7 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 import json
 from datetime import date
 
-from .company_policy_models import ManualPenalty, ManualBonus, ManualAllowance
+from .company_policy_models import ManualPenalty, ManualBonus, ManualAllowance, ManualEntryApprovalSetting
 from employees.models import Employee
 from accounts.fcm_service import (
     notify_manual_entry_approved,
@@ -68,6 +68,24 @@ def _can_manage_employee(user, employee):
 # ═══════════════════════════════════════════════════════════════
 # Serializer
 # ═══════════════════════════════════════════════════════════════
+def _category_requires_approval(company, model_class, category):
+    """يرجّع True لو الفئة دي محتاجة موافقة (الافتراضي True لحد ما الأدمن يغيّرها)"""
+    entry_type_map = {
+        'ManualPenalty': 'penalty',
+        'ManualBonus': 'bonus',
+        'ManualAllowance': 'allowance',
+    }
+    entry_type = entry_type_map.get(model_class.__name__)
+    if not entry_type:
+        return True
+    setting = ManualEntryApprovalSetting._base_manager.filter(
+        company=company, entry_type=entry_type, category=category,
+    ).first()
+    if setting is None:
+        return True
+    return setting.requires_approval
+
+
 def _entry_to_dict(entry):
     return {
         'id': entry.id,
@@ -195,13 +213,14 @@ def _handle_list_create(request, ModelClass):
                 'error': 'مش مصرح لك تطلب للموظف ده (مش تابع لفريقك)',
             }, status=403)
 
-        # لو صاحب الشركة نفسه هو اللي بيضيف، يتعتمد فوراً من غير موافقة إضافية
-        _auto_approve = _is_ceo(request.user)
+        _category = data.get('category', 'other')
+        # لو صاحب الشركة نفسه هو اللي بيضيف، أو الفئة دي معفاة من الموافقة، يتعتمد فوراً
+        _auto_approve = _is_ceo(request.user) or not _category_requires_approval(company, ModelClass, _category)
         entry = ModelClass._base_manager.create(
             company=company,
             employee=employee,
             requested_by=request.user,
-            category=data.get('category', 'other'),
+            category=_category,
             amount_type=data.get('amount_type', 'fixed'),
             amount_value=data.get('amount_value', 0),
             reason=data.get('reason', ''),
@@ -487,3 +506,53 @@ def manual_entries_summary(request):
         'is_ceo': _is_ceo(request.user),
         'is_hr': _is_hr(request.user),
     })
+
+
+# ═══════════════════════════════════════════════════════════════
+# Approval Settings (CEO/HR only) - تحديد أنهي فئة تحتاج موافقة
+# ═══════════════════════════════════════════════════════════════
+@api_view(['GET', 'POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manual_entry_approval_settings(request):
+    """CEO/HR بس يقدروا يشوفوا/يعدّلوا هل فئة معينة تحتاج موافقة أو تتطبق تلقائيًا"""
+    if not (_is_ceo(request.user) or _is_hr(request.user)):
+        return JsonResponse({'success': False, 'error': 'غير مصرح'}, status=403)
+    company = request.user.company
+
+    if request.method == 'GET':
+        all_categories = {
+            'penalty': [c[0] for c in ManualPenalty.PENALTY_CATEGORY],
+            'bonus': [c[0] for c in ManualBonus.BONUS_CATEGORY],
+        }
+        existing = {
+            (s.entry_type, s.category): s.requires_approval
+            for s in ManualEntryApprovalSetting._base_manager.filter(company=company)
+        }
+        result = []
+        for entry_type, categories in all_categories.items():
+            for cat in categories:
+                result.append({
+                    'entry_type': entry_type,
+                    'category': cat,
+                    'requires_approval': existing.get((entry_type, cat), True),
+                })
+        return JsonResponse({'success': True, 'settings': result})
+
+    # POST — تحديث إعداد واحد أو أكتر
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        items = data.get('settings', [])
+        for item in items:
+            entry_type = item.get('entry_type')
+            category = item.get('category')
+            requires_approval = item.get('requires_approval', True)
+            if not entry_type or not category:
+                continue
+            ManualEntryApprovalSetting._base_manager.update_or_create(
+                company=company, entry_type=entry_type, category=category,
+                defaults={'requires_approval': requires_approval, 'updated_by': request.user},
+            )
+        return JsonResponse({'success': True, 'message': 'تم حفظ الإعدادات'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
