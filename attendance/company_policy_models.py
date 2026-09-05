@@ -210,6 +210,11 @@ class PayrollAllowance(TenantModel):
     def __str__(self):
         return f'{self.employee} - {self.name_ar} - {self.amount}'
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if not self.start_date:
+            raise ValidationError({'start_date': 'تاريخ بداية البدل مطلوب'})
+
 
 class PayrollDeduction(TenantModel):
     """
@@ -253,6 +258,11 @@ class PayrollDeduction(TenantModel):
 
     def __str__(self):
         return f'{self.employee} - {self.name_ar} - {self.amount}'
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if not self.start_date:
+            raise ValidationError({'start_date': 'تاريخ بداية الخصم مطلوب'})
 
 
 class CompanyAllowancePolicy(TenantModel):
