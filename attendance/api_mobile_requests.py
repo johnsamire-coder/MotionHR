@@ -1561,11 +1561,48 @@ def mobile_manager_employees_attendance(request):
             'status': getattr(att, 'status', '') or '',
         })
 
+    # نتأكد هل اليوم إجازة رسمية للشركة كلها، أو يوم عطلة أسبوعية بحسب سياسة العمل
+    is_official_holiday = False
+    try:
+        from leaves.official_holiday_models import OfficialHoliday
+        is_official_holiday = OfficialHoliday._base_manager.filter(
+            company=company, is_active=True,
+            start_date__lte=target_date, end_date__gte=target_date,
+        ).exists()
+    except Exception:
+        pass
+    if not is_official_holiday:
+        try:
+            from attendance.company_policy_models import CompanyWorkPolicy
+            policy = CompanyWorkPolicy._base_manager.filter(company=company).first()
+            if policy:
+                weekday_map = {
+                    0: policy.work_monday, 1: policy.work_tuesday, 2: policy.work_wednesday,
+                    3: policy.work_thursday, 4: policy.work_friday, 5: policy.work_saturday,
+                    6: policy.work_sunday,
+                }
+                if not weekday_map.get(target_date.weekday(), True):
+                    is_official_holiday = True
+        except Exception:
+            pass
+    # نحسب عدد الموظفين المعتمدين إجازة فردية اليوم (ضمن نطاق المستهدفين)
+    on_leave_count = 0
+    try:
+        from leaves.models import LeaveRequest
+        on_leave_count = LeaveRequest._base_manager.filter(
+            employee_id__in=scope_employee_ids,
+            status='approved',
+            start_date__lte=target_date, end_date__gte=target_date,
+        ).count()
+    except Exception:
+        pass
     return Response({
         'success': True,
         'date': target_date.strftime('%Y-%m-%d'),
         'items': items,
         'total': len(items),
+        'is_official_holiday': is_official_holiday,
+        'on_leave_count': on_leave_count,
     })
 
 
