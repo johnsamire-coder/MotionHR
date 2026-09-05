@@ -195,9 +195,23 @@ class CompanyAnnouncement(models.Model):
             if titles:
                 qs = qs.filter(job_title__in=titles)
         elif self.target_type == 'by_department':
-            qs = qs.filter(department__in=self.target_departments.all())
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT department_id FROM accounts_companyannouncement_target_departments WHERE companyannouncement_id = %s",
+                    [self.id],
+                )
+                _dept_ids = [row[0] for row in cursor.fetchall()]
+            qs = qs.filter(department_id__in=_dept_ids)
         elif self.target_type == 'by_branch':
-            qs = qs.filter(branch__in=self.target_branches.all())
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT branch_id FROM accounts_companyannouncement_target_branches WHERE companyannouncement_id = %s",
+                    [self.id],
+                )
+                _branch_ids = [row[0] for row in cursor.fetchall()]
+            qs = qs.filter(branch_id__in=_branch_ids)
 
         # طبّق الاستثناءات
         excluded_ids = list(self.excluded_employees.values_list('id', flat=True))

@@ -180,6 +180,14 @@ def manager_create_announcement(request):
     )
     if _is_plain_manager and _direct_report_ids:
         ann.target_employees.add(*_direct_report_ids)
+    elif not _is_plain_manager and _target_type == 'by_department':
+        _dept_ids = data.get('department_ids') or []
+        if _dept_ids:
+            ann.target_departments.add(*_dept_ids)
+    elif not _is_plain_manager and _target_type == 'by_branch':
+        _branch_ids = data.get('branch_ids') or []
+        if _branch_ids:
+            ann.target_branches.add(*_branch_ids)
 
     # إرسال Push Notification لكل موظف مستهدف
     sent_count = 0
