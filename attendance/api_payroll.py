@@ -597,6 +597,18 @@ def payroll_settings(request):
             logging.getLogger(__name__).warning(f'payroll cycle save error: {cycle_err}')
 
         company = getattr(user, 'company', None)
+
+        # امسح الكاش لما الإعدادات تتغير عشان الأرقام الجديدة تظهر فوراً
+        try:
+            from django.core.cache import cache
+            if company:
+                for lang in ('ar', 'en'):
+                    for y in range(2020, 2030):
+                        for m in range(1, 13):
+                            cache.delete(f"payroll_summary:{company.id}:{y}:{m}:{lang}")
+        except Exception:
+            pass
+
         return Response({
             'status': 'saved',
             'late_deduction_per_minute': float(obj.late_deduction_per_minute),
