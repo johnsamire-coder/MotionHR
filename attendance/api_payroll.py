@@ -121,7 +121,7 @@ def _get_payroll_settings(user):
                 }
     except Exception:
         pass
-    return DEFAULT_SETTINGS.copy()
+    return dict(DEFAULT_SETTINGS)
 
 
 def _serialize_summary_row(payroll):
