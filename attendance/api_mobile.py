@@ -732,6 +732,68 @@ def mobile_send_location(request):
         timestamp=timezone.now()
     )
 
+    # ── فحص النطاق الجغرافي وإنذار الـ 15 دقيقة ──
+    try:
+        now_dt = timezone.now()
+        today_date = timezone.localdate()
+        active_att = Attendance._base_manager.filter(
+            employee=employee,
+            date=today_date,
+            check_in_time__isnull=False,
+            check_out_time__isnull=True
+        ).order_by('-check_in_time').first()
+
+        if active_att:
+            active_att.last_location_ping = now_dt
+            company = employee.company
+            is_exempt = getattr(active_att, 'on_mission', False) or getattr(employee, 'worker_type', 'office') == 'field_free'
+
+            if is_exempt:
+                active_att.outside_geofence_since = None
+                active_att.geofence_alert_sent = False
+                active_att.save(update_fields=['last_location_ping', 'outside_geofence_since', 'geofence_alert_sent'])
+            else:
+                is_inside = True
+                if company and getattr(company, 'geofence_enabled', False) and company.office_latitude and company.office_longitude:
+                    from attendance.location_utils import is_within_radius
+                    radius = company.geofence_radius or 500
+                    check = is_within_radius(
+                        latitude, longitude,
+                        float(company.office_latitude),
+                        float(company.office_longitude),
+                        radius
+                    )
+                    is_inside = check.get('is_within', False)
+
+                if is_inside:
+                    active_att.outside_geofence_since = None
+                    active_att.geofence_alert_sent = False
+                    active_att.save(update_fields=['last_location_ping', 'outside_geofence_since', 'geofence_alert_sent'])
+                else:
+                    if not active_att.outside_geofence_since:
+                        active_att.outside_geofence_since = now_dt
+                        active_att.save(update_fields=['last_location_ping', 'outside_geofence_since'])
+                    else:
+                        diff_sec = (now_dt - active_att.outside_geofence_since).total_seconds()
+                        mins_out = int(diff_sec // 60)
+                        if mins_out >= 15 and not active_att.geofence_alert_sent:
+                            try:
+                                from attendance.fcm_logic import notify_manager_geofence_violation
+                                emp_name = f"{employee.first_name_ar or ''} {employee.last_name_ar or ''}".strip() or employee.employee_code
+                                notify_manager_geofence_violation(
+                                    company=company,
+                                    employee_name=emp_name,
+                                    minutes_outside=mins_out,
+                                    employee=employee
+                                )
+                                active_att.geofence_alert_sent = True
+                            except Exception as e:
+                                print(f"Geofence alert error: {e}")
+                        active_att.save(update_fields=['last_location_ping', 'geofence_alert_sent'])
+    except Exception as _geo_err:
+        print(f"Geofence tracking hook error: {_geo_err}")
+
+
     return Response({
         'success': True,
         'message': 'تم تسجيل الموقع بنجاح',
