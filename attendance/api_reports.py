@@ -1378,7 +1378,8 @@ def daily_attendance_report(request):
 
         for al in gps_qs:
             note = (getattr(al, 'notes', '') or '').lower()
-            if 'gps' in note or (getattr(al, 'last_latitude', None) is None and getattr(al, 'last_longitude', None) is None):
+            # فقط لو الـ notes فيها 'gps' صراحة (مش بناءً على None)
+            if 'gps' in note:
                 gps_alert_map[al.employee_id] = al
     except Exception:
         gps_alert_map = {}
@@ -1403,6 +1404,7 @@ def daily_attendance_report(request):
             status = summary.effective_status or summary.status
             row = {
                 'employee_id': emp.id,
+                'attendance_id': att.id if att else None,
                 'employee_name': _employee_name(emp),
                 'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
                 'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
@@ -1426,6 +1428,7 @@ def daily_attendance_report(request):
                 status = 'present'
             row = {
                 'employee_id': emp.id,
+                'attendance_id': att.id if att else None,
                 'employee_name': _employee_name(emp),
                 'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
                 'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
@@ -1457,6 +1460,7 @@ def daily_attendance_report(request):
             status = 'absent'
             row = {
                 'employee_id': emp.id,
+                'attendance_id': None,
                 'employee_name': _employee_name(emp),
                 'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
                 'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',

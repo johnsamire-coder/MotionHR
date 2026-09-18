@@ -39,13 +39,40 @@ def manager_adjust_attendance(request, attendance_id):
     if not reason:
         return Response({'success': False, 'message': 'يجب كتابة سبب التعديل بالتفصيل'}, status=400)
 
-    try:
-        attendance = Attendance._base_manager.select_related('employee', 'employee__company').get(id=attendance_id)
-    except Attendance.DoesNotExist:
-        return Response({'success': False, 'message': 'سجل الحضور غير موجود'}, status=404)
-
-    if user.role != 'super_admin' and attendance.employee.company_id != getattr(user, 'company_id', None):
-        return Response({'success': False, 'message': 'لا يمكنك تعديل سجلات موظف في شركة أخرى'}, status=403)
+    # ─── لو attendance_id = 0 → نعمل سجل حضور جديد ───
+    if not attendance_id or attendance_id == 0:
+        # لازم employee_id في الـ body
+        emp_id = request.data.get('employee_id')
+        if not emp_id:
+            return Response({'success': False, 'message': 'يجب تحديد الموظف'}, status=400)
+        try:
+            employee = __import__('employees').models.Employee._base_manager.select_related('company').get(id=emp_id)
+        except Exception:
+            return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
+        if user.role != 'super_admin' and employee.company_id != getattr(user, 'company_id', None):
+            return Response({'success': False, 'message': 'لا يمكنك تعديل سجلات موظف في شركة أخرى'}, status=403)
+        from datetime import datetime
+        date_str = request.data.get('date') or str(datetime.now().date())
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except Exception:
+            return Response({'success': False, 'message': 'صيغة التاريخ غير صحيحة'}, status=400)
+        # نعمل سجل جديد
+        attendance = Attendance._base_manager.create(
+            employee=employee,
+            date=target_date,
+            status='present',
+            is_manually_edited=True,
+        )
+        changes = ['سجل حضور جديد (إضافة يدوية)']
+    else:
+        try:
+            attendance = Attendance._base_manager.select_related('employee', 'employee__company').get(id=attendance_id)
+        except Attendance.DoesNotExist:
+            return Response({'success': False, 'message': 'سجل الحضور غير موجود'}, status=404)
+        if user.role != 'super_admin' and attendance.employee.company_id != getattr(user, 'company_id', None):
+            return Response({'success': False, 'message': 'لا يمكنك تعديل سجلات موظف في شركة أخرى'}, status=403)
+        changes = []
 
     changes = []
     req_check_in = request.data.get('check_in_time')
@@ -112,6 +139,9 @@ def manager_adjust_attendance(request, attendance_id):
             date=attendance.date,
             defaults={
                 'status': attendance.status,
+                'effective_status': attendance.status,
+                'late_minutes': int(attendance.late_minutes or 0),
+                'early_leave_minutes': int(attendance.early_leave_minutes or 0),
                 'work_hours': attendance.work_hours or Decimal('0.00'),
             }
         )

@@ -330,3 +330,29 @@ def notify_manager_new_mission_request(company, employee_name, mission_title, mi
         body_en=f'{employee_name} submitted a mission request: {mission_title}',
         employee=employee,
     )
+
+
+def notify_manager_geofence_violation(company, employee_name, minutes_outside, employee=None):
+    """إرسال إشعار للمديرين يفيد بأن الموظف خارج نطاق العمل لمدة تزيد عن 15 دقيقة"""
+    title = "خروج عن نطاق العمل ⚠️"
+    body = f"الموظف {employee_name} متواجد خارج نطاق العمل منذ {minutes_outside} دقيقة"
+    
+    title_en = "Out of Geofence Range ⚠️"
+    body_en = f"Employee {employee_name} has been outside the geofence range for {minutes_outside} minutes"
+    
+    data = {
+        "type": "geofence_violation",
+        "employee_id": str(employee.id) if employee else "",
+        "employee_name": employee_name,
+        "minutes_outside": str(minutes_outside)
+    }
+    
+    return notify_managers(
+        title=title,
+        body=body,
+        data=data,
+        company=company,
+        title_en=title_en,
+        body_en=body_en,
+        employee=employee
+    )

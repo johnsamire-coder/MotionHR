@@ -882,6 +882,21 @@ def mobile_attendance_action(request):
     # ═══════════════════════════════════════════════════
     # Worker Type Check - فحص نوع الموظف
     # ═══════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════
+    # Weekly Off Day Check - فحص يوم الإجازة الأسبوعية
+    # ═══════════════════════════════════════════════════
+    if action == 'check_in' and active_shift and hasattr(active_shift, 'is_work_day'):
+        if not active_shift.is_work_day(today):
+            return Response({
+                'success': False,
+                **bilingual_message(
+                    employee,
+                    'اليوم إجازة أسبوعية حسب الشيفت المحدد لك، لا يمكن تسجيل الحضور.',
+                    'Today is your weekly off day according to your shift. Check-in is not allowed.'
+                ),
+                'is_weekly_off': True,
+            }, status=400)
+
     if action == 'check_in':
         worker_type = getattr(employee, 'worker_type', 'office') or 'office'
         company = employee.company
@@ -1847,25 +1862,28 @@ def mobile_attendance_status(request):
             check_in_local = timezone.localtime(attendance.check_in_time)
             periods = get_shift_periods(shift, att_date)
 
+            grace_minutes = int(getattr(shift, 'grace_period', 0) or 0)
             if periods:
                 first_start = periods[0].get('start')
                 if first_start:
                     if timezone.is_naive(first_start):
                         tz = timezone.get_current_timezone()
                         first_start = timezone.make_aware(first_start, tz)
-                    diff = (check_in_local - timezone.localtime(first_start)).total_seconds()
-                    if diff > 0:
+                    diff_minutes = (check_in_local - timezone.localtime(first_start)).total_seconds() / 60
+                    net_late = int(diff_minutes) - grace_minutes
+                    if net_late > 0:
                         response_data['is_late'] = True
-                        response_data['late_minutes'] = int(diff // 60)
+                        response_data['late_minutes'] = net_late
             elif shift.start_time:
                 from datetime import datetime
                 shift_start_dt = datetime.combine(att_date, shift.start_time)
                 tz = timezone.get_current_timezone()
                 shift_start_aware = timezone.make_aware(shift_start_dt, tz)
-                diff = (check_in_local - shift_start_aware).total_seconds()
-                if diff > 0:
+                diff_minutes = (check_in_local - shift_start_aware).total_seconds() / 60
+                net_late = int(diff_minutes) - grace_minutes
+                if net_late > 0:
                     response_data['is_late'] = True
-                    response_data['late_minutes'] = int(diff // 60)
+                    response_data['late_minutes'] = net_late
     except Exception:
         pass
     # ──────────────────────────────────────────────────
@@ -2237,40 +2255,9 @@ def mobile_device_register(request):
         if not device_id:
             return Response({'success': False, 'message': 'device_id مطلوب'}, status=400)
 
-        # ─── منع تعدد الحسابات على نفس الجهاز ───
-        other_user_device = TrustedDevice._base_manager.filter(
-            device_id=device_id
-        ).exclude(user=user).first()
-
-        if other_user_device:
-            # نبعت إشعار للمديرين إن في نشاط مشبوه
-            emp = Employee._base_manager.filter(user=user).first()
-            emp_name = f"{getattr(emp, 'first_name_ar', '')} {getattr(emp, 'last_name_ar', '')}".strip() if emp else user.username
-            other_emp = Employee._base_manager.filter(user=other_user_device.user).first()
-            other_name = f"{getattr(other_emp, 'first_name_ar', '')} {getattr(other_emp, 'last_name_ar', '')}".strip() if other_emp else other_user_device.user.username
-            try:
-                from accounts.fcm_service import send_notification_to_managers
-                send_notification_to_managers(
-                    company=getattr(user, 'company', None),
-                    title='🚨 نشاط مشبوه — تعدد حسابات',
-                    body=f'الجهاز نفسه مسجل باسم {other_name} وحاول الدخول باسم {emp_name}',
-                    data={
-                        'type': 'suspicious_device_activity',
-                        'screen': 'trusted_devices',
-                        'device_id': device_id[:20],
-                        'user_id': str(user.id),
-                    },
-                    employee=emp,
-                )
-            except Exception:
-                pass
-
-            return Response({
-                'success': False,
-                'status': 'suspicious',
-                'auto_attendance_enabled': False,
-                'message': 'هذا الجهاز مسجل بحساب آخر — تم إبلاغ المدير',
-            }, status=403)
+        # ─── ⚠️ نظام تعدد الحسابات معطّل بطلب العميل (6 سبتمبر 2026) ───
+        # ─── تم تعطيل فحص 'نفس الجهاز بحسابين' والإشعارات المرتبطة به ───
+        pass
         # ─────────────────────────────────────────────
 
         # هل الجهاز ده موجود قبل كده؟
@@ -3042,6 +3029,23 @@ def check_app_version(request):
             'force_update': False,
         })
 
+    # ─── ⚠️ استثناء: إخفاء إشعار التحديث لموظف بعينه (EMP00006) بطلب العميل 6 سبتمبر 2026 ───
+    from rest_framework.authtoken.models import Token
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if auth_header.startswith('Token '):
+        token_key = auth_header.split(' ')[1]
+        try:
+            token = Token.objects.select_related('user').get(key=token_key)
+            if hasattr(token.user, 'employee') and token.user.employee.employee_code == 'EMP00006':
+                return Response({
+                    'success': True,
+                    'update_available': False,
+                    'force_update': False,
+                })
+        except Exception:
+            pass
+    # ─────────────────────────────────────────────────────────────────────
+
     update_available = current_version_code < version.latest_version_code
     force_update = current_version_code < version.min_required_version_code
 
@@ -3055,3 +3059,118 @@ def check_app_version(request):
         'message_ar': version.update_message_ar,
         'message_en': version.update_message_en,
     })
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def geofence_ping(request):
+    """
+    استقبال تحديث الموقع من تطبيق الموظف دورياً
+    والتحقق من تواجده داخل نطاق العمل، وإرسال تنبيه للمدير إذا تجاوز 15 دقيقة في الخارج.
+    """
+    user = request.user
+    employee = getattr(user, 'employee', None)
+    if not employee:
+        return Response({'success': False, 'message': 'الموظف غير موجود'}, status=400)
+
+    try:
+        latitude = float(request.data.get('latitude'))
+        longitude = float(request.data.get('longitude'))
+    except (TypeError, ValueError):
+        return Response({'success': False, 'message': 'إحداثيات الموقع غير صالحة'}, status=400)
+
+    now = timezone.now()
+    today = timezone.localdate()
+
+    # جلب سجل الحضور المفتوح لليوم (بصم ولم ينصرف)
+    attendance = Attendance._base_manager.filter(
+        employee=employee,
+        date=today,
+        check_in_time__isnull=False,
+        check_out_time__isnull=True
+    ).order_by('-check_in_time').first()
+
+    if not attendance:
+        return Response({
+            'success': True,
+            'message': 'لا يوجد حضور نشط حالياً',
+            'is_active': False
+        })
+
+    attendance.last_location_ping = now
+    company = employee.company
+
+    # فحص نوع الموظف والمأموريات
+    if getattr(attendance, 'on_mission', False) or getattr(employee, 'worker_type', 'office') == 'field_free':
+        # في مأمورية أو ميداني حر -> معفي من قيود النطاق
+        attendance.outside_geofence_since = None
+        attendance.geofence_alert_sent = False
+        attendance.save(update_fields=['last_location_ping', 'outside_geofence_since', 'geofence_alert_sent'])
+        return Response({'success': True, 'inside_geofence': True, 'exempt': True})
+
+    # فحص النطاق الجغرافي للشركة
+    is_inside = True
+    if company and getattr(company, 'geofence_enabled', False) and company.office_latitude and company.office_longitude:
+        from attendance.location_utils import is_within_radius
+        radius = company.geofence_radius or 500
+        check = is_within_radius(
+            latitude, longitude,
+            float(company.office_latitude),
+            float(company.office_longitude),
+            radius
+        )
+        is_inside = check.get('is_within', False)
+
+    if is_inside:
+        # الموظف داخل النطاق -> تصفير عداد الخروج
+        attendance.outside_geofence_since = None
+        attendance.geofence_alert_sent = False
+        attendance.save(update_fields=['last_location_ping', 'outside_geofence_since', 'geofence_alert_sent'])
+        return Response({
+            'success': True,
+            'inside_geofence': True,
+            'minutes_outside': 0,
+            'alert_sent': False
+        })
+    else:
+        # الموظف خارج النطاق
+        if not attendance.outside_geofence_since:
+            # بداية رصد الخروج
+            attendance.outside_geofence_since = now
+            attendance.save(update_fields=['last_location_ping', 'outside_geofence_since'])
+            return Response({
+                'success': True,
+                'inside_geofence': False,
+                'minutes_outside': 0,
+                'alert_sent': False
+            })
+        else:
+            # حساب عدد الدقائق منذ الخروج
+            diff_seconds = (now - attendance.outside_geofence_since).total_seconds()
+            minutes_outside = int(diff_seconds // 60)
+
+            alert_sent = attendance.geofence_alert_sent
+            if minutes_outside >= 15 and not alert_sent:
+                # تجاوز 15 دقيقة ولم يتم إرسال تنبيه -> إرسال إشعار للمديرين
+                try:
+                    from attendance.fcm_logic import notify_manager_geofence_violation
+                    emp_name = f"{employee.first_name_ar or ''} {employee.last_name_ar or ''}".strip() or employee.employee_code
+                    notify_manager_geofence_violation(
+                        company=company,
+                        employee_name=emp_name,
+                        minutes_outside=minutes_outside,
+                        employee=employee
+                    )
+                    attendance.geofence_alert_sent = True
+                    alert_sent = True
+                except Exception as e:
+                    print(f"Geofence violation notification error: {e}")
+
+            attendance.save(update_fields=['last_location_ping', 'geofence_alert_sent'])
+            return Response({
+                'success': True,
+                'inside_geofence': False,
+                'minutes_outside': minutes_outside,
+                'alert_sent': alert_sent
+            })

@@ -682,10 +682,10 @@ def manager_employee_requests(request, emp_id):
             records.append({
                 "id": req.id,
                 "request_type": str(req.request_type) if req.request_type else "",
-                "title": req.title or "",
+                "title": req.subject or "",
                 "status": req.status,
                 "created_at": req.created_at.strftime("%Y-%m-%d") if req.created_at else None,
-                "notes": req.notes or "",
+                "notes": req.details or "",
             })
 
         return Response({"requests": records, "count": len(records)})

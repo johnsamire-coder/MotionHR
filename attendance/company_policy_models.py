@@ -134,6 +134,18 @@ class CompanyWorkPolicy(TenantModel):
         max_length=20, choices=LOCATION_LOSS_ACTIONS, default='alert_only',
         verbose_name='إجراء فقد الموقع'
     )
+    # صلاحيات تعديل الحضور (HR/Admin)
+    hr_can_edit_attendance = models.BooleanField(
+        default=False,
+        verbose_name='الـ HR يقدر يعدل الحضور',
+        help_text='يسمح لمدير الشركة بتعديل سجلات الحضور'
+    )
+    hr_can_cancel_attendance = models.BooleanField(
+        default=False,
+        verbose_name='الـ HR يقدر يلغي الحضور',
+        help_text='يسمح لمدير الشركة بإلغاء سجلات الحضور'
+    )
+
     location_loss_grace_minutes = models.PositiveIntegerField(
         default=5, verbose_name='دقائق سماح قبل اعتبار الموقع مفقوداً'
     )
@@ -1114,7 +1126,7 @@ class PenaltyRule(TenantModel):
             return _policy_has_specific_employee(self, employee.id)
         return False
 
-    def calculate(self, amount, basic_salary=0, days_in_month=30):
+    def calculate(self, amount, basic_salary=0, days_in_month=30, daily_salary=None):
         """
         يحسب مبلغ الخصم بناءً على الشرائح
         - amount: القيمة المدخلة (دقايق أو أيام)
@@ -1128,7 +1140,10 @@ class PenaltyRule(TenantModel):
         if effective == 0:
             return Decimal('0'), None
 
-        basic = Decimal(str(basic_salary or 0))
+        if daily_salary and not basic_salary:
+            basic = Decimal(str(daily_salary)) * Decimal(str(days_in_month))
+        else:
+            basic = Decimal(str(basic_salary or 0))
         daily = basic / Decimal(str(days_in_month))
 
         # نلاقي الشريحة المناسبة

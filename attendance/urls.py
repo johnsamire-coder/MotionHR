@@ -119,6 +119,7 @@ urlpatterns = [
     path('api/mobile/jwt/refresh/', TokenRefreshView.as_view(), name='mobile_jwt_refresh'),
     path('api/mobile/jwt/verify/', TokenVerifyView.as_view(), name='mobile_jwt_verify'),
     path('api/mobile/location/', api_mobile.mobile_send_location, name='mobile_location'),
+    path('api/mobile/geofence-ping/', api_mobile.geofence_ping, name='geofence_ping'),
     path('api/mobile/attendance/', api_mobile.mobile_attendance_action, name='mobile_attendance'),
     path('api/mobile/status/', api_mobile.mobile_attendance_status, name='mobile_attendance_status'),
     path('api/mobile/activate-account/', api_mobile.activate_account),

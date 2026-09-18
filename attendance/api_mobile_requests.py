@@ -1130,6 +1130,7 @@ def mobile_manager_pending(request):
 @permission_classes([IsAuthenticated])
 def mobile_manager_action(request):
     """موافقة أو رفض طلب"""
+    from leaves.models import LeaveRequest
     user = request.user
     role = getattr(user, 'role', 'employee')
 
@@ -1191,12 +1192,7 @@ def mobile_manager_action(request):
                     except Exception:
                         pass
 
-                leave_category = getattr(getattr(item, 'leave_type', None), 'category', '') or ''
-                if leave_category == 'sick' and not getattr(item, 'substitute_employee', None):
-                    return Response({
-                        'success': False,
-                        'message': 'لا يمكن اعتماد الإجازة المرضية بدون تحديد موظف بديل'
-                    }, status=400)
+                # تم إلغاء إجبار تحديد بديل عند اعتماد الإجازة المرضية (البديل اختياري دلوقتي)
 
                 item.approve(user, notes)
                 if employee_user:
@@ -2220,14 +2216,7 @@ def manager_edit_leave(request, leave_id):
         leave.reason = d['reason']
     if 'status' in d and role in ('company_admin', 'hr_manager', 'super_admin'):
         new_status = d['status']
-        leave_category = getattr(getattr(leave, 'leave_type', None), 'category', '') or ''
-        if new_status == 'approved' and leave_category == 'sick' and not (
-            d.get('substitute_employee_id') or getattr(leave, 'substitute_employee_id', None)
-        ):
-            return Response({
-                'success': False,
-                'message': 'لا يمكن اعتماد الإجازة المرضية بدون تحديد موظف بديل'
-            }, status=400)
+        # تم إلغاء إجبار تحديد بديل عند اعتماد الإجازة المرضية (البديل اختياري دلوقتي)
         leave.status = new_status
     if 'substitute_employee_id' in d:
         from employees.models import Employee
@@ -2546,15 +2535,8 @@ def hr_create_leave(request):
     if status_val not in ("pending", "approved"):
         status_val = "approved"
 
-    # إجبار البديل في المرضية عند الإنشاء المباشر كـ approved
+    # تم إلغاء إجبار تحديد بديل عند اعتماد الإجازة المرضية (البديل اختياري دلوقتي)
     leave_category = getattr(leave_type, 'category', '') or ''
-    if status_val == 'approved' and leave_category == 'sick':
-        _sub_id = request.data.get('substitute_employee_id')
-        if not _sub_id:
-            return Response({
-                'success': False,
-                'error': 'لا يمكن اعتماد الإجازة المرضية بدون تحديد موظف بديل'
-            }, status=400)
 
     # البديل لو بعته المدير أو HR
     substitute_emp = None

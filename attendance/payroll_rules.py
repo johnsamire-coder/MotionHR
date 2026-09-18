@@ -2564,3 +2564,84 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
         'daily_details': daily_details,
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# Late Warning System
+# ═══════════════════════════════════════════════════════════════
+def get_late_warning_info(employee, target_date, late_minutes):
+    """
+    ترجع معلومات الإنذار للموظف بناءً على عدد مرات التأخير في الشهر
+
+    Args:
+        employee: الموظف
+        target_date: تاريخ التأخير
+        late_minutes: عدد دقائق التأخير (محسوبة بعد فترة السماح)
+
+    Returns:
+        dict: {
+            'warning_level': 0-2,    # 0 = عادي, 1 = إنذار أول, 2 = إنذار ثاني
+            'late_count': int,       # عدد مرات التأخير في الشهر
+            'message': str,          # رسالة عربية
+            'deduction_days': float, # عدد أيام الخصم
+        }
+        or None في حالة الخطأ
+    """
+    try:
+        from attendance.models import Attendance
+        from attendance.company_policy_models import PenaltyRule
+
+        company = getattr(employee, 'company', None)
+        if not company:
+            return None
+
+        # الشهر الحالي
+        if isinstance(target_date, str):
+            from datetime import datetime
+            target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+        month_start = target_date.replace(day=1)
+
+        # عدد مرات التأخير في الشهر (بما فيها الحالية)
+        late_count = Attendance._base_manager.filter(
+            employee=employee,
+            date__gte=month_start,
+            date__lte=target_date,
+            late_minutes__gt=0,
+        ).count()
+
+        # نجيب الـ PenaltyRule للشركة
+        rule = PenaltyRule._base_manager.filter(
+            company=company,
+            warnings_enabled=True,
+            is_active=True,
+        ).first()
+
+        # الحالة الافتراضية (بدون rule)
+        if not rule:
+            return {
+                'warning_level': 0,
+                'late_count': late_count,
+                'message': f'عدد مرات التأخير هذا الشهر: {late_count}',
+                'deduction_days': 0,
+            }
+
+        # تحديد مستوى الإنذار
+        warning_level = 0
+        deduction_days = 0
+        message = f'عدد مرات التأخير هذا الشهر: {late_count}'
+
+        if rule.second_warning_after and late_count >= rule.second_warning_after:
+            warning_level = 2
+            message = f'إنذار ثاني - وصل التأخير إلى {late_count} مرات في الشهر'
+        elif rule.first_warning_after and late_count >= rule.first_warning_after:
+            warning_level = 1
+            message = f'إنذار أول - وصل التأخير إلى {late_count} مرات في الشهر'
+
+        return {
+            'warning_level': warning_level,
+            'late_count': late_count,
+            'message': message,
+            'deduction_days': deduction_days,
+        }
+    except Exception:
+        return None

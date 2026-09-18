@@ -1264,6 +1264,22 @@ class Attendance(TenantModel):
         verbose_name='ملاحظات الإدارة'
     )
     
+    # مراقبة النطاق الجغرافي
+    outside_geofence_since = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="تاريخ ووقت الخروج عن النطاق"
+    )
+    geofence_alert_sent = models.BooleanField(
+        default=False,
+        verbose_name="تم إرسال تنبيه الخروج"
+    )
+    last_location_ping = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="آخر تحديث للموقع"
+    )
+
     class Meta:
         verbose_name = 'سجل حضور'
         verbose_name_plural = 'سجلات الحضور'
