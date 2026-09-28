@@ -1121,7 +1121,7 @@ def _get_active_policy(company, target_date, department=None, branch=None):
 
         # قسم أولاً
         if department:
-            dept_assignment = AttendancePolicyAssignment.objects.filter(
+            dept_assignment = AttendancePolicyAssignment._base_manager.filter(
                 date_filter & status_filter & company_filter,
                 assignment_type='department',
                 department=department
@@ -1131,7 +1131,7 @@ def _get_active_policy(company, target_date, department=None, branch=None):
 
         # فرع تانياً
         if branch:
-            branch_assignment = AttendancePolicyAssignment.objects.filter(
+            branch_assignment = AttendancePolicyAssignment._base_manager.filter(
                 date_filter & status_filter & company_filter,
                 assignment_type='branch',
                 branch=branch
@@ -1140,7 +1140,7 @@ def _get_active_policy(company, target_date, department=None, branch=None):
                 return branch_assignment.policy
 
         # شركة أخيراً
-        company_assignment = AttendancePolicyAssignment.objects.filter(
+        company_assignment = AttendancePolicyAssignment._base_manager.filter(
             date_filter & status_filter & company_filter,
             assignment_type='company'
         ).select_related('policy').order_by('priority').first()
@@ -1163,7 +1163,7 @@ def _apply_late_rule(policy, late_minutes, daily_salary):
     try:
         from attendance.company_policy_models import PenaltyRule
         new_rule = PenaltyRule._base_manager.filter(
-            policy_company=policy.company if hasattr(policy, 'company') else None,
+            company=policy.company if hasattr(policy, 'company') else None,
             penalty_type='late_arrival',
             is_active=True,
             is_superseded=False,
@@ -1431,7 +1431,7 @@ def _apply_absence_rule(policy, absent_days, daily_salary):
     try:
         from attendance.company_policy_models import PenaltyRule
         new_rule = PenaltyRule._base_manager.filter(
-            policy_company=policy.company if hasattr(policy, 'company') else None,
+            company=policy.company if hasattr(policy, 'company') else None,
             penalty_type='absence',
             is_active=True,
             is_superseded=False,
@@ -2117,6 +2117,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     # م-6: نجمع الأرقام لكل سياسة لوحدها ثم نطبق قواعدها
     _policy_totals = {}  # policy_id -> {late, absent, overtime, night, weekend}
     _no_policy_totals = {'late': 0, 'absent': 0, 'overtime': 0.0, 'night': 0, 'weekend': 0}
+    _late_deduction_sum = 0.0  # نحسب خصم التأخير يوم بيوم مش على إجمالي الشهر
 
     for dd in daily_details:
         _d_date = None
@@ -2137,6 +2138,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 _policy_totals[_pid] = {'policy': _dp, 'late': 0, 'absent': 0, 'overtime': 0.0, 'night': 0, 'weekend': 0}
             if _es in ('late',):
                 _policy_totals[_pid]['late'] += dd.get('late_minutes', 0)
+                _late_deduction_sum += _apply_late_rule(_dp, dd.get('late_minutes', 0), daily_salary)
             if _es == 'absent':
                 _policy_totals[_pid]['absent'] += 1
             _policy_totals[_pid]['overtime'] += dd.get('overtime_hours', 0.0)
@@ -2164,9 +2166,9 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     night_allowance = 0.0
     weekend_allowance = 0.0
 
+    late_deduction = _late_deduction_sum
     for _pid, _pt in _policy_totals.items():
         _pol = _pt['policy']
-        late_deduction += _apply_late_rule(_pol, _pt['late'], daily_salary)
         absence_deduction += _apply_absence_rule(_pol, _pt['absent'], daily_salary)
         overtime_bonus += _apply_overtime_rule(_pol, _pt['overtime'], hourly_rate)
         night_allowance += _apply_night_allowance(_pol, _pt['night'], daily_salary)
