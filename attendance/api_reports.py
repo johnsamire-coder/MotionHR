@@ -324,6 +324,8 @@ def attendance_monthly_report(request):
             'total_checkins': checkins,
             'total_checkouts': checkouts,
             'working_days': working_days,
+            'expected_working_days': len(emp_business_dates),
+            'weekly_off_days': (emp_end - emp_start).days + 1 - len(emp_business_dates),
             'absent_days': absent_days,
             'late_days': late_days,
             'approved_leaves': len(emp_leave_dates),

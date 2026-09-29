@@ -2492,7 +2492,17 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     )
 
     net_salary = round(gross_salary - total_deductions, 2)
-    attended_days = present_days + late_days + mission_days
+    try:
+        _period_first, _period_last = (
+            get_payroll_period_bounds(company, year, month)
+            if hasattr(company, 'payroll_cycle_type') else _period_bounds(year, month)
+        )
+        _period_upper = min(_period_last, date.today())
+        _total_period_days = (_period_upper - _period_first).days + 1
+        weekend_days = max(0, _total_period_days - len(working_dates))
+    except Exception:
+        weekend_days = 0
+    attended_days = present_days + late_days + mission_days + on_leave_days + weekend_days
 
     return {
         'employee_id': employee.id,
