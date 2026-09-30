@@ -1024,30 +1024,49 @@ def payroll_summary_export_pdf(request):
     import calendar, datetime
 
     year, month = _parse_month(request)
-    settings = _get_payroll_settings(user)
-    employees = _get_company_employees(user)
 
-    _, last_day = calendar.monthrange(year, month)
-    month_start = datetime.date(year, month, 1)
-    month_end = datetime.date(year, month, last_day)
+    # نحاول نستخدم النسخة المخزّنة مؤقتاً (Cache) لو موجودة، عشان التصدير يبقى سريع
+    company_id = getattr(getattr(user, 'employee_profile', None), 'company_id', None) or getattr(user, 'company_id', None)
+    cache_key = f"payroll_summary:{company_id}:{year}:{month}:ar"
+    cached_result = cache.get(cache_key)
 
     rows = []
-    for emp in employees:
-        if emp.hire_date and emp.hire_date > month_end:
-            continue
-        if getattr(emp, 'termination_date', None) and emp.termination_date < month_start:
-            continue
-        payroll = calculate_effective_payroll(emp, year, month, settings, lang='ar')
-        rows.append({
-            'employee_code': payroll.get('employee_code', ''),
-            'employee_name': payroll.get('employee_name', ''),
-            'basic_salary': payroll.get('basic_salary', 0),
-            'allowances_total': payroll.get('allowances_total', 0),
-            'overtime_bonus': payroll.get('overtime_bonus', 0),
-            'late_deduction': payroll.get('late_deduction', 0),
-            'absence_deduction': payroll.get('absence_deduction', 0),
-            'net_salary': payroll.get('net_salary', 0),
-        })
+    if cached_result and cached_result.get('employees'):
+        for e in cached_result['employees']:
+            rows.append({
+                'employee_code': e.get('employee_code', ''),
+                'employee_name': e.get('employee_name', ''),
+                'basic_salary': e.get('basic_salary', 0),
+                'allowances_total': e.get('allowances_total', 0),
+                'overtime_bonus': e.get('overtime_bonus', 0),
+                'late_deduction': e.get('late_deduction', 0),
+                'absence_deduction': e.get('absence_deduction', 0),
+                'net_salary': e.get('net_salary', 0),
+            })
+    else:
+        settings = _get_payroll_settings(user)
+        employees = _get_company_employees(user)
+
+        _, last_day = calendar.monthrange(year, month)
+        month_start = datetime.date(year, month, 1)
+        month_end = datetime.date(year, month, last_day)
+
+        for emp in employees:
+            if emp.hire_date and emp.hire_date > month_end:
+                continue
+            if getattr(emp, 'termination_date', None) and emp.termination_date < month_start:
+                continue
+            payroll = calculate_effective_payroll(emp, year, month, settings, lang='ar')
+            rows.append({
+                'employee_code': payroll.get('employee_code', ''),
+                'employee_name': payroll.get('employee_name', ''),
+                'basic_salary': payroll.get('basic_salary', 0),
+                'allowances_total': payroll.get('allowances_total', 0),
+                'overtime_bonus': payroll.get('overtime_bonus', 0),
+                'late_deduction': payroll.get('late_deduction', 0),
+                'absence_deduction': payroll.get('absence_deduction', 0),
+                'net_salary': payroll.get('net_salary', 0),
+            })
 
     columns = [
         ('employee_code', 'الكود', 12),
