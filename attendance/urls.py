@@ -229,6 +229,7 @@ from .api_attendance_policy import (
 
 from .api_payroll import (
     payroll_summary,
+    payroll_summary_export_pdf,
     payroll_employee_detail,
     payroll_settings,
     payroll_runs_list,
@@ -260,6 +261,7 @@ urlpatterns += [
     path('api/mobile/manager/attendance-policy/<int:policy_id>/disciplinary-rules/<int:rule_id>/', disciplinary_rule_detail),
 
     path('api/mobile/manager/payroll/summary/', payroll_summary, name='payroll-summary'),
+    path('api/mobile/manager/payroll/summary/export/pdf/', payroll_summary_export_pdf, name='payroll-summary-export-pdf'),
     path('api/mobile/manager/payroll/employee/', payroll_employee_detail, name='payroll-employee'),
     path('api/mobile/manager/payroll/settings/', payroll_settings, name='payroll-settings'),
     path('api/mobile/manager/payroll/runs/', payroll_runs_list, name='payroll-runs-list'),

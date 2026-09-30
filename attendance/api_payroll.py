@@ -1011,6 +1011,58 @@ def payroll_run_approve(request, run_id):
         return Response({'success': False, 'error': str(e)}, status=500)
 
 
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def payroll_summary_export_pdf(request):
+    """تصدير PDF لملخص مرتبات الشهر (نفس شاشة hr/payroll) — من الباك إند عشان العربي يظهر صح"""
+    user = request.user
+    if not _check_manager(user):
+        return Response({'success': False, 'error': 'صلاحية غير كافية'}, status=403)
+
+    from attendance.report_export_helper import export_to_pdf
+    import calendar, datetime
+
+    year, month = _parse_month(request)
+    settings = _get_payroll_settings(user)
+    employees = _get_company_employees(user)
+
+    _, last_day = calendar.monthrange(year, month)
+    month_start = datetime.date(year, month, 1)
+    month_end = datetime.date(year, month, last_day)
+
+    rows = []
+    for emp in employees:
+        if emp.hire_date and emp.hire_date > month_end:
+            continue
+        if getattr(emp, 'termination_date', None) and emp.termination_date < month_start:
+            continue
+        payroll = calculate_effective_payroll(emp, year, month, settings, lang='ar')
+        rows.append({
+            'employee_code': payroll.get('employee_code', ''),
+            'employee_name': payroll.get('employee_name', ''),
+            'basic_salary': payroll.get('basic_salary', 0),
+            'allowances_total': payroll.get('allowances_total', 0),
+            'overtime_bonus': payroll.get('overtime_bonus', 0),
+            'late_deduction': payroll.get('late_deduction', 0),
+            'absence_deduction': payroll.get('absence_deduction', 0),
+            'net_salary': payroll.get('net_salary', 0),
+        })
+
+    columns = [
+        ('employee_code', 'الكود', 12),
+        ('employee_name', 'الموظف', 22),
+        ('basic_salary', 'الأساسي', 14),
+        ('allowances_total', 'البدلات', 12),
+        ('overtime_bonus', 'الأوفرتايم', 12),
+        ('late_deduction', 'خصم تأخير', 12),
+        ('absence_deduction', 'خصم غياب', 12),
+        ('net_salary', 'الصافي', 14),
+    ]
+    title = f'مسير رواتب {month}-{year}'
+    return export_to_pdf(title=title, columns=columns, rows=rows, user=user, filename=f'payroll_{year}_{month}.pdf')
+
+
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
