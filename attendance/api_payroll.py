@@ -1011,6 +1011,45 @@ def payroll_run_approve(request, run_id):
         return Response({'success': False, 'error': str(e)}, status=500)
 
 
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def payroll_run_cancel(request, run_id):
+    """إلغاء (حذف) مسودة تشغيل رواتب لم تُعتمد بعد"""
+    user = request.user
+    if not _check_manager(user):
+        return Response({'success': False, 'error': 'صلاحية غير كافية'}, status=403)
+
+    try:
+        from attendance.payroll_pro_models import PayrollRun
+
+        company = getattr(user, 'company', None)
+        if not company:
+            return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
+
+        run = PayrollRun._base_manager.filter(
+            id=run_id, company=company
+        ).first()
+
+        if not run:
+            return Response({'success': False, 'error': 'تشغيل الرواتب غير موجود'}, status=404)
+
+        if run.status != 'draft':
+            return Response({'success': False, 'error': 'لا يمكن إلغاء تشغيل تم اعتماده بالفعل'}, status=400)
+
+        run.delete()
+
+        return Response({
+            'success': True,
+            'message': 'تم إلغاء المسودة بنجاح',
+        })
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception('payroll_run_cancel error')
+        return Response({'success': False, 'error': str(e)}, status=500)
+
+
 def _payroll_run_lines_data(run):
     """تجهيز بيانات سطور مسير رواتب معين للتصدير"""
     from attendance.payroll_pro_models import PayrollLine
