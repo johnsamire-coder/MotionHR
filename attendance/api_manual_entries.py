@@ -556,3 +556,100 @@ def manual_entry_approval_settings(request):
         return JsonResponse({'success': True, 'message': 'تم حفظ الإعدادات'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+
+@api_view(['GET', 'POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def payroll_installment_list_create(request):
+    """قائمة/إنشاء سلف وأقساط الموظفين"""
+    from .payroll_pro_models import PayrollInstallment, PayrollRun
+
+    company = request.user.company
+
+    if request.method == 'GET':
+        try:
+            qs = PayrollInstallment._base_manager.filter(employee__company=company).select_related('employee')
+            employee_id = request.GET.get('employee_id')
+            if employee_id:
+                qs = qs.filter(employee_id=int(employee_id))
+            qs = qs.order_by('-id')
+            results = []
+            for inst in qs:
+                results.append({
+                    'id': inst.id,
+                    'employee_id': inst.employee_id,
+                    'employee_name': f'{inst.employee.first_name_ar} {inst.employee.last_name_ar}',
+                    'description': inst.description,
+                    'total_amount': float(inst.total_amount),
+                    'monthly_amount': float(inst.monthly_amount),
+                    'paid_amount': float(inst.paid_amount),
+                    'remaining_amount': inst.remaining_amount(),
+                    'start_month': inst.start_month,
+                    'start_year': inst.start_year,
+                    'status': inst.status,
+                    'notes': inst.notes,
+                })
+            return JsonResponse({'success': True, 'count': len(results), 'results': results})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+    try:
+        if not _is_manager(request.user):
+            return JsonResponse({'success': False, 'error': 'غير مسموح - فقط المدراء'}, status=403)
+
+        data = json.loads(request.body.decode('utf-8'))
+        employee_id = data.get('employee_id')
+        description = (data.get('description') or '').strip()
+        total_amount = data.get('total_amount')
+        monthly_amount = data.get('monthly_amount')
+        start_month = data.get('start_month')
+        start_year = data.get('start_year')
+
+        missing = [k for k in ['employee_id', 'description', 'total_amount', 'monthly_amount', 'start_month', 'start_year'] if not data.get(k)]
+        if missing:
+            return JsonResponse({'success': False, 'error': f"الحقول المطلوبة ناقصة: {', '.join(missing)}"}, status=400)
+
+        try:
+            employee = Employee._base_manager.get(id=employee_id, company=company)
+        except Employee.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'الموظف غير موجود'}, status=404)
+
+        start_month = int(start_month)
+        start_year = int(start_year)
+
+        existing_run = PayrollRun._base_manager.filter(
+            company=company, year=start_year, month=start_month
+        ).first()
+
+        warning_message = None
+        if existing_run:
+            if existing_run.status == 'approved':
+                return JsonResponse({
+                    'success': False,
+                    'error': f'تشغيل رواتب شهر {start_month}/{start_year} معتمد بالفعل. من فضلك أضف السلفة في شهر لاحق.',
+                }, status=400)
+            elif existing_run.status == 'draft':
+                warning_message = f'يوجد مسودة تشغيل رواتب لشهر {start_month}/{start_year} بالفعل. لازم تلغي المسودة وتعمل مسير جديد عشان السلفة تظهر في الحساب.'
+
+        installment = PayrollInstallment._base_manager.create(
+            employee=employee,
+            description=description,
+            total_amount=total_amount,
+            monthly_amount=monthly_amount,
+            start_month=start_month,
+            start_year=start_year,
+            status='active',
+            notes=data.get('notes', ''),
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': 'تم إضافة السلفة بنجاح',
+            'warning': warning_message,
+            'installment_id': installment.id,
+        }, status=201)
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
