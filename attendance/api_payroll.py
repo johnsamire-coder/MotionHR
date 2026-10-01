@@ -1144,6 +1144,8 @@ def _payroll_run_lines_data(run):
             'gross_salary': float(line.gross_salary),
             'late_deduction': float(line.late_deduction),
             'absence_deduction': float(line.absence_deduction),
+            'penalties_total': float(line.penalties_total),
+            'installments_total': float(line.installments_total),
             'insurance_deduction': float(line.insurance_deduction),
             'total_deductions': float(line.total_deductions),
             'net_salary': float(line.net_salary),
