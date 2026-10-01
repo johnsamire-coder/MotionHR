@@ -2105,10 +2105,10 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     currency = getattr(employee, 'currency', None) or 'EGP'
     has_insurance = bool(getattr(employee, 'has_insurance', False))
 
-    # حساب اليومي والساعي للموظف
-    working_days_count = max(len(working_dates), 1)
+    # حساب اليومي والساعي للموظف — المرتب اليومي = المرتب ÷ عدد أيام الشهر التقويمي كامل (مش أيام العمل)
+    calendar_days_in_month = monthrange(year, month)[1]
     basic_salary_temp = _safe_float(getattr(employee, 'basic_salary', 0))
-    daily_salary = round(basic_salary_temp / working_days_count, 4)
+    daily_salary = round(basic_salary_temp / calendar_days_in_month, 4)
     # اجيب الشيفت الافتراضي للموظف عشان احسب أجر الساعة منه
     _default_shift_for_rate = _get_shift_for_date(employee, first_day)
     _work_hours_for_rate = float(_default_shift_for_rate.work_hours) if _default_shift_for_rate and _default_shift_for_rate.work_hours else 8.0
