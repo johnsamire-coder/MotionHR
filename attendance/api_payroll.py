@@ -1041,6 +1041,8 @@ def payroll_summary_export_pdf(request):
                 'overtime_bonus': e.get('overtime_bonus', 0),
                 'late_deduction': e.get('late_deduction', 0),
                 'absence_deduction': e.get('absence_deduction', 0),
+                'penalties_total': e.get('penalties_total', 0),
+                'installments_total': e.get('installments_total', 0),
                 'net_salary': e.get('net_salary', 0),
             })
     else:
@@ -1076,6 +1078,8 @@ def payroll_summary_export_pdf(request):
         ('overtime_bonus', 'الأوفرتايم', 12),
         ('late_deduction', 'خصم تأخير', 12),
         ('absence_deduction', 'خصم غياب', 12),
+        ('penalties_total', 'خصم جزاء', 12),
+        ('installments_total', 'خصم سلفة', 12),
         ('net_salary', 'الصافي', 14),
     ]
     title = f'مسير رواتب {month}-{year}'
@@ -1155,6 +1159,8 @@ _PAYROLL_RUN_EXPORT_COLUMNS = [
     ('gross_salary', 'إجمالي المرتب', 15),
     ('late_deduction', 'خصم التأخير', 15),
     ('absence_deduction', 'خصم الغياب', 15),
+    ('penalties_total', 'خصم الجزاءات', 15),
+    ('installments_total', 'خصم السلف', 15),
     ('insurance_deduction', 'خصم التأمين', 15),
     ('total_deductions', 'إجمالي الخصومات', 15),
     ('net_salary', 'صافي المرتب', 15),
