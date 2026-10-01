@@ -634,6 +634,7 @@ def payroll_installment_list_create(request):
                 warning_message = f'يوجد مسودة تشغيل رواتب لشهر {start_month}/{start_year} بالفعل. لازم تلغي المسودة وتعمل مسير جديد عشان السلفة تظهر في الحساب.'
 
         installment = PayrollInstallment._base_manager.create(
+            company=company,
             employee=employee,
             description=description,
             total_amount=total_amount,
