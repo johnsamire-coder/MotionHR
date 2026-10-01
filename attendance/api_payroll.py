@@ -1067,6 +1067,8 @@ def payroll_summary_export_pdf(request):
                 'overtime_bonus': payroll.get('overtime_bonus', 0),
                 'late_deduction': payroll.get('late_deduction', 0),
                 'absence_deduction': payroll.get('absence_deduction', 0),
+                'penalties_total': payroll.get('penalties_total', 0),
+                'installments_total': payroll.get('installments_total', 0),
                 'net_salary': payroll.get('net_salary', 0),
             })
 
