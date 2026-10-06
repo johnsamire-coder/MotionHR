@@ -691,25 +691,73 @@ def remind_shift_coverage_gaps():
 # ═══════════════════════════════════════════════════════
 # الدالة الرئيسية — بيتم استدعاؤها من Cron
 # ═══════════════════════════════════════════════════════
-def run_all_reminders(reminder_type="all"):
-    """
-    نقطة الدخول الرئيسية.
-    reminder_type: all | checkin | checkout | pending | charter | documents | split_periods
-    """
-    logger.info(f"=== MotionHR Reminders — type={reminder_type} ===")
-
-    
 # ═══════════════════════════════════════════════════════
 # 7.8  تذكير بداية الشيفت قبل 15 دقيقة
 # ═══════════════════════════════════════════════════════
+def _shift_reminder_is_workday(shift, source, day):
+    """Return whether a real, active shift assignment schedules work on this date."""
+    assigned_sources = {
+        "override",
+        "employee_assignment",
+        "department_assignment",
+        "branch_assignment",
+        "company_assignment",
+        "legacy_employee_shift",
+    }
+    is_rotation_assignment = isinstance(source, str) and source.startswith("rotation_")
+    if not shift or not getattr(shift, "is_active", False):
+        return False
+    if source not in assigned_sources and not is_rotation_assignment:
+        # A company default / first-active fallback isn't an employee's active assignment.
+        return False
+
+    # A date-specific override or a rotation slot with a shift explicitly schedules work.
+    if source == "override" or is_rotation_assignment:
+        return True
+
+    schedule = getattr(shift, "schedule_config", {}) or {}
+    if not isinstance(schedule, dict):
+        return False
+    shift_mode = getattr(shift, "shift_mode", "fixed") or "fixed"
+    if shift_mode in ("variable_weekly", "variable_weekly_flex"):
+        days = schedule.get("days", {}) or {}
+        if not isinstance(days, dict):
+            return False
+        day_config = days.get(str(day.weekday()))
+        return isinstance(day_config, dict) and bool(day_config)
+    if shift_mode == "variable_daily":
+        dates = schedule.get("dates", {}) or {}
+        if not isinstance(dates, dict):
+            return False
+        date_config = dates.get(day.isoformat())
+        return isinstance(date_config, dict) and bool(date_config)
+
+    is_work_day = getattr(shift, "is_work_day", None)
+    return bool(is_work_day(day)) if callable(is_work_day) else False
+
+
+def _employee_has_approved_leave(employee, day):
+    """Approved leave covers the full calendar date, including half-day requests."""
+    from leaves.models import LeaveRequest
+
+    return LeaveRequest._base_manager.filter(
+        employee=employee,
+        status="approved",
+        start_date__lte=day,
+        end_date__gte=day,
+    ).exists()
+
+
 def remind_shift_starting_soon():
     """
-    يفحص الموظفين النشطين الذين يبدأ شيفتهم خلال 15 دقيقة ولم يسجلوا حضوراً بعد.
+    Notify employees with an active, scheduled shift starting in about 15 minutes,
+    unless they have checked in or have approved leave covering the shift date.
     """
     try:
         from django.contrib.auth import get_user_model
         from attendance.models import Attendance, Employee
-        from attendance.api_mobile import get_active_shift, get_shift_bounds
+        from attendance.api_mobile import get_shift_periods
+        from attendance.api_shifts import get_effective_shift
 
         User = get_user_model()
         now = timezone.now()
@@ -732,11 +780,15 @@ def remind_shift_starting_soon():
             if has_attendance:
                 continue
 
-            shift = get_active_shift(employee, today)
-            if not shift:
+            shift, shift_source = get_effective_shift(employee, today)
+            if not _shift_reminder_is_workday(shift, shift_source, today):
                 continue
 
-            shift_start, shift_end = get_shift_bounds(shift, today)
+            if _employee_has_approved_leave(employee, today):
+                continue
+
+            periods = get_shift_periods(shift, today)
+            shift_start = periods[0].get('start') if periods else None
             if not shift_start:
                 continue
 
@@ -759,7 +811,11 @@ def remind_shift_starting_soon():
         logger.error(f"remind_shift_starting_soon error: {e}")
 
 
-dispatch = {
+def run_all_reminders(reminder_type="all"):
+    """Main entry point used by the scheduled reminder command."""
+    logger.info(f"=== MotionHR Reminders — type={reminder_type} ===")
+
+    dispatch = {
         "checkin": remind_missing_checkin,
         "checkout": remind_missing_checkout,
         "pending": remind_pending_requests,
