@@ -8,8 +8,8 @@ access.py
 
 ACCOUNT_DISABLED_MSG = 'حسابك موقوف. برجاء التواصل مع إدارة الموارد البشرية.'
 ACCOUNT_DISABLED_MSG_EN = 'Your account is disabled. Please contact HR.'
-COMPANY_SUSPENDED_MSG = 'اشتراك الشركة متوقف لحين السداد. برجاء التواصل مع إدارة الشركة.'
-COMPANY_SUSPENDED_MSG_EN = 'The company subscription is suspended until payment. Please contact your company management.'
+COMPANY_SUSPENDED_MSG = 'اشتراك الشركة متوقف. برجاء التواصل مع إدارة الشركة.'
+COMPANY_SUSPENDED_MSG_EN = 'The company subscription is suspended. Please contact your company management.'
 
 
 def is_super_admin(user):

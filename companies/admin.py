@@ -10,7 +10,7 @@ class CompanyAdmin(admin.ModelAdmin):
     actions = ('suspend_companies', 'resume_companies')
 
     # إيقاف/تشغيل الشركة: مابيمسحش أي بيانات، بس بيمنع الدخول من الويب والموبايل
-    @admin.action(description='⛔ إيقاف الشركة (لحين السداد)')
+    @admin.action(description='⛔ إيقاف الشركة')
     def suspend_companies(self, request, queryset):
         from companies.management.commands.company_access import set_company_active
         for company in queryset:
