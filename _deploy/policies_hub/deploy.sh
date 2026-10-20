@@ -73,18 +73,25 @@ NODE_DIR="$(dirname "$(readlink -f "$NPM")")"
 
 # ── 0) التأكد إن ملفات السيرفر هي نفس النسخة اللي اتعمل عليها التصليح ──
 say "0/5 بتأكد إن الكود اللي على السيرفر ماتغيرش من ساعة ما اتبعت"
-curl -fsSL "https://codeload.github.com/johnsamire-coder/motionhr/tar.gz/refs/heads/live-server-snapshot" -o "$TMP/be_snap.tgz"
-curl -fsSL "https://codeload.github.com/johnsamire-coder/motionhr_web/tar.gz/refs/heads/live-server-snapshot" -o "$TMP/web_snap.tgz"
-mkdir -p "$TMP/be_snap" "$TMP/web_snap"
-tar -xzf "$TMP/be_snap.tgz" -C "$TMP/be_snap" --strip-components=1
-tar -xzf "$TMP/web_snap.tgz" -C "$TMP/web_snap" --strip-components=1
+# النسخ المعروفة: كود السيرفر الأصلي + كل رفعة سابقة من التصليحات دي
+KNOWN_REFS="live-server-snapshot policies-hub-deployed-1"
+for ref in $KNOWN_REFS; do
+  mkdir -p "$TMP/known_be/$ref" "$TMP/known_web/$ref"
+  curl -fsSL "https://codeload.github.com/johnsamire-coder/motionhr/tar.gz/refs/heads/$ref" | tar -xz -C "$TMP/known_be/$ref" --strip-components=1
+  curl -fsSL "https://codeload.github.com/johnsamire-coder/motionhr_web/tar.gz/refs/heads/$ref" | tar -xz -C "$TMP/known_web/$ref" --strip-components=1
+done
+_known() {  # $1 = be|web ، $2 = الملف ، $3 = المسار على السيرفر
+  [ -e "$3" ] || return 0
+  local found_any=0
+  for ref in $KNOWN_REFS; do
+    local k="$TMP/known_$1/$ref/$2"
+    [ -e "$k" ] && found_any=1 && cmp -s "$k" "$3" && return 0
+  done
+  [ "$found_any" = 0 ]
+}
 CHANGED=""
-for f in "${BE_FILES[@]}"; do
-  if [ -e "$TMP/be_snap/$f" ] && ! cmp -s "$TMP/be_snap/$f" "$BE/$f"; then CHANGED="$CHANGED\n  backend: $f"; fi
-done
-for f in "${WEB_FILES[@]}"; do
-  if [ -e "$TMP/web_snap/$f" ] && ! cmp -s "$TMP/web_snap/$f" "$WEB/$f"; then CHANGED="$CHANGED\n  web: $f"; fi
-done
+for f in "${BE_FILES[@]}"; do _known be "$f" "$BE/$f" || CHANGED="$CHANGED\n  backend: $f"; done
+for f in "${WEB_FILES[@]}"; do _known web "$f" "$WEB/$f" || CHANGED="$CHANGED\n  web: $f"; done
 if [ -n "$CHANGED" ]; then
   trap - ERR
   fail "الملفات دي اتعدلت على السيرفر بعد ما بعتها، فمش هكمل عشان مانمسحش تعديلاتك:$CHANGED"
@@ -161,7 +168,7 @@ for f in "${WEB_FILES[@]}"; do install -D -o "$WEB_OWNER" -g "$(stat -c %G "$WEB
 ok "الملفات اتحدثت (${#BE_FILES[@]} باك إند + ${#WEB_FILES[@]} ويب)"
 
 # ── 3) اختبارات الباك إند على السيرفر نفسه ──
-say "3/5 بشغّل اختبارات المرتبات (182 اختبار على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
+say "3/5 بشغّل اختبارات المرتبات (186 اختبار على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py check >/dev/null )
 if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
   grep -E "^(FAIL|ERROR):|Error" "$BK/tests.log" | head -20; tail -5 "$BK/tests.log"; false

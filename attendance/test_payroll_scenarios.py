@@ -342,6 +342,24 @@ class LateAttendancePolicyTests(PayrollScenarioBase):
         self.attend_all(overrides={1: {'in_hm': (9, 20)}})
         self.assertMoney(self.payroll()['late_deduction'], 7)
 
+    def test_policy_late_beyond_last_rule_uses_default_per_minute(self):
+        # زي جاكي ستور: قاعدة واحدة 0-15 لا خصم
+        pol = self.attendance_policy()
+        LateRule.objects.create(policy=pol, from_minutes=0, to_minutes=15, deduction_type='none', deduction_value=0)
+        self.attend_all(overrides={1: {'in_hm': (9, 10)}, 2: {'in_hm': (9, 40)}})
+        # يوم 1: 0 ، يوم 2: 40 دقيقة → 25 دقيقة زيادة × 1
+        self.assertMoney(self.payroll()['late_deduction'], 25)
+
+    def test_jacky_escalating_rules(self):
+        pol = self.attendance_policy()
+        LateRule.objects.create(policy=pol, from_minutes=0, to_minutes=15, deduction_type='none', deduction_value=0)
+        LateRule.objects.create(policy=pol, from_minutes=16, to_minutes=30, deduction_type='day_fraction', deduction_value=Decimal('0.25'))
+        LateRule.objects.create(policy=pol, from_minutes=31, to_minutes=60, deduction_type='day_fraction', deduction_value=Decimal('0.5'))
+        LateRule.objects.create(policy=pol, from_minutes=61, to_minutes=1440, deduction_type='day_fraction', deduction_value=Decimal('1'))
+        self.attend_all(overrides={1: {'in_hm': (9, 15)}, 2: {'in_hm': (9, 16)}, 3: {'in_hm': (9, 45)}, 6: {'in_hm': (11, 0)}})
+        # 0 + ربع يوم 75 + نص يوم 150 + يوم 300
+        self.assertMoney(self.payroll()['late_deduction'], 525)
+
     def test_policy_late_rule_none_type(self):
         pol = self.attendance_policy()
         LateRule.objects.create(policy=pol, from_minutes=1, to_minutes=15, deduction_type='none', deduction_value=0)
@@ -946,11 +964,11 @@ class MoreRuleShapesTests(PayrollScenarioBase):
         self.attend_all(overrides={1: {'in_hm': (9, 5)}, 2: {'in_hm': (9, 50)}})
         self.assertMoney(self.payroll()['late_deduction'], 180)
 
-    def test_late_minute_beyond_last_tier_gap(self):
-        # شرائح من 1 لـ 30 بس، والتأخير 45 → مفيش شريحة → مفيش خصم
+    def test_late_minute_beyond_last_tier(self):
+        # شرائح من 1 لـ 30 بس، والتأخير 45 → آخر شريحة (25) + 15 دقيقة × 1 جنيه
         self.penalty_rule('late_arrival', [{'from': 1, 'to': 30, 'deduction_type': 'fixed_total', 'value': 25}])
         self.attend_all(overrides={1: {'in_hm': (9, 45)}, 2: {'in_hm': (9, 10)}})
-        self.assertMoney(self.payroll()['late_deduction'], 25)
+        self.assertMoney(self.payroll()['late_deduction'], 25 + 40)
 
     def test_overtime_fixed_total(self):
         self.bonus_rule('overtime', [{'from': 0, 'to': None, 'value_type': 'fixed_total', 'value': 200}])

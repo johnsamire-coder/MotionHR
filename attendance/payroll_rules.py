@@ -1196,13 +1196,23 @@ def _get_active_policy(company, target_date, department=None, branch=None):
     return None
 
 
-def _apply_late_rule(policy, late_minutes, daily_salary):
+def _apply_late_rule(policy, late_minutes, daily_salary, per_minute=0.0):
     """قواعد التأخير بتاعة سياسة الحضور (LateRule) على تأخير يوم واحد.
-    لائحة الجزاءات (PenaltyRule) بتتطبق قبلها في calculate_effective_payroll."""
+    لائحة الجزاءات (PenaltyRule) بتتطبق قبلها في calculate_effective_payroll.
+    التأخير الأكبر من آخر شريحة: آخر شريحة + الدقايق الزيادة بخصم الدقيقة الافتراضي."""
     if not policy or late_minutes <= 0:
         return 0.0
     try:
         from attendance.models import LateRule
+        all_rules = list(LateRule.objects.filter(policy=policy))
+        if not all_rules:
+            return 0.0
+        max_to = max(int(r.to_minutes or 0) for r in all_rules)
+        extra = 0
+        if late_minutes > max_to:
+            extra = late_minutes - max_to
+            late_minutes = max_to
+
         rules = LateRule.objects.filter(
             policy=policy,
             from_minutes__lte=late_minutes,
@@ -1215,17 +1225,15 @@ def _apply_late_rule(policy, late_minutes, daily_salary):
                 from_minutes__lte=late_minutes
             ).order_by('-from_minutes').first()
 
-        if not rules:
-            return 0.0
-
-        if rules.deduction_type == 'none':
-            return 0.0
-        elif rules.deduction_type == 'day_fraction':
-            return round(daily_salary * float(rules.deduction_value), 2)
-        elif rules.deduction_type == 'fixed_amount':
-            return round(float(rules.deduction_value), 2)
-        elif rules.deduction_type == 'per_minute':
-            return round(late_minutes * float(rules.deduction_value), 2)
+        amount = 0.0
+        if rules:
+            if rules.deduction_type == 'day_fraction':
+                amount = daily_salary * float(rules.deduction_value)
+            elif rules.deduction_type == 'fixed_amount':
+                amount = float(rules.deduction_value)
+            elif rules.deduction_type == 'per_minute':
+                amount = late_minutes * float(rules.deduction_value)
+        return round(amount + extra * per_minute, 2)
     except Exception:
         logger.exception("payroll_rules error in _apply_late_rule")
     return 0.0
@@ -1281,6 +1289,17 @@ def _match_tier(tiers, value):
         if value >= t_from and (t_to in (None, '') or value <= float(t_to)):
             return tier
     return None
+
+
+def _tiers_max_to(tiers):
+    """أكبر "إلى" في الشرائح، أو None لو آخر شريحة مفتوحة (بدون حد)"""
+    max_to = 0.0
+    for tier in tiers or []:
+        t_to = tier.get('to')
+        if t_to in (None, ''):
+            return None
+        max_to = max(max_to, float(t_to))
+    return max_to
 
 
 def _penalty_tier_amount(tier, quantity, daily_salary, basic_salary):
@@ -2256,9 +2275,14 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         if _dl > 0:
             _rule = _tiered_rule('late_arrival', _d)
             if _rule:
-                late_deduction += _penalty_tier_amount(_match_tier(_rule.tiers, _dl), _dl, daily_salary, basic_salary)
+                # التأخير الأكبر من آخر شريحة: آخر شريحة + الدقايق الزيادة بخصم الدقيقة الافتراضي
+                _max_to = _tiers_max_to(_rule.tiers)
+                _extra = max(0, _dl - _max_to) if _max_to is not None else 0
+                _cov = _dl - _extra
+                late_deduction += _penalty_tier_amount(_match_tier(_rule.tiers, _cov), _cov, daily_salary, basic_salary)
+                late_deduction += _extra * late_per_min
             elif _policy_has_late_rules(_dp):
-                late_deduction += _apply_late_rule(_dp, _dl, daily_salary)
+                late_deduction += _apply_late_rule(_dp, _dl, daily_salary, late_per_min)
             else:
                 late_deduction += _dl * late_per_min
 
