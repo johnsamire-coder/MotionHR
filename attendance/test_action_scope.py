@@ -5,12 +5,14 @@
 التشغيل:
   python manage.py test attendance.test_action_scope --settings=motionhr.settings_test
 """
-from datetime import date, datetime, timedelta
+import shutil
+import tempfile
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.base import ContentFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -203,8 +205,17 @@ class PermissionBalanceScopeTests(ScopeBase):
         self.assertEqual(PermissionLedger._base_manager.get(employee=self.team_a).minutes_used, -30)
 
 
+_TMP_MEDIA = tempfile.mkdtemp(prefix='motionhr_test_media_')
+
+
+@override_settings(MEDIA_ROOT=_TMP_MEDIA)  # ملفات الاختبار ماتتكتبش في media الحقيقي
 class DeviceTimelineAttachmentTests(ScopeBase):
     """81 و83 و155/204"""
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(_TMP_MEDIA, ignore_errors=True)
 
     def device(self, emp):
         from accounts.fcm_models import TrustedDevice
