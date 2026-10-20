@@ -1714,8 +1714,11 @@ class DailyAttendanceSummary(TenantModel):
                 return None
 
             if not att or not getattr(att, 'check_in_time', None):
+                from attendance.mission_days import employee_mission_dates
                 if day_shift and not day_shift.is_work_day(target_date):
                     status = 'weekend'
+                elif target_date in employee_mission_dates(employee, target_date, target_date):
+                    status = 'mission'
                 else:
                     status = 'absent'
 

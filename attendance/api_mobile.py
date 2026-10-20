@@ -659,6 +659,7 @@ def mobile_login(request):
 def _create_gps_disabled_alert(employee, source="attendance"):
     try:
         from attendance.models import TrackingAlert
+        from accounts.fcm_service import send_notification_to_managers
         now = timezone.now()
         today = timezone.localdate()
 
@@ -690,6 +691,33 @@ def _create_gps_disabled_alert(employee, source="attendance"):
                 status='open',
                 notes=note,
             )
+            # إرسال إشعار فوري تفصيلي (الاسم + الفرع + القسم) لجرس الإشعارات
+            try:
+                emp_name = f"{getattr(employee, 'first_name_ar', '')} {getattr(employee, 'last_name_ar', '')}".strip() or employee.employee_code
+                branch_name = getattr(getattr(employee, 'branch', None), 'name_ar', '') or getattr(getattr(employee, 'branch', None), 'name', '') or 'بدون فرع'
+                dept_name = getattr(getattr(employee, 'department', None), 'name_ar', '') or getattr(getattr(employee, 'department', None), 'name', '') or 'بدون قسم'
+                
+                source_ar = "تسجيل الحضور/الانصراف" if source == "attendance" else "تحديد الموقع"
+                
+                body_text_ar = f"قام الموظف {emp_name} (فرع: {branch_name} | قسم: {dept_name}) بإيقاف موقع الـ GPS أثناء {source_ar}"
+                body_text_en = f"Employee {emp_name} (Branch: {branch_name} | Dept: {dept_name}) disabled GPS during {source}"
+
+                send_notification_to_managers(
+                    company=employee.company,
+                    title="🚨 تنبيه: إيقاف الـ GPS",
+                    body=body_text_ar,
+                    data={
+                        "type": "gps_disabled",
+                        "employee_id": str(employee.id),
+                        "employee_name": emp_name,
+                        "branch": branch_name,
+                        "department": dept_name,
+                    },
+                    title_en="🚨 Alert: GPS Disabled",
+                    body_en=body_text_en,
+                )
+            except Exception as _ne:
+                pass
     except Exception:
         pass
 

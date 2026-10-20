@@ -2035,8 +2035,7 @@ def mobile_cancel_leave(request, leave_id):
             'message': f'لا يمكن إلغاء الإجازة — حالتها: {leave.get_status_display()}'
         }, status=400)
 
-    leave.status = 'cancelled'
-    leave.save()
+    leave.cancel()
 
     # إشعار المدير بإلغاء الموظف لإجازته
     try:

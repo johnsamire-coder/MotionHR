@@ -654,3 +654,39 @@ def payroll_installment_list_create(request):
 
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def payroll_installment_cancel(request, installment_id):
+    """إلغاء سلفة نشطة — بتبطل تتخصم من المرتبات الجاية"""
+    from .payroll_pro_models import PayrollInstallment
+
+    try:
+        if not _is_manager(request.user):
+            return JsonResponse({'success': False, 'error': 'غير مسموح - فقط المدراء'}, status=403)
+
+        company = request.user.company
+        inst = PayrollInstallment._base_manager.filter(id=installment_id, employee__company=company).first()
+        if inst is None:
+            return JsonResponse({'success': False, 'error': 'السلفة غير موجودة'}, status=404)
+
+        if inst.status != 'active':
+            return JsonResponse({'success': False, 'error': 'السلفة دي مش نشطة (منتهية أو ملغية بالفعل)'}, status=400)
+
+        inst.status = 'cancelled'
+        inst.save()
+
+        warning = None
+        if float(inst.paid_amount) > 0:
+            warning = f'تم خصم {float(inst.paid_amount)} من السلفة قبل كده، الإلغاء بيوقف الخصم من هنا ورايح بس.'
+
+        return JsonResponse({
+            'success': True,
+            'message': 'تم إلغاء السلفة بنجاح',
+            'warning': warning,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

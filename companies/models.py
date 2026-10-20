@@ -905,6 +905,26 @@ class DepartmentHierarchy(models.Model):
         related_name='parent_link',
         verbose_name='الإدارة الفرعية',
     )
+    # ==== Geofencing Fields ====
+    office_latitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True,
+        verbose_name='خط العرض للشركة'
+    )
+    office_longitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True,
+        verbose_name='خط الطول للشركة'
+    )
+    geofence_radius = models.IntegerField(
+        default=100, verbose_name='نطاق الشركة بالمتر'
+    )
+    geofence_enabled = models.BooleanField(
+        default=False, verbose_name='تفعيل التحقق من موقع الحضور'
+    )
+    office_address = models.CharField(
+        max_length=500, blank=True, default='',
+        verbose_name='عنوان الشركة النصي'
+    )
+
     is_active = models.BooleanField(default=True, verbose_name='نشط')
     notes = models.TextField(blank=True, verbose_name='ملاحظات')
     created_at = models.DateTimeField(auto_now_add=True)

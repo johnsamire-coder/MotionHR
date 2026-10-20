@@ -502,7 +502,9 @@ def absence_report(request):
                 # في أي خطأ: الأمان عدم احتساب اليوم غياب مبكراً
                 effective_working_dates = [d for d in effective_working_dates if d != today]
 
-        absent_dates = [d for d in effective_working_dates if d not in attended_dates]
+        from attendance.mission_days import employee_mission_dates
+        _mission_days_set = employee_mission_dates(emp, emp_start, emp_end)
+        absent_dates = [d for d in effective_working_dates if d not in attended_dates and d not in _mission_days_set]
         emp_working_dates = effective_working_dates
 
         if absent_dates:

@@ -2491,7 +2491,6 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         2
     )
 
-    net_salary = round(gross_salary - total_deductions, 2)
     try:
         _period_first, _period_last = (
             get_payroll_period_bounds(company, year, month)
@@ -2502,7 +2501,19 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         weekend_days = max(0, _total_period_days - len(working_dates))
     except Exception:
         weekend_days = 0
-    attended_days = present_days + late_days + mission_days + on_leave_days + weekend_days
+
+    # استثناء: لو الموظف صفر حضور وصفر إجازات طول الفترة بالكامل (مفيش أي علاقة شغل حقيقية)،
+    # الجمعة والسبت كمان بتتخصم (بدل ما تفضل مدفوعة مجانًا)
+    _had_real_engagement = (present_days + late_days + mission_days + on_leave_days) > 0
+    if not _had_real_engagement and weekend_days > 0:
+        _weekend_extra_deduction = round(weekend_days * daily_salary, 2)
+        absence_deduction = round(absence_deduction + _weekend_extra_deduction, 2)
+        total_deductions = round(total_deductions + _weekend_extra_deduction, 2)
+        attended_days = present_days + late_days + mission_days + on_leave_days
+    else:
+        attended_days = present_days + late_days + mission_days + on_leave_days + weekend_days
+
+    net_salary = round(gross_salary - total_deductions, 2)
 
     return {
         'employee_id': employee.id,
