@@ -54,6 +54,9 @@ BE_FILES=(
   motionhr/settings_test.py
 )
 WEB_FILES=(
+  src/components/auth/access-guard.tsx
+  src/components/auth/login-form.tsx
+  src/lib/providers.tsx
   src/app/hr/policies/page.tsx
   src/components/hr/policies/attendance-policy-dialog.tsx
   src/components/hr/policies/bonus-rule-dialog.tsx
@@ -144,7 +147,9 @@ mkdir -p "$BK"
 ( cd "$BE" && for f in "${BE_FILES[@]}"; do [ -e "$f" ] && echo "$f"; done > "$BK/backend_existing_files.txt"; true )
 ( cd "$BE" && for f in "${BE_FILES[@]}"; do [ -e "$f" ] || echo "$f"; done > "$BK/backend_new_files.txt"; true )
 ( cd "$BE" && tar -czf "$BK/backend_files.tar.gz" -T "$BK/backend_existing_files.txt" )
-( cd "$WEB" && tar -czf "$BK/web_files.tar.gz" "${WEB_FILES[@]}" )
+( cd "$WEB" && for f in "${WEB_FILES[@]}"; do [ -e "$f" ] && echo "$f"; done > "$BK/web_existing_files.txt"; true )
+( cd "$WEB" && for f in "${WEB_FILES[@]}"; do [ -e "$f" ] || echo "$f"; done > "$BK/web_new_files.txt"; true )
+( cd "$WEB" && tar -czf "$BK/web_files.tar.gz" -T "$BK/web_existing_files.txt" )
 if [ -d "$WEB/.next" ]; then ( cd "$WEB" && tar -czf "$BK/web_next_build.tar.gz" .next ); fi
 
 cat > "$BK/rollback.sh" <<ROLLBACK
@@ -160,6 +165,7 @@ while read -r f; do [ -n "\$f" ] && rm -f "$BE/\$f" && rmdir -p --ignore-fail-on
 chown $BE_OWNER: \$(tar -tzf "$BK/backend_files.tar.gz") 2>/dev/null || true
 echo "▶ برجّع ملفات الويب..."
 cd "$WEB" && tar -xzf "$BK/web_files.tar.gz"
+while read -r f; do [ -n "\$f" ] && rm -f "$WEB/\$f"; done < "$BK/web_new_files.txt"
 if [ -f "$BK/web_next_build.tar.gz" ]; then rm -rf "$WEB/.next" && tar -xzf "$BK/web_next_build.tar.gz" && chown -R $WEB_OWNER: "$WEB/.next"; fi
 systemctl restart $BE_SERVICE
 systemctl restart $WEB_SERVICE

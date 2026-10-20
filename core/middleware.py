@@ -549,7 +549,8 @@ class AccessGuardMiddleware:
     """
     1) أي طلب من حساب موقوف أو من شركة موقوفة بيترفض برسالة واضحة
        (الـ API بـ 401 عشان الويب يرجّعه لصفحة الدخول، والصفحات بصفحة رسالة).
-    2) صفحات الموقع القديم (Django) بقت للسوبر أدمن بس.
+    2) صفحات الموقع القديم (Django) بقت للسوبر أدمن بس — أي طلب بجلسة الموقع القديم
+       من غير توكن على مساراته (حتى اللي فيها api) بيتقفل على غير السوبر أدمن.
     """
 
     OLD_SITE_PREFIXES = (
@@ -588,7 +589,9 @@ class AccessGuardMiddleware:
                 if path not in ('/login/',):
                     return _block_page(request, 'مش متاح', reason[1])
 
-        if (session_user is not None and not is_api
+        # الويب الجديد والموبايل بيبعتوا توكن؛ الطلب اللي من غير توكن جاي من صفحات الموقع القديم
+        # (حتى لو في رابطه api زي attendance/api/employee-route)
+        if (session_user is not None and not request.META.get('HTTP_AUTHORIZATION')
                 and path.startswith(self.OLD_SITE_PREFIXES)
                 and not path.startswith(self.OLD_SITE_OPEN)
                 and not is_super_admin(session_user)):

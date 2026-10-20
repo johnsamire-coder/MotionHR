@@ -342,6 +342,20 @@ class OldSiteTests(AccessBase):
             self.assertEqual(r.status_code, 403, url)
             self.assertContains(r, 'للإدارة بس', status_code=403)
 
+    def test_old_site_api_links_closed_for_session(self):
+        emp = self.make_employee(role='manager')
+        self.client.force_login(emp.user, backend='accounts.login_backend.SmartLoginBackend')
+        for url in ('/attendance/api/employee-route/1/', '/attendance/api/monitor/', '/employees/api/search/?q=a'):
+            r = self.client.get(url)
+            self.assertEqual(r.status_code, 403, url)
+
+    def test_token_requests_not_affected_by_old_site_lock(self):
+        emp = self.make_employee()
+        token = self.login(emp.user.username).json()['token']
+        self.client.force_login(emp.user, backend='accounts.login_backend.SmartLoginBackend')
+        r = self.client.get(SOME_API, HTTP_AUTHORIZATION=f'Token {token}')
+        self.assertEqual(r.status_code, 200)
+
     def test_open_pages_still_open(self):
         emp = self.make_employee()
         self.client.force_login(emp.user, backend='accounts.login_backend.SmartLoginBackend')
