@@ -110,8 +110,9 @@ say "0/5 بتأكد إن الكود اللي على السيرفر ماتغير�
 KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 $BRANCH"
 for ref in $KNOWN_REFS; do
   mkdir -p "$TMP/known_be/$ref" "$TMP/known_web/$ref"
-  gh_tarball motionhr "$ref" "$TMP/k.tgz" && tar -xzf "$TMP/k.tgz" -C "$TMP/known_be/$ref" --strip-components=1
-  gh_tarball motionhr_web "$ref" "$TMP/k.tgz" && tar -xzf "$TMP/k.tgz" -C "$TMP/known_web/$ref" --strip-components=1
+  # النسخة اللي لسه ماترفعتش مش هتبقى موجودة — عادي
+  gh_tarball motionhr "$ref" "$TMP/k.tgz" 2>/dev/null && tar -xzf "$TMP/k.tgz" -C "$TMP/known_be/$ref" --strip-components=1
+  gh_tarball motionhr_web "$ref" "$TMP/k.tgz" 2>/dev/null && tar -xzf "$TMP/k.tgz" -C "$TMP/known_web/$ref" --strip-components=1
 done
 rm -f "$TMP/k.tgz"
 # لازم على الأقل النسخة اللي على السيرفر دلوقتي تكون نزلت، وإلا الفحص مالوش لازمة
@@ -155,7 +156,7 @@ echo "▶ بشيل القواعد اللي اتنقلت من سياسات الح
 cd "$BE" && sudo -H -u $BE_OWNER "$PY" manage.py shell -c "from django.utils.dateparse import parse_datetime; from attendance.company_policy_models import PenaltyRule, BonusRule; t = parse_datetime('$START_ISO'); print(PenaltyRule._base_manager.filter(change_reason__startswith='converted_from_policy:', created_at__gte=t).delete()[0] + BonusRule._base_manager.filter(change_reason__startswith='converted_from_policy:', created_at__gte=t).delete()[0], 'قاعدة')" 2>/dev/null | tail -1 || true
 echo "▶ برجّع ملفات الباك إند..."
 cd "$BE" && tar -xzf "$BK/backend_files.tar.gz"
-while read -r f; do [ -n "\$f" ] && rm -f "$BE/\$f"; done < "$BK/backend_new_files.txt"
+while read -r f; do [ -n "\$f" ] && rm -f "$BE/\$f" && rmdir -p --ignore-fail-on-non-empty "\$(dirname "$BE/\$f")" 2>/dev/null; done < "$BK/backend_new_files.txt"
 chown $BE_OWNER: \$(tar -tzf "$BK/backend_files.tar.gz") 2>/dev/null || true
 echo "▶ برجّع ملفات الويب..."
 cd "$WEB" && tar -xzf "$BK/web_files.tar.gz"
