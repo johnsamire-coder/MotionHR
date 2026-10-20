@@ -75,7 +75,8 @@ NODE_DIR="$(dirname "$(readlink -f "$NPM")")"
 # ── 0) التأكد إن ملفات السيرفر هي نفس النسخة اللي اتعمل عليها التصليح ──
 say "0/5 بتأكد إن الكود اللي على السيرفر ماتغيرش من ساعة ما اتبعت"
 # النسخ المعروفة: كود السيرفر الأصلي + كل رفعة سابقة من التصليحات دي
-KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2"
+# + الفرع اللي بنرفعه نفسه: لو السيرفر عليه النسخة دي خلاص، إعادة الرفع آمنة
+KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 $BRANCH"
 for ref in $KNOWN_REFS; do
   mkdir -p "$TMP/known_be/$ref" "$TMP/known_web/$ref"
   curl -fsSL "https://codeload.github.com/johnsamire-coder/motionhr/tar.gz/refs/heads/$ref" | tar -xz -C "$TMP/known_be/$ref" --strip-components=1
