@@ -2294,8 +2294,9 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 _max_to = _tiers_max_to(_rule.tiers)
                 _extra = max(0, _dl - _max_to) if _max_to is not None else 0
                 _cov = _dl - _extra
-                late_deduction += _penalty_tier_amount(_match_tier(_rule.tiers, _cov), _cov, daily_salary, basic_salary)
-                late_deduction += _extra * late_per_min
+                late_deduction += round(
+                    _penalty_tier_amount(_match_tier(_rule.tiers, _cov), _cov, daily_salary, basic_salary)
+                    + _extra * late_per_min, 2)
             elif _policy_has_late_rules(_dp):
                 late_deduction += _apply_late_rule(_dp, _dl, daily_salary, late_per_min)
             else:
@@ -2308,7 +2309,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             if _rule:
                 _eff = max(0, _de - int(_rule.grace_amount or 0))
                 if _eff > 0:
-                    early_leave_deduction += _penalty_tier_amount(_match_tier(_rule.tiers, _eff), _eff, daily_salary, basic_salary)
+                    early_leave_deduction += round(_penalty_tier_amount(_match_tier(_rule.tiers, _eff), _eff, daily_salary, basic_salary), 2)
             else:
                 early_leave_deduction += _de * late_per_min
 
@@ -2320,7 +2321,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 _missing_counter[_rule.id] = _n
                 _idx = _n - int(_rule.grace_amount or 0)
                 if _idx > 0:
-                    missing_checkout_deduction += _penalty_tier_amount(_match_tier(_rule.tiers, _idx), 1, daily_salary, basic_salary)
+                    missing_checkout_deduction += round(_penalty_tier_amount(_match_tier(_rule.tiers, _idx), 1, daily_salary, basic_salary), 2)
 
         # الغياب: الشرائح تصاعدية — يوم الغياب رقم N بيتخصم بالشريحة اللي N واقع فيها
         if _es == 'absent':
@@ -2331,7 +2332,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 _absence_counter[_rule.id] = _cur
                 _idx = int(-(-_cur // 1)) - int(_rule.grace_amount or 0)  # ceil
                 if _idx > 0:
-                    absence_deduction += _penalty_tier_amount(_match_tier(_rule.tiers, _idx), 1, daily_salary, basic_salary) * _frac
+                    absence_deduction += round(_penalty_tier_amount(_match_tier(_rule.tiers, _idx), 1, daily_salary, basic_salary) * _frac, 2)
             elif _dp:
                 absence_deduction += _apply_absence_rule(_dp, _frac, daily_salary)
             else:

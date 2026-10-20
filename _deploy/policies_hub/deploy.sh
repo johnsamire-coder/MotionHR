@@ -171,7 +171,7 @@ for f in "${WEB_FILES[@]}"; do install -D -o "$WEB_OWNER" -g "$(stat -c %G "$WEB
 ok "الملفات اتحدثت (${#BE_FILES[@]} باك إند + ${#WEB_FILES[@]} ويب)"
 
 # ── 3) اختبارات الباك إند على السيرفر نفسه ──
-say "3/5 بشغّل اختبارات المرتبات (196 اختبار على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
+say "3/5 بشغّل اختبارات المرتبات (198 اختبار على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py check >/dev/null )
 if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
   grep -E "^(FAIL|ERROR):|Error" "$BK/tests.log" | head -20; tail -5 "$BK/tests.log"; false

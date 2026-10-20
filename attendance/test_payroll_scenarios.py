@@ -1148,6 +1148,22 @@ class ConvertPolicyRulesTests(PayrollScenarioBase):
         self.assertMoney(a1['late_deduction'], 20 + 40 + 100 + 150 + 270)
         self.assertMoney(a1['absence_deduction'], 2 * 600)
 
+    def test_conversion_exact_with_fractional_day_wage(self):
+        # مرتب 8000 في سبتمبر = 266.666 في اليوم → التقريب لازم يبقى يوم بيوم في الطريقتين
+        emp = self.make_employee(salary=8000)
+        pol = self.attendance_policy(assign=None)
+        LateRule.objects.create(policy=pol, from_minutes=0, to_minutes=15, deduction_type='none', deduction_value=0)
+        LateRule.objects.create(policy=pol, from_minutes=16, to_minutes=30, deduction_type='day_fraction', deduction_value=Decimal('0.25'))
+        LateRule.objects.create(policy=pol, from_minutes=31, to_minutes=1440, deduction_type='day_fraction', deduction_value=Decimal('0.5'))
+        AbsenceRule.objects.create(policy=pol, absence_type='unexcused', deduction_type='day_fraction', deduction_value=Decimal('1.5'))
+        self.attend_all(emp=emp, except_days=(10, 11), overrides={d.day: {'in_hm': (9, 20 + d.day)} for d in SEPT_WORKDAYS})
+        before = self.payroll(emp)
+        out = self._convert()
+        self.assertIn('ولا صافي مرتب اتغير', out)
+        LateRule.objects.filter(policy=pol).delete()
+        AbsenceRule.objects.filter(policy=pol).delete()
+        self.assertMoney(self.payroll(emp)['net_salary'], before['net_salary'])
+
     def test_dry_run_saves_nothing_and_rerun_skips(self):
         pol = self.attendance_policy()
         LateRule.objects.create(policy=pol, from_minutes=1, to_minutes=999, deduction_type='fixed_amount', deduction_value=Decimal('50'))
