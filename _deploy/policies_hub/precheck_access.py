@@ -131,7 +131,7 @@ title('3) حاجات على السيرفر بتسحب من GitHub')
 for d in ('/var/www/motionhr', '/var/www/motionhr_web'):
     try:
         r = subprocess.run(['git', '-C', d, 'remote', '-v'], capture_output=True, text=True)
-        out = r.stdout.strip()
+        out = re.sub(r'://[^@/\s]+@', '://***@', r.stdout.strip())  # ماتطبعش أي مفتاح
     except OSError:
         out = ''
     print(f'{d}: {out or "مش git (ماحدش بيعمل git pull هنا)"}')

@@ -4,9 +4,25 @@ from .models import Company, Branch, Department
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
-    list_display = ('name_ar', 'name_en', 'email', 'phone', 'is_active', 'created_at')
+    list_display = ('id', 'name_ar', 'name_en', 'email', 'phone', 'is_active', 'created_at')
     list_filter = ('is_active', 'created_at')
     search_fields = ('name_ar', 'name_en', 'email', 'commercial_register')
+    actions = ('suspend_companies', 'resume_companies')
+
+    # إيقاف/تشغيل الشركة: مابيمسحش أي بيانات، بس بيمنع الدخول من الويب والموبايل
+    @admin.action(description='⛔ إيقاف الشركة (لحين السداد)')
+    def suspend_companies(self, request, queryset):
+        from companies.management.commands.company_access import set_company_active
+        for company in queryset:
+            set_company_active(company, False)
+        self.message_user(request, f'اتوقفت {queryset.count()} شركة. محدش من موظفينها يقدر يدخل لحد ما تشغّلها.')
+
+    @admin.action(description='✅ تشغيل الشركة')
+    def resume_companies(self, request, queryset):
+        from companies.management.commands.company_access import set_company_active
+        for company in queryset:
+            set_company_active(company, True)
+        self.message_user(request, f'اشتغلت {queryset.count()} شركة. يقدروا يدخلوا دلوقتي.')
     
     fieldsets = (
         ('البيانات الأساسية', {

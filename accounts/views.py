@@ -154,9 +154,22 @@ def smart_login_view(request):
         else:
             user = authenticate(request, username=username, password=password)
 
+            from accounts.access import block_reason, is_super_admin
+            from core.middleware import OLD_SITE_CLOSED_MSG
+
+            if user is None:
+                # باسورد صح بس الحساب موقوف: نقوله السبب
+                from accounts.login_backend import SmartLoginBackend
+                candidate = SmartLoginBackend.find_user(username)
+                if candidate and not candidate.is_active and candidate.check_password(password):
+                    error = block_reason(candidate)[1]
+
             if user is not None:
-                if not user.is_active:
-                    error = 'حسابك موقوف - تواصل مع المدير'
+                reason = block_reason(user)
+                if reason:
+                    error = reason[1]
+                elif not is_super_admin(user):
+                    error = OLD_SITE_CLOSED_MSG
                 else:
                     auth_login(request, user,
                                backend='accounts.login_backend.SmartLoginBackend')
@@ -172,7 +185,7 @@ def smart_login_view(request):
                         return redirect('password_change')
 
                     return redirect('dashboard')
-            else:
+            elif not error:
                 error = 'اسم المستخدم أو كلمة المرور غير صحيحة'
 
     context = {
@@ -1117,45 +1130,6 @@ from django.contrib.auth import get_user_model
 @permission_classes([AllowAny])
 @authentication_classes([])
 def activate_employee_account(request):
-    """تفعيل حساب الموظف لأول مرة باستخدام الموبايل والقومي"""
-    phone = request.data.get('phone', '').strip()
-    national_id_suffix = request.data.get('national_id_suffix', '').strip()
-    new_password = request.data.get('new_password', '').strip()
-
-    if not phone or not national_id_suffix:
-        return Response({'success': False, 'message': 'رقم الموبايل وآخر 4 أرقام من القومي مطلوبين'}, status=400)
-
-    # البحث عن الموظف (بالموبايل والـ 4 أرقام الأخيرة من القومي)
-    # بنعمل filter للموظفين اللي لسه ما دخلوش قبل كده (last_login is null) أو حسابهم عليه علامة "تغيير باسورد إجباري"
-    import re as _re
-    clean_phone = _re.sub(r'\D', '', phone)
-    emp = Employee._base_manager.filter(
-        phone__endswith=clean_phone[-10:],
-        national_id__endswith=national_id_suffix
-    ).select_related('user').first()
-
-    if not emp or not emp.user:
-        return Response({'success': False, 'message': 'بيانات غير مطابقة. تأكد من إدخال البيانات كما في شيت الشركة'}, status=404)
-
-    user = emp.user
-
-    # لو العميل باعت باسورد جديدة، نغيرها ونفعل الحساب
-    if new_password:
-        if len(new_password) < 8:
-             return Response({'success': False, 'message': 'كلمة السر يجب أن تكون 8 رموز على الأقل'}, status=400)
-        
-        user.set_password(new_password)
-        user.is_active = True
-        user.save()
-        return Response({
-            'success': True, 
-            'message': 'تم تفعيل حسابك بنجاح. يمكنك الآن تسجيل الدخول',
-            'username': user.username
-        })
-
-    # لو لسه ما بعتش باسورد، نأكدله إننا لقيناه ونرجعله الـ username
-    return Response({
-        'success': True,
-        'message': f'أهلاً {emp.first_name_ar}. يرجى تعيين كلمة سر جديدة لحسابك',
-        'username': user.username
-    })
+    """تفعيل حساب الموظف لأول مرة باستخدام الموبايل والقومي (التطبيق)"""
+    from accounts.activation import activate_account_response
+    return activate_account_response(request)

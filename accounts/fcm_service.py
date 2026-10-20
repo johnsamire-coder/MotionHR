@@ -60,6 +60,11 @@ def send_notification_to_user(user, title, body, data=None, title_en=None, body_
 
     _log_notification(user, title, body, data)
 
+    # الشركة الموقوفة مابيوصلهاش إشعارات، وبترجع أول ما تشتغل
+    from accounts.access import notifications_allowed
+    if not notifications_allowed(user):
+        return {"success": False, "sent": 0, "failed": 0, "errors": ["Company suspended"]}
+
     if not init_firebase():
         return {"success": False, "sent": 0, "failed": 0, "errors": ["Firebase init failed"]}
 

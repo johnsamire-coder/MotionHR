@@ -18,6 +18,11 @@ def send_push_to_user(user, title, body, url="/dashboard/",
     pip install pywebpush
     """
     try:
+        # الشركة الموقوفة مابيوصلهاش إشعارات، وبترجع أول ما تشتغل
+        from accounts.access import notifications_allowed
+        if not notifications_allowed(user):
+            return 0
+
         from accounts.models import PushSubscription
         from companies.models import NotificationPreference
 

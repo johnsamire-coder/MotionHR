@@ -554,10 +554,23 @@ def mobile_login(request):
     if not username or not password:
         return Response({'success': False, 'message': 'اسم المستخدم وكلمة السر مطلوبين'}, status=400)
 
+    from accounts.access import block_reason, blocked_payload
+    from accounts.login_backend import SmartLoginBackend
+
     user = authenticate(username=username, password=password)
 
     if not user:
+        # باسورد صح بس الحساب موقوف: نقوله السبب بدل "بيانات غلط"
+        candidate = SmartLoginBackend.find_user(username)
+        if candidate and not candidate.is_active and candidate.check_password(password):
+            reason = block_reason(candidate)
+            if reason:
+                return Response(blocked_payload(reason), status=403)
         return Response({'success': False, 'message': 'بيانات الدخول غير صحيحة'}, status=401)
+
+    reason = block_reason(user)
+    if reason:
+        return Response(blocked_payload(reason), status=403)
 
     token, _ = Token._base_manager.get_or_create(user=user)
 
@@ -3048,52 +3061,17 @@ def _can_track_location(employee):
     except Exception:
         return False
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
 def activate_account(request):
     """
-    تفعيل حساب الموظف لأول مرة عن طريق رقم الموبايل + آخر 4 أرقام من الرقم القومي.
+    تفعيل حساب الموظف لأول مرة عن طريق رقم الموبايل + آخر 4 أرقام من الرقم القومي (الويب).
     خطوة 1 (من غير new_password): التحقق من الهوية وإرجاع username.
     خطوة 2 (مع new_password): تحديث كلمة السر.
     """
-    from employees.models import Employee
-    import re
-
-    data = request.data
-    phone = str(data.get('phone', '')).strip()
-    national_id_suffix = str(data.get('national_id_suffix', '')).strip()
-    new_password = str(data.get('new_password', '')).strip()
-
-    if not phone or not national_id_suffix:
-        return Response({'success': False, 'message': 'رقم الموبايل وآخر 4 أرقام من الرقم القومي مطلوبين'}, status=400)
-
-    clean_phone = re.sub(r'\D', '', phone)
-    if len(national_id_suffix) != 4 or not national_id_suffix.isdigit():
-        return Response({'success': False, 'message': 'آخر 4 أرقام من الرقم القومي غير صحيحة'}, status=400)
-
-    employee = Employee._base_manager.filter(
-        phone__endswith=clean_phone[-10:],
-        national_id__endswith=national_id_suffix,
-        status='active',
-    ).first()
-
-    if not employee or not employee.user:
-        return Response({'success': False, 'message': 'بيانات غير مطابقة. تأكد من إدخال البيانات المسجلة بالشركة'}, status=400)
-
-    if not new_password:
-        # خطوة 1: التحقق فقط
-        return Response({
-            'success': True,
-            'message': 'تم التحقق من هويتك بنجاح!',
-            'username': employee.user.username,
-        })
-
-    if len(new_password) < 8:
-        return Response({'success': False, 'message': 'كلمة المرور يجب أن تكون 8 رموز على الأقل'}, status=400)
-
-    employee.user.set_password(new_password)
-    employee.user.must_change_password = False
-    employee.user.save()
-
-    return Response({'success': True, 'message': 'تم تفعيل حسابك بنجاح!'})
+    from accounts.activation import activate_account_response
+    return activate_account_response(request)
 
 
 @api_view(['GET'])

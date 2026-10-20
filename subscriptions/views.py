@@ -636,6 +636,7 @@ def feature_upsell_page(request, feature_code):
 # ═════════════════════════════════════════════════════════════
 
 @login_required
+@user_passes_test(is_super_admin)
 def admin_dashboard(request):
     from decimal import Decimal
     from datetime import date

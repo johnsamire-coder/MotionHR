@@ -76,6 +76,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.AccessGuardMiddleware',
     'core.middleware.CompanyPolicyStealthFinalSyncMiddleware',
     'core.middleware.CompanyPolicyStealthSyncMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -183,7 +184,7 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'JsSolutions.eg@gmail.com'
-EMAIL_HOST_PASSWORD = 'fjfq dljn adzs wzpd'
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')  # من ملف .env على السيرفر
 DEFAULT_FROM_EMAIL = 'MotionHR <JsSolutions.eg@gmail.com>'
 
 # ─────────────────────────────────────────────
@@ -344,4 +345,7 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': False,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    # الحساب الموقوف أو الشركة الموقوفة مايطلعلهمش توكن جديد
+    'TOKEN_OBTAIN_SERIALIZER': 'accounts.jwt_serializers.AccessTokenObtainPairSerializer',
+    'TOKEN_REFRESH_SERIALIZER': 'accounts.jwt_serializers.AccessTokenRefreshSerializer',
 }
