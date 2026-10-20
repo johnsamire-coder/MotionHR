@@ -82,7 +82,7 @@ def _calc_overtime_hours(shift, att):
 
     try:
         from django.utils import timezone
-        today = att.check_in_time.date()
+        today = timezone.localtime(att.check_in_time).date()
         shift_end = datetime.combine(today, shift.end_time)
         if shift.crosses_midnight or shift.end_time <= shift.start_time:
             shift_end += timedelta(days=1)
@@ -365,15 +365,15 @@ def get_official_holiday_treatment(employee, year, month):
                     matched_rule = rule
                     break
 
-            if not matched_rule:
-                continue
+            # إجازة رسمية من غير قاعدة تخص الموظف = إجازة مدفوعة (مش غياب)
+            treatment = matched_rule.treatment if matched_rule else 'paid_leave'
 
             current = max(holiday.start_date, first_day)
             end = min(holiday.end_date, last_day)
             while current <= end:
                 if current not in result:
                     result[current] = {
-                        'treatment': matched_rule.treatment,
+                        'treatment': treatment,
                         'rule': matched_rule,
                         'holiday_name': holiday.name,
                     }
@@ -466,6 +466,7 @@ def get_leave_dates(employee, year, month):
                     half_day_dates[current] = {
                         'type': _half,
                         'hours': _hours if _hours > 0 else 4.0,
+                        'paid': bool(getattr(getattr(lv, 'leave_type', None), 'is_paid', True)),
                     }
                 else:
                     leave_dates.add(current)
@@ -531,6 +532,34 @@ def get_approved_permission_minutes(employee, first_day, last_day):
         extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
         )
     return late_minutes, early_minutes
+
+def get_approved_permission_minutes_by_day(employee, first_day, last_day):
+    """
+    نفس get_approved_permission_minutes بس متقسمة على الأيام:
+    {date: {'late': دقايق, 'early': دقايق}}
+    """
+    result = {}
+    try:
+        from requests_app.models import EmployeeRequest
+        approved_requests = EmployeeRequest._base_manager.filter(
+            employee=employee,
+            status='approved',
+            start_date__gte=first_day,
+            start_date__lte=last_day,
+            request_type__permission_kind__in=('late_arrival', 'early_leave'),
+        ).select_related('request_type')
+        for req in approved_requests:
+            kind = getattr(req.request_type, 'permission_kind', '') or ''
+            minutes = int(float(req.duration_hours or 0) * 60)
+            day = result.setdefault(req.start_date, {'late': 0, 'early': 0})
+            if kind == 'late_arrival':
+                day['late'] += minutes
+            elif kind == 'early_leave':
+                day['early'] += minutes
+    except Exception:
+        logger.exception("payroll_rules error in get_approved_permission_minutes_by_day")
+    return result
+
 
 def get_unpaid_leave_dates(employee, year, month):
     unpaid_dates = set()
@@ -862,9 +891,9 @@ def _get_bonuses(employee, year, month, lang='ar'):
                 ).values_list('date', flat=True)
             )
 
-            working_days_count = max(len(get_company_working_days(company, year, month)), 1)
+            # نفس أجر اليوم المستخدم في باقي المرتب (المرتب ÷ أيام الشهر)
             basic_salary_val = _safe_float(getattr(employee, 'basic_salary', 0))
-            daily_salary = round(basic_salary_val / working_days_count, 4)
+            daily_salary = round(basic_salary_val / monthrange(year, month)[1], 4)
 
             grouped = {}
 
@@ -1147,6 +1176,18 @@ def _get_active_policy(company, target_date, department=None, branch=None):
         if company_assignment:
             return company_assignment.policy
 
+        # سياسة معتمدة ومش مربوطة بأي نطاق = بتتطبق على الشركة كلها
+        unassigned = AttendancePolicy._base_manager.filter(
+            company=company,
+            status='active',
+            effective_from__lte=target_date,
+            assignments__isnull=True,
+        ).filter(
+            Q(effective_to__isnull=True) | Q(effective_to__gte=target_date)
+        ).order_by('-effective_from', '-id').first()
+        if unassigned:
+            return unassigned
+
     except Exception:
         logger.exception(
         "payroll_rules error in _get_active_policy",
@@ -1156,25 +1197,10 @@ def _get_active_policy(company, target_date, department=None, branch=None):
 
 
 def _apply_late_rule(policy, late_minutes, daily_salary):
-    """يطبق قاعدة الخصم على دقائق التأخير (الجديد أولاً)"""
+    """قواعد التأخير بتاعة سياسة الحضور (LateRule) على تأخير يوم واحد.
+    لائحة الجزاءات (PenaltyRule) بتتطبق قبلها في calculate_effective_payroll."""
     if not policy or late_minutes <= 0:
         return 0.0
-    # 1) النظام الجديد (PenaltyRule) - له الأولوية
-    try:
-        from attendance.company_policy_models import PenaltyRule
-        new_rule = PenaltyRule._base_manager.filter(
-            company=policy.company if hasattr(policy, 'company') else None,
-            penalty_type='late_arrival',
-            is_active=True,
-            is_superseded=False,
-        ).order_by('-version_number').first()
-        if new_rule and new_rule.applies_to_employee(getattr(policy, '_employee', None)):
-            deduction, tier = new_rule.calculate(late_minutes, daily_salary=daily_salary)
-            return float(deduction)
-    except Exception:
-        logger.exception("new PenaltyRule lookup failed in _apply_late_rule")
-
-    # 2) النظام القديم (LateRule) - fallback
     try:
         from attendance.models import LateRule
         rules = LateRule.objects.filter(
@@ -1201,14 +1227,107 @@ def _apply_late_rule(policy, late_minutes, daily_salary):
         elif rules.deduction_type == 'per_minute':
             return round(late_minutes * float(rules.deduction_value), 2)
     except Exception:
-        logger.exception(
-        "payroll_rules error in _apply_late_rule",
-        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
-        )
+        logger.exception("payroll_rules error in _apply_late_rule")
     return 0.0
 
 
+def _policy_has_late_rules(policy):
+    if not policy:
+        return False
+    try:
+        from attendance.models import LateRule
+        return LateRule.objects.filter(policy=policy).exists()
+    except Exception:
+        return False
 
+
+def _load_scoped_rules(model, company, employee, first_day, last_day, type_field):
+    """
+    بيجيب قواعد (PenaltyRule / BonusRule / AllowanceRule) الشركة اللي
+    بتنطبق على الموظف وسارية في أي جزء من الفترة، متجمعة حسب النوع.
+    الأحدث (رقم نسخة أعلى) الأول.
+    """
+    by_type = {}
+    if not company:
+        return by_type
+    try:
+        qs = model._base_manager.filter(
+            company=company,
+            is_active=True,
+            start_date__lte=last_day,
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=first_day)
+        ).order_by('-version_number', '-created_at', '-id')
+        for r in qs:
+            if r.applies_to_employee(employee):
+                by_type.setdefault(getattr(r, type_field), []).append(r)
+    except Exception:
+        logger.exception("payroll_rules error in _load_scoped_rules for %s", model.__name__)
+    return by_type
+
+
+def _rule_for_day(rules, d):
+    """أول قاعدة سارية في اليوم ده (القائمة مترتبة الأحدث الأول)"""
+    for r in rules or []:
+        if r.start_date <= d and (r.end_date is None or r.end_date >= d):
+            return r
+    return None
+
+
+def _match_tier(tiers, value):
+    for tier in tiers or []:
+        t_from = float(tier.get('from', 0) or 0)
+        t_to = tier.get('to')
+        if value >= t_from and (t_to in (None, '') or value <= float(t_to)):
+            return tier
+    return None
+
+
+def _penalty_tier_amount(tier, quantity, daily_salary, basic_salary):
+    """مبلغ شريحة جزاء واحدة. quantity = عدد الوحدات (دقايق) لنوع fixed_per_unit"""
+    if not tier:
+        return 0.0
+    dt = tier.get('deduction_type', 'fixed_per_unit')
+    val = float(tier.get('value', 0) or 0)
+    if dt == 'fixed_per_unit':
+        return quantity * val
+    if dt == 'fixed_total':
+        return val
+    if dt == 'percent_basic':
+        return basic_salary * val / 100.0
+    if dt == 'quarter_day':
+        return daily_salary / 4.0
+    if dt == 'half_day':
+        return daily_salary / 2.0
+    if dt in ('full_day', 'day_plus_warning'):
+        return daily_salary
+    if dt == 'two_days':
+        return daily_salary * 2
+    if dt == 'three_days':
+        return daily_salary * 3
+    return 0.0
+
+
+def _bonus_tier_amount(rule, units, unit_rate, basic_salary):
+    """BonusRule: الشريحة بتتحدد بإجمالي الوحدات في الشهر (ساعات أو أيام)"""
+    if not rule or units <= 0:
+        return 0.0
+    tier = _match_tier(rule.tiers, units)
+    if not tier:
+        return 0.0
+    vt = tier.get('value_type', 'multiplier')
+    val = float(tier.get('value', 0) or 0)
+    if vt == 'multiplier':
+        amount = units * unit_rate * val
+    elif vt == 'fixed_per_unit':
+        amount = units * val
+    elif vt == 'fixed_total':
+        amount = val
+    elif vt == 'percent_basic':
+        amount = basic_salary * val / 100.0
+    else:
+        amount = 0.0
+    return amount
 
 
 def _upsert_flex_adjustment(employee, att, day_shift, actual_hours):
@@ -1352,6 +1471,18 @@ def _apply_permission_balance(employee, late_minutes, reference_date, policy):
 
     from attendance.models import PermissionLedger
 
+    # لو اليوم ده اتحول لإذن قبل كده (حساب مرتب سابق) نستخدم نفس الحركة
+    # عشان كل مرة نفتح فيها المرتب مايتسحبش من الرصيد تاني
+    if reference_date:
+        existing = PermissionLedger._base_manager.filter(
+            employee=employee,
+            entry_type='auto_late',
+            reference_date=reference_date,
+        ).first()
+        if existing:
+            converted = min(int(existing.minutes_used or 0), late_minutes)
+            return converted, max(0, late_minutes - converted)
+
     today = reference_date or date.today()
 
     # نحدد فترة الشهر حسب نوع الدورة
@@ -1390,16 +1521,13 @@ def _apply_permission_balance(employee, late_minutes, reference_date, policy):
     # نحسب كام دقيقة هنحولها لإذن
     max_per_request = int(float(policy.permission_max_hours_per_request) * 60)
 
-    # لو الكسر بمرة كاملة → نحسب المرة كاملة
+    # التأخير اللي هيتحول لإذن (مش أكتر من حد المرة ولا الرصيد ولا التأخير نفسه)
+    minutes_to_convert = min(late_minutes, max_per_request, remaining_minutes)
+    count_to_use = 1
+    # لو "الكسر بمرة كاملة": المرة بتتخصم من الرصيد كاملة حتى لو التأخير أقل
+    minutes_charged = minutes_to_convert
     if policy.permission_fraction_as_full:
-        minutes_to_convert = min(max_per_request, remaining_minutes)
-        count_to_use = 1
-    else:
-        minutes_to_convert = min(late_minutes, max_per_request, remaining_minutes)
-        count_to_use = 1
-
-    # مش هنحول أكتر من التأخير نفسه
-    minutes_to_convert = min(minutes_to_convert, late_minutes)
+        minutes_charged = min(max_per_request, remaining_minutes)
 
     if minutes_to_convert <= 0 or count_to_use > remaining_count:
         return 0, late_minutes
@@ -1410,7 +1538,7 @@ def _apply_permission_balance(employee, late_minutes, reference_date, policy):
             employee=employee,
             company=employee.company,
             entry_type='auto_late',
-            minutes_used=minutes_to_convert,
+            minutes_used=minutes_charged,
             count_used=count_to_use,
             reference_date=reference_date,
             notes=f'خصم تلقائي من رصيد الأذونات بسبب تأخير {late_minutes} دقيقة',
@@ -1424,25 +1552,9 @@ def _apply_permission_balance(employee, late_minutes, reference_date, policy):
     return minutes_to_convert, remaining_late
 
 def _apply_absence_rule(policy, absent_days, daily_salary):
-    """يطبق قاعدة الخصم على أيام الغياب (الجديد أولاً)"""
+    """قاعدة الغياب بتاعة سياسة الحضور (AbsenceRule) — absent_days ممكن يكون كسر (نص يوم)"""
     if not policy or absent_days <= 0:
         return 0.0
-    # 1) النظام الجديد (PenaltyRule) - له الأولوية
-    try:
-        from attendance.company_policy_models import PenaltyRule
-        new_rule = PenaltyRule._base_manager.filter(
-            company=policy.company if hasattr(policy, 'company') else None,
-            penalty_type='absence',
-            is_active=True,
-            is_superseded=False,
-        ).order_by('-version_number').first()
-        if new_rule and new_rule.applies_to_employee(getattr(policy, '_employee', None)):
-            deduction, tier = new_rule.calculate(absent_days, basic_salary=daily_salary * 30, days_in_month=30)
-            return float(deduction)
-    except Exception:
-        logger.exception("new PenaltyRule lookup failed in _apply_absence_rule")
-
-    # 2) النظام القديم (AbsenceRule) - fallback
     try:
         from attendance.models import AbsenceRule
         rule = AbsenceRule.objects.filter(
@@ -1457,81 +1569,51 @@ def _apply_absence_rule(policy, absent_days, daily_salary):
             return round(absent_days * daily_salary * float(rule.deduction_value), 2)
         elif rule.deduction_type == 'fixed_amount':
             return round(absent_days * float(rule.deduction_value), 2)
+        elif rule.deduction_type == 'warning':
+            return 0.0
     except Exception:
-        logger.exception(
-        "payroll_rules error in _apply_absence_rule",
-        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
-        )
+        logger.exception("payroll_rules error in _apply_absence_rule")
     return round(absent_days * daily_salary, 2)
 
 
-def _apply_overtime_rule(policy, overtime_hours, hourly_rate, overtime_type='after_shift'):
-    """يطبق قاعدة الأوفر تايم (الجديد أولاً)"""
-    if not policy or overtime_hours <= 0:
-        return 0.0
-    # 1) النظام الجديد (BonusRule) - له الأولوية
-    try:
-        from attendance.company_policy_models import BonusRule
-        new_rule = BonusRule._base_manager.filter(
-            bonus_type='overtime',
-            is_active=True,
-            is_superseded=False,
-        ).order_by('-version_number').first()
-        if new_rule and new_rule.applies_to_employee(getattr(policy, '_employee', None)):
-            # BonusRule.calculate() مش موجودة - نستخدم hourly_rate كقيمة افتراضية
-            return round(overtime_hours * hourly_rate * 1.5, 2)
-    except Exception:
-        logger.exception("new BonusRule lookup failed in _apply_overtime_rule")
-
-    # 2) النظام القديم (OvertimeRule) - fallback
+def _policy_overtime_rule(policy, overtime_type='after_shift'):
+    if not policy:
+        return None
     try:
         from attendance.models import OvertimeRule
         rule = OvertimeRule.objects.filter(
-            policy=policy,
-            overtime_type=overtime_type
+            policy=policy, overtime_type=overtime_type
         ).order_by('display_order').first()
-
         if not rule:
             rule = OvertimeRule.objects.filter(
-                policy=policy,
-                overtime_type='after_shift'
+                policy=policy, overtime_type='after_shift'
             ).order_by('display_order').first()
-
-        if not rule:
-            return round(overtime_hours * hourly_rate * 1.5, 2)
-
-        min_hours = float(rule.min_minutes) / 60
-        if overtime_hours < min_hours:
-            return 0.0
-
-        return round(overtime_hours * hourly_rate * float(rule.multiplier), 2)
+        return rule
     except Exception:
-        logger.exception(
-        "payroll_rules error in _apply_overtime_rule",
-        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
-        )
-    return round(overtime_hours * hourly_rate * 1.5, 2)
+        logger.exception("payroll_rules error in _policy_overtime_rule")
+        return None
+
+
+def _apply_overtime_rule(policy, overtime_hours, hourly_rate, overtime_type='after_shift'):
+    """قاعدة الأوفر تايم بتاعة سياسة الحضور. بترجع None لو السياسة مفيهاش قاعدة."""
+    if overtime_hours <= 0:
+        return 0.0
+    rule = _policy_overtime_rule(policy, overtime_type)
+    if not rule:
+        return None
+    min_hours = float(rule.min_minutes or 0) / 60
+    if overtime_hours < min_hours:
+        return 0.0
+    hours = overtime_hours
+    if rule.max_hours_per_month:
+        hours = min(hours, float(rule.max_hours_per_month))
+    return round(hours * hourly_rate * float(rule.multiplier), 2)
 
 
 def _apply_night_allowance(policy, night_shift_days, daily_salary):
-    """يحسب بدل الشيفت الليلي (الجديد أولاً)"""
+    """بدل الشيفت الليلي من سياسة الحضور (NightShiftRule)"""
     if not policy or night_shift_days <= 0:
         return 0.0
-    # 1) النظام الجديد (BonusRule)
-    try:
-        from attendance.company_policy_models import BonusRule
-        new_rule = BonusRule._base_manager.filter(
-            bonus_type='night_shift',
-            is_active=True,
-            is_superseded=False,
-        ).order_by('-version_number').first()
-        if new_rule and new_rule.applies_to_employee(getattr(policy, '_employee', None)):
-            # BonusRule.calculate() مش موحدة - نستخدم fallback
-            return round(night_shift_days * daily_salary * 0.25, 2)
-    except Exception:
-        logger.exception("new BonusRule lookup failed in _apply_night_allowance")
-
-    # 2) النظام القديم (NightShiftRule)
     try:
         from attendance.models import NightShiftRule
         rule = NightShiftRule.objects.filter(policy=policy).first()
@@ -1542,31 +1624,14 @@ def _apply_night_allowance(policy, night_shift_days, daily_salary):
         elif rule.allowance_type == 'percentage':
             return round(night_shift_days * daily_salary * float(rule.percentage) / 100, 2)
     except Exception:
-        logger.exception(
-        "payroll_rules error in _apply_night_allowance",
-        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
-        )
+        logger.exception("payroll_rules error in _apply_night_allowance")
     return 0.0
 
 
 def _apply_weekend_allowance(policy, weekend_work_days, daily_salary):
-    """يحسب بدل العمل في يوم الراحة (الجديد أولاً)"""
+    """مقابل الشغل في يوم الراحة من سياسة الحضور (WeekendWorkRule)"""
     if not policy or weekend_work_days <= 0:
         return 0.0
-    # 1) النظام الجديد (BonusRule)
-    try:
-        from attendance.company_policy_models import BonusRule
-        new_rule = BonusRule._base_manager.filter(
-            bonus_type='weekend_work',
-            is_active=True,
-            is_superseded=False,
-        ).order_by('-version_number').first()
-        if new_rule and new_rule.applies_to_employee(getattr(policy, '_employee', None)):
-            return round(weekend_work_days * daily_salary * 2, 2)
-    except Exception:
-        logger.exception("new BonusRule lookup failed in _apply_weekend_allowance")
-
-    # 2) النظام القديم (WeekendWorkRule)
     try:
         from attendance.models import WeekendWorkRule
         rule = WeekendWorkRule.objects.filter(policy=policy).first()
@@ -1576,11 +1641,10 @@ def _apply_weekend_allowance(policy, weekend_work_days, daily_salary):
             return round(weekend_work_days * daily_salary * float(rule.multiplier), 2)
         elif rule.compensation_type == 'fixed_amount':
             return round(weekend_work_days * float(rule.amount or 0), 2)
+        elif rule.compensation_type == 'day_off':
+            return 0.0
     except Exception:
-        logger.exception(
-        "payroll_rules error in _apply_weekend_allowance",
-        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
-        )
+        logger.exception("payroll_rules error in _apply_weekend_allowance")
     return round(weekend_work_days * daily_salary * 2, 2)
 
 
@@ -1607,120 +1671,75 @@ def _is_policy_applicable(policy, employee, year, month):
         return False
 
 
+_DEFAULT_SETTINGS = {
+    # نفس DEFAULT_SETTINGS في api_payroll — لما الشركة مالهاش إعدادات رواتب محفوظة
+    'late_deduction_per_minute': 1.0,
+    'absence_deduction_per_day': 0.0,  # 0 = أجر اليوم
+    'overtime_rate_per_hour': 0.0,     # 0 = مفيش أوفر تايم إلا لو فيه قاعدة
+    'insurance_mode': 'none',
+    'insurance_fixed_amount': 0.0,
+    'insurance_percent': 0.0,
+    'field_allowance_type': 'none',
+    'fixed_field_allowance': 0.0,
+    'per_visit_allowance': 0.0,
+}
+
+
+def _resolve_payroll_settings(company, settings=None):
+    """
+    إعدادات الرواتب دايماً من شركة الموظف نفسه (مش من شركة المستخدم اللي فاتح الشاشة)،
+    عشان كل الشاشات والتقارير تطلع نفس الرقم.
+    """
+    try:
+        from attendance.payroll_settings_model import PayrollSettings
+        s = PayrollSettings._base_manager.filter(company=company).first() if company else None
+        if s:
+            return {
+                'late_deduction_per_minute': float(s.late_deduction_per_minute),
+                'absence_deduction_per_day': float(s.absence_deduction_per_day),
+                'overtime_rate_per_hour': float(s.overtime_rate_per_hour),
+                'insurance_mode': getattr(s, 'insurance_mode', 'none') or 'none',
+                'insurance_fixed_amount': float(getattr(s, 'insurance_fixed_amount', 0) or 0),
+                'insurance_percent': float(getattr(s, 'insurance_percent', 0) or 0),
+                'field_allowance_type': getattr(s, 'field_allowance_type', 'none') or 'none',
+                'fixed_field_allowance': float(getattr(s, 'fixed_field_allowance', 0) or 0),
+                'per_visit_allowance': float(getattr(s, 'per_visit_allowance', 0) or 0),
+            }
+    except Exception:
+        logger.exception("payroll_rules error in _resolve_payroll_settings")
+    merged = dict(_DEFAULT_SETTINGS)
+    if settings:
+        merged.update(settings)
+    return merged
+
+
 def calculate_effective_payroll(employee, year, month, settings=None, lang='ar'):
     """
     الحساب الكامل للراتب:
     Basic + Allowances + Overtime + Bonuses
     - Late - Absence - Insurance - Installments - Penalties - Extra
     = Net Salary
+
+    ترتيب الأولوية في الخصومات (التأخير / الغياب / الانصراف المبكر):
+      1) لائحة الجزاءات (PenaltyRule) لو فيه قاعدة سارية تخص الموظف
+      2) قواعد سياسة الحضور المعتمدة (LateRule / AbsenceRule)
+      3) إعدادات الرواتب (خصم الدقيقة / خصم يوم الغياب، والصفر = أجر اليوم)
+    فترة السماح بتتطبق مرة واحدة: الأكبر بين سماحية الشيفت وسماحية اللائحة،
+    والخصم بيبدأ بعدها.
     """
-    if settings is None:
-        settings = {}
+    company = getattr(employee, 'company', None)
+    settings = _resolve_payroll_settings(company, settings)
 
     late_per_min = _safe_float(settings.get('late_deduction_per_minute', 1.0))
-    absence_per_day = _safe_float(settings.get('absence_deduction_per_day', 200.0))
-    overtime_per_hour = _safe_float(settings.get('overtime_rate_per_hour', 50.0))
-
-    # الأدمن/HR/Super Admin ملهومش نظام حضور وانصراف أصلاً، فمينفعش يتحسبلهم غياب أو تأخير
-    _emp_user_role = getattr(getattr(employee, 'user', None), 'role', None)
-    if _emp_user_role in ('company_admin', 'hr_manager', 'super_admin'):
-        absence_per_day = 0.0
-        late_per_min = 0.0
+    absence_per_day = _safe_float(settings.get('absence_deduction_per_day', 0))
+    overtime_per_hour = _safe_float(settings.get('overtime_rate_per_hour', 0))
     insurance_mode = settings.get('insurance_mode', 'none')
     insurance_fixed_amount = _safe_float(settings.get('insurance_fixed_amount', 0))
     insurance_percent = _safe_float(settings.get('insurance_percent', 0))
 
-    company = getattr(employee, 'company', None)
-
-    # ═══════════════════════════════════════════════════
-    # Override من قواعد الرواتب الجديدة (Rules)
-    # ═══════════════════════════════════════════════════
-    # القواعد الجديدة أولوية أعلى من الجدول القديم
-    late_grace = 0
-    absence_multiplier = 1.0
-    early_leave_grace = 0
-    late_max_per_day = 0
-    _deduction_rule = None
-    _bonus_rule = None
-    _allowance_rule = None
-
-    try:
-        from attendance.company_policy_models import (
-            PenaltyRule, BonusRule, AllowanceRule
-        )
-        from django.db.models import Q
-        from datetime import date as _date
-
-        period_end = _date(year, month, monthrange(year, month)[1])
-
-        # قواعد الجزاءات (Penalty Rules with Tiers)
-        # نجيب كل قواعد الجزاءات النشطة، ونخزنها بحسب النوع
-        _penalty_rules_by_type = {}
-        penalty_rules = PenaltyRule._base_manager.filter(
-            company=company,
-            is_active=True,
-            start_date__lte=period_end,
-        ).filter(
-            Q(end_date__isnull=True) | Q(end_date__gte=period_end)
-        )
-        for r in penalty_rules:
-            if r.applies_to_employee(employee):
-                if r.penalty_type not in _penalty_rules_by_type:
-                    _penalty_rules_by_type[r.penalty_type] = r
-
-        # نقرأ قاعدة تأخير الحضور لو موجودة
-        _late_rule = _penalty_rules_by_type.get('late_arrival')
-        if _late_rule:
-            _deduction_rule = _late_rule
-            late_grace = int(_late_rule.grace_amount)
-
-        # قواعد الغياب
-        _absence_rule = _penalty_rules_by_type.get('absence')
-
-        # قواعد الخروج المبكر
-        _early_leave_rule = _penalty_rules_by_type.get('early_leave')
-        if _early_leave_rule:
-            early_leave_grace = int(_early_leave_rule.grace_amount)
-
-        # قواعد المكافآت (Bonus Rules with Tiers)
-        _bonus_rules_by_type = {}
-        bonus_rules = BonusRule._base_manager.filter(
-            company=company,
-            is_active=True,
-            start_date__lte=period_end,
-        ).filter(
-            Q(end_date__isnull=True) | Q(end_date__gte=period_end)
-        )
-        for r in bonus_rules:
-            if r.applies_to_employee(employee):
-                if r.bonus_type not in _bonus_rules_by_type:
-                    _bonus_rules_by_type[r.bonus_type] = r
-
-        _overtime_rule = _bonus_rules_by_type.get('overtime')
-        if _overtime_rule:
-            _bonus_rule = _overtime_rule
-
-        # قواعد البدلات (Allowance Rules with Tiers)
-        _allowance_rules_by_type = {}
-        allowance_rules = AllowanceRule._base_manager.filter(
-            company=company,
-            is_active=True,
-            start_date__lte=period_end,
-        ).filter(
-            Q(end_date__isnull=True) | Q(end_date__gte=period_end)
-        )
-        for r in allowance_rules:
-            if r.applies_to_employee(employee):
-                if r.allowance_type not in _allowance_rules_by_type:
-                    _allowance_rules_by_type[r.allowance_type] = r
-
-        _field_rule = _allowance_rules_by_type.get('field_work')
-        if _field_rule:
-            _allowance_rule = _field_rule
-
-    except Exception as _e:
-        pass  # fallback للجدول القديم لو حصل خطأ
-
+    # الأدمن/HR/Super Admin ملهومش نظام حضور وانصراف أصلاً، فمينفعش يتحسبلهم غياب أو تأخير
+    _emp_user_role = getattr(getattr(employee, 'user', None), 'role', None)
+    _exempt = _is_exempt_from_attendance(_emp_user_role)
 
     department = getattr(employee, 'department', None)
     branch = getattr(employee, 'branch', None)
@@ -1731,21 +1750,38 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     else:
         first_day, last_day = _period_bounds(year, month)
 
-    # م-6: السياسة بتتجاب لكل يوم مش مرة واحدة للشهر كله
-    # active_policy = للتوافق مع القديم (بتاخد السياسة السائدة في الشهر)
-    active_policy = _get_active_policy(company, first_day, department=department, branch=branch)
-    _policy_cache = {}  # cache عشان ما نعملش query لكل يوم لوحده
+    # فترة التعيين جوه فترة المرتب (اللي قبل التعيين أو بعد انتهاء الخدمة مش مستحق)
+    _hire = getattr(employee, 'hire_date', None)
+    _term = getattr(employee, 'termination_date', None)
+    emp_start = max(first_day, _hire) if _hire else first_day
+    emp_end = min(last_day, _term) if _term else last_day
+
+    def _employed(d):
+        return emp_start <= d <= emp_end
+
+    # ═══ قواعد مركز السياسات اللي بتخص الموظف ═══
+    from attendance.company_policy_models import PenaltyRule, BonusRule, AllowanceRule
+    penalty_rules = _load_scoped_rules(PenaltyRule, company, employee, first_day, last_day, 'penalty_type')
+    bonus_rules = _load_scoped_rules(BonusRule, company, employee, first_day, last_day, 'bonus_type')
+    allowance_rules = _load_scoped_rules(AllowanceRule, company, employee, first_day, last_day, 'allowance_type')
+
+    def _tiered_rule(kind, d):
+        r = _rule_for_day(penalty_rules.get(kind), d)
+        return r if r and r.tiers else None
+
+    _policy_cache = {}
 
     def _get_day_policy(d):
         if d not in _policy_cache:
             _policy_cache[d] = _get_active_policy(company, d, department=department, branch=branch)
         return _policy_cache[d]
 
-    working_dates = get_company_working_days(company, year, month)
+    working_dates = [d for d in get_company_working_days(company, year, month) if _employed(d)]
     mission_dates = get_mission_dates(employee, year, month)
     leave_dates, half_day_dates = get_leave_dates(employee, year, month)
     unpaid_leave_dates = get_unpaid_leave_dates(employee, year, month)
     official_holiday_map = get_official_holiday_treatment(employee, year, month)
+    permissions_by_day = get_approved_permission_minutes_by_day(employee, first_day, last_day)
 
     attendances = list(
         Attendance._base_manager.filter(
@@ -1757,7 +1793,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     attendance_by_date = {a.date: a for a in attendances}
     attended_dates = {
         a.date for a in attendances
-        if getattr(a, 'check_in_time', None) is not None
+        if getattr(a, 'check_in_time', None) is not None and _employed(a.date)
     }
 
     # Hybrid: جلب الملخصات اليومية المتاحة (لو موجودة تسرّع الحساب)
@@ -1786,19 +1822,57 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     total_early_leave_minutes = 0
     total_work_hours = 0.0
     total_overtime_hours = 0.0
+    approved_late_minutes = 0
+    approved_early_minutes = 0
     daily_details = []
 
     night_shift_days = 0
     weekend_work_days = 0
 
+    def _late_for_day(d, late_min, shift, half):
+        """
+        late_min جاي بعد سماحية الشيفت.
+        بيرجع (التأخير بعد السماح الموحد، التأخير اللي يتخصم بعد الأذونات)
+        """
+        nonlocal approved_late_minutes
+        if half and half.get('type') == 'morning':
+            late_min = max(0, late_min - int(float(half.get('hours', 4)) * 60))
+        if late_min <= 0:
+            return 0, 0
+        rule = _tiered_rule('late_arrival', d)
+        if rule and rule.grace_amount:
+            shift_grace = int(getattr(shift, 'grace_period', 0) or 0) if shift else 0
+            late_min = max(0, late_min - max(0, int(rule.grace_amount) - shift_grace))
+        if late_min <= 0:
+            return 0, 0
+        approved = min(late_min, permissions_by_day.get(d, {}).get('late', 0))
+        approved_late_minutes += approved
+        remaining = late_min - approved
+        if remaining > 0:
+            _conv, remaining = _apply_permission_balance(employee, remaining, d, _get_day_policy(d))
+        return late_min, remaining
+
+    def _early_for_day(d, att, half):
+        nonlocal approved_early_minutes
+        elm = int(getattr(att, 'early_leave_minutes', 0) or 0) if att else 0
+        if half and half.get('type') == 'afternoon':
+            elm = max(0, elm - int(float(half.get('hours', 4)) * 60))
+        approved = min(elm, permissions_by_day.get(d, {}).get('early', 0))
+        approved_early_minutes += approved
+        return elm, elm - approved
+
+    def _fmt(t):
+        return timezone.localtime(t).strftime('%I:%M %p') if t else None
+
     # ندمج أيام الشركة مع أي أيام الموظف اشتغلها فعلياً وهي مش أيام عمل للشركة
     # الأدمن/HR/Super Admin ملهومش نظام حضور وانصراف أصلاً، فمفيش أيام تتحسب ليهم خالص
-    if _is_exempt_from_attendance(_emp_user_role):
+    if _exempt:
         all_eval_dates = []
     else:
         all_eval_dates = sorted(list(set(working_dates) | attended_dates))
     for d in all_eval_dates:
         att = attendance_by_date.get(d)
+        half = half_day_dates.get(d)
 
         # إجازة رسمية مدفوعة → يتحسب on_leave مش absent
         _official = official_holiday_map.get(d)
@@ -1822,21 +1896,69 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             })
             continue
 
+        # نص يوم إجازة: النص التاني يا حضور يا غياب
+        if half and d not in mission_dates:
+            on_leave_days += 0.5
+            if not half.get('paid', True):
+                unpaid_leave_days += 0.5
+            day_shift = _get_shift_for_date(employee, d)
+            if att and att.check_in_time:
+                present_days += 0.5
+                late_min, deductible_late = _late_for_day(d, _calc_late_minutes(day_shift, att), day_shift, half)
+                elm, deductible_early = _early_for_day(d, att, half)
+                work_h = _safe_float(att.work_hours)
+                ot_h = _calc_overtime_hours(day_shift, att)
+                total_work_hours += work_h
+                total_overtime_hours += ot_h
+                total_early_leave_minutes += deductible_early
+                total_late_minutes += deductible_late
+                if late_min > 0:
+                    late_days += 1
+                daily_details.append({
+                    'date': d.isoformat(), 'status': 'half_day_leave',
+                    'effective_status': 'late' if late_min > 0 else 'present',
+                    'check_in': _fmt(att.check_in_time), 'check_out': _fmt(att.check_out_time),
+                    'work_hours': round(work_h, 2), 'late_minutes': late_min,
+                    'deductible_late_minutes': deductible_late,
+                    'early_leave_minutes': elm, 'deductible_early_minutes': deductible_early,
+                    'overtime_hours': round(ot_h, 2),
+                    'shift_name': day_shift.name if day_shift else '',
+                    'is_night_shift': False, 'is_weekend_work': False, 'half_day_leave': True,
+                })
+            else:
+                absent_days += 0.5
+                daily_details.append({
+                    'date': d.isoformat(), 'status': 'half_day_leave',
+                    'effective_status': 'absent', 'absent_fraction': 0.5,
+                    'check_in': None, 'check_out': None, 'work_hours': 0,
+                    'late_minutes': 0, 'early_leave_minutes': 0, 'overtime_hours': 0,
+                    'shift_name': day_shift.name if day_shift else '',
+                    'is_night_shift': False, 'is_weekend_work': False, 'half_day_leave': True,
+                })
+            continue
+
         # Hybrid: لو عندنا summary لليوم ده نستخدمها
         _summary = _summaries.get(d)
-        if _summary and d not in leave_dates and d not in mission_dates:
+        if _summary and d not in mission_dates:
             _es = _summary.effective_status or _summary.status
+            # ملخص قديم بيقول غياب والموظف عنده حضور فعلي (اتعدل بعدين) → نتجاهل الملخص
+            if _es == 'absent' and d in attended_dates:
+                _summary = None
+        if _summary and d not in mission_dates:
             _day_shift = _summary.shift or _get_shift_for_date(employee, d)
+            _late_shown = 0
+            _late_deductible = 0
 
             if _es == 'present':
                 present_days += 1
             elif _es == 'late':
-                late_days += 1
-                _day_pol = _get_day_policy(d)
-                _conv, _remaining = _apply_permission_balance(
-                    employee, _summary.late_minutes, d, _day_pol
-                )
-                total_late_minutes += _remaining
+                _late_shown, _late_deductible = _late_for_day(d, int(_summary.late_minutes or 0), _day_shift, None)
+                if _late_shown > 0:
+                    late_days += 1
+                    total_late_minutes += _late_deductible
+                else:
+                    present_days += 1
+                    _es = 'present'
             elif _es == 'absent':
                 absent_days += 1
             elif _es == 'weekend':
@@ -1846,10 +1968,10 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
             _wh = float(_summary.work_hours or 0)
             _oth = float(_summary.overtime_hours or 0)
-            _elm = int(getattr(att, 'early_leave_minutes', 0) or 0)
+            _elm, _elm_deductible = _early_for_day(d, att, None)
             total_work_hours += _wh
             total_overtime_hours += _oth
-            total_early_leave_minutes += _elm
+            total_early_leave_minutes += _elm_deductible
 
             if _summary.is_night_shift:
                 night_shift_days += 1
@@ -1860,11 +1982,13 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 'date': d.isoformat(),
                 'status': _summary.status,
                 'effective_status': _es,
-                'check_in': timezone.localtime(att.check_in_time).strftime('%I:%M %p') if att and att.check_in_time else None,
-                'check_out': timezone.localtime(att.check_out_time).strftime('%I:%M %p') if att and att.check_out_time else None,
+                'check_in': _fmt(att.check_in_time) if att else None,
+                'check_out': _fmt(att.check_out_time) if att else None,
                 'work_hours': round(_wh, 2),
-                'late_minutes': _summary.late_minutes,
+                'late_minutes': _late_shown,
+                'deductible_late_minutes': _late_deductible,
                 'early_leave_minutes': _elm,
+                'deductible_early_minutes': _elm_deductible,
                 'overtime_hours': round(_oth, 2),
                 'shift_name': _day_shift.name if _day_shift else '',
                 'is_night_shift': _summary.is_night_shift,
@@ -1875,27 +1999,6 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         # Fallback: الحساب التقليدي لو مفيش summary
         day_shift = _get_shift_for_date(employee, d)
 
-        if d in leave_dates:
-            on_leave_days += 1
-            if d in unpaid_leave_dates:
-                unpaid_leave_days += 1
-        elif d in half_day_dates:
-            # نص يوم: حاضر نص الوقت فقط
-            on_leave_days += 0.5
-            _hd = half_day_dates[d]
-            _hd_hours = _hd.get('hours', 4.0)
-            _hd_daily_deduct = round(_hd_hours / max(float(getattr(att.employee if att else employee, 'required_daily_hours', 8) or 8), 1) * daily_salary, 2)
-            absence_deduction += _hd_daily_deduct
-            daily_details.append({
-                'date': d.isoformat(), 'status': 'on_leave',
-                'effective_status': 'on_leave', 'check_in': None,
-                'check_out': None, 'work_hours': 0,
-                'late_minutes': 0, 'early_leave_minutes': 0, 'overtime_hours': 0,
-                'shift_name': day_shift.name if day_shift else '',
-                'is_night_shift': False, 'is_weekend_work': False,
-            })
-            continue
-
         if d in mission_dates:
             mission_days += 1
             work_h = _safe_float(att.work_hours if att else 0)
@@ -1903,17 +2006,18 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             elm = int(getattr(att, 'early_leave_minutes', 0) or 0) if att else 0
             total_work_hours += work_h
             total_overtime_hours += ot_h
-            total_early_leave_minutes += elm
             is_night = _is_night_shift(day_shift)
             if is_night:
                 night_shift_days += 1
             daily_details.append({
                 'date': d.isoformat(), 'status': 'mission_day',
                 'effective_status': 'present',
-                'check_in': timezone.localtime(att.check_in_time).strftime('%I:%M %p') if att and att.check_in_time else None,
-                'check_out': timezone.localtime(att.check_out_time).strftime('%I:%M %p') if att and att.check_out_time else None,
+                'check_in': _fmt(att.check_in_time) if att else None,
+                'check_out': _fmt(att.check_out_time) if att else None,
                 'work_hours': round(work_h, 2),
-                'late_minutes': 0, 'early_leave_minutes': elm, 'overtime_hours': round(ot_h, 2),
+                # يوم المأمورية مفيهوش خصم تأخير ولا انصراف مبكر
+                'late_minutes': 0, 'early_leave_minutes': elm, 'deductible_early_minutes': 0,
+                'overtime_hours': round(ot_h, 2),
                 'shift_name': day_shift.name if day_shift else '',
                 'is_night_shift': is_night, 'is_weekend_work': False,
             })
@@ -1934,17 +2038,18 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                     # يبقى اليوم مش غياب كامل، ده checkout ناقص
                     if att and att.check_in_time and not att.check_out_time:
                         present_days += 1
-                        elm = int(getattr(att, 'early_leave_minutes', 0) or 0)
-                        total_early_leave_minutes += elm
+                        elm, deductible_early = _early_for_day(d, att, None)
+                        total_early_leave_minutes += deductible_early
                         daily_details.append({
                             'date': d.isoformat(),
                             'status': getattr(att, 'status', 'present'),
                             'effective_status': 'present',
-                            'check_in': timezone.localtime(att.check_in_time).strftime('%I:%M %p') if att.check_in_time else None,
+                            'check_in': _fmt(att.check_in_time),
                             'check_out': None,
                             'work_hours': 0,
                             'late_minutes': 0,
                             'early_leave_minutes': elm,
+                            'deductible_early_minutes': deductible_early,
                             'overtime_hours': 0,
                             'shift_name': day_shift.name if day_shift else '',
                             'is_night_shift': False,
@@ -1962,12 +2067,12 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                         })
                     continue
                 work_h = round(split_metrics['worked_minutes'] / 60, 2)
-                late_min = split_metrics['late_minutes'] + split_metrics['shortage_minutes']
+                raw_late = split_metrics['late_minutes'] + split_metrics['shortage_minutes']
                 ot_h = 0.0
             else:
                 work_h = _safe_float(att.work_hours)
                 ot_h = _calc_overtime_hours(day_shift, att)
-                late_min = _calc_late_minutes(day_shift, att)
+                raw_late = _calc_late_minutes(day_shift, att)
             is_night = _is_night_shift(day_shift)
             is_weekend = _is_weekend_work(day_shift, d)
 
@@ -1979,18 +2084,13 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             if is_weekend:
                 weekend_work_days += 1
 
-            elm = int(getattr(att, 'early_leave_minutes', 0) or 0)
-            total_early_leave_minutes += elm
+            elm, deductible_early = _early_for_day(d, att, None)
+            total_early_leave_minutes += deductible_early
 
+            late_min, deductible_late = _late_for_day(d, raw_late, day_shift, None)
             if late_min > 0:
                 late_days += 1
-                # نحاول نحول التأخير لإذن لو الموظف عنده رصيد (م-6: سياسة اليوم)
-                _day_pol = _get_day_policy(d)
-                converted, remaining_late = _apply_permission_balance(
-                    employee, late_min, d, _day_pol
-                )
-                effective_late_min = remaining_late
-                total_late_minutes += effective_late_min
+                total_late_minutes += deductible_late
                 eff_status = 'late'
             else:
                 present_days += 1
@@ -2000,11 +2100,13 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
                 'date': d.isoformat(),
                 'status': getattr(att, 'status', 'present'),
                 'effective_status': eff_status,
-                'check_in': timezone.localtime(att.check_in_time).strftime('%I:%M %p') if att.check_in_time else None,
-                'check_out': timezone.localtime(att.check_out_time).strftime('%I:%M %p') if att.check_out_time else None,
+                'check_in': _fmt(att.check_in_time),
+                'check_out': _fmt(att.check_out_time),
                 'work_hours': round(work_h, 2),
                 'late_minutes': late_min,
+                'deductible_late_minutes': deductible_late,
                 'early_leave_minutes': elm,
+                'deductible_early_minutes': deductible_early,
                 'overtime_hours': round(ot_h, 2),
                 'shift_name': day_shift.name if day_shift else '',
                 'is_night_shift': is_night,
@@ -2013,14 +2115,14 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             continue
 
         if day_shift and not day_shift.is_work_day(d):
-            # لو الموظف مجاش في يوم راحته -> مش غياب
+            # لو الموظف مجاش في يوم راحته -> مش غياب ومش شغل في يوم راحة
             daily_details.append({
                 'date': d.isoformat(), 'status': 'weekend',
                 'effective_status': 'weekend', 'check_in': None,
                 'check_out': None, 'work_hours': 0,
                 'late_minutes': 0, 'early_leave_minutes': 0, 'overtime_hours': 0,
                 'shift_name': day_shift.name if day_shift else '',
-                'is_night_shift': False, 'is_weekend_work': True,
+                'is_night_shift': False, 'is_weekend_work': False,
             })
             continue
         # لو النهارده ولسه وقت شيفت الموظف ما جاش، منحسبوش غياب
@@ -2053,13 +2155,13 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
         _visits_qs = LocationCheckIn._base_manager.filter(
             employee=employee,
-            arrival_time__year=year,
-            arrival_time__month=month,
+            arrival_time__date__gte=first_day,
+            arrival_time__date__lte=last_day,
         ).values('arrival_time', 'departure_time', 'status')
 
         _visits_by_date = defaultdict(list)
         for _v in _visits_qs:
-            _vdate = _v['arrival_time'].date() if _v['arrival_time'] else None
+            _vdate = timezone.localtime(_v['arrival_time']).date() if _v['arrival_time'] else None
             if _vdate:
                 _visits_by_date[_vdate].append(_v)
 
@@ -2107,136 +2209,153 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
     # حساب اليومي والساعي للموظف — المرتب اليومي = المرتب ÷ عدد أيام الشهر التقويمي كامل (مش أيام العمل)
     calendar_days_in_month = monthrange(year, month)[1]
-    basic_salary_temp = _safe_float(getattr(employee, 'basic_salary', 0))
-    daily_salary = round(basic_salary_temp / calendar_days_in_month, 4)
+    daily_salary = round(basic_salary / calendar_days_in_month, 4)
     # اجيب الشيفت الافتراضي للموظف عشان احسب أجر الساعة منه
     _default_shift_for_rate = _get_shift_for_date(employee, first_day)
     _work_hours_for_rate = float(_default_shift_for_rate.work_hours) if _default_shift_for_rate and _default_shift_for_rate.work_hours else 8.0
     hourly_rate = round(daily_salary / _work_hours_for_rate, 4)
 
-    # م-6: نجمع الأرقام لكل سياسة لوحدها ثم نطبق قواعدها
-    _policy_totals = {}  # policy_id -> {late, absent, overtime, night, weekend}
-    _no_policy_totals = {'late': 0, 'absent': 0, 'overtime': 0.0, 'night': 0, 'weekend': 0}
-    _late_deduction_sum = 0.0  # نحسب خصم التأخير يوم بيوم مش على إجمالي الشهر
+    # ═══════════════════════════════════════════════════
+    # تحويل الأيام لفلوس — يوم بيوم، وكل يوم بالقاعدة السارية فيه
+    # ═══════════════════════════════════════════════════
+    late_deduction = 0.0
+    early_leave_deduction = 0.0
+    absence_deduction = 0.0
+    missing_checkout_deduction = 0.0
+    _absence_counter = {}
+    _missing_counter = {}
+    _ot_bonus = {}       # rule_id -> [rule, hours]
+    _ot_policy = {}      # policy_id -> [policy, hours]
+    _ot_settings_hours = 0.0
+    _night_bonus = {}    # rule_id -> [rule, hours]
+    _night_policy = {}   # policy_id -> [policy, days]
+    _weekend_bonus = {}  # rule_id -> [rule, days]
+    _weekend_policy = {} # policy_id -> [policy, days]
+    _used_policies = {}
+    _today_local = timezone.localdate()
 
     for dd in daily_details:
-        _d_date = None
         try:
-            _d_date = date.fromisoformat(dd['date'])
+            _d = date.fromisoformat(dd['date'])
         except Exception:
-            logger.exception(
-        "payroll_rules error in calculate_effective_payroll",
-        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
-            )
-
-        _dp = _get_day_policy(_d_date) if _d_date else None
+            continue
+        _dp = _get_day_policy(_d)
+        if _dp:
+            _used_policies[_dp.id] = _dp
         _es = dd.get('effective_status', '')
 
-        if _dp:
-            _pid = _dp.id
-            if _pid not in _policy_totals:
-                _policy_totals[_pid] = {'policy': _dp, 'late': 0, 'absent': 0, 'overtime': 0.0, 'night': 0, 'weekend': 0}
-            if _es in ('late',):
-                _policy_totals[_pid]['late'] += dd.get('late_minutes', 0)
-                _late_deduction_sum += _apply_late_rule(_dp, dd.get('late_minutes', 0), daily_salary)
-            if _es == 'absent':
-                _policy_totals[_pid]['absent'] += 1
-            _policy_totals[_pid]['overtime'] += dd.get('overtime_hours', 0.0)
-            if dd.get('is_night_shift'):
-                _policy_totals[_pid]['night'] += 1
-            if dd.get('is_weekend_work'):
-                _policy_totals[_pid]['weekend'] += 1
-        else:
-            if _es in ('late',):
-                _no_policy_totals['late'] += dd.get('late_minutes', 0)
-            if _es == 'absent':
-                _no_policy_totals['absent'] += 1
-            _no_policy_totals['overtime'] += dd.get('overtime_hours', 0.0)
-            if dd.get('is_night_shift'):
-                _no_policy_totals['night'] += 1
-            if dd.get('is_weekend_work'):
-                _no_policy_totals['weekend'] += 1
-
-    _approved_late_min = 0
-
-    # نجمع الناتج من كل السياسات
-    late_deduction = 0.0
-    absence_deduction = 0.0
-    overtime_bonus = 0.0
-    night_allowance = 0.0
-    weekend_allowance = 0.0
-
-    late_deduction = _late_deduction_sum
-    for _pid, _pt in _policy_totals.items():
-        _pol = _pt['policy']
-        absence_deduction += _apply_absence_rule(_pol, _pt['absent'], daily_salary)
-        overtime_bonus += _apply_overtime_rule(_pol, _pt['overtime'], hourly_rate)
-        night_allowance += _apply_night_allowance(_pol, _pt['night'], daily_salary)
-        weekend_allowance += _apply_weekend_allowance(_pol, _pt['weekend'], daily_salary)
-
-    # الأيام بدون سياسة -> نطبق قواعد الجزاءات والمكافآت الجديدة (Tiers)
-    if _no_policy_totals['late'] or _no_policy_totals['absent'] or _no_policy_totals['overtime']:
-        _days_in_month = 30
-
-        # ═══ حسم التأخير: استخدام Tiers ═══
-        _effective_late = max(0, _no_policy_totals['late'] - _approved_late_min)
-        if _late_rule and _late_rule.tiers:
-            # نطبق القاعدة الجديدة بالـ Tiers
-            _late_amount, _ = _late_rule.calculate(_effective_late, basic_salary, _days_in_month)
-            late_deduction += float(_late_amount)
-        else:
-            # fallback للطريقة القديمة
-            _effective = max(0, _effective_late - late_grace)
-            late_deduction += round(_effective * late_per_min, 2)
-
-        # ═══ حسم الغياب: استخدام Tiers ═══
-        if _absence_rule and _absence_rule.tiers:
-            _abs_amount, _ = _absence_rule.calculate(_no_policy_totals['absent'], basic_salary, _days_in_month)
-            absence_deduction += float(_abs_amount)
-        else:
-            absence_deduction += round(_no_policy_totals['absent'] * absence_per_day * absence_multiplier, 2)
-
-        # ═══ الأوفرتايم: استخدام Tiers ═══
-        if _overtime_rule and _overtime_rule.tiers:
-            # نلاقي الشريحة المطابقة للساعات
-            _ot_hours = _no_policy_totals['overtime']
-            _matched_tier = None
-            for tier in _overtime_rule.tiers:
-                t_from = tier.get('from', 0)
-                t_to = tier.get('to')
-                if _ot_hours >= t_from and (t_to is None or _ot_hours <= t_to):
-                    _matched_tier = tier
-                    break
-            if _matched_tier:
-                _vt = _matched_tier.get('value_type', 'multiplier')
-                _val = float(_matched_tier.get('value', 1.0) or 0)
-                if _vt == 'multiplier':
-                    overtime_bonus += round(_ot_hours * hourly_rate * _val, 2)
-                elif _vt == 'fixed_per_unit':
-                    overtime_bonus += round(_ot_hours * _val, 2)
-                elif _vt == 'fixed_total':
-                    overtime_bonus += _val
-                elif _vt == 'percent_basic':
-                    overtime_bonus += round((float(basic_salary) * _val) / 100.0, 2)
+        # التأخير
+        _dl = int(dd.get('deductible_late_minutes', 0) or 0)
+        if _dl > 0:
+            _rule = _tiered_rule('late_arrival', _d)
+            if _rule:
+                late_deduction += _penalty_tier_amount(_match_tier(_rule.tiers, _dl), _dl, daily_salary, basic_salary)
+            elif _policy_has_late_rules(_dp):
+                late_deduction += _apply_late_rule(_dp, _dl, daily_salary)
             else:
-                overtime_bonus += round(_ot_hours * overtime_per_hour, 2)
-        else:
-            overtime_bonus += round(_no_policy_totals['overtime'] * overtime_per_hour, 2)
+                late_deduction += _dl * late_per_min
+
+        # الانصراف المبكر
+        _de = int(dd.get('deductible_early_minutes', 0) or 0)
+        if _de > 0:
+            _rule = _tiered_rule('early_leave', _d)
+            if _rule:
+                _eff = max(0, _de - int(_rule.grace_amount or 0))
+                if _eff > 0:
+                    early_leave_deduction += _penalty_tier_amount(_match_tier(_rule.tiers, _eff), _eff, daily_salary, basic_salary)
+            else:
+                early_leave_deduction += _de * late_per_min
+
+        # نسيان تسجيل الانصراف (النهارده لسه ممكن يسجل)
+        if dd.get('missing_checkout') and _d < _today_local:
+            _rule = _tiered_rule('missing_checkout', _d)
+            if _rule:
+                _n = _missing_counter.get(_rule.id, 0) + 1
+                _missing_counter[_rule.id] = _n
+                _idx = _n - int(_rule.grace_amount or 0)
+                if _idx > 0:
+                    missing_checkout_deduction += _penalty_tier_amount(_match_tier(_rule.tiers, _idx), 1, daily_salary, basic_salary)
+
+        # الغياب: الشرائح تصاعدية — يوم الغياب رقم N بيتخصم بالشريحة اللي N واقع فيها
+        if _es == 'absent':
+            _frac = float(dd.get('absent_fraction', 1) or 1)
+            _rule = _tiered_rule('absence', _d)
+            if _rule:
+                _cur = _absence_counter.get(_rule.id, 0.0) + _frac
+                _absence_counter[_rule.id] = _cur
+                _idx = int(-(-_cur // 1)) - int(_rule.grace_amount or 0)  # ceil
+                if _idx > 0:
+                    absence_deduction += _penalty_tier_amount(_match_tier(_rule.tiers, _idx), 1, daily_salary, basic_salary) * _frac
+            elif _dp:
+                absence_deduction += _apply_absence_rule(_dp, _frac, daily_salary)
+            else:
+                absence_deduction += _frac * (absence_per_day if absence_per_day > 0 else daily_salary)
+
+        # الأوفر تايم
+        _oth = float(dd.get('overtime_hours', 0) or 0)
+        if _oth > 0:
+            _br = _rule_for_day(bonus_rules.get('overtime'), _d)
+            if _br and _br.tiers:
+                _ot_bonus.setdefault(_br.id, [_br, 0.0])[1] += _oth
+            elif _dp and _policy_overtime_rule(_dp):
+                _ot_policy.setdefault(_dp.id, [_dp, 0.0])[1] += _oth
+            else:
+                _ot_settings_hours += _oth
+
+        # الشيفت الليلي
+        if dd.get('is_night_shift') and dd.get('check_in'):
+            _br = _rule_for_day(bonus_rules.get('night_shift'), _d)
+            if _br and _br.tiers:
+                _night_bonus.setdefault(_br.id, [_br, 0.0])[1] += float(dd.get('work_hours', 0) or 0)
+            elif _dp:
+                _night_policy.setdefault(_dp.id, [_dp, 0])[1] += 1
+
+        # الشغل في يوم الراحة
+        if dd.get('is_weekend_work'):
+            _br = _rule_for_day(bonus_rules.get('weekend_work'), _d)
+            if _br and _br.tiers:
+                _weekend_bonus.setdefault(_br.id, [_br, 0])[1] += 1
+            elif _dp:
+                _weekend_policy.setdefault(_dp.id, [_dp, 0])[1] += 1
+
+    overtime_bonus = 0.0
+    for _r, _h in _ot_bonus.values():
+        overtime_bonus += _bonus_tier_amount(_r, _h, hourly_rate, basic_salary)
+    for _p, _h in _ot_policy.values():
+        overtime_bonus += _apply_overtime_rule(_p, _h, hourly_rate) or 0.0
+    overtime_bonus += _ot_settings_hours * overtime_per_hour
+
+    night_allowance = 0.0
+    for _r, _h in _night_bonus.values():
+        night_allowance += _bonus_tier_amount(_r, _h, hourly_rate, basic_salary)
+    for _p, _n in _night_policy.values():
+        night_allowance += _apply_night_allowance(_p, _n, daily_salary)
+
+    weekend_allowance = 0.0
+    for _r, _n in _weekend_bonus.values():
+        weekend_allowance += _bonus_tier_amount(_r, _n, daily_salary, basic_salary)
+    for _p, _n in _weekend_policy.values():
+        weekend_allowance += _apply_weekend_allowance(_p, _n, daily_salary)
+
+    if _exempt:
+        late_deduction = early_leave_deduction = absence_deduction = missing_checkout_deduction = 0.0
 
     late_deduction = round(late_deduction, 2)
+    early_leave_deduction = round(early_leave_deduction, 2)
     absence_deduction = round(absence_deduction, 2)
+    missing_checkout_deduction = round(missing_checkout_deduction, 2)
     overtime_bonus = round(overtime_bonus, 2)
     night_allowance = round(night_allowance, 2)
     weekend_allowance = round(weekend_allowance, 2)
 
     # policy_name: لو فيه أكتر من سياسة نقول "سياسات متعددة"
-    _used_policies = list(_policy_totals.values())
-    if len(_used_policies) == 0:
+    _used_list = list(_used_policies.values())
+    if len(_used_list) == 0:
         active_policy = None
-    elif len(_used_policies) == 1:
-        active_policy = _used_policies[0]['policy']
+    elif len(_used_list) == 1:
+        active_policy = _used_list[0]
     else:
-        active_policy = type('_MultiPolicy', (), {'name': 'سياسات متعددة' if True else 'Multiple Policies'})()
+        active_policy = type('_MultiPolicy', (), {'name': 'سياسات متعددة' if lang == 'ar' else 'Multiple Policies'})()
 
     # [ب] خصم نقص ساعات الشيفت المرن (approved فقط)
     flex_shortage_deduction = 0.0
@@ -2255,17 +2374,14 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     except Exception:
         flex_shortage_deduction = 0.0
 
-    # خصم الانصراف المبكر = بنفس معدل التأخير الحالي
-    # خصم الإذن المعتمد من التأخير والانصراف المبكر
-    _approved_late_min, _approved_early_min = get_approved_permission_minutes(
-        employee, first_day, last_day
-    )
-    effective_late_minutes = max(0, total_late_minutes - _approved_late_min)
-    effective_early_minutes = max(0, total_early_leave_minutes - _approved_early_min)
-
-    early_leave_deduction = round(effective_early_minutes * late_per_min, 2)
-
     unpaid_leave_deduction = round(unpaid_leave_days * daily_salary, 2)
+
+    # الأيام اللي قبل التعيين أو بعد انتهاء الخدمة جوه فترة المرتب
+    if emp_start > emp_end:
+        not_employed_days = (last_day - first_day).days + 1
+    else:
+        not_employed_days = (emp_start - first_day).days + (last_day - emp_end).days
+    not_employed_deduction = round(not_employed_days * daily_salary, 2)
 
     allowances_total, allowance_items = _get_allowances(employee, first_day, last_day, lang=lang)
     deductions = _get_monthly_deductions(employee, year, month, lang=lang)
@@ -2295,187 +2411,233 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             general_extra_total += amount
             general_extra_items.append(item)
 
-    insurance_deduction = round(deductions['insurance_total'] + general_insurance_total, 2)
-    if has_insurance:
-        if insurance_mode == 'fixed':
-            insurance_deduction += insurance_fixed_amount
-        elif insurance_mode == 'percent':
-            insurance_deduction += round((basic_salary * insurance_percent) / 100.0, 2)
-    insurance_deduction = round(insurance_deduction, 2)
-
     # ═══════════════════════════════════════════════════
-    # نظام التأمينات الجديد — CompanyInsurancePolicy
+    # التأمينات — مصدر واحد بس (من الأخص للأعم) عشان مايتخصمش مرتين:
+    #   1) خصم تأمين مسجل على الموظف نفسه
+    #   2) سياسة التأمينات (CompanyInsurancePolicy)
+    #   3) خصم عام بنوع تأمين (CompanyDeductionPolicy)
+    #   4) إعدادات الرواتب (insurance_mode) للموظف المؤمن عليه
     # ═══════════════════════════════════════════════════
     social_insurance_employee = 0.0
     social_insurance_company = 0.0
     medical_insurance_employee = 0.0
     medical_insurance_company = 0.0
-    total_company_insurance_contribution = 0.0
 
     try:
         from attendance.company_policy_models import CompanyInsurancePolicy
-        from django.db.models import Q
-        from datetime import date as _date
-
-        # نجيب السياسات السارية في نهاية الشهر
-        period_end = _date(year, month, monthrange(year, month)[1])  # آخر يوم مضمون في الشهر
         insurance_policies = CompanyInsurancePolicy._base_manager.filter(
             company=company,
             is_active=True,
-            start_date__lte=period_end,
+            start_date__lte=last_day,
         ).filter(
-            Q(end_date__isnull=True) | Q(end_date__gte=period_end)
+            Q(end_date__isnull=True) | Q(end_date__gte=last_day)
         )
-
         for policy in insurance_policies:
             if not policy.applies_to_employee(employee):
                 continue
-
             calc = policy.calculate_deduction(employee)
-
             if policy.insurance_type == 'social':
                 social_insurance_employee += float(calc['employee_share'])
                 social_insurance_company += float(calc['company_share'])
             elif policy.insurance_type == 'medical':
                 medical_insurance_employee += float(calc['employee_share'])
                 medical_insurance_company += float(calc['company_share'])
+    except Exception:
+        logger.exception("payroll_rules error in insurance policies")
 
-        # نضيف حصة الموظف الجديدة للـ insurance_deduction
-        new_insurance_total = social_insurance_employee + medical_insurance_employee
-        if new_insurance_total > 0:
-            insurance_deduction += round(new_insurance_total, 2)
+    _policy_insurance = social_insurance_employee + medical_insurance_employee
+    _settings_insurance = 0.0
+    if has_insurance:
+        if insurance_mode == 'fixed':
+            _settings_insurance = insurance_fixed_amount
+        elif insurance_mode == 'percent':
+            _settings_insurance = (basic_salary * insurance_percent) / 100.0
 
-        total_company_insurance_contribution = round(social_insurance_company + medical_insurance_company, 2)
-
-    except Exception as _e:
-        pass  # فشل النظام الجديد لا يوقف الحساب القديم
+    insurance_items = []
+    if deductions['insurance_total'] > 0:
+        insurance_deduction = deductions['insurance_total']
+        insurance_items = deductions['insurance_items']
+        social_insurance_employee = social_insurance_company = 0.0
+        medical_insurance_employee = medical_insurance_company = 0.0
+    elif _policy_insurance > 0 or social_insurance_company > 0 or medical_insurance_company > 0:
+        insurance_deduction = _policy_insurance
+    elif general_insurance_total > 0:
+        insurance_deduction = general_insurance_total
+        insurance_items = general_insurance_items
+    else:
+        insurance_deduction = _settings_insurance
 
     social_insurance_employee = round(social_insurance_employee, 2)
     social_insurance_company = round(social_insurance_company, 2)
     medical_insurance_employee = round(medical_insurance_employee, 2)
     medical_insurance_company = round(medical_insurance_company, 2)
+    total_company_insurance_contribution = round(social_insurance_company + medical_insurance_company, 2)
     insurance_deduction = round(insurance_deduction, 2)
 
     # ═══════════════════════════════════════════════════
-    # نظام الضرائب الجديد — TaxPolicy
+    # بدلات مركز السياسات (AllowanceRule) — كل نوع بقاعدته
     # ═══════════════════════════════════════════════════
-    tax_deduction = 0.0
-    try:
-        from attendance.company_policy_models import TaxPolicy
-        from django.db.models import Q
-        from datetime import date as _date
-
-        period_end = _date(year, month, monthrange(year, month)[1])
-        tax_policy = TaxPolicy._base_manager.filter(
-            company=company,
-            is_active=True,
-            is_superseded=False,
-            start_date__lte=period_end,
-        ).filter(
-            Q(end_date__isnull=True) | Q(end_date__gte=period_end)
-        ).order_by('-created_at').first()
-
-        if tax_policy:
-            # نجيب الحالة الاجتماعية من الموظف لو موجودة
-            marital_status = getattr(employee, 'marital_status', 'single') or 'single'
-            # نحول للقيم المتوقعة في السياسة
-            if marital_status not in ('single', 'married'):
-                marital_status = 'single'
-
-            # الدخل السنوي = gross شهري × 12
-            annual_gross = float(basic_salary) * 12
-
-            # نخصم التأمينات من الوعاء الضريبي لو السياسة تقول كده
-            taxable_base = annual_gross
-            if getattr(tax_policy, 'exempt_social_insurance', True):
-                taxable_base -= (social_insurance_employee * 12)
-            if getattr(tax_policy, 'exempt_medical_insurance', True):
-                taxable_base -= (medical_insurance_employee * 12)
-
-            tax_result = tax_policy.calculate_annual_tax(
-                annual_income=max(0, taxable_base),
-                marital_status=marital_status,
-            )
-            annual_tax = float(tax_result.get('annual_tax', 0))
-            tax_deduction = round(annual_tax / 12, 2)
-
-    except Exception as _tax_err:
-        tax_deduction = 0.0  # فشل الضريبة لا يوقف الحساب
-
-    tax_deduction = round(tax_deduction, 2)
-
-    # بدل الانتقالات للموظفين الميدانيين — أولوية لقواعد البدلات الجديدة
     field_allowance = 0.0
     meal_allowance = 0.0
     transport_allowance = 0.0
+    other_rule_allowances = 0.0
+    rule_allowance_items = []
     ps = None  # للحفاظ على compatibility مع الكود اللاحق
 
-    try:
-        _is_field_worker = hasattr(employee, 'worker_type') and employee.worker_type in ('field_free', 'field_assigned')
+    _is_field_worker = (
+        getattr(employee, 'worker_type', None) in ('field_free', 'field_assigned')
+        or bool(getattr(employee, 'is_field_worker', False))
+    )
 
-        # ═══ أولوية 1: القاعدة الجديدة (AllowanceRule) ═══
-        if _allowance_rule:
-            # بدل الميدان
-            if _is_field_worker:
-                if _allowance_rule.field_allowance_type == 'fixed':
-                    field_allowance = float(_allowance_rule.fixed_field_allowance or 0)
-                elif _allowance_rule.field_allowance_type == 'per_visit':
-                    from attendance.models import LocationCheckIn
-                    visits_count = LocationCheckIn._base_manager.filter(
-                        employee=employee,
-                        arrival_time__year=year,
-                        arrival_time__month=month,
-                    ).count()
-                    field_allowance = visits_count * float(_allowance_rule.per_visit_allowance or 0)
+    def _visits_count():
+        try:
+            from attendance.models import LocationCheckIn
+            return LocationCheckIn._base_manager.filter(
+                employee=employee,
+                arrival_time__date__gte=first_day,
+                arrival_time__date__lte=last_day,
+            ).count()
+        except Exception:
+            return 0
 
-            # بدل الوجبات
-            if float(_allowance_rule.meal_allowance_per_day) > 0:
-                _min_hours = int(_allowance_rule.meal_min_work_hours or 0)
-                _eligible_days = sum(1 for _dd in daily_details if _dd.get('work_hours', 0) >= _min_hours)
-                meal_allowance = _eligible_days * float(_allowance_rule.meal_allowance_per_day)
+    def _worked_days(min_hours=0):
+        n = 0
+        for _dd in daily_details:
+            worked = _dd.get('status') == 'mission_day' or (
+                _dd.get('check_in') and _dd.get('effective_status') in ('present', 'late')
+            )
+            if not worked:
+                continue
+            if min_hours and _dd.get('status') != 'mission_day' and float(_dd.get('work_hours', 0) or 0) < min_hours:
+                continue
+            n += 1
+        return n
 
-            # بدل المواصلات
-            if _allowance_rule.transport_allowance_type == 'per_day':
-                _work_days = sum(1 for _dd in daily_details if _dd.get('work_hours', 0) > 0)
-                transport_allowance = _work_days * float(_allowance_rule.transport_allowance_per_day or 0)
-            elif _allowance_rule.transport_allowance_type == 'monthly':
-                transport_allowance = float(_allowance_rule.monthly_transport or 0)
-
-        # ═══ أولوية 2: الجدول القديم (fallback) ═══
+    for _atype, _rules in allowance_rules.items():
+        _rule = _rule_for_day(_rules, emp_end) or _rules[0]
+        if _atype == 'field_work' and not _is_field_worker:
+            continue
+        _ct = _rule.calculation_type
+        _val = float(_rule.fixed_amount or 0)
+        if _ct == 'fixed_monthly':
+            _amt = _val
+        elif _ct == 'per_day':
+            _amt = _worked_days(int(_rule.min_work_hours_per_day or 0)) * _val
+        elif _ct == 'per_visit':
+            _amt = _visits_count() * _val
+        elif _ct == 'tiered':
+            _tier = _match_tier(_rule.tiers, _worked_days(int(_rule.min_work_hours_per_day or 0)))
+            _amt = float(_tier.get('value', 0) or 0) if _tier else 0.0
         else:
+            _amt = 0.0  # per_km: مفيش بيانات مسافات
+        _amt = round(_amt, 2)
+        if _amt <= 0:
+            continue
+        if _atype == 'field_work':
+            field_allowance += _amt
+        elif _atype == 'meals':
+            meal_allowance += _amt
+        elif _atype == 'transport':
+            transport_allowance += _amt
+        else:
+            other_rule_allowances += _amt
+        rule_allowance_items.append({
+            'type': _atype,
+            'name': _rule.name,
+            'name_ar': _rule.name,
+            'name_en': _rule.name,
+            'amount': _amt,
+            'calculation_type': _ct,
+            'source': 'allowance_rule',
+        })
+
+    # بدل الميدان من إعدادات الرواتب لو مفيش قاعدة بدل ميدان
+    if 'field_work' not in allowance_rules:
+        try:
             from attendance.payroll_settings_model import PayrollSettings
             ps = PayrollSettings._base_manager.filter(company=company).first()
             if ps and _is_field_worker:
                 if ps.field_allowance_type == 'fixed':
                     field_allowance = float(ps.fixed_field_allowance or 0)
                 elif ps.field_allowance_type == 'per_visit':
-                    from attendance.models import LocationCheckIn
-                    visits_count = LocationCheckIn._base_manager.filter(
-                        employee=employee,
-                        arrival_time__year=year,
-                        arrival_time__month=month,
-                    ).count()
-                    field_allowance = visits_count * float(ps.per_visit_allowance or 0)
-    except Exception:
-        logger.exception(
-        "payroll_rules error in calculate_effective_payroll",
-        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
-        )
+                    field_allowance = _visits_count() * float(ps.per_visit_allowance or 0)
+        except Exception:
+            logger.exception("payroll_rules error in settings field allowance")
 
     field_allowance = round(field_allowance, 2)
     meal_allowance = round(meal_allowance, 2)
     transport_allowance = round(transport_allowance, 2)
+    other_rule_allowances = round(other_rule_allowances, 2)
+    rule_allowances_total = round(field_allowance + meal_allowance + transport_allowance + other_rule_allowances, 2)
 
     installments_total = round(deductions['installments_total'] + installments_total_new + general_installments_total, 2)
     penalties_total = round(deductions['penalties_total'] + penalties_total_new, 2)
     extra_deductions_total = round(deductions['extra_total'] + general_extra_total, 2)
 
-    # لو الشركة مش شغالة بسياسة أوفر تايم خالص (المعدل صفر)، نلغي أي أوفر تايم تمامًا
-    if overtime_per_hour <= 0:
-        overtime_bonus = 0.0
-        total_overtime_hours = 0.0
+    gross_salary = round(
+        basic_salary + allowances_total + overtime_bonus + bonuses_total
+        + night_allowance + weekend_allowance + rule_allowances_total, 2
+    )
 
-    gross_salary = round(basic_salary + allowances_total + overtime_bonus + bonuses_total + night_allowance + weekend_allowance + field_allowance + meal_allowance + transport_allowance, 2)
+    # ═══ الأيام اللي مالهاش أي علاقة شغل ═══
+    try:
+        _period_upper = min(emp_end, date.today())
+        _total_period_days = max(0, (_period_upper - emp_start).days + 1)
+        weekend_days = max(0, _total_period_days - len(working_dates))
+    except Exception:
+        weekend_days = 0
+
+    # استثناء: لو الموظف صفر حضور وصفر إجازات طول الفترة بالكامل (مفيش أي علاقة شغل حقيقية)،
+    # الجمعة والسبت كمان بتتخصم (بدل ما تفضل مدفوعة مجانًا)
+    _had_real_engagement = (present_days + late_days + mission_days + on_leave_days) > 0
+    _weekend_extra_deduction = 0.0
+    if not _exempt and not _had_real_engagement and weekend_days > 0:
+        _weekend_extra_deduction = round(weekend_days * daily_salary, 2)
+        absence_deduction = round(absence_deduction + _weekend_extra_deduction, 2)
+        attended_days = present_days + late_days + mission_days + on_leave_days
+    else:
+        attended_days = present_days + late_days + mission_days + on_leave_days + weekend_days
+
+    # ═══════════════════════════════════════════════════
+    # الضرايب — على المرتب المستحق فعلاً (الإجمالي بعد خصومات الحضور)
+    # ═══════════════════════════════════════════════════
+    _attendance_deductions = (
+        late_deduction + absence_deduction + early_leave_deduction + unpaid_leave_deduction
+        + flex_shortage_deduction + missing_checkout_deduction + not_employed_deduction
+    )
+    tax_deduction = 0.0
+    try:
+        from attendance.company_policy_models import TaxPolicy
+        # بالتاريخ مش بـ is_superseded: النسخة القديمة بتفضل سارية لآخر الشهر اللي اتعدلت فيه
+        _tax_policies = TaxPolicy._base_manager.filter(
+            company=company,
+            is_active=True,
+            start_date__lte=last_day,
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=last_day)
+        ).order_by('-version_number', '-created_at')
+        tax_policy = next((t for t in _tax_policies if t.applies_to_employee(employee)), None)
+
+        if tax_policy:
+            marital_status = getattr(employee, 'marital_status', 'single') or 'single'
+            if marital_status not in ('single', 'married'):
+                marital_status = 'single'
+
+            taxable_monthly = max(0.0, gross_salary - _attendance_deductions)
+            if getattr(tax_policy, 'exempt_social_insurance', True):
+                taxable_monthly -= (insurance_deduction - medical_insurance_employee)
+            if getattr(tax_policy, 'exempt_medical_insurance', True):
+                taxable_monthly -= medical_insurance_employee
+
+            tax_result = tax_policy.calculate_annual_tax(
+                annual_income=max(0.0, taxable_monthly) * 12,
+                marital_status=marital_status,
+            )
+            tax_deduction = float(tax_result.get('annual_tax', 0)) / 12
+    except Exception:
+        logger.exception("payroll_rules error in tax")
+        tax_deduction = 0.0
+    tax_deduction = round(tax_deduction, 2)
 
     total_deductions = round(
         late_deduction
@@ -2487,31 +2649,11 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         + extra_deductions_total
         + flex_shortage_deduction
         + early_leave_deduction
-        + unpaid_leave_deduction,
+        + unpaid_leave_deduction
+        + missing_checkout_deduction
+        + not_employed_deduction,
         2
     )
-
-    try:
-        _period_first, _period_last = (
-            get_payroll_period_bounds(company, year, month)
-            if hasattr(company, 'payroll_cycle_type') else _period_bounds(year, month)
-        )
-        _period_upper = min(_period_last, date.today())
-        _total_period_days = (_period_upper - _period_first).days + 1
-        weekend_days = max(0, _total_period_days - len(working_dates))
-    except Exception:
-        weekend_days = 0
-
-    # استثناء: لو الموظف صفر حضور وصفر إجازات طول الفترة بالكامل (مفيش أي علاقة شغل حقيقية)،
-    # الجمعة والسبت كمان بتتخصم (بدل ما تفضل مدفوعة مجانًا)
-    _had_real_engagement = (present_days + late_days + mission_days + on_leave_days) > 0
-    if not _had_real_engagement and weekend_days > 0:
-        _weekend_extra_deduction = round(weekend_days * daily_salary, 2)
-        absence_deduction = round(absence_deduction + _weekend_extra_deduction, 2)
-        total_deductions = round(total_deductions + _weekend_extra_deduction, 2)
-        attended_days = present_days + late_days + mission_days + on_leave_days
-    else:
-        attended_days = present_days + late_days + mission_days + on_leave_days + weekend_days
 
     net_salary = round(gross_salary - total_deductions, 2)
 
@@ -2536,11 +2678,17 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'field_allowance': round(field_allowance, 2),
         'meal_allowance': round(meal_allowance, 2),
         'transport_allowance': round(transport_allowance, 2),
-        'field_allowance_type': getattr(ps, 'field_allowance_type', 'none') if 'ps' in dir() else 'none',
+        'other_rule_allowances': other_rule_allowances,
+        'rule_allowances_total': rule_allowances_total,
+        'rule_allowance_items': rule_allowance_items,
+        'field_allowance_type': getattr(ps, 'field_allowance_type', 'none') if ps else 'none',
         'policy_name': active_policy.name if active_policy else None,
         'flex_shortage_deduction': round(flex_shortage_deduction, 2),
         'early_leave_deduction': round(early_leave_deduction, 2),
         'unpaid_leave_deduction': round(unpaid_leave_deduction, 2),
+        'missing_checkout_deduction': missing_checkout_deduction,
+        'not_employed_days': not_employed_days,
+        'not_employed_deduction': not_employed_deduction,
         'late_deduction': round(late_deduction, 2),
         'absence_deduction': round(absence_deduction, 2),
         'insurance_deduction': round(insurance_deduction, 2),
@@ -2567,8 +2715,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         'on_leave_days': on_leave_days,
         'unpaid_leave_days': unpaid_leave_days,
         'total_late_minutes': total_late_minutes,
-        'approved_late_minutes': _approved_late_min,
-        'approved_early_minutes': _approved_early_min,
+        'approved_late_minutes': approved_late_minutes,
+        'approved_early_minutes': approved_early_minutes,
         'total_early_leave_minutes': total_early_leave_minutes,
         'total_work_hours': round(total_work_hours, 2),
         'overtime_hours': round(total_overtime_hours, 2),
@@ -2578,7 +2726,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
         'allowance_items': allowance_items,
         'bonus_items': bonus_items,
-        'insurance_items': deductions['insurance_items'] + general_insurance_items,
+        'insurance_items': insurance_items,
         'installment_items': deductions['installment_items'] + general_installment_items + installment_items_new,
         'penalty_items': deductions['penalty_items'] + penalty_items_new,
         'extra_deduction_items': deductions['extra_items'] + general_extra_items,

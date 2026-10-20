@@ -72,8 +72,84 @@ def _type_rule_data(rule):
     }
 
 
+# خانات الأيام في شاشة الويب ← فئة نوع الإجازة
+_SIMPLE_DAYS_FIELDS = {
+    "annual_days": "annual",
+    "sick_days": "sick",
+    "casual_days": "casual",
+    "maternity_days": "maternity",
+}
+
+
+def _simple_fields_data(policy):
+    """قيم خانات الشاشة البسيطة من قواعد الأنواع المحفوظة"""
+    out = {}
+    rules = {r.leave_type.category: r for r in policy.type_rules.all().select_related("leave_type")}
+    for field, category in _SIMPLE_DAYS_FIELDS.items():
+        r = rules.get(category)
+        if r is None:
+            continue
+        if r.entitlement_mode == "fixed_days":
+            out[field] = float(r.fixed_days or 0)
+    annual = rules.get("annual")
+    if annual is not None:
+        out["carry_forward_enabled"] = annual.carry_mode != "none"
+        out["max_carry_forward_days"] = float(annual.carry_max_days or 0)
+    unpaid = rules.get("unpaid")
+    if unpaid is not None:
+        out["unpaid_allowed"] = bool(unpaid.enabled)
+    return out
+
+
+def _save_simple_fields(policy, data):
+    """
+    شاشة الويب بتبعت أيام كل نوع (سنوي/مرضي/عارضة/وضع) كأرقام مباشرة.
+    بنحولها لقواعد أنواع (LeavePolicyTypeRule) على أنواع الإجازات اللي في الشركة بنفس الفئة.
+    السنوي لو فيه شرائح مدة خدمة بيمشي بالشرائح، ولو مفيش بالرقم الثابت.
+    """
+    from leaves.models import LeaveType, LeavePolicyTypeRule
+
+    if not any(k in data for k in list(_SIMPLE_DAYS_FIELDS) + ["carry_forward_enabled", "unpaid_allowed"]):
+        return
+    if "type_rules" in data:
+        return  # الموبايل بيبعت القواعد التفصيلية بنفسه
+
+    has_tiers = bool(data.get("tiers")) or policy.tiers.exists()
+    for field, category in _SIMPLE_DAYS_FIELDS.items():
+        if field not in data:
+            continue
+        try:
+            days = float(data.get(field) or 0)
+        except (TypeError, ValueError):
+            continue
+        for lt in LeaveType._base_manager.filter(company=policy.company, category=category, is_active=True):
+            rule, _ = LeavePolicyTypeRule._base_manager.get_or_create(policy=policy, leave_type=lt)
+            if category == "annual" and has_tiers:
+                rule.entitlement_mode = "from_service_tier"
+            else:
+                rule.entitlement_mode = "fixed_days"
+                rule.fixed_days = days
+            rule.enabled = True
+            if category == "annual" and "carry_forward_enabled" in data:
+                if data.get("carry_forward_enabled"):
+                    rule.carry_mode = "percentage_with_cap"
+                    rule.carry_percentage = 100
+                    rule.carry_max_days = float(data.get("max_carry_forward_days") or 0)
+                else:
+                    rule.carry_mode = "none"
+            rule.save()
+
+    if "unpaid_allowed" in data:
+        for lt in LeaveType._base_manager.filter(company=policy.company, category="unpaid", is_active=True):
+            rule, _ = LeavePolicyTypeRule._base_manager.get_or_create(policy=policy, leave_type=lt)
+            rule.enabled = bool(data.get("unpaid_allowed"))
+            rule.entitlement_mode = "fixed_days"
+            rule.save()
+
+
 def _policy_data(policy):
     return {
+        **_simple_fields_data(policy),
         "id": policy.id,
         "name": policy.name,
         "effective_from": str(policy.effective_from),
@@ -136,6 +212,7 @@ def leave_policy_list_create(request):
             created_by=request.user,
         )
         _save_policy_details(policy, data)
+        _save_simple_fields(policy, data)
         return Response({"success": True, "policy": _policy_data(policy)}, status=201)
     except Exception as e:
         logger.exception("leave_policy_list_create POST error")
@@ -180,6 +257,7 @@ def leave_policy_detail(request, policy_id):
     policy.updated_by = request.user
     policy.save()
     _save_policy_details(policy, data)
+    _save_simple_fields(policy, data)
     return Response({"success": True, "policy": _policy_data(policy)})
 
 
@@ -209,7 +287,34 @@ def leave_policy_approve(request, policy_id):
     policy.approved_at = timezone.now()
     policy.save()
 
-    return Response({"success": True, "message": f"تم اعتماد سياسة '{policy.name}'"})
+    # الموظفين اللي مالهمش رصيد السنة دي لنوع إجازة بياخدوه من السياسة الجديدة.
+    # الأرصدة الموجودة مابتتغيرش (فيها مستخدم وتعديلات يدوية وترحيل).
+    created_balances = 0
+    try:
+        from employees.models import Employee
+        from leaves.models import LeaveBalance, LeaveType
+        from leaves.services_leave_accrual import calculate_employee_leave_entitlement
+        year = timezone.localdate().year
+        leave_types = list(LeaveType._base_manager.filter(company=company, is_active=True))
+        for emp in Employee._base_manager.filter(company=company).exclude(status__in=["terminated", "resigned"]):
+            for lt in leave_types:
+                _, created = LeaveBalance._base_manager.get_or_create(
+                    company=company, employee=emp, leave_type=lt, year=year,
+                    defaults={
+                        "total_days": calculate_employee_leave_entitlement(emp, lt),
+                        "used_days": 0,
+                        "pending_days": 0,
+                    },
+                )
+                created_balances += int(created)
+    except Exception:
+        logger.exception("leave_policy_approve balances error")
+
+    return Response({
+        "success": True,
+        "message": f"تم اعتماد سياسة '{policy.name}'",
+        "created_balances": created_balances,
+    })
 
 
 # ── تعديل أرصدة الإجازات (للموظفين القدامى) ──

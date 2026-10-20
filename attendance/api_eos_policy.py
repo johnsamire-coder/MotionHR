@@ -25,6 +25,7 @@ def _to_dict(p):
         'salary_base_type': p.salary_base_type,
         'salary_base_type_display': p.get_salary_base_type_display(),
         'service_tiers': p.service_tiers or [],
+        'termination_adjustments': _termination_adjustments(p),
         'min_service_months': p.min_service_months,
         'max_months_cap': float(p.max_months_cap),
         'percent_on_resignation': float(p.percent_on_resignation),
@@ -53,6 +54,21 @@ def _to_dict(p):
     }
 
 
+# أسباب إنهاء الخدمة اللي بتيجي من الشاشة (termination_adjustments) → حقول النسب
+_REASON_FIELDS = {
+    'resignation': 'percent_on_resignation',
+    'termination': 'percent_on_termination',
+    'death': 'percent_on_death',
+    'retirement': 'percent_on_retirement',
+    'disability': 'percent_on_disability',
+    'misconduct': 'percent_on_misconduct',
+}
+
+
+def _termination_adjustments(p):
+    return {reason: float(getattr(p, field)) for reason, field in _REASON_FIELDS.items()}
+
+
 def _extract_fields(data, defaults=None):
     fields = [
         'name', 'salary_base_type', 'service_tiers',
@@ -68,6 +84,10 @@ def _extract_fields(data, defaults=None):
             result[f] = data[f]
         elif defaults and hasattr(defaults, f):
             result[f] = getattr(defaults, f)
+    for reason, rate in (data.get('termination_adjustments') or {}).items():
+        field = _REASON_FIELDS.get(reason)
+        if field and rate not in (None, ''):
+            result[field] = rate
     return result
 
 
@@ -138,6 +158,8 @@ def eos_policy_detail(request, policy_id):
 
         core_fields = ['salary_base_type', 'service_tiers', 'min_service_months',
                        'max_months_cap', 'percent_on_resignation', 'percent_on_termination',
+                       'percent_on_death', 'percent_on_retirement', 'percent_on_disability',
+                       'percent_on_misconduct', 'termination_adjustments',
                        'partial_year_calculation', 'scope']
         is_core = any(f in data for f in core_fields)
         if edit_mode == 'auto':
@@ -217,14 +239,36 @@ def eos_calculate(request):
         else:
             p = EndOfServicePolicy._base_manager.filter(company=company, is_active=True, is_superseded=False).order_by('-created_at').first()
 
+        _preview = 'service_tiers' in data or 'termination_adjustments' in data
+        if not p and _preview:
+            p = EndOfServicePolicy(company=company)
         if not p:
             return JsonResponse({'success': False, 'error': 'no active policy'}, status=404)
 
+        # معاينة من الشاشة قبل الحفظ: نحسب بالشرائح والنسب اللي مبعوتة من غير ما نحفظ
+        if _preview:
+            from decimal import Decimal as _D
+            for f, v in _extract_fields(data).items():
+                if f == 'name':
+                    continue
+                if f.startswith('percent_on_') or f == 'max_months_cap':
+                    v = _D(str(v or 0))
+                setattr(p, f, v)
+
         result = p.calculate_eos(
-            service_years=float(data.get('service_years', 0)),
-            monthly_salary=float(data.get('monthly_salary', 0)),
+            service_years=float(data.get('service_years', data.get('years_of_service', 0)) or 0),
+            monthly_salary=float(data.get('monthly_salary', 0) or 0),
             termination_reason=data.get('termination_reason', 'resignation'),
         )
-        return JsonResponse({'success': True, 'result': result})
+        # الشاشة بتقرا الأرقام دي على المستوى الأول
+        return JsonResponse({
+            'success': True,
+            'result': result,
+            'total_months_earned': result.get('total_months', 0),
+            'gross_benefit': result.get('gross_amount', 0),
+            'final_benefit': result.get('net_amount', 0),
+            'eligible': result.get('eligible', False),
+            'reason': result.get('reason', ''),
+        })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
