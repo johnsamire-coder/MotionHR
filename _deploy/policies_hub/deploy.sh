@@ -29,6 +29,7 @@ BE_FILES=(
   attendance/company_policy_models.py
   attendance/payroll_rules.py
   attendance/test_payroll_scenarios.py
+  attendance/management/commands/convert_policy_rules.py
   leaves/api_leave_policy.py
   leaves/services_leave_accrual.py
   motionhr/settings_test.py
@@ -74,7 +75,7 @@ NODE_DIR="$(dirname "$(readlink -f "$NPM")")"
 # ── 0) التأكد إن ملفات السيرفر هي نفس النسخة اللي اتعمل عليها التصليح ──
 say "0/5 بتأكد إن الكود اللي على السيرفر ماتغيرش من ساعة ما اتبعت"
 # النسخ المعروفة: كود السيرفر الأصلي + كل رفعة سابقة من التصليحات دي
-KNOWN_REFS="live-server-snapshot policies-hub-deployed-1"
+KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2"
 for ref in $KNOWN_REFS; do
   mkdir -p "$TMP/known_be/$ref" "$TMP/known_web/$ref"
   curl -fsSL "https://codeload.github.com/johnsamire-coder/motionhr/tar.gz/refs/heads/$ref" | tar -xz -C "$TMP/known_be/$ref" --strip-components=1
@@ -113,6 +114,8 @@ cat > "$BK/rollback.sh" <<ROLLBACK
 #!/usr/bin/env bash
 # الرجوع للنسخة اللي كانت قبل رفع $TS
 set -u
+echo "▶ بشيل القواعد اللي اتنقلت من سياسات الحضور (السياسات الأصلية لسه موجودة)..."
+cd "$BE" && sudo -H -u $BE_OWNER "$PY" manage.py shell -c "from attendance.company_policy_models import PenaltyRule, BonusRule; print(PenaltyRule._base_manager.filter(change_reason__startswith='converted_from_policy:').delete()[0] + BonusRule._base_manager.filter(change_reason__startswith='converted_from_policy:').delete()[0], 'قاعدة')" 2>/dev/null | tail -1 || true
 echo "▶ برجّع ملفات الباك إند..."
 cd "$BE" && tar -xzf "$BK/backend_files.tar.gz"
 while read -r f; do [ -n "\$f" ] && rm -f "$BE/\$f"; done < "$BK/backend_new_files.txt"
@@ -168,13 +171,21 @@ for f in "${WEB_FILES[@]}"; do install -D -o "$WEB_OWNER" -g "$(stat -c %G "$WEB
 ok "الملفات اتحدثت (${#BE_FILES[@]} باك إند + ${#WEB_FILES[@]} ويب)"
 
 # ── 3) اختبارات الباك إند على السيرفر نفسه ──
-say "3/5 بشغّل اختبارات المرتبات (186 اختبار على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
+say "3/5 بشغّل اختبارات المرتبات (196 اختبار على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py check >/dev/null )
 if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
   grep -E "^(FAIL|ERROR):|Error" "$BK/tests.log" | head -20; tail -5 "$BK/tests.log"; false
 fi
 grep -E "^Ran |^OK" "$BK/tests.log" || true
 ok "كل الاختبارات نجحت"
+
+# ── 3ب) نقل قواعد سياسات الحضور لكروتها المنفصلة (بيتأكد إن ولا مرتب اتغير قبل ما يحفظ) ──
+say "3ب نقل قواعد التأخير والغياب والأوفر تايم لكروتها المنفصلة"
+CONVERT_OK=1
+( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py convert_policy_rules --apply >"$BK/convert.log" 2>&1 ) || CONVERT_OK=0
+grep -v "objects imported" "$BK/convert.log" || true
+[ "$CONVERT_OK" = 1 ] && grep -q "ولا صافي مرتب اتغير\|مفيش قواعد محتاجة تتنقل" "$BK/convert.log" || { fail "النقل ماتمش"; false; }
+ok "النقل تم من غير ما أي رقم يتغير"
 
 # ── 4) بناء الويب ──
 say "4/5 ببني الويب (ممكن ياخد كام دقيقة)"

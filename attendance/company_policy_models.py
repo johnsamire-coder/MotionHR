@@ -1167,6 +1167,8 @@ class PenaltyRule(TenantModel):
             return val, matched_tier
         elif dt == 'percent_basic':
             return (basic * val) / Decimal('100'), matched_tier
+        elif dt == 'day_fraction':
+            return daily * val, matched_tier
         elif dt == 'quarter_day':
             return daily / Decimal('4'), matched_tier
         elif dt == 'half_day':

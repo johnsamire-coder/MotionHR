@@ -1312,6 +1312,8 @@ def _penalty_tier_amount(tier, quantity, daily_salary, basic_salary):
         return quantity * val
     if dt == 'fixed_total':
         return val
+    if dt == 'day_fraction':
+        return daily_salary * val
     if dt == 'percent_basic':
         return basic_salary * val / 100.0
     if dt == 'quarter_day':
@@ -1325,6 +1327,19 @@ def _penalty_tier_amount(tier, quantity, daily_salary, basic_salary):
     if dt == 'three_days':
         return daily_salary * 3
     return 0.0
+
+
+def _bonus_overtime_day_hours(rule, day_hours):
+    """
+    قاعدة أوفر تايم (BonusRule): ساعات اليوم بعد "أقل مدة في اليوم" (بالدقايق، محفوظة
+    في الشرائح min_minutes_per_day) و"الحد الأقصى في اليوم" (max_per_day بالساعات).
+    """
+    min_minutes = max([float(t.get('min_minutes_per_day', 0) or 0) for t in (rule.tiers or [])] or [0])
+    if day_hours * 60 < min_minutes:
+        return 0.0
+    if float(rule.max_per_day or 0) > 0:
+        day_hours = min(day_hours, float(rule.max_per_day))
+    return day_hours
 
 
 def _bonus_tier_amount(rule, units, unit_rate, basic_salary):
@@ -2327,7 +2342,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         if _oth > 0:
             _br = _rule_for_day(bonus_rules.get('overtime'), _d)
             if _br and _br.tiers:
-                _ot_bonus.setdefault(_br.id, [_br, 0.0])[1] += _oth
+                _ot_bonus.setdefault(_br.id, [_br, 0.0])[1] += _bonus_overtime_day_hours(_br, _oth)
             elif _dp and _policy_overtime_rule(_dp):
                 _ot_policy.setdefault(_dp.id, [_dp, 0.0])[1] += _policy_overtime_day_hours(_policy_overtime_rule(_dp), _oth)
             else:
@@ -2351,6 +2366,8 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 
     overtime_bonus = 0.0
     for _r, _h in _ot_bonus.values():
+        if float(_r.max_per_month or 0) > 0:
+            _h = min(_h, float(_r.max_per_month))  # الحد الشهري بالساعات
         overtime_bonus += _bonus_tier_amount(_r, _h, hourly_rate, basic_salary)
     for _p, _h in _ot_policy.values():
         overtime_bonus += _apply_overtime_rule(_p, _h, hourly_rate) or 0.0

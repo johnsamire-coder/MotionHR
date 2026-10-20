@@ -1087,6 +1087,92 @@ class ScreensConsistencyTests(PayrollScenarioBase):
         self.assertMoney(expected, 9000 - 75 - 300)
 
 
+class ConvertPolicyRulesTests(PayrollScenarioBase):
+    """نقل قواعد سياسة الحضور للكروت المنفصلة من غير ما أي رقم يتغير"""
+
+    def _convert(self, apply=True):
+        from io import StringIO
+        from django.core.management import call_command
+        buf = StringIO()
+        args = ['convert_policy_rules', '--year', str(YEAR), '--month', str(MONTH)]
+        if apply:
+            args.append('--apply')
+        call_command(*args, stdout=buf)
+        return buf.getvalue()
+
+    def test_jacky_style_policy(self):
+        pol = self.attendance_policy(assign=None)
+        LateRule.objects.create(policy=pol, from_minutes=0, to_minutes=15, deduction_type='none', deduction_value=0)
+        LateRule.objects.create(policy=pol, from_minutes=16, to_minutes=30, deduction_type='day_fraction', deduction_value=Decimal('0.25'))
+        LateRule.objects.create(policy=pol, from_minutes=31, to_minutes=60, deduction_type='day_fraction', deduction_value=Decimal('0.5'))
+        LateRule.objects.create(policy=pol, from_minutes=61, to_minutes=1440, deduction_type='day_fraction', deduction_value=Decimal('1'))
+        OvertimeRule.objects.create(policy=pol, overtime_type='after_shift', multiplier=Decimal('1.5'), min_minutes=10)
+        overrides = {d.day: {'out_hm': (17, 5)} for d in SEPT_WORKDAYS}
+        overrides.update({1: {'in_hm': (9, 15), 'out_hm': (19, 0)}, 2: {'in_hm': (9, 16)}, 3: {'in_hm': (9, 45)}, 6: {'in_hm': (11, 0)}})
+        self.attend_all(except_days=(7,), overrides=overrides)
+        before = self.payroll()
+        out = self._convert()
+        self.assertIn('ولا صافي مرتب اتغير', out)
+        self.assertEqual(PenaltyRule._base_manager.filter(company=self.company, penalty_type='late_arrival').count(), 1)
+        self.assertEqual(BonusRule._base_manager.filter(company=self.company, bonus_type='overtime').count(), 1)
+        # نشيل قواعد السياسة القديمة: الكروت الجديدة لوحدها لازم تدي نفس الأرقام
+        LateRule.objects.filter(policy=pol).delete()
+        OvertimeRule.objects.filter(policy=pol).delete()
+        after = self.payroll()
+        for k in ('late_deduction', 'overtime_bonus', 'absence_deduction', 'net_salary'):
+            self.assertMoney(after[k], before[k], k)
+        self.assertMoney(after['late_deduction'], 525)
+        self.assertMoney(after['overtime_bonus'], 112.5)
+
+    def test_gpr_style_branch_policy_with_gaps_and_absence(self):
+        pol = self.attendance_policy(assign='branch')
+        LateRule.objects.create(policy=pol, from_minutes=1, to_minutes=15, deduction_type='per_minute', deduction_value=Decimal('2'))
+        LateRule.objects.create(policy=pol, from_minutes=31, to_minutes=60, deduction_type='fixed_amount', deduction_value=Decimal('100'))
+        LateRule.objects.create(policy=pol, from_minutes=61, to_minutes=120, deduction_type='day_fraction', deduction_value=Decimal('0.5'))
+        AbsenceRule.objects.create(policy=pol, absence_type='unexcused', deduction_type='day_fraction', deduction_value=Decimal('2'))
+        other = self.make_employee(branch=self.branch2)
+        for e in (self.emp, other):
+            self.attend_all(emp=e, except_days=(8, 9), overrides={
+                1: {'in_hm': (9, 10)}, 2: {'in_hm': (9, 20)}, 3: {'in_hm': (9, 50)}, 6: {'in_hm': (10, 30)}, 7: {'in_hm': (13, 0)},
+            })
+        b1, b2 = self.payroll(), self.payroll(other)
+        self._convert()
+        r = PenaltyRule._base_manager.get(company=self.company, penalty_type='late_arrival')
+        self.assertEqual((r.scope, r.branch_id), ('branch', self.branch.id))
+        LateRule.objects.filter(policy=pol).delete()
+        AbsenceRule.objects.filter(policy=pol).delete()
+        a1, a2 = self.payroll(), self.payroll(other)
+        self.assertMoney(a1['net_salary'], b1['net_salary'])
+        self.assertMoney(a2['net_salary'], b2['net_salary'])
+        # 10د×2=20 ، 20د (فجوة → قاعدة 1-15) = 40 ، 50د = 100 ، 90د = نص يوم 150 ، 240د = 150 + 120د×1
+        self.assertMoney(a1['late_deduction'], 20 + 40 + 100 + 150 + 270)
+        self.assertMoney(a1['absence_deduction'], 2 * 600)
+
+    def test_dry_run_saves_nothing_and_rerun_skips(self):
+        pol = self.attendance_policy()
+        LateRule.objects.create(policy=pol, from_minutes=1, to_minutes=999, deduction_type='fixed_amount', deduction_value=Decimal('50'))
+        self.attend_all()
+        self._convert(apply=False)
+        self.assertEqual(PenaltyRule._base_manager.filter(company=self.company).count(), 0)
+        self._convert()
+        self._convert()
+        self.assertEqual(PenaltyRule._base_manager.filter(company=self.company).count(), 1)
+
+    def test_day_fraction_penalty_tier(self):
+        self.penalty_rule('late_arrival', [{'from': 1, 'to': None, 'deduction_type': 'day_fraction', 'value': 0.3}])
+        self.attend_all(overrides={1: {'in_hm': (9, 5)}})
+        self.assertMoney(self.payroll()['late_deduction'], 90)
+
+    def test_bonus_overtime_min_and_caps(self):
+        self.bonus_rule('overtime', [{'from': 0, 'to': None, 'value_type': 'multiplier', 'value': 1, 'min_minutes_per_day': 10}],
+                        max_per_day=Decimal('1.5'), max_per_month=Decimal('2'))
+        overrides = {d.day: {'out_hm': (17, 5)} for d in SEPT_WORKDAYS}
+        overrides.update({1: {'out_hm': (20, 0)}, 2: {'out_hm': (18, 0)}})
+        self.attend_all(overrides=overrides)
+        # يوم1: 3 ساعات → حد اليوم 1.5 ، يوم2: 1 ، الباقي 5 دقايق مش بتتحسب → 2.5 → حد الشهر 2 ساعة
+        self.assertMoney(self.payroll()['overtime_bonus'], 2 * 37.5)
+
+
 # ═══════════════════════════════════════════════════════════════
 # نفس كل السيناريوهات تاني بس المرتب بيقرا من الملخصات اليومية
 # (السيرفر بيحسبها بالليل لكل يوم فات)
