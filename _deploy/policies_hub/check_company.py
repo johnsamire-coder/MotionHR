@@ -82,8 +82,17 @@ for company in companies:
     try:
         with transaction.atomic():
             emps = Employee._base_manager.filter(company=company).exclude(status__in=['terminated', 'resigned']).order_by('id')
+            only = os.environ.get('EMP', '').strip()
+            if only:
+                emps = emps.filter(employee_code=only)
             for emp in emps:
                 p = pr.calculate_effective_payroll(emp, year, month)
+                if only:
+                    line(f'  تفاصيل {only} يوم بيوم (التاريخ | الحالة | حضور | انصراف | تأخير بعد السماح | تأخير بيتخصم | أوفر تايم ساعات):')
+                    for dd in p['daily_details']:
+                        line(f"    {dd['date']} | {dd.get('effective_status')} | {dd.get('check_in') or '-'} | {dd.get('check_out') or '-'} | "
+                             f"{dd.get('late_minutes', 0)} | {dd.get('deductible_late_minutes', 0)} | {dd.get('overtime_hours', 0)}")
+                    line(f"  إجمالي: أوفر تايم {p['overtime_hours']} ساعة = {p['overtime_bonus']} جنيه | خصم التأخير {p['late_deduction']} | الإجمالي {p['gross_salary']} | الخصومات {p['total_deductions']} | الصافي {p['net_salary']}")
                 rules = pr._load_scoped_rules(PenaltyRule, company, emp, first_day, last_day, 'penalty_type')
                 late_rule = pr._rule_for_day(rules.get('late_arrival'), min(today, last_day))
                 pol = pr._get_active_policy(company, min(today, last_day), department=emp.department, branch=emp.branch)
