@@ -62,6 +62,14 @@ BE_OWNER="$(stat -c %U "$BE/manage.py")"
 WEB_OWNER="$(stat -c %U "$WEB/package.json")"
 PY="$BE/venv/bin/python"
 [ -x "$PY" ] || PY="$BE/.venv/bin/python"
+# npm ممكن يكون متسطب عام أو جوه nvm بتاع صاحب الويب
+NPM="${NPM_BIN:-$(command -v npm || true)}"
+if [ -z "$NPM" ]; then
+  WEB_HOME="$(getent passwd "$WEB_OWNER" | cut -d: -f6)"
+  NPM="$(ls -1 "$WEB_HOME"/.nvm/versions/node/*/bin/npm 2>/dev/null | tail -1 || true)"
+fi
+[ -n "$NPM" ] || { fail "مش لاقي npm على السيرفر"; exit 1; }
+NODE_DIR="$(dirname "$(readlink -f "$NPM")")"
 
 # ── 0) التأكد إن ملفات السيرفر هي نفس النسخة اللي اتعمل عليها التصليح ──
 say "0/5 بتأكد إن الكود اللي على السيرفر ماتغيرش من ساعة ما اتبعت"
@@ -118,8 +126,9 @@ ln -sfn "$BK" /var/backups/motionhr_policies_latest
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py shell -c "
 from django.conf import settings
 d = settings.DATABASES['default']
-print(d['ENGINE']); print(d.get('NAME') or ''); print(d.get('USER') or ''); print(d.get('HOST') or ''); print(d.get('PORT') or ''); print(d.get('PASSWORD') or '')
-" 2>/dev/null ) > "$TMP/db.txt" || true
+for v in (d['ENGINE'], d.get('NAME'), d.get('USER'), d.get('HOST'), d.get('PORT'), d.get('PASSWORD')):
+    print('DBV|' + str(v or ''))
+" 2>/dev/null | sed -n 's/^DBV|//p' ) > "$TMP/db.txt" || true
 DB_ENGINE="$(sed -n 1p "$TMP/db.txt")"
 if echo "$DB_ENGINE" | grep -q postgresql; then
   if PGPASSWORD="$(sed -n 6p "$TMP/db.txt")" pg_dump -Fc -h "$(sed -n 4p "$TMP/db.txt" | sed 's/^$/localhost/')" \
@@ -152,17 +161,17 @@ for f in "${WEB_FILES[@]}"; do install -D -o "$WEB_OWNER" -g "$(stat -c %G "$WEB
 ok "الملفات اتحدثت (${#BE_FILES[@]} باك إند + ${#WEB_FILES[@]} ويب)"
 
 # ── 3) اختبارات الباك إند على السيرفر نفسه ──
-say "3/5 بشغّل اختبارات المرتبات ($(grep -c 'def test_' "$BE/attendance/test_payroll_scenarios.py") سيناريو × طريقتين) — بياخد دقيقتين تقريباً"
+say "3/5 بشغّل اختبارات المرتبات (178 اختبار على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py check >/dev/null )
 if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
   grep -E "^(FAIL|ERROR):|Error" "$BK/tests.log" | head -20; tail -5 "$BK/tests.log"; false
 fi
-tail -3 "$BK/tests.log"
+grep -E "^Ran |^OK" "$BK/tests.log" || true
 ok "كل الاختبارات نجحت"
 
 # ── 4) بناء الويب ──
 say "4/5 ببني الويب (ممكن ياخد كام دقيقة)"
-( cd "$WEB" && sudo -H -u "$WEB_OWNER" npm run build >"$BK/web_build.log" 2>&1 ) || { tail -30 "$BK/web_build.log"; false; }
+( cd "$WEB" && sudo -H -u "$WEB_OWNER" env PATH="$(dirname "$NPM"):$NODE_DIR:/usr/local/bin:/usr/bin:/bin" "$NPM" run build >"$BK/web_build.log" 2>&1 ) || { tail -30 "$BK/web_build.log"; false; }
 ok "الويب اتبنى"
 
 # ── 5) إعادة التشغيل والتأكد ──
