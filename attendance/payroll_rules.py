@@ -1601,13 +1601,20 @@ def _apply_overtime_rule(policy, overtime_hours, hourly_rate, overtime_type='aft
     rule = _policy_overtime_rule(policy, overtime_type)
     if not rule:
         return None
-    min_hours = float(rule.min_minutes or 0) / 60
-    if overtime_hours < min_hours:
-        return 0.0
+    # أقل مدة والحد اليومي بيتطبقوا على كل يوم لوحده (_policy_overtime_day_hours)
     hours = overtime_hours
     if rule.max_hours_per_month:
         hours = min(hours, float(rule.max_hours_per_month))
     return round(hours * hourly_rate * float(rule.multiplier), 2)
+
+
+def _policy_overtime_day_hours(rule, day_hours):
+    """ساعات أوفر تايم يوم واحد بعد "أقل مدة" و"الحد اليومي" بتوع قاعدة سياسة الحضور"""
+    if day_hours * 60 < float(rule.min_minutes or 0):
+        return 0.0
+    if rule.max_hours_per_day:
+        day_hours = min(day_hours, float(rule.max_hours_per_day))
+    return day_hours
 
 
 def _apply_night_allowance(policy, night_shift_days, daily_salary):
@@ -2298,7 +2305,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
             if _br and _br.tiers:
                 _ot_bonus.setdefault(_br.id, [_br, 0.0])[1] += _oth
             elif _dp and _policy_overtime_rule(_dp):
-                _ot_policy.setdefault(_dp.id, [_dp, 0.0])[1] += _oth
+                _ot_policy.setdefault(_dp.id, [_dp, 0.0])[1] += _policy_overtime_day_hours(_policy_overtime_rule(_dp), _oth)
             else:
                 _ot_settings_hours += _oth
 

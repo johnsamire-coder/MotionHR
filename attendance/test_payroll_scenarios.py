@@ -631,6 +631,22 @@ class OvertimeTests(PayrollScenarioBase):
         # 2 × 37.5 × 2
         self.assertMoney(self.payroll()['overtime_bonus'], 150)
 
+    def test_policy_overtime_min_minutes_per_day(self):
+        # أقل مدة 10 دقايق: الأيام اللي فيها 5 دقايق بس مش بتتحسب حتى لو مجموعها كبير
+        pol = self.attendance_policy()
+        OvertimeRule.objects.create(policy=pol, overtime_type='after_shift', multiplier=Decimal('1.5'), min_minutes=10)
+        overrides = {d.day: {'out_hm': (17, 5)} for d in SEPT_WORKDAYS}
+        overrides[1] = {'out_hm': (19, 0)}
+        self.attend_all(overrides=overrides)
+        # يوم 1 بس: 2 ساعة × 37.5 × 1.5
+        self.assertMoney(self.payroll()['overtime_bonus'], 112.5)
+
+    def test_policy_overtime_max_per_day(self):
+        pol = self.attendance_policy()
+        OvertimeRule.objects.create(policy=pol, overtime_type='after_shift', multiplier=Decimal('1'), min_minutes=0, max_hours_per_day=1)
+        self.attend_all(overrides={1: {'out_hm': (20, 0)}})
+        self.assertMoney(self.payroll()['overtime_bonus'], 37.5)
+
     def test_policy_overtime_min_minutes(self):
         pol = self.attendance_policy()
         OvertimeRule.objects.create(policy=pol, overtime_type='after_shift', multiplier=Decimal('1.5'), min_minutes=180)
