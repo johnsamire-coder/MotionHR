@@ -1161,8 +1161,12 @@ def mobile_manager_action(request):
         }, status=400)
 
     try:
+        from attendance.action_scope import deny_action, deny_mission_action
         if item_type == 'leave':
             item = LeaveRequest._base_manager.get(id=item_id)
+            denied = deny_action(user, item.employee)
+            if denied:
+                return denied
 
             employee_user = None
             try:
@@ -1247,6 +1251,9 @@ def mobile_manager_action(request):
 
         elif item_type == 'request':
             item = EmployeeRequest._base_manager.get(id=item_id)
+            denied = deny_action(user, item.employee)
+            if denied:
+                return denied
 
             employee_user = None
             try:
@@ -1431,6 +1438,9 @@ def mobile_manager_action(request):
         elif item_type == 'mission':
             from attendance.missions_models import Mission, MissionAssignment
             item = Mission._base_manager.get(id=item_id)
+            denied = deny_mission_action(user, item)
+            if denied:
+                return denied
 
             employee_user = item.created_by
             mission_title = item.title or ''
@@ -2075,6 +2085,11 @@ def manager_edit_request(request, request_id):
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
 
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, req.employee)
+    if denied:
+        return denied
+
     if req.status in ('cancelled',):
         return Response({
             'success': False,
@@ -2128,6 +2143,11 @@ def manager_cancel_request(request, request_id):
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
 
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, req.employee)
+    if denied:
+        return denied
+
     if req.status == 'cancelled':
         return Response({'success': False, 'message': 'الطلب ملغي مسبقاً'}, status=400)
 
@@ -2162,6 +2182,11 @@ def manager_reopen_request(request, request_id):
         req = EmployeeRequest._base_manager.get(id=request_id)
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
+
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, req.employee)
+    if denied:
+        return denied
 
     if req.status not in ('rejected', 'cancelled'):
         return Response({
@@ -2202,6 +2227,11 @@ def manager_edit_leave(request, leave_id):
         leave = LeaveRequest._base_manager.get(id=leave_id)
     except Exception:
         return Response({'success': False, 'message': 'طلب الإجازة غير موجود'}, status=404)
+
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, leave.employee)
+    if denied:
+        return denied
 
     if leave.status == 'cancelled':
         return Response({'success': False, 'message': 'لا يمكن تعديل إجازة ملغية'}, status=400)
@@ -2254,6 +2284,11 @@ def manager_cancel_leave(request, leave_id):
         leave = LeaveRequest._base_manager.get(id=leave_id)
     except Exception:
         return Response({'success': False, 'message': 'طلب الإجازة غير موجود'}, status=404)
+
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, leave.employee)
+    if denied:
+        return denied
 
     if leave.status == 'cancelled':
         return Response({'success': False, 'message': 'الإجازة ملغية مسبقاً'}, status=400)

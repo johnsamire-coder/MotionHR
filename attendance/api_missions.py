@@ -1215,9 +1215,11 @@ def mission_locations_timeline(request, assignment_id):
     employee = get_employee(request.user)
     try:
         assignment = MissionAssignment._base_manager.get(id=assignment_id)
-        # المدير أو الموظف نفسه
-        if assignment.employee != employee and not is_manager_or_hr(request.user):
-            return Response({'error': 'غير مصرح'}, status=403)
+        # الموظف نفسه، أو مدير/HR الموظف ده في نطاقه (شركته / فريقه)
+        if assignment.employee != employee:
+            from attendance.action_scope import in_scope
+            if not is_manager_or_hr(request.user) or not in_scope(request.user, assignment.employee):
+                return Response({'error': 'التعيين غير موجود'}, status=404)
     except MissionAssignment.DoesNotExist:
         return Response({'error': 'التعيين غير موجود'}, status=404)
 

@@ -2522,6 +2522,13 @@ def manager_device_action(request, device_id):
         if not device:
             return Response({'success': False, 'message': 'الجهاز مش موجود'}, status=404)
 
+        # الجهاز لازم يكون لموظف في نطاق المدير (شركته / فريقه)
+        from attendance.action_scope import deny_action
+        from employees.models import Employee as _DevEmp
+        dev_emp = _DevEmp._base_manager.filter(user_id=device.user_id).first()
+        if not dev_emp or deny_action(request.user, dev_emp):
+            return Response({'success': False, 'message': 'الجهاز مش موجود'}, status=404)
+
         if action == 'approve':
             device.status = 'approved'
             device.auto_attendance_enabled = True
