@@ -312,7 +312,7 @@ while read -r f; do [ -n "\$f" ] && rm -f "$BE/\$f" && rmdir -p --ignore-fail-on
 chown $BE_OWNER: \$(tar -tzf "$BK/backend_files.tar.gz") 2>/dev/null || true
 echo "▶ برجّع ملفات الويب..."
 cd "$WEB" && tar -xzf "$BK/web_files.tar.gz"
-while read -r f; do [ -n "\$f" ] && rm -f "$WEB/\$f"; done < "$BK/web_new_files.txt"
+while read -r f; do [ -n "\$f" ] && rm -f "$WEB/\$f" && rmdir -p --ignore-fail-on-non-empty "\$(dirname "$WEB/\$f")" 2>/dev/null; done < "$BK/web_new_files.txt"
 if [ -f "$BK/web_next_build.tar.gz" ]; then rm -rf "$WEB/.next" && tar -xzf "$BK/web_next_build.tar.gz" && chown -R $WEB_OWNER: "$WEB/.next"; fi
 systemctl restart $BE_SERVICE
 systemctl restart $WEB_SERVICE
