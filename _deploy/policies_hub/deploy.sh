@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
 # رفع تصليحات مركز السياسات على السيرفر — أمر واحد:
-#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/group3-leaves/_deploy/policies_hub/deploy.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/group4-permissions/_deploy/policies_hub/deploy.sh | sudo bash
 #
 # لو المستودعات خاصة: مفتاح قراءة من GitHub محفوظ في /root/.motionhr_github_token
 #
@@ -14,7 +14,7 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-BRANCH="${BRANCH:-fix/group3-leaves}"
+BRANCH="${BRANCH:-fix/group4-permissions}"
 BE="${BE:-/var/www/motionhr}"
 WEB="${WEB:-/var/www/motionhr_web}"
 BE_SERVICE="${BE_SERVICE:-motionhr}"
@@ -26,6 +26,7 @@ TMP="$(mktemp -d)"
 
 BE_FILES=(
   accounts/access.py
+  accounts/company_announcements.py
   accounts/activation.py
   accounts/fcm_service.py
   accounts/jwt_serializers.py
@@ -33,6 +34,12 @@ BE_FILES=(
   accounts/test_access_guard.py
   accounts/views.py
   attendance/action_scope.py
+  attendance/api_announcements.py
+  attendance/api_company_policy.py
+  attendance/api_employee_management.py
+  attendance/api_employee_profile.py
+  attendance/api_offboarding.py
+  attendance/test_group4_permissions.py
   attendance/api_attachments.py
   attendance/api_manual_entries.py
   attendance/api_missions.py
@@ -124,7 +131,7 @@ NODE_DIR="$(dirname "$(readlink -f "$NPM")")"
 say "0/5 بتأكد إن الكود اللي على السيرفر ماتغيرش من ساعة ما اتبعت"
 # النسخ المعروفة: كود السيرفر الأصلي + كل رفعة سابقة من التصليحات دي
 # + الفرع اللي بنرفعه نفسه: لو السيرفر عليه النسخة دي خلاص، إعادة الرفع آمنة
-KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 policies-hub-deployed-5 policies-hub-deployed-6 policies-hub-deployed-7 $BRANCH"
+KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 policies-hub-deployed-5 policies-hub-deployed-6 policies-hub-deployed-7 policies-hub-deployed-8 $BRANCH"
 for ref in $KNOWN_REFS; do
   mkdir -p "$TMP/known_be/$ref" "$TMP/known_web/$ref"
   # النسخة اللي لسه ماترفعتش مش هتبقى موجودة — عادي
@@ -233,7 +240,7 @@ ok "الملفات اتحدثت (${#BE_FILES[@]} باك إند + ${#WEB_FILES[@]
 # ── 3) اختبارات الباك إند على السيرفر نفسه ──
 say "3/5 بشغّل الاختبارات (المرتبات والدخول، على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py check >/dev/null )
-if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios accounts.test_access_guard attendance.test_action_scope attendance.test_group3_misc leaves.test_leave_balance --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
+if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios accounts.test_access_guard attendance.test_action_scope attendance.test_group3_misc leaves.test_leave_balance attendance.test_group4_permissions --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
   grep -E "^(FAIL|ERROR):|Error" "$BK/tests.log" | head -20; tail -5 "$BK/tests.log"; false
 fi
 grep -E "^Ran |^OK" "$BK/tests.log" || true

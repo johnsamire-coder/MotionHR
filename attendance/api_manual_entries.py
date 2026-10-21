@@ -219,6 +219,9 @@ def _handle_list_create(request, ModelClass):
             return JsonResponse({'success': False, 'error': 'الموظف غير موجود'}, status=404)
 
         # التحقق من صلاحية المدير
+        if employee.user_id == request.user.id and not _is_ceo(request.user):
+            return JsonResponse({'success': False, 'error': 'مينفعش تضيف بند لنفسك. لازم حد أعلى منك يضيفه.'}, status=403)
+
         if not _can_manage_employee(request.user, employee):
             return JsonResponse({
                 'success': False,
@@ -613,8 +616,9 @@ def payroll_installment_list_create(request):
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
     try:
-        if not _is_manager(request.user):
-            return JsonResponse({'success': False, 'error': 'غير مسموح - فقط المدراء'}, status=403)
+        # السلفة بتتخصم من المرتب: إنشاؤها لصاحب الشركة والـ HR بس، ومش لنفسه
+        if not (_is_ceo(request.user) or _is_hr(request.user)):
+            return JsonResponse({'success': False, 'error': 'إضافة السلف لصاحب الشركة والموارد البشرية بس'}, status=403)
 
         data = json.loads(request.body.decode('utf-8'))
         employee_id = data.get('employee_id')
@@ -632,6 +636,8 @@ def payroll_installment_list_create(request):
             employee = Employee._base_manager.get(id=employee_id, company=company)
         except Employee.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'الموظف غير موجود'}, status=404)
+        if employee.user_id == request.user.id and not _is_ceo(request.user):
+            return JsonResponse({'success': False, 'error': 'مينفعش تعمل سلفة لنفسك. لازم صاحب الشركة يعملها.'}, status=403)
 
         start_month = int(start_month)
         start_year = int(start_year)

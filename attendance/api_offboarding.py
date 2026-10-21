@@ -28,6 +28,21 @@ def _is_allowed(user, permission_code):
     ).exists()
 
 
+def _has_history(emp):
+    from attendance.models import Attendance
+    from leaves.models import LeaveRequest
+    checks = [
+        Attendance._base_manager.filter(employee=emp),
+        LeaveRequest._base_manager.filter(employee=emp),
+    ]
+    try:
+        from attendance.payroll_pro_models import PayrollLine
+        checks.append(PayrollLine._base_manager.filter(employee=emp))
+    except Exception:
+        pass
+    return any(q.exists() for q in checks)
+
+
 STATUS_CHOICES = ['resigned', 'terminated', 'suspended', 'retired']
 STATUS_LABELS = {
     'resigned': 'مستقيل',
@@ -52,6 +67,11 @@ def offboard_employee(request, employee_id):
 
     if not emp:
         return Response({'error': 'الموظف غير موجود'}, status=404)
+
+    from attendance.action_scope import deny_account_action
+    denied = deny_account_action(request.user, emp)
+    if denied:
+        return Response({'error': denied.data['message'], 'message': denied.data['message']}, status=denied.status_code)
 
     if emp.status in STATUS_CHOICES:
         return Response({'error': f'الموظف ده بالفعل حالته {STATUS_LABELS.get(emp.status, emp.status)}'}, status=400)
@@ -126,6 +146,11 @@ def reactivate_employee(request, employee_id):
 
     if not emp:
         return Response({'error': 'الموظف غير موجود'}, status=404)
+
+    from attendance.action_scope import deny_account_action
+    denied = deny_account_action(request.user, emp)
+    if denied:
+        return Response({'error': denied.data['message'], 'message': denied.data['message']}, status=denied.status_code)
 
     with transaction.atomic():
         emp.status = 'active'
@@ -204,6 +229,11 @@ def toggle_employee_status(request, employee_id):
     if not emp:
         return Response({'error': 'الموظف غير موجود'}, status=404)
 
+    from attendance.action_scope import deny_account_action
+    denied = deny_account_action(request.user, emp)
+    if denied:
+        return Response({'error': denied.data['message'], 'message': denied.data['message']}, status=denied.status_code)
+
     new_status = (request.data.get('status') or '').strip()
     VALID = ['active', 'suspended', 'on_leave']
     if new_status not in VALID:
@@ -246,7 +276,18 @@ def delete_employee_api(request, employee_id):
     if not emp:
         return Response({'error': 'الموظف غير موجود'}, status=404)
 
+    from attendance.action_scope import deny_account_action
+    denied = deny_account_action(request.user, emp)
+    if denied:
+        return Response({'error': denied.data['message'], 'message': denied.data['message']}, status=denied.status_code)
+
     emp_name = getattr(emp, 'full_name_ar', None) or f'#{emp.id}'
+
+    # الموظف اللي ليه تاريخ (حضور/إجازات/مرتبات) مايتمسحش نهائي عشان التاريخ مايضيعش
+    if _has_history(emp):
+        return Response({
+            'error': 'الموظف ده ليه سجلات حضور أو إجازات أو مرتبات، فمينفعش يتمسح نهائي. استخدم "إنهاء الخدمة" بدل الحذف.',
+        }, status=400)
 
     if emp.user:
         emp.user.is_active = False
@@ -280,6 +321,11 @@ def offboard_employee_web(request, employee_id):
     ).first()
     if not emp:
         return Response({'error': 'الموظف غير موجود'}, status=404)
+
+    from attendance.action_scope import deny_account_action
+    denied = deny_account_action(request.user, emp)
+    if denied:
+        return Response({'error': denied.data['message'], 'message': denied.data['message']}, status=denied.status_code)
 
     STATUS_MAP = {
         'terminated': 'مفصول',

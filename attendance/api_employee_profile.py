@@ -798,6 +798,7 @@ def manager_attendance_export_excel(request):
     records = Attendance._base_manager.filter(date=target_date).select_related("employee", "employee__department").order_by("employee__first_name_ar")
     if company:
         records = records.filter(company=company)
+    records = _limit_to_team(request.user, records)
 
     def fmt_time(dt):
         if not dt:
@@ -865,6 +866,7 @@ def manager_attendance_export_pdf(request):
     records = Attendance._base_manager.filter(date=target_date).select_related("employee", "employee__department").order_by("employee__first_name_ar")
     if company:
         records = records.filter(company=company)
+    records = _limit_to_team(request.user, records)
 
     def fmt_time(dt):
         if not dt:
@@ -906,6 +908,15 @@ def manager_attendance_export_pdf(request):
     return export_to_pdf(title="تقرير الحضور اليومي", columns=columns, rows=rows, user=request.user, filename="attendance.pdf", subtitle=subtitle)
 
 
+def _limit_to_team(user, qs):
+    """صاحب الشركة والـ HR: الشركة كلها. المدير العادي: فريقه (ونفسه) بس."""
+    from attendance.action_scope import is_full_access
+    if is_full_access(user):
+        return qs
+    from employees.visibility import get_visible_employees_qs
+    return qs.filter(employee__in=get_visible_employees_qs(user))
+
+
 def _leaves_export_data(request):
     """داتا الإجازات (خام - status بالإنجليزي) - للتصدير والقائمة"""
     from leaves.models import LeaveRequest
@@ -919,6 +930,7 @@ def _leaves_export_data(request):
     qs = LeaveRequest._base_manager.filter(employee__company=company).select_related(
         "employee", "employee__department", "leave_type"
     ).order_by("-start_date")
+    qs = _limit_to_team(request.user, qs)
 
     if status_filter and status_filter != "all":
         qs = qs.filter(status=status_filter)
@@ -1050,6 +1062,7 @@ def _requests_export_data(request):
     qs = EmployeeRequest._base_manager.filter(employee__company=company).select_related(
         "employee", "employee__department", "request_type"
     ).order_by("-created_at")
+    qs = _limit_to_team(request.user, qs)
 
     if status_filter and status_filter != "all":
         qs = qs.filter(status=status_filter)
@@ -1169,6 +1182,10 @@ def manager_payroll_export_excel(request):
     err = _check_manager(request)
     if err:
         return err
+    # مسير الرواتب لصاحب الشركة والـ HR بس (المدير العادي مايشوفش مرتبات الشركة)
+    from attendance.action_scope import is_full_access
+    if not is_full_access(request.user):
+        return Response({"success": False, "error": "مسير الرواتب لصاحب الشركة والموارد البشرية بس"}, status=403)
     from attendance.report_export_helper import export_to_excel
 
     rows, year, month = _payroll_export_data(request)
@@ -1194,6 +1211,10 @@ def manager_payroll_export_pdf(request):
     err = _check_manager(request)
     if err:
         return err
+    # مسير الرواتب لصاحب الشركة والـ HR بس (المدير العادي مايشوفش مرتبات الشركة)
+    from attendance.action_scope import is_full_access
+    if not is_full_access(request.user):
+        return Response({"success": False, "error": "مسير الرواتب لصاحب الشركة والموارد البشرية بس"}, status=403)
     from attendance.report_export_helper import export_to_pdf
 
     rows, year, month = _payroll_export_data(request)

@@ -621,6 +621,10 @@ def manager_create_employee(request):
     err = _check_manager(request)
     if err:
         return err
+    # إضافة موظفين وتحديد مرتباتهم لصاحب الشركة والـ HR بس (مش المدير العادي)
+    from attendance.action_scope import is_full_access
+    if not is_full_access(request.user):
+        return Response({"success": False, "error": "إضافة الموظفين لصاحب الشركة والموارد البشرية بس"}, status=403)
 
     try:
         company = _get_company(request)
@@ -986,6 +990,12 @@ def manager_reset_employee_password(request, employee_id):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
+        # الـ HR مايقدرش ياخد حساب صاحب الشركة أو حد في مستواه
+        from attendance.action_scope import deny_account_action
+        denied = deny_account_action(request.user, target_employee)
+        if denied:
+            return denied
+
         if not getattr(target_employee, "user", None):
             return Response(
                 {"success": False, "error": "هذا الموظف لا يملك حساب دخول"},
@@ -1084,6 +1094,14 @@ def manager_update_employee(request, employee_id):
                     {"success": False, "error": "لا يمكنك تعديل موظف من شركة أخرى"},
                     status=status.HTTP_403_FORBIDDEN
                 )
+
+        # مايعدلش بيانات (ومرتب) حد في نفس مستواه أو أعلى، ولا بياناته هو إلا صاحب الشركة
+        from attendance.action_scope import deny_account_action
+        denied = deny_account_action(
+            request.user, target_employee, allow_self=getattr(request.user, "role", None) == "company_admin"
+        )
+        if denied:
+            return denied
 
         company = target_employee.company
         data = request.data
@@ -1867,6 +1885,11 @@ def manager_get_location_report(request):
         try:
             employee = Employee._base_manager.get(id=employee_id, company=company)
         except Employee.DoesNotExist:
+            return Response({'success': False, 'error': 'الموظف غير موجود'}, status=404)
+
+        # مواقع الموظف: هو نفسه، أو مديره/الـ HR اللي هو في نطاقهم
+        from attendance.action_scope import in_scope, is_self
+        if not is_self(request.user, employee) and not in_scope(request.user, employee):
             return Response({'success': False, 'error': 'الموظف غير موجود'}, status=404)
 
         locations = LocationHistory._base_manager.filter(

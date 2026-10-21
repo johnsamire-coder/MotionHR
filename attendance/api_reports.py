@@ -93,7 +93,8 @@ def _get_manager_scope_employees(user):
 
         return qs.order_by('id')
     except Exception:
-        return _get_company_employees(user)
+        # مدير مالوش ملف موظف: مالوش فريق، فمايشوفش حد (قبل كده كان بيشوف الشركة كلها)
+        return Employee._base_manager.none()
 
 
 def _get_direct_team_employees(user):

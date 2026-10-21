@@ -787,6 +787,10 @@ def employee_start_mission(request, assignment_id):
     if assignment.started_at:
         return Response({'error': 'المهمة بدأت مسبقاً'}, status=400)
 
+    # المأمورية الملغية أو اللي لسه مستنية موافقة مينفعش تبدأ (قبل كده كانت بترجع "جارية")
+    if assignment.mission.status in ('cancelled', 'pending_approval', 'rejected', 'completed'):
+        return Response({'error': 'المأمورية دي ملغية أو لسه ما اتوافقش عليها، مينفعش تبدأها'}, status=400)
+
     lat = request.data.get('lat')
     lng = request.data.get('lng')
 

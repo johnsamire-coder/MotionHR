@@ -193,7 +193,9 @@ class CompanyAnnouncement(models.Model):
         elif self.target_type == 'by_job_title':
             titles = [t.strip() for t in self.target_job_titles.split(',') if t.strip()]
             if titles:
-                qs = qs.filter(job_title__in=titles)
+                # المسمى الوظيفي جدول، فبنقارن بالاسم (قبل كده كانت بتقع)
+                from django.db.models import Q
+                qs = qs.filter(Q(job_title__name_ar__in=titles) | Q(job_title__name_en__in=titles))
         elif self.target_type == 'by_department':
             from django.db import connection
             with connection.cursor() as cursor:

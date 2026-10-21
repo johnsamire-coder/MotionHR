@@ -2182,10 +2182,11 @@ def mobile_geofence_set(request):
     """حفظ موقع الشركة من الموبايل (للمدير فقط)"""
     user = request.user
     role = getattr(user, 'role', 'employee') or 'employee'
-    manager_roles = ['super_admin', 'company_admin', 'hr_manager', 'manager']
+    # موقع الشركة ونطاق الحضور بتاعها كله لصاحب الشركة والـ HR بس
+    manager_roles = ['super_admin', 'company_admin', 'hr_manager']
 
-    if role not in manager_roles:
-        return Response({'success': False, 'message': 'ليس لديك صلاحية'}, status=403)
+    if role not in manager_roles and not user.is_superuser:
+        return Response({'success': False, 'message': 'تغيير موقع الشركة لصاحب الشركة والموارد البشرية بس'}, status=403)
 
     latitude = request.data.get('latitude')
     longitude = request.data.get('longitude')
@@ -2828,8 +2829,9 @@ def mobile_charter_update(request):
 
     user = request.user
     role = getattr(user, 'role', '')
-    if not (user.is_staff or user.is_superuser or role in ['super_admin', 'admin', 'company_admin', 'hr_manager', 'manager']):
-        return Response({"success": False, "error": "غير مصرح"}, status=403)
+    # لائحة الشركة كلها (وموافقات الموظفين عليها) لصاحب الشركة والـ HR بس
+    if not (user.is_superuser or role in ['super_admin', 'company_admin', 'hr_manager']):
+        return Response({"success": False, "error": "تعديل اللائحة لصاحب الشركة والموارد البشرية بس"}, status=403)
 
     employee = Employee._base_manager.filter(user=user).first()
     company = getattr(user, "company", None) or getattr(employee, "company", None)

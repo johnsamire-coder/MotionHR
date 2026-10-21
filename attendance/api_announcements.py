@@ -58,6 +58,22 @@ def announcements_list(request):
     ).order_by('-publish_at')
 
     emp = get_employee(user)
+
+    # كل واحد يشوف الإعلانات الموجهة له بس؛ صاحب الشركة والـ HR يشوفوا الكل، واللي كتب الإعلان يشوفه
+    from attendance.action_scope import is_full_access
+    if not is_full_access(user):
+        visible = []
+        for a in qs:
+            if a.created_by_id == user.id:
+                visible.append(a.id)
+                continue
+            try:
+                if emp and a.get_target_employees().filter(id=emp.id).exists():
+                    visible.append(a.id)
+            except Exception:
+                pass
+        qs = qs.filter(id__in=visible)
+
     read_ids = set()
     if emp:
         read_ids = set(
@@ -161,10 +177,10 @@ def manager_create_announcement(request):
             _direct_report_ids = list(
                 Employee._base_manager.filter(direct_manager=_mgr_emp).values_list('id', flat=True)
             )
-        if _direct_report_ids:
-            _target_type = 'specific'
-        else:
-            _target_type = 'all'
+        if not _direct_report_ids:
+            # قبل كده كان بيتبعت للشركة كلها
+            return Response({'error': 'مالكش فريق مباشر تبعتله إعلان. الإعلان للشركة كلها من الموارد البشرية.'}, status=400)
+        _target_type = 'specific'
 
     ann = CompanyAnnouncement._base_manager.create(
         company=user.company,

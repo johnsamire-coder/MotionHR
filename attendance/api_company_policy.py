@@ -86,8 +86,9 @@ def save_work_policy(request):
     user = request.user
     lang = _get_lang(user)
 
-    if not _check_manager(user):
-        msg = 'Insufficient permissions' if lang == 'en' else 'صلاحية غير كافية'
+    # أيام العمل والإجازة الأسبوعية للشركة كلها: صاحب الشركة والـ HR بس (مش المدير العادي)
+    if not _check_manager(user) or (getattr(user, 'role', None) == 'manager' and not user.is_superuser):
+        msg = 'Insufficient permissions' if lang == 'en' else 'تعديل أيام العمل لصاحب الشركة والموارد البشرية بس'
         return Response({'error': msg}, status=403)
 
     company = getattr(user, 'company', None)

@@ -112,3 +112,41 @@ def deny_mission_action(user, mission):
             return None
         return Response({'success': False, 'message': NOT_FOUND_MSG}, status=404)
     return deny_action(user, emp)
+
+
+# ─────────────────────────────────────────────────────────────
+# إجراءات على حساب الموظف نفسه (إعادة باسورد / تعديل بيانات / إيقاف / إنهاء خدمة / حذف)
+# محدش يعملها على نفسه، ولا على حد في نفس مستواه أو أعلى منه (الـ HR مايلمسش صاحب الشركة)
+# ─────────────────────────────────────────────────────────────
+ROLE_RANK = {'employee': 0, 'manager': 1, 'hr_manager': 2, 'company_admin': 3, 'super_admin': 4}
+
+SELF_ACCOUNT_MSG = 'مينفعش تعمل الإجراء ده على حسابك أنت.'
+HIGHER_ACCOUNT_MSG = 'مينفعش تعمل الإجراء ده على حد في نفس مستواك أو أعلى منك.'
+
+
+def role_rank(user):
+    if user is None:
+        return 0
+    if getattr(user, 'is_superuser', False):
+        return ROLE_RANK['super_admin']
+    return ROLE_RANK.get(getattr(user, 'role', '') or 'employee', 0)
+
+
+def deny_account_action(user, employee, allow_self=False):
+    """Response بالرفض أو None. الموظف لازم يكون في نطاقه (شركته/فريقه) ورتبته أقل منه."""
+    if _is_super(user):
+        return None
+    target_user = getattr(employee, 'user', None) if employee is not None else None
+    if is_self(user, employee):
+        if allow_self:
+            return None
+        return Response({'success': False, 'message': SELF_ACCOUNT_MSG, 'error': SELF_ACCOUNT_MSG}, status=403)
+    if not in_scope(user, employee):
+        return Response({'success': False, 'message': NOT_FOUND_MSG, 'error': 'الموظف غير موجود'}, status=404)
+    if target_user is not None and role_rank(target_user) >= role_rank(user):
+        return Response({'success': False, 'message': HIGHER_ACCOUNT_MSG, 'error': HIGHER_ACCOUNT_MSG}, status=403)
+    return None
+
+
+def is_full_access(user):
+    return _is_super(user) or getattr(user, 'role', '') in FULL_ACCESS_ROLES

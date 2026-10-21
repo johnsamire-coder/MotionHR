@@ -504,6 +504,13 @@ def approve_work_location(request, location_id):
             'message': f'الموقع بحالة: {location.get_status_display()} بالفعل',
         }, status=400)
 
+    # محدش يعتمد موقع اقترحه لنفسه (إلا صاحب الشركة)، والمدير لفريقه بس
+    if location.employee_id:
+        from attendance.action_scope import deny_action
+        denied = deny_action(request.user, location.employee)
+        if denied:
+            return denied
+
     # اعتماد مباشر
     location.status = 'approved'
     location.approved_by = request.user
