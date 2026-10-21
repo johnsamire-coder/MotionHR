@@ -1362,8 +1362,11 @@ def manager_reassign_employee(request, mission_id):
             return Response({'error': 'الموظف الجديد مُعيَّن على هذه المهمة مسبقاً'}, status=400)
 
         # نقفل طلب الموظف الطالب القديم (مو مستغل)
+        # ونقفل موافقة المدير كمان عشان مايفضلش ظاهر عنده كطلب معلق
         mission_req.final_status = 'rejected'
-        mission_req.save(update_fields=['final_status'])
+        if mission_req.manager_approval == 'pending':
+            mission_req.manager_approval = 'rejected'
+        mission_req.save(update_fields=['final_status', 'manager_approval'])
 
         # إشعارات
         try:

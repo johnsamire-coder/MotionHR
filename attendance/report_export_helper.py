@@ -2,6 +2,7 @@
 Report Export Helper - نظام موحد لتصدير التقارير
 كل التقارير بتستخدم النظام ده للـ Excel و PDF مع لوجو الشركة
 """
+from core.export_safety import safe_cell_value, pdf_text
 from io import BytesIO
 from django.http import HttpResponse
 from django.utils import timezone
@@ -138,7 +139,7 @@ def export_to_excel(title, columns, rows, user, filename=None, subtitle=None):
             value = row_data.get(key, '') if isinstance(row_data, dict) else ''
             if value is None:
                 value = ''
-            cell = ws.cell(row=r_idx, column=c_idx, value=value)
+            cell = ws.cell(row=r_idx, column=c_idx, value=safe_cell_value(value))
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = thin_border
             if r_idx % 2 == 0:
@@ -307,7 +308,7 @@ def export_to_pdf(title, columns, rows, user, filename=None, subtitle=None):
         table_row = []
         for col in columns:
             val = row_data.get(col[0], '') if isinstance(row_data, dict) else ''
-            table_row.append(Paragraph(shape_rtl(val), table_cell_style))
+            table_row.append(Paragraph(pdf_text(shape_rtl(val)), table_cell_style))
         table_data.append(table_row)
 
     if len(table_data) > 1:

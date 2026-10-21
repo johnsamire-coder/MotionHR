@@ -460,23 +460,8 @@ def manager_list_announcements(request):
 
 
 def _is_announcement_targeted_to_employee(ann, employee):
-    """يتأكد هل الإعلان موجه للموظف ده بناءً على نوع الاستهداف"""
-    if employee.id in ann.excluded_employees.values_list('id', flat=True):
-        return False
-
-    if ann.target_type == 'all':
-        return True
-    elif ann.target_type == 'specific':
-        return ann.target_employees.filter(id=employee.id).exists()
-    elif ann.target_type == 'by_job_title':
-        job_title_name = getattr(employee.job_title, 'name_ar', '') if employee.job_title else ''
-        targets = [t.strip() for t in (ann.target_job_titles or '').split(',')]
-        return job_title_name in targets
-    elif ann.target_type == 'by_department':
-        return ann.target_departments.filter(id=employee.department_id).exists()
-    elif ann.target_type == 'by_branch':
-        return ann.target_branches.filter(id=employee.branch_id).exists()
-    return False
+    """يتأكد هل الإعلان موجه للموظف ده (نفس حساب المستهدفين والاستثناءات)"""
+    return ann.get_target_employees().filter(id=employee.id).exists()
 
 
 @api_view(['GET'])

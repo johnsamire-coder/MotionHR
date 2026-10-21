@@ -38,6 +38,16 @@ def _is_allowed(user, permission_code):
 # ══════════════════════════════════════
 # 1. قايمة الأقسام
 # ══════════════════════════════════════
+def _swap_department_role(emp, old_dept, new_dept):
+    """تغيير الدور تلقائي مع النقل: بنشيل دور القسم القديم بس ونسيب باقي أدوار الموظف"""
+    if not emp.user or not new_dept.default_role:
+        return
+    old_role = getattr(old_dept, 'default_role', None) if old_dept else None
+    if old_role and old_role != new_dept.default_role:
+        UserRole._base_manager.filter(user=emp.user, role=old_role).delete()
+    UserRole._base_manager.get_or_create(user=emp.user, role=new_dept.default_role)
+
+
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -193,14 +203,10 @@ def delete_department(request, dept_id):
                 return Response({'error': 'القسم البديل غير موجود'}, status=400)
 
             for emp in employees:
+                _old_dept = emp.department
                 emp.department = new_dept
                 emp.save(update_fields=['department'])
-
-                # تغيير الدور تلقائي
-                if new_dept.default_role and emp.user:
-                    old_roles = UserRole._base_manager.filter(user=emp.user)
-                    old_roles.delete()
-                    UserRole._base_manager.get_or_create(user=emp.user, role=new_dept.default_role)
+                _swap_department_role(emp, _old_dept, new_dept)
 
         dept.is_active = False
         dept.save(update_fields=['is_active'])
@@ -240,14 +246,11 @@ def transfer_employees_between_departments(request):
             emp = Employee._base_manager.filter(id=emp_id, company=company).first()
             if not emp:
                 continue
+            _old_dept = emp.department
             emp.department = new_dept
             emp.save(update_fields=['department'])
             success += 1
-
-            # تغيير الدور تلقائي
-            if new_dept.default_role and emp.user:
-                UserRole._base_manager.filter(user=emp.user).delete()
-                UserRole._base_manager.get_or_create(user=emp.user, role=new_dept.default_role)
+            _swap_department_role(emp, _old_dept, new_dept)
 
     return Response({
         'success': True,

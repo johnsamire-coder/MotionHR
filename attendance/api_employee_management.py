@@ -523,7 +523,14 @@ def manager_employees_simple(request):
             return Response({"success": False, "error": "لا توجد شركة مرتبطة"}, status=400)
         from employees.models import Employee
         # جلب كل الموظفين النشطين
-        all_emps = get_visible_employees_qs(request.user).exclude(user=request.user).filter(status="active").select_related("job_title", "user", "department", "branch").order_by("first_name_ar")[:200]
+        all_emps = get_visible_employees_qs(request.user).exclude(user=request.user).filter(status="active")
+        # بحث بالاسم أو الكود (قبل كده القايمة كانت بتقف عند أول 200 موظف)
+        q = (request.GET.get("search") or "").strip()
+        if q:
+            from django.db.models import Q
+            all_emps = all_emps.filter(Q(first_name_ar__icontains=q) | Q(last_name_ar__icontains=q)
+                                       | Q(first_name_en__icontains=q) | Q(employee_code__icontains=q))
+        all_emps = all_emps.select_related("job_title", "user", "department", "branch").order_by("first_name_ar")[:2000]
         data = []
         for e in all_emps:
             user_role = getattr(e.user, "role", "employee") if e.user else "employee"
@@ -1222,7 +1229,7 @@ def manager_update_employee(request, employee_id):
         if contract_type not in ("permanent", "temporary", "training", "freelance", "part_time", "full_time", "consultant"):
             return Response({"success": False, "error": "نوع العقد غير صحيح"}, status=400)
 
-        if salary_payment_method not in ("cash", "bank", "instapay", "wallet"):
+        if salary_payment_method not in ("none", "cash", "bank", "instapay", "wallet"):  # none = الافتراضي في الموديل
             return Response({"success": False, "error": "طريقة القبض غير صحيحة"}, status=400)
 
         try:

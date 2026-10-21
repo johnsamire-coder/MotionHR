@@ -216,15 +216,19 @@ class CompanyAnnouncement(models.Model):
             qs = qs.filter(branch_id__in=_branch_ids)
 
         # طبّق الاستثناءات
-        excluded_ids = list(self.excluded_employees.values_list('id', flat=True))
+        # (بنقرا جداول الربط مباشرة لأن علاقة الموظفين والأقسام بتتفلتر بالشركة الحالية وبترجع فاضية)
+        _ex_emp = self.excluded_employees.through._default_manager
+        excluded_ids = list(_ex_emp.filter(companyannouncement_id=self.id).values_list('employee_id', flat=True))
         if excluded_ids:
             qs = qs.exclude(id__in=excluded_ids)
 
-        excluded_titles = [t.strip() for t in self.excluded_job_titles.split(',') if t.strip()]
+        excluded_titles = [t.strip() for t in (self.excluded_job_titles or '').split(',') if t.strip()]
         if excluded_titles:
-            qs = qs.exclude(job_title__in=excluded_titles)
+            from django.db.models import Q
+            qs = qs.exclude(Q(job_title__name_ar__in=excluded_titles) | Q(job_title__name_en__in=excluded_titles))
 
-        excluded_dept_ids = list(self.excluded_departments.values_list('id', flat=True))
+        _ex_dept = self.excluded_departments.through._default_manager
+        excluded_dept_ids = list(_ex_dept.filter(companyannouncement_id=self.id).values_list('department_id', flat=True))
         if excluded_dept_ids:
             qs = qs.exclude(department_id__in=excluded_dept_ids)
 

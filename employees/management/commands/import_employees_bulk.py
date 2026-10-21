@@ -6,7 +6,7 @@ import os
 import random
 import string
 from decimal import Decimal, InvalidOperation
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from django.db import transaction
 from openpyxl import load_workbook
@@ -246,6 +246,10 @@ class Command(BaseCommand):
         file_path  = options["file"]
         send_emails = options["send_emails"]
 
+        if not options["company_id"]:
+            # قبل كده كان بياخد أول شركة في الجدول، فالموظفين ممكن يتحطوا في شركة غلط
+            raise CommandError("لازم تحدد الشركة (company_id) قبل الاستيراد")
+
         if not os.path.exists(file_path):
             self.stdout.write(self.style.ERROR(f"الملف غير موجود: {file_path}"))
             return
@@ -258,10 +262,7 @@ class Command(BaseCommand):
             return
 
         from companies.models import Company
-        if options["company_id"]:
-            company = Company.objects.filter(id=options["company_id"]).first()
-        else:
-            company = Company.objects.first()
+        company = Company._base_manager.filter(id=options["company_id"]).first()
 
         if not company:
             self.stdout.write(self.style.ERROR("لا توجد شركة مسجلة في النظام!"))
@@ -448,16 +449,16 @@ class Command(BaseCommand):
         if manager_name:
             # مطابقة بالاسم الكامل أو الاسم الأول والأخير
             employees = Employee._base_manager.filter(company=company).select_related("department", "user")
+            found = []
             for e in employees:
-                e_full = f"{e.first_name_ar} {e.middle_name_ar} {e.last_name_ar}".strip().replace("  ", " ")
+                e_full = f"{e.first_name_ar} {e.middle_name_ar or ''} {e.last_name_ar}".strip().replace("  ", " ")
                 e_short = f"{e.first_name_ar} {e.last_name_ar}".strip()
                 if manager_name in [e_full, e_short, e.employee_code]:
-                    return e
-            # محاولة بحث تقريبية
-            first_word = manager_name.split()[0] if manager_name.split() else manager_name
-            candidate = Employee._base_manager.filter(company=company, first_name_ar__icontains=first_word).first()
-            if candidate:
-                return candidate
+                    found.append(e)
+            # لازم تطابق واحد بالظبط. قبل كده كان بيخمّن من الاسم الأول (أي "محمد" في الشركة)،
+            # ولو مفيش تطابق أكيد بنرجع للقاعدة التلقائية تحت (مدير القسم أو HR أو صاحب الشركة)
+            if len(found) == 1:
+                return found[0]
 
         # 2. في حالة عدم تحديد مدير (تحديد تلقائي ذكي)
         # البحث عن صاحب الشركة أو HR Manager

@@ -7,6 +7,15 @@ import os
 IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.heic', '.gif'}
 DOCUMENT_EXTS = IMAGE_EXTS | {'.pdf', '.doc', '.docx', '.xls', '.xlsx'}
 
+# أول كام بايت في الملف لازم تطابق الامتداد (مش كفاية كلام الموبايل عن نوعه)
+_SIGNATURES = {
+    '.pdf': (b'%PDF',),
+    '.docx': (b'PK\x03\x04',),
+    '.xlsx': (b'PK\x03\x04',),
+    '.doc': (b'\xd0\xcf\x11\xe0',),
+    '.xls': (b'\xd0\xcf\x11\xe0',),
+}
+
 IMAGE_MAX_MB = 10
 DOCUMENT_MAX_MB = 25
 
@@ -31,4 +40,13 @@ def upload_error(uploaded_file, kind='document'):
             uploaded_file.seek(pos)
         except Exception:
             return 'الملف ده مش صورة سليمة'
+    if ext in _SIGNATURES:
+        try:
+            pos = uploaded_file.tell() if hasattr(uploaded_file, 'tell') else 0
+            head = uploaded_file.read(8)
+            uploaded_file.seek(pos)
+        except Exception:
+            head = b''
+        if not head.startswith(_SIGNATURES[ext]):
+            return f'الملف ده مش ملف {ext[1:].upper()} سليم'
     return None

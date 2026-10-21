@@ -335,7 +335,10 @@ def free_trial_register(request):
             trial_end = today + timedelta(days=TRIAL_DAYS)
 
             # ابحث عن أي plan موجود أو أنشئ واحد
-            plan = SubscriptionPlan.objects.first()
+            # خطة التجربة الأول، ولو مش موجودة أول خطة نشطة
+            plan = (SubscriptionPlan.objects.filter(is_trial=True, is_active=True).order_by('id').first()
+                    or SubscriptionPlan.objects.filter(is_active=True).order_by('id').first()
+                    or SubscriptionPlan.objects.first())
             if not plan:
                 plan = SubscriptionPlan.objects.create(
                     name_ar='تجربة مجانية',

@@ -146,6 +146,9 @@ def _format_time(value):
     if not value:
         return None
     try:
+        # الوقت متخزن بتوقيت جرينتش، فبنحوله لتوقيت مصر قبل العرض
+        if hasattr(value, 'tzinfo') and timezone.is_aware(value):
+            value = timezone.localtime(value)
         return value.strftime('%I:%M %p')
     except Exception:
         return str(value)
@@ -2736,7 +2739,11 @@ def unified_dashboard(request):
     hired_this_month = active_emps.filter(
         hire_date__gte=month_start, hire_date__lte=today,
     ).count()
-    terminated_this_month = all_emps.filter(
+    # قايمة النطاق فيها الشغالين بس، فاللي سابوا بنعدهم من كل موظفي الشركة (للأدمن والـ HR)
+    _left_base = all_emps
+    if user.is_superuser or getattr(user, 'role', '') in FULL_ACCESS_ROLES:
+        _left_base = Employee._base_manager.filter(company=company)
+    terminated_this_month = _left_base.filter(
         status__in=['terminated', 'resigned', 'retired'],
         termination_date__gte=month_start,
         termination_date__lte=today,

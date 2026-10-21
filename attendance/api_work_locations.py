@@ -6,6 +6,8 @@ Work Locations APIs
 - المدير/HR يوافق أو يرفض
 - الموظف يقدر يبصم من المواقع المعتمدة
 """
+import logging
+
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
@@ -15,6 +17,8 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from attendance.models import EmployeeWorkLocation
 from employees.models import Employee
+
+logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════
@@ -274,7 +278,8 @@ def my_work_locations(request):
     if filter_type == 'approved':
         qs = qs.filter(status='approved', is_active=True)
     elif filter_type == 'pending':
-        qs = qs.filter(status='pending')
+        # الحالات المعلقة اسمها "قيد المدير" و"قيد HR" مش pending
+        qs = qs.filter(status__in=('pending_manager', 'pending_hr'))
     elif filter_type == 'rejected':
         qs = qs.filter(status='rejected')
     
@@ -448,7 +453,9 @@ def manager_all_locations(request):
     ).select_related('employee', 'proposed_by', 'approved_by').order_by('-created_at')
     
     filter_type = request.GET.get('filter', 'all').lower()
-    if filter_type in ('approved', 'pending', 'rejected', 'expired', 'suspended'):
+    if filter_type == 'pending':
+        qs = qs.filter(status__in=('pending_manager', 'pending_hr'))
+    elif filter_type in ('approved', 'rejected', 'expired', 'suspended', 'pending_manager', 'pending_hr'):
         qs = qs.filter(status=filter_type)
     
     employee_id = request.GET.get('employee_id')

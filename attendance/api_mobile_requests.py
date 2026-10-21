@@ -1577,12 +1577,13 @@ def mobile_manager_employees_attendance(request):
     else:
         target_date = timezone.localdate()
 
-    scope_employee_ids = list(_get_direct_team_employees(user).values_list('id', flat=True))
-    # لو الأدمن/HR معندهوش فريق مباشر مربوط بيه، يشوف الشركة كلها (زي الداشبورد)
-    if not scope_employee_ids and (user.is_superuser or role in FULL_ACCESS_ROLES):
+    # الأدمن والـ HR يشوفوا الشركة كلها دايماً (حتى لو ليهم فريق مباشر)، والمدير فريقه بس
+    if user.is_superuser or role in FULL_ACCESS_ROLES:
         scope_employee_ids = list(
             _Emp._base_manager.filter(company=company, status='active').values_list('id', flat=True)
         )
+    else:
+        scope_employee_ids = list(_get_direct_team_employees(user).values_list('id', flat=True))
 
     records = Attendance._base_manager.filter(
         date=target_date,
@@ -1765,7 +1766,8 @@ def mobile_manager_live_locations(request):
         ).order_by('-timestamp').first()
 
         if last_log:
-            log_date = last_log.timestamp.date() if last_log.timestamp else None
+            # بتوقيت مصر (قبل كده جرينتش، فالصبح بدري كان بيبان "مش من النهارده")
+            log_date = timezone.localtime(last_log.timestamp).date() if last_log.timestamp else None
             is_online = log_date == today
             items.append({
                 'employee_id': emp.id,
@@ -1776,7 +1778,7 @@ def mobile_manager_live_locations(request):
                 'longitude': float(last_log.longitude),
                 'accuracy': float(last_log.accuracy) if last_log.accuracy else 0,
                 'address': getattr(last_log, 'address', '') or '',
-                'timestamp': last_log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if last_log.timestamp else '',
+                'timestamp': timezone.localtime(last_log.timestamp).strftime('%Y-%m-%d %H:%M:%S') if last_log.timestamp else '',
                 'status': 'online' if is_online else 'offline',
                 'has_location': True,
                 'attendance_registered': True,
@@ -1866,7 +1868,7 @@ def mobile_manager_employee_route(request):
             'longitude': float(log.longitude),
             'accuracy': float(log.accuracy) if log.accuracy else 0,
             'address': getattr(log, 'address', '') or '',
-            'timestamp': log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else '',
+            'timestamp': timezone.localtime(log.timestamp).strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else '',
         })
 
     return Response({
