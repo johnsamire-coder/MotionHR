@@ -982,6 +982,10 @@ def employee_upload_attachment(request, assignment_id):
     file = request.FILES.get('file')
     if not file:
         return Response({'error': 'لم يتم إرسال ملف'}, status=400)
+    from core.upload_validation import upload_error
+    _err = upload_error(file)
+    if _err:
+        return Response({'error': _err}, status=400)
 
     caption = request.data.get('caption', '')
     attachment = MissionAttachment._base_manager.create(

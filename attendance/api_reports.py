@@ -409,6 +409,60 @@ def late_report(request):
     })
 
 
+def _non_working_days(employee, first, last):
+    """
+    الأيام اللي الموظف مش مطلوب يحضر فيها: إجازة معتمدة، مأمورية، إجازة رسمية، أو يوم مش شغل في سياسة الشركة.
+    بترجع dict {التاريخ: السبب} — للتقارير بس (مابتغيرش أي حساب).
+    """
+    out = _company_off_days(getattr(employee, 'company', None), first, last)
+    try:
+        from leaves.models import LeaveRequest
+        for lv in LeaveRequest._base_manager.filter(employee=employee, status='approved', start_date__lte=last, end_date__gte=first):
+            d = max(lv.start_date, first)
+            while d <= min(lv.end_date, last):
+                out[d] = 'on_leave'
+                d += timedelta(days=1)
+    except Exception:
+        pass
+    try:
+        from attendance.mission_days import employee_mission_dates
+        for d in employee_mission_dates(employee, first, last):
+            out[d] = 'mission'
+    except Exception:
+        pass
+    return out
+
+
+def _company_off_days(company, first, last):
+    """أيام الراحة الأسبوعية (من سياسة الشركة) والإجازات الرسمية"""
+    out = {}
+    try:
+        from attendance.company_policy_models import CompanyWorkPolicy
+        policy = CompanyWorkPolicy._base_manager.filter(company=company).first()
+        if policy:
+            works = {0: policy.work_monday, 1: policy.work_tuesday, 2: policy.work_wednesday,
+                     3: policy.work_thursday, 4: policy.work_friday, 5: policy.work_saturday, 6: policy.work_sunday}
+        else:
+            works = {4: False}   # من غير سياسة: الجمعة بس زي قبل كده
+        d = first
+        while d <= last:
+            if not works.get(d.weekday(), True):
+                out[d] = 'weekend'
+            d += timedelta(days=1)
+    except Exception:
+        pass
+    try:
+        from leaves.official_holiday_models import OfficialHoliday
+        for h in OfficialHoliday._base_manager.filter(company=company, is_active=True, start_date__lte=last, end_date__gte=first):
+            d = max(h.start_date, first)
+            while d <= min(h.end_date, last):
+                out[d] = 'weekend'
+                d += timedelta(days=1)
+    except Exception:
+        pass
+    return out
+
+
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -431,12 +485,11 @@ def absence_report(request):
     today = date.today()
     upper_bound = min(last_day, today)
 
+    # كل أيام الفترة؛ أيام الراحة والإجازات بتتشال لكل موظف تحت (قبل كده الجمعة بس اللي كانت بتتشال)
     working_dates = []
     current = first_day
     while current <= upper_bound:
-        # الجمعة = 4 في Python
-        if current.weekday() != 4:
-            working_dates.append(current)
+        working_dates.append(current)
         current += timedelta(days=1)
 
     employees = _get_manager_scope_employees(user)
@@ -464,7 +517,8 @@ def absence_report(request):
         if emp_start > emp_end:
             continue
 
-        emp_working_dates = [d for d in working_dates if emp_start <= d <= emp_end]
+        _off = _non_working_days(emp, emp_start, emp_end)
+        emp_working_dates = [d for d in working_dates if emp_start <= d <= emp_end and d not in _off]
 
         attended_dates = set(
             Attendance._base_manager.filter(
@@ -525,7 +579,7 @@ def absence_report(request):
         'month': month,
         'from': first_day.isoformat(),
         'to': upper_bound.isoformat() if upper_bound else None,
-        'total_working_days_in_month': len(working_dates),
+        'total_working_days_in_month': len([d for d in working_dates if d not in _company_off_days(getattr(user, 'company', None), first_day, upper_bound)]),
         'total_employees_with_absence': len(results),
         'employees': results,
     })
@@ -1462,14 +1516,15 @@ def daily_attendance_report(request):
                 pass
             if _shift_not_started:
                 continue
-            status = 'absent'
+            # إجازة معتمدة / مأمورية / إجازة رسمية / يوم راحة مش غياب
+            status = _non_working_days(emp, target_date, target_date).get(target_date, 'absent')
             row = {
                 'employee_id': emp.id,
                 'attendance_id': None,
                 'employee_name': _employee_name(emp),
                 'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
                 'branch': getattr(getattr(emp, 'branch', None), 'name_ar', '') or '',
-                'status': 'absent',
+                'status': status,
                 'check_in': None,
                 'check_out': None,
                 'work_hours': 0,

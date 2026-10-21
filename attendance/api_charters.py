@@ -196,6 +196,10 @@ def manager_charters_update(request, charter_id):
         allowed = {'.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg'}
         if ext not in allowed:
             return Response({"success": False, "error": "نوع الملف غير مدعوم"}, status=400)
+        from core.upload_validation import upload_error
+        _err = upload_error(attachment_file)
+        if _err:
+            return Response({"success": False, "error": _err}, status=400)
         charter.attachment = attachment_file
 
     if str(request.data.get('remove_attachment', '')).lower() in ['1', 'true', 'yes']:

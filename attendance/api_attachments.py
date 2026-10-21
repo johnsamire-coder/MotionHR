@@ -75,6 +75,11 @@ def get_file_type(mime_type):
 
 def validate_file(uploaded_file):
     """Validate file size and type"""
+    # الامتداد كمان (نوع الملف اللي الجهاز بيبعته ممكن يتزوّر)
+    from core.upload_validation import upload_error
+    _err = upload_error(uploaded_file)
+    if _err:
+        return False, _err
     if uploaded_file.size > MAX_FILE_SIZE_MB * 1024 * 1024:
         return False, f"الملف كبير جداً. الحد الأقصى {MAX_FILE_SIZE_MB} MB"
 

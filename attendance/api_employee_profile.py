@@ -318,6 +318,10 @@ def my_upload_photo(request):
         photo_file = request.FILES.get("photo")
         if not photo_file:
             return Response({"success": False, "message": "لم يتم إرفاق صورة"}, status=status.HTTP_400_BAD_REQUEST)
+        from core.upload_validation import upload_error
+        _err = upload_error(photo_file, kind="image")
+        if _err:
+            return Response({"success": False, "message": _err}, status=status.HTTP_400_BAD_REQUEST)
         emp.photo = photo_file
         emp.save(update_fields=["photo"])
         return Response({"success": True, "photo": emp.photo.url if emp.photo else None})
@@ -337,6 +341,10 @@ def my_upload_document(request):
         title = request.data.get("title", "")
         if not doc_file:
             return Response({"success": False, "message": "لم يتم إرفاق ملف"}, status=status.HTTP_400_BAD_REQUEST)
+        from core.upload_validation import upload_error
+        _err = upload_error(doc_file)
+        if _err:
+            return Response({"success": False, "message": _err}, status=status.HTTP_400_BAD_REQUEST)
         if not title:
             title = doc_file.name
         from employees.models import EmployeeDocument

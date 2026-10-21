@@ -432,8 +432,10 @@ def apply_leave_policy_to_existing_employees(request):
     if not policy:
         return Response({"success": False, "error": "لا توجد سياسة إجازات نشطة"}, status=400)
 
-    employees = Employee._base_manager.filter(company=company)
+    # الموظفين النشطين بس (قبل كده كانت بتشمل المفصولين)
+    employees = Employee._base_manager.filter(company=company, status="active")
     leave_types = LeaveType._base_manager.filter(company=company, is_active=True)
+    from django.db.models import Sum
 
     processed = 0
     created_balances = 0
@@ -471,7 +473,11 @@ def apply_leave_policy_to_existing_employees(request):
                 adjustments_created += 1
             else:
                 old_total = float(balance.total_days)
-                new_total = float(entitled_days)
+                # الاستحقاق الجديد + الترحيل والرصيد الافتتاحي والتعديلات اليدوية (كانوا بيتمسحوا)
+                kept = LeaveBalanceAdjustment._base_manager.filter(
+                    company=company, employee=employee, leave_type=leave_type, year=year,
+                ).exclude(adjustment_type="policy_reset").aggregate(t=Sum("days"))["t"] or 0
+                new_total = float(entitled_days) + float(kept)
 
                 if old_total != new_total:
                     diff = new_total - old_total

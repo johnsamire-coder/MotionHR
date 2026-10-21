@@ -1986,6 +1986,10 @@ def manager_upload_company_logo(request):
         allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
         if logo_file.content_type not in allowed:
             return Response({'success': False, 'error': 'نوع الملف غير مدعوم (JPEG/PNG/GIF/WEBP فقط)'}, status=400)
+        from core.upload_validation import upload_error
+        _err = upload_error(logo_file, kind='image')
+        if _err:
+            return Response({'success': False, 'error': _err}, status=400)
 
         if logo_file.size > 5 * 1024 * 1024:
             return Response({'success': False, 'error': 'حجم الملف أكبر من 5MB'}, status=400)
