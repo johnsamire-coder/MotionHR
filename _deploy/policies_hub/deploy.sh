@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
 # رفع تصليحات مركز السياسات على السيرفر — أمر واحد:
-#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/group15-biometric/_deploy/policies_hub/deploy.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/group16-documents/_deploy/policies_hub/deploy.sh | sudo bash
 #
 # لو المستودعات خاصة: مفتاح قراءة من GitHub محفوظ في /root/.motionhr_github_token
 #
@@ -14,7 +14,7 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-BRANCH="${BRANCH:-fix/group15-biometric}"
+BRANCH="${BRANCH:-fix/group16-documents}"
 BE="${BE:-/var/www/motionhr}"
 WEB="${WEB:-/var/www/motionhr_web}"
 BE_SERVICE="${BE_SERVICE:-motionhr}"
@@ -132,6 +132,7 @@ BE_FILES=(
   leaves/api_leave_policy.py
   leaves/services_leave_accrual.py
   motionhr/settings_test.py
+  attendance/test_group16_documents.py
 )
 WEB_FILES=(
   src/app/api/employee/announcements/route.ts
@@ -251,6 +252,10 @@ WEB_FILES=(
   src/lib/audit-proxy.ts
   src/app/api/biometric/[...path]/route.ts
   src/app/hr/biometric/page.tsx
+  src/lib/documents-proxy.ts
+  src/components/employees/employee-documents.tsx
+  src/app/api/hr/employees/[id]/documents/route.ts
+  src/app/api/hr/employees/[id]/documents/[docId]/route.ts
 )
 
 # تنزيل نسخة من GitHub — بمفتاح القراءة لو موجود (المستودعات الخاصة)، ومن غيره لو عامة
@@ -299,7 +304,7 @@ NODE_DIR="$(dirname "$(readlink -f "$NPM")")"
 say "0/5 بتأكد إن الكود اللي على السيرفر ماتغيرش من ساعة ما اتبعت"
 # النسخ المعروفة: كود السيرفر الأصلي + كل رفعة سابقة من التصليحات دي
 # + الفرع اللي بنرفعه نفسه: لو السيرفر عليه النسخة دي خلاص، إعادة الرفع آمنة
-KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 policies-hub-deployed-5 policies-hub-deployed-6 policies-hub-deployed-7 policies-hub-deployed-8 policies-hub-deployed-9 policies-hub-deployed-10 policies-hub-deployed-11 policies-hub-deployed-12 policies-hub-deployed-13 policies-hub-deployed-14 policies-hub-deployed-15 policies-hub-deployed-16 policies-hub-deployed-17 policies-hub-deployed-18 policies-hub-deployed-19 $BRANCH"
+KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 policies-hub-deployed-5 policies-hub-deployed-6 policies-hub-deployed-7 policies-hub-deployed-8 policies-hub-deployed-9 policies-hub-deployed-10 policies-hub-deployed-11 policies-hub-deployed-12 policies-hub-deployed-13 policies-hub-deployed-14 policies-hub-deployed-15 policies-hub-deployed-16 policies-hub-deployed-17 policies-hub-deployed-18 policies-hub-deployed-19 policies-hub-deployed-20 $BRANCH"
 for ref in $KNOWN_REFS; do
   mkdir -p "$TMP/known_be/$ref" "$TMP/known_web/$ref"
   # النسخة اللي لسه ماترفعتش مش هتبقى موجودة — عادي
@@ -345,6 +350,7 @@ cat > "$BK/rollback.sh" <<ROLLBACK
 #!/usr/bin/env bash
 # الرجوع للنسخة اللي كانت قبل رفع $TS
 set -u
+[ -f "$BK/cron_created" ] && rm -f /etc/cron.d/motionhr-document-reminders && echo "▶ شلت جدول تذكير المستندات"
 echo "▶ بشيل القواعد اللي اتنقلت من سياسات الحضور (السياسات الأصلية لسه موجودة)..."
 # بس القواعد اللي اتنقلت في الرفعة دي (مش اللي اتنقلت في رفعات قبلها)
 cd "$BE" && sudo -H -u $BE_OWNER "$PY" manage.py shell -c "from django.utils.dateparse import parse_datetime; from attendance.company_policy_models import PenaltyRule, BonusRule; t = parse_datetime('$START_ISO'); print(PenaltyRule._base_manager.filter(change_reason__startswith='converted_from_policy:', created_at__gte=t).delete()[0] + BonusRule._base_manager.filter(change_reason__startswith='converted_from_policy:', created_at__gte=t).delete()[0], 'قاعدة')" 2>/dev/null | tail -1 || true
@@ -408,7 +414,7 @@ ok "الملفات اتحدثت (${#BE_FILES[@]} باك إند + ${#WEB_FILES[@]
 # ── 3) اختبارات الباك إند على السيرفر نفسه ──
 say "3/5 بشغّل الاختبارات (المرتبات والدخول، على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py check >/dev/null )
-if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios accounts.test_access_guard attendance.test_action_scope attendance.test_group3_misc leaves.test_leave_balance attendance.test_group4_permissions attendance.test_group5_bugs employees.test_import_bulk attendance.test_group6_web_server attendance.test_group7_safety attendance.test_group8_medium attendance.test_group9_scope attendance.test_group10_misc attendance.test_group11_mobile_server attendance.test_group12_app_support attendance.test_group13_web attendance.test_group14_reports audit biometric --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
+if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios accounts.test_access_guard attendance.test_action_scope attendance.test_group3_misc leaves.test_leave_balance attendance.test_group4_permissions attendance.test_group5_bugs employees.test_import_bulk attendance.test_group6_web_server attendance.test_group7_safety attendance.test_group8_medium attendance.test_group9_scope attendance.test_group10_misc attendance.test_group11_mobile_server attendance.test_group12_app_support attendance.test_group13_web attendance.test_group14_reports attendance.test_group16_documents audit biometric --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
   grep -E "^(FAIL|ERROR):|Error" "$BK/tests.log" | head -20; tail -5 "$BK/tests.log"; false
 fi
 grep -E "^Ran |^OK" "$BK/tests.log" || true
@@ -422,6 +428,16 @@ ok "سجل التعديلات جاهز"
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py biometric_setup >"$BK/biometric_setup.log" 2>&1 ) || { cat "$BK/biometric_setup.log"; fail "جداول البصمة ماتعملتش"; false; }
 grep -v "objects imported" "$BK/biometric_setup.log" || true
 ok "جداول أجهزة البصمة جاهزة"
+
+# ── 3ج) تذكير المستندات اللي قربت تنتهي: مرة كل يوم الصبح (ملف لوحده، مابيلمسش أي جدولة تانية) ──
+CRON_FILE=/etc/cron.d/motionhr-document-reminders
+if [ -d /etc/cron.d ] && [ ! -e "$CRON_FILE" ]; then
+  printf '# MotionHR: document expiry reminders (added by deploy script)\nSHELL=/bin/bash\n5 7 * * * %s cd %s && %s manage.py send_reminders --type documents >/dev/null 2>&1\n' \
+    "$BE_OWNER" "$BE" "$PY" > "$CRON_FILE"
+  chmod 644 "$CRON_FILE"
+  touch "$BK/cron_created"
+  ok "تذكير المستندات اتجدول (كل يوم الصبح)"
+fi
 
 # ── 3ب) نقل قواعد سياسات الحضور لكروتها المنفصلة (بيتأكد إن ولا مرتب اتغير قبل ما يحفظ) ──
 say "3ب نقل قواعد التأخير والغياب والأوفر تايم لكروتها المنفصلة"

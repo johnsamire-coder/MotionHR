@@ -161,7 +161,9 @@ def _serialize_employee_list(emp):
 
 
 def _serialize_document(doc):
-    today = date.today()
+    from django.utils import timezone
+    today = timezone.localdate()
+    days_left = (doc.expiry_date - today).days if doc.expiry_date else None
     return {
         "id": doc.id,
         "document_type": doc.get_document_type_display(),
@@ -172,8 +174,51 @@ def _serialize_document(doc):
         "expiry_date": str(doc.expiry_date) if doc.expiry_date else None,
         "is_expired": bool(doc.expiry_date and doc.expiry_date < today),
         "expires_soon": bool(doc.expiry_date and today <= doc.expiry_date <= today + timedelta(days=30)),
+        "days_left": days_left,
         "notes": doc.notes,
+        "created_at": doc.created_at.isoformat() if getattr(doc, "created_at", None) else None,
     }
+
+
+def _document_fields(data, partial=False):
+    """
+    بيانات المستند من الطلب (نوعه وعنوانه وتاريخ إصداره وانتهاؤه وملاحظات).
+    بترجع (dict, رسالة خطأ أو None). partial = تعديل: اللي مش مبعوت مابيتغيرش.
+    """
+    from django.utils.dateparse import parse_date
+    from employees.models import EmployeeDocument
+    out = {}
+    valid_types = {c for c, _ in EmployeeDocument.DOCUMENT_TYPE_CHOICES}
+    if "document_type" in data or not partial:
+        doc_type = (data.get("document_type") or "other").strip()
+        if doc_type not in valid_types:
+            return None, "نوع المستند غير صحيح"
+        out["document_type"] = doc_type
+    if "title" in data:
+        out["title"] = (data.get("title") or "").strip()[:200]
+    for key, label in (("issue_date", "تاريخ الإصدار"), ("expiry_date", "تاريخ الانتهاء")):
+        if key not in data and partial:
+            continue
+        raw = (data.get(key) or "").strip() if isinstance(data.get(key), str) else data.get(key)
+        if not raw:
+            out[key] = None
+            continue
+        try:
+            value = parse_date(str(raw))
+        except ValueError:
+            value = None
+        if value is None:
+            return None, f"{label} غير صحيح"
+        out[key] = value
+    if "notes" in data:
+        out["notes"] = (data.get("notes") or "").strip() or None
+    return out, None
+
+
+def _check_document_dates(issue_date, expiry_date):
+    if issue_date and expiry_date and expiry_date < issue_date:
+        return "تاريخ الانتهاء لازم يكون بعد تاريخ الإصدار"
+    return None
 
 
 def _serialize_movement(mv):
@@ -349,6 +394,25 @@ def my_upload_photo(request):
     except Exception as e:
         logger.exception("my_upload_photo error")
         return Response({"success": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+def _create_document(request, emp):
+    """رفع مستند جديد لموظف: بيرجع المستند أو Response بالخطأ"""
+    doc_file = request.FILES.get("file")
+    if not doc_file:
+        return Response({"success": False, "message": "لم يتم إرفاق ملف"}, status=status.HTTP_400_BAD_REQUEST)
+    from core.upload_validation import upload_error
+    _err = upload_error(doc_file)
+    if _err:
+        return Response({"success": False, "message": _err}, status=status.HTTP_400_BAD_REQUEST)
+    fields, err = _document_fields(request.data)
+    err = err or _check_document_dates(fields and fields.get("issue_date"), fields and fields.get("expiry_date"))
+    if err:
+        return Response({"success": False, "message": err}, status=status.HTTP_400_BAD_REQUEST)
+    if not fields.get("title"):
+        fields["title"] = doc_file.name[:200]
+    from employees.models import EmployeeDocument
+    return EmployeeDocument._base_manager.create(company=emp.company, employee=emp, file=doc_file, **fields)
+
+
 @api_view(["POST"])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -357,25 +421,9 @@ def my_upload_document(request):
         emp = getattr(request.user, "employee_profile", None)
         if not emp:
             return Response({"success": False, "message": "no employee profile"}, status=status.HTTP_404_NOT_FOUND)
-        doc_file = request.FILES.get("file")
-        doc_type = request.data.get("document_type", "other")
-        title = request.data.get("title", "")
-        if not doc_file:
-            return Response({"success": False, "message": "لم يتم إرفاق ملف"}, status=status.HTTP_400_BAD_REQUEST)
-        from core.upload_validation import upload_error
-        _err = upload_error(doc_file)
-        if _err:
-            return Response({"success": False, "message": _err}, status=status.HTTP_400_BAD_REQUEST)
-        if not title:
-            title = doc_file.name
-        from employees.models import EmployeeDocument
-        doc = EmployeeDocument._base_manager.create(
-            company=emp.company,
-            employee=emp,
-            document_type=doc_type,
-            title=title,
-            file=doc_file,
-        )
+        doc = _create_document(request, emp)
+        if isinstance(doc, Response):
+            return doc
         return Response({"success": True, "document": _serialize_document(doc)})
     except Exception as e:
         logger.exception("my_upload_document error")
@@ -541,7 +589,18 @@ def manager_employee_profile(request, emp_id):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(["GET"])
+def _deny_document_write(request, emp):
+    """إضافة/تعديل/حذف مستندات الموظف: للـ HR وصاحب الشركة بس، وفي نفس الشركة"""
+    from attendance.action_scope import is_full_access, in_scope
+    if not is_full_access(request.user):
+        return Response({"success": False, "message": "إضافة وتعديل المستندات للموارد البشرية بس"},
+                        status=status.HTTP_403_FORBIDDEN)
+    if emp is None or not in_scope(request.user, emp):
+        return Response({"success": False, "message": "الموظف غير موجود"}, status=status.HTTP_404_NOT_FOUND)
+    return None
+
+
+@api_view(["GET", "POST"])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def manager_employee_documents(request, emp_id):
@@ -550,14 +609,67 @@ def manager_employee_documents(request, emp_id):
         return err
     try:
         emp = _get_employee_scoped(request, emp_id)
+        if request.method == "POST":
+            denied = _deny_document_write(request, emp)
+            if denied:
+                return denied
+            doc = _create_document(request, emp)
+            if isinstance(doc, Response):
+                return doc
+            return Response({"success": True, "document": _serialize_document(doc)}, status=status.HTTP_201_CREATED)
         if not emp:
             return Response({"documents": []})
         from employees.models import EmployeeDocument
         docs = EmployeeDocument._base_manager.filter(employee=emp).order_by("-created_at")
-        return Response({"documents": [_serialize_document(d) for d in docs]})
+        return Response({"documents": [_serialize_document(d) for d in docs],
+                         "can_edit": _deny_document_write(request, emp) is None})
     except Exception as e:
         logger.exception("manager_employee_documents error")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["PATCH", "DELETE"])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def manager_employee_document_detail(request, emp_id, doc_id):
+    err = _check_manager(request)
+    if err:
+        return err
+    try:
+        emp = _get_employee_scoped(request, emp_id)
+        denied = _deny_document_write(request, emp)
+        if denied:
+            return denied
+        from employees.models import EmployeeDocument
+        doc = EmployeeDocument._base_manager.filter(pk=doc_id, employee=emp).first()
+        if doc is None:
+            return Response({"success": False, "message": "المستند غير موجود"}, status=status.HTTP_404_NOT_FOUND)
+        if request.method == "DELETE":
+            doc.delete()
+            return Response({"success": True})
+
+        fields, err = _document_fields(request.data, partial=True)
+        if err:
+            return Response({"success": False, "message": err}, status=status.HTTP_400_BAD_REQUEST)
+        new_file = request.FILES.get("file")
+        if new_file:
+            from core.upload_validation import upload_error
+            _err = upload_error(new_file)
+            if _err:
+                return Response({"success": False, "message": _err}, status=status.HTTP_400_BAD_REQUEST)
+            fields["file"] = new_file
+        if "title" in fields and not fields["title"]:
+            fields.pop("title")
+        err = _check_document_dates(fields.get("issue_date", doc.issue_date), fields.get("expiry_date", doc.expiry_date))
+        if err:
+            return Response({"success": False, "message": err}, status=status.HTTP_400_BAD_REQUEST)
+        for k, v in fields.items():
+            setattr(doc, k, v)
+        doc.save()
+        return Response({"success": True, "document": _serialize_document(doc)})
+    except Exception as e:
+        logger.exception("manager_employee_document_detail error")
+        return Response({"success": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["GET"])

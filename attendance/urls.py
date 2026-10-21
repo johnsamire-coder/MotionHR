@@ -319,6 +319,7 @@ urlpatterns += [
     path('api/mobile/charters/<int:charter_id>/accept/', api_charters.my_charter_accept),
     path('api/mobile/manager/employees/<int:emp_id>/profile/', api_employee_profile.manager_employee_profile),
     path('api/mobile/manager/employees/<int:emp_id>/documents/', api_employee_profile.manager_employee_documents),
+    path('api/mobile/manager/employees/<int:emp_id>/documents/<int:doc_id>/', api_employee_profile.manager_employee_document_detail),
     path('api/mobile/manager/employees/<int:emp_id>/movements/', api_employee_profile.manager_employee_movements),
     path("api/mobile/attachments/upload/", api_attachments.upload_attachment),
     path("api/mobile/attachments/list/", api_attachments.list_attachments),

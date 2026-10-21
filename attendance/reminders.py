@@ -361,14 +361,107 @@ def remind_charter_acceptance():
 
 
 # ═══════════════════════════════════════════════════════
-# 7.5  تذكير مستندات منتهية (Placeholder)
+# 7.5  تذكير المستندات اللي قربت تنتهي
 # ═══════════════════════════════════════════════════════
+# (مرحلة التذكير، أقصى عدد أيام باقية، النص)
+DOCUMENT_STAGES = [
+    ("expired", -1, "انتهى"),
+    ("today", 0, "بينتهي النهارده"),
+    ("tomorrow", 1, "بينتهي بكره"),
+    ("week", 7, "باقي أسبوع أو أقل"),
+    ("month", 30, "باقي شهر أو أقل"),
+]
+DOCUMENT_EXPIRED_LOOKBACK_DAYS = 30
+
+
+def _document_stage(days_left):
+    if days_left < -DOCUMENT_EXPIRED_LOOKBACK_DAYS:
+        return None
+    for key, max_days, label in DOCUMENT_STAGES:
+        if days_left <= max_days:
+            return key, label
+    return None
+
+
 def remind_expiring_documents():
     """
-    Placeholder — هيتفعل لما نضيف موديل المستندات لاحقاً.
+    يتشغل مرة كل يوم.
+    لكل مستند ليه تاريخ انتهاء: تذكير لما يفضل شهر، وأسبوع، ويوم، ويوم الانتهاء، وبعد ما ينتهي.
+    التذكير بيروح للموظف نفسه ومديره المباشر والـ HR وصاحب الشركة.
+    كل مرحلة بتتبعت مرة واحدة بس (حتى لو الأمر اشتغل كذا مرة في اليوم).
     """
-    logger.info("remind_expiring_documents: placeholder — skipped")
-    pass
+    try:
+        from django.contrib.auth import get_user_model
+        from accounts.models import EmployeeNotification
+        from employees.models import EmployeeDocument
+
+        User = get_user_model()
+        today = timezone.localdate()
+        docs = EmployeeDocument._base_manager.filter(
+            expiry_date__isnull=False,
+            expiry_date__gte=today - timedelta(days=DOCUMENT_EXPIRED_LOOKBACK_DAYS),
+            expiry_date__lte=today + timedelta(days=30),
+            employee__status="active",
+            employee__company__is_active=True,
+        ).select_related("employee", "employee__direct_manager")
+
+        sent = 0
+        for doc in docs:
+            try:
+                emp = doc.employee
+                days_left = (doc.expiry_date - today).days
+                stage = _document_stage(days_left)
+                if not stage:
+                    continue
+                stage_key, stage_label = stage
+                name = emp.full_name_ar or emp.employee_code or ""
+                doc_name = doc.title or doc.get_document_type_display()
+                title = f"📄 مستند {stage_label}: {doc_name}"[:200]
+                message = (f"{doc.get_document_type_display()} «{doc_name}» للموظف {name} — "
+                           f"تاريخ الانتهاء {doc.expiry_date:%Y-%m-%d}.")
+                # المرحلة دي اتبعتت قبل كده؟
+                if EmployeeNotification.objects.filter(employee=emp, title=title, message=message).exists():
+                    continue
+
+                user_ids = set(User.objects.filter(
+                    company_id=emp.company_id, role__in=["hr_manager", "company_admin"], is_active=True,
+                ).values_list("id", flat=True))
+                if emp.user_id:
+                    user_ids.add(emp.user_id)
+                manager = emp.direct_manager
+                if manager is not None and manager.user_id and manager.status == "active":
+                    user_ids.add(manager.user_id)
+                recipients = User.objects.filter(id__in=user_ids, is_active=True)
+
+                if days_left < 0:
+                    body = f"{message} انتهى من {-days_left} يوم — محتاج يتجدد."
+                elif days_left == 0:
+                    body = f"{message} بينتهي النهارده."
+                else:
+                    body = f"{message} باقي {days_left} يوم."
+                _send_to_users(
+                    recipients, title=title, body=body,
+                    title_en=f"📄 Document expiry: {doc_name}"[:200],
+                    body_en=f"{doc_name} ({name}) expires on {doc.expiry_date:%Y-%m-%d}.",
+                    data={"type": "document_expiry", "document_id": str(doc.id),
+                          "employee_id": str(emp.id), "stage": stage_key},
+                )
+                # إشعار داخلي للموظف صاحب المستند (وده كمان علامة إن المرحلة اتبعتت)
+                EmployeeNotification.objects.create(
+                    employee=emp, title=title, message=message, notification_type="general_notice",
+                    severity="danger" if days_left <= 1 else "warning",
+                )
+                for user in recipients.exclude(id=emp.user_id) if emp.user_id else recipients:
+                    _create_internal_notification_for_user(user, title, message, severity="warning")
+                sent += 1
+            except Exception as e:
+                logger.error(f"remind_expiring_documents doc {doc.id}: {e}")
+
+        logger.info(f"remind_expiring_documents: done — {sent} documents notified")
+        return sent
+    except Exception as e:
+        logger.error(f"remind_expiring_documents error: {e}")
+        return 0
 
 
 
