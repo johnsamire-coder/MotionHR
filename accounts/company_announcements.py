@@ -177,8 +177,8 @@ class CompanyAnnouncement(models.Model):
         """يحسب قائمة الموظفين المستهدفين بعد الاستثناءات"""
         from employees.models import Employee
         
-        # ابدأ بكل موظفي الشركة النشطين
-        qs = Employee._base_manager.filter(company=self.company)
+        # ابدأ بكل موظفي الشركة النشطين (قبل كده كان بيشمل اللي سابوا الشركة)
+        qs = Employee._base_manager.filter(company=self.company, status='active')
 
         # حدد المستهدفين
         if self.target_type == 'specific':

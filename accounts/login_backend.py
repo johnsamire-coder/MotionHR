@@ -37,24 +37,32 @@ class SmartLoginBackend(ModelBackend):
 
     @staticmethod
     def find_user(username):
-        """بنبحث بكل الطرق في وقت واحد، ولو مش لاقيه نجرب الرقم الوظيفي"""
+        """
+        اسم المستخدم الأول (فريد)، وبعدين الإيميل أو الموبايل، وبعدين الرقم الوظيفي.
+        الإيميل/الموبايل/الرقم الوظيفي لازم يطابقوا حساب واحد بس — الرقم الوظيفي بيتكرر بين الشركات
+        (EMP00001 في كل شركة)، فلو اتكرر مانخمنش (عشان محدش يدخل حساب شركة تانية).
+        """
         username = (username or '').strip()
         if not username:
             return None
-        user = User.objects.filter(
-            Q(username__iexact=username) |
-            Q(email__iexact=username) |
-            Q(phone=username)
-        ).first()
+        user = User.objects.filter(username__iexact=username).first()
+        if user:
+            return user
 
-        if not user:
-            from employees.models import Employee
-            emp = Employee.objects.filter(
-                employee_code__iexact=username
-            ).select_related('user').first()
-            if emp and emp.user:
-                user = emp.user
-        return user
+        users = list(User.objects.filter(Q(email__iexact=username) | Q(phone=username))[:2])
+        if len(users) == 1:
+            return users[0]
+        if users:
+            return None
+
+        from employees.models import Employee
+        # _base_manager: وقت الدخول مفيش شركة محددة، فـ objects كانت بترجع فاضي
+        emps = list(Employee._base_manager.filter(
+            employee_code__iexact=username, user__isnull=False,
+        ).select_related('user')[:2])
+        if len(emps) == 1:
+            return emps[0].user
+        return None
 
     def get_user(self, user_id):
         try:

@@ -1507,6 +1507,11 @@ def manager_transfer_employee(request, employee_id):
                         {"success": False, "error": "لا يمكن أن يكون الموظف مديراً لنفسه"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
+                if new_mgr.id in target_employee.get_all_subordinates_ids():
+                    return Response(
+                        {"success": False, "error": "المدير الجديد تحت الموظف ده في الهيكل، فده هيعمل دايرة"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
                 if hasattr(target_employee, "direct_manager"):
                     old_name = target_employee.direct_manager.full_name_ar if target_employee.direct_manager else "لا يوجد"
                     target_employee.direct_manager = new_mgr

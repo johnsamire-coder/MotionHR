@@ -1271,6 +1271,14 @@ def mobile_manager_action(request):
             except Exception:
                 request_type_name = 'طلب'
 
+            # الطلب بيتقرر مرة واحدة بس (الضغط مرتين، أو موافقة بعد رفض، كانوا بيتنفذوا)
+            _final = 'approved' if action == 'approve' else 'rejected'
+            if not EmployeeRequest._base_manager.filter(
+                pk=item.pk, status__in=('pending', 'manager_approved', 'hr_approved'),
+            ).update(status=_final):
+                item.refresh_from_db()
+                return Response({'success': False, 'message': 'الطلب ده اتراجع قبل كده', 'status': item.status}, status=409)
+
             if action == 'approve':
                 item.status = 'approved'
                 # لو طلب تعديل الاسم الشخصي → نحدث اسم الموظف تلقائياً

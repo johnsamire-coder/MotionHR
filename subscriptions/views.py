@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.db.models import Count, Sum, Q
 from django.core.paginator import Paginator
 from datetime import timedelta, date
+from decimal import Decimal
 
 from .models import SubscriptionPlan, CompanySubscription, FeatureFlag
 from companies.models import Company
@@ -280,9 +281,11 @@ def extend_subscription(request, pk):
     if request.method == 'POST':
         try:
             days = int(request.POST.get('days', 30))
-            price = float(request.POST.get('price', 0))
+            price = Decimal(str(request.POST.get('price') or 0))
             
-            subscription.end_date = subscription.end_date + timedelta(days=days)
+            # الاشتراك المنتهي بيتمد من النهارده مش من تاريخ انتهائه القديم
+            base = max(subscription.end_date, timezone.now().date())
+            subscription.end_date = base + timedelta(days=days)
             subscription.status = 'active'
             subscription.price_paid = subscription.price_paid + price
             subscription.save()

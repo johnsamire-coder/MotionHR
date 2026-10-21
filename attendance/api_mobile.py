@@ -1668,51 +1668,53 @@ def mobile_attendance_status(request):
     # ═══════════════════════════════════════════════════
     # ATT-10b: GPS Detection - يسجل Alert لو GPS مقفول
     # ═══════════════════════════════════════════════════
-    try:
-        _lat = request.GET.get('latitude')
-        _lng = request.GET.get('longitude')
-        _has_gps = _lat not in (None, '', 'null') and _lng not in (None, '', 'null')
+    # صفحات الويب بتسأل عن الحالة من غير موقع — ده مش معناه إن الـ GPS مقفول
+    if request.GET.get('source') != 'web':
+        try:
+            _lat = request.GET.get('latitude')
+            _lng = request.GET.get('longitude')
+            _has_gps = _lat not in (None, '', 'null') and _lng not in (None, '', 'null')
 
-        from attendance.models import TrackingAlert
-        _now = timezone.now()
+            from attendance.models import TrackingAlert
+            _now = timezone.now()
 
-        _open_alert = TrackingAlert._base_manager.filter(
-            company=employee.company,
-            employee=employee,
-            date=today,
-            status='open',
-            notes__icontains='GPS'
-        ).first()
+            _open_alert = TrackingAlert._base_manager.filter(
+                company=employee.company,
+                employee=employee,
+                date=today,
+                status='open',
+                notes__icontains='GPS'
+            ).first()
 
-        if not _has_gps:
-            # GPS مقفول - نسجل Alert
-            if _open_alert:
-                # تحديث Alert الموجود
-                _open_alert.last_seen_at = _now
-                _open_alert.save(update_fields=['last_seen_at'])
+            if not _has_gps:
+                # GPS مقفول - نسجل Alert
+                if _open_alert:
+                    # تحديث Alert الموجود
+                    _open_alert.last_seen_at = _now
+                    _open_alert.save(update_fields=['last_seen_at'])
+                else:
+                    # إنشاء Alert جديد
+                    TrackingAlert._base_manager.create(
+                        company=employee.company,
+                        employee=employee,
+                        date=today,
+                        started_at=_now,
+                        last_seen_at=_now,
+                        minutes_outside=0,
+                        last_latitude=None,
+                        last_longitude=None,
+                        last_address='',
+                        status='open',
+                        notes='GPS disabled - detected from status ping',
+                    )
             else:
-                # إنشاء Alert جديد
-                TrackingAlert._base_manager.create(
-                    company=employee.company,
-                    employee=employee,
-                    date=today,
-                    started_at=_now,
-                    last_seen_at=_now,
-                    minutes_outside=0,
-                    last_latitude=None,
-                    last_longitude=None,
-                    last_address='',
-                    status='open',
-                    notes='GPS disabled - detected from status ping',
-                )
-        else:
-            # GPS شغال - نقفل أي Alert مفتوح
-            if _open_alert:
-                _open_alert.status = 'resolved'
-                _open_alert.resolved_at = _now
-                _open_alert.save(update_fields=['status', 'resolved_at'])
-    except Exception:
-        pass
+                # GPS شغال - نقفل أي Alert مفتوح
+                if _open_alert:
+                    _open_alert.status = 'resolved'
+                    _open_alert.resolved_at = _now
+                    _open_alert.save(update_fields=['status', 'resolved_at'])
+        except Exception:
+            pass
     # ═══════════════════════════════════════════════════
     
     # ═══════════════════════════════════════════════════
