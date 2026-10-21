@@ -4,6 +4,7 @@ from django.urls import path, include
 from employees import views as employee_views
 from django.conf import settings
 from django.conf.urls.static import static
+from biometric import iclock as biometric_iclock
 
 from accounts.views import (
     CustomPasswordChangeView,
@@ -93,6 +94,14 @@ urlpatterns = [
     path('companies/',     include('companies.urls',     namespace='companies')),
     path('leaves/',        include('leaves.urls',        namespace='leaves')),
     path('audit/',         include('audit.urls',         namespace='audit')),   # سجل التعديلات
+    path('biometric/',     include('biometric.urls',     namespace='biometric')),   # أجهزة البصمة
+    # أجهزة ZKTeco بتكلم العنوان ده لوحدها (ADMS)
+    path('iclock/cdata', biometric_iclock.cdata),
+    path('iclock/cdata.aspx', biometric_iclock.cdata),
+    path('iclock/getrequest', biometric_iclock.getrequest),
+    path('iclock/getrequest.aspx', biometric_iclock.getrequest),
+    path('iclock/devicecmd', biometric_iclock.devicecmd),
+    path('iclock/devicecmd.aspx', biometric_iclock.devicecmd),
     path('requests/',    include('requests_app.urls', namespace='requests_app')),
     path('reports/',       include('reports.urls',       namespace='reports')),
 

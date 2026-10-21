@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'landing',
     'subscriptions',
     'audit',   # سجل التعديلات (مين عمل إيه وإمتى)
+    'biometric',   # أجهزة البصمة ZKTeco
     'rest_framework',
     'corsheaders',
     'rest_framework.authtoken',
