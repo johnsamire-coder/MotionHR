@@ -2090,7 +2090,7 @@ def mobile_attendance_history(request):
 def mobile_change_password(request):
     """تغيير كلمة المرور من تطبيق الموبايل"""
     user = request.user
-    current_password = request.data.get('current_password', '').strip()
+    current_password = (request.data.get('current_password') or request.data.get('old_password') or '').strip()  # الويب كان بيبعت old_password
     new_password = request.data.get('new_password', '').strip()
 
     if not current_password or not new_password:

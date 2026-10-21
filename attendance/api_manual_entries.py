@@ -639,8 +639,25 @@ def payroll_installment_list_create(request):
         if employee.user_id == request.user.id and not _is_ceo(request.user):
             return JsonResponse({'success': False, 'error': 'مينفعش تعمل سلفة لنفسك. لازم صاحب الشركة يعملها.'}, status=403)
 
-        start_month = int(start_month)
-        start_year = int(start_year)
+        # المبلغ والقسط لازم يكونوا موجبين، والقسط مايزيدش عن السلفة
+        # (القسط السالب كان بيتحول لزيادة في المرتب كل شهر)
+        from decimal import Decimal, InvalidOperation
+        try:
+            _total = Decimal(str(total_amount))
+            _monthly = Decimal(str(monthly_amount))
+        except (InvalidOperation, ValueError):
+            return JsonResponse({'success': False, 'error': 'المبلغ والقسط لازم يكونوا أرقام'}, status=400)
+        if _total <= 0 or _monthly <= 0:
+            return JsonResponse({'success': False, 'error': 'المبلغ والقسط الشهري لازم يكونوا أكبر من صفر'}, status=400)
+        if _monthly > _total:
+            return JsonResponse({'success': False, 'error': 'القسط الشهري مينفعش يكون أكبر من إجمالي السلفة'}, status=400)
+        try:
+            start_month = int(start_month)
+            start_year = int(start_year)
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'شهر وسنة البداية لازم يكونوا أرقام'}, status=400)
+        if not 1 <= start_month <= 12:
+            return JsonResponse({'success': False, 'error': 'شهر البداية لازم يكون من 1 لـ 12'}, status=400)
 
         existing_run = PayrollRun._base_manager.filter(
             company=company, year=start_year, month=start_month

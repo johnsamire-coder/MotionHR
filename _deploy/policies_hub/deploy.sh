@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
 # رفع تصليحات مركز السياسات على السيرفر — أمر واحد:
-#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/group5-bugs/_deploy/policies_hub/deploy.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/group6-web/_deploy/policies_hub/deploy.sh | sudo bash
 #
 # لو المستودعات خاصة: مفتاح قراءة من GitHub محفوظ في /root/.motionhr_github_token
 #
@@ -14,7 +14,7 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-BRANCH="${BRANCH:-fix/group5-bugs}"
+BRANCH="${BRANCH:-fix/group6-web}"
 BE="${BE:-/var/www/motionhr}"
 WEB="${WEB:-/var/www/motionhr_web}"
 BE_SERVICE="${BE_SERVICE:-motionhr}"
@@ -42,6 +42,7 @@ BE_FILES=(
   attendance/api_offboarding.py
   attendance/test_group4_permissions.py
   attendance/test_group5_bugs.py
+  attendance/test_group6_web_server.py
   attendance/reminders.py
   employees/models.py
   employees/management/commands/import_employees_bulk.py
@@ -81,15 +82,46 @@ BE_FILES=(
   motionhr/settings_test.py
 )
 WEB_FILES=(
+  src/app/api/employee/announcements/route.ts
+  src/app/api/employee/my-missions/route.ts
+  src/app/api/employee/my-permissions/route.ts
+  src/app/api/employee/my-work-locations/route.ts
+  src/app/api/employee/today-sessions/route.ts
+  src/app/api/hr/leave-recalls/route.ts
+  src/app/api/hr/policies-allowance/route.ts
+  src/app/api/hr/policies-attendance/route.ts
+  src/app/api/hr/policies-bonus/route.ts
+  src/app/api/hr/policies-deduction/route.ts
+  src/app/api/hr/policies-leave/route.ts
+  src/app/api/hr/policies/allowance-policies/[id]/route.ts
+  src/app/api/hr/policies/bonus-policies/[id]/route.ts
+  src/app/api/hr/policies/deduction-policies/[id]/route.ts
+  src/app/api/hr/work-location-types/route.ts
+  src/app/api/manager/mission-requests/route.ts
+  src/app/api/manager/shift-changes/route.ts
+  src/app/api/manager/withdraw-requests/route.ts
+  src/app/employee/dashboard/page.tsx
+  src/app/employee/field-visits/page.tsx
+  src/app/employee/missions/page.tsx
+  src/app/employee/permissions/page.tsx
+  src/app/hr/attendance/page.tsx
+  src/app/hr/manual-entries/page.tsx
+  src/app/hr/policies/page.tsx
+  src/app/hr/reports/leaves-basic/page.tsx
+  src/app/hr/settings/page.tsx
   src/app/hr/work-locations/page.tsx
+  src/app/manager/attendance/page.tsx
+  src/app/manager/locations/page.tsx
+  src/app/manager/my-field-visits/page.tsx
+  src/app/manager/my-missions/page.tsx
+  src/app/manager/requests/page.tsx
   src/components/auth/access-guard.tsx
   src/components/auth/login-form.tsx
-  src/lib/providers.tsx
-  src/app/hr/policies/page.tsx
   src/components/hr/policies/attendance-policy-dialog.tsx
   src/components/hr/policies/bonus-rule-dialog.tsx
   src/components/hr/policies/leave-policy-dialog.tsx
   src/components/hr/policies/penalty-rule-dialog.tsx
+  src/lib/providers.tsx
 )
 
 # تنزيل نسخة من GitHub — بمفتاح القراءة لو موجود (المستودعات الخاصة)، ومن غيره لو عامة
@@ -138,7 +170,7 @@ NODE_DIR="$(dirname "$(readlink -f "$NPM")")"
 say "0/5 بتأكد إن الكود اللي على السيرفر ماتغيرش من ساعة ما اتبعت"
 # النسخ المعروفة: كود السيرفر الأصلي + كل رفعة سابقة من التصليحات دي
 # + الفرع اللي بنرفعه نفسه: لو السيرفر عليه النسخة دي خلاص، إعادة الرفع آمنة
-KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 policies-hub-deployed-5 policies-hub-deployed-6 policies-hub-deployed-7 policies-hub-deployed-8 policies-hub-deployed-9 $BRANCH"
+KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 policies-hub-deployed-5 policies-hub-deployed-6 policies-hub-deployed-7 policies-hub-deployed-8 policies-hub-deployed-9 policies-hub-deployed-10 $BRANCH"
 for ref in $KNOWN_REFS; do
   mkdir -p "$TMP/known_be/$ref" "$TMP/known_web/$ref"
   # النسخة اللي لسه ماترفعتش مش هتبقى موجودة — عادي
@@ -247,7 +279,7 @@ ok "الملفات اتحدثت (${#BE_FILES[@]} باك إند + ${#WEB_FILES[@]
 # ── 3) اختبارات الباك إند على السيرفر نفسه ──
 say "3/5 بشغّل الاختبارات (المرتبات والدخول، على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py check >/dev/null )
-if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios accounts.test_access_guard attendance.test_action_scope attendance.test_group3_misc leaves.test_leave_balance attendance.test_group4_permissions attendance.test_group5_bugs employees.test_import_bulk --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
+if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios accounts.test_access_guard attendance.test_action_scope attendance.test_group3_misc leaves.test_leave_balance attendance.test_group4_permissions attendance.test_group5_bugs employees.test_import_bulk attendance.test_group6_web_server --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
   grep -E "^(FAIL|ERROR):|Error" "$BK/tests.log" | head -20; tail -5 "$BK/tests.log"; false
 fi
 grep -E "^Ran |^OK" "$BK/tests.log" || true

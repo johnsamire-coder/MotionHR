@@ -256,6 +256,11 @@ def manager_update_announcement(request, pk):
     except CompanyAnnouncement.DoesNotExist:
         return Response({'error': 'الإعلان غير موجود'}, status=404)
 
+    # المدير العادي بيعدّل إعلاناته هو بس، ومايغيرش المستهدفين (عشان مايبقاش للشركة كلها)
+    _is_plain_manager = user.role == 'manager'
+    if _is_plain_manager and ann.created_by_id != user.id:
+        return Response({'error': 'تقدر تعدّل إعلاناتك أنت بس'}, status=403)
+
     data = request.data
 
     if 'title' in data:
@@ -265,8 +270,8 @@ def manager_update_announcement(request, pk):
         ann.title = title
 
     if 'message' in data or 'content' in data:
-        ann.message = (data.get('message') or data.get('content') or '').strip()
-        message = str(data.get('message') or '').strip()
+        # الويب بيبعت content والموبايل message
+        message = str(data.get('message') or data.get('content') or '').strip()
         if not message:
             return Response({'error': 'المحتوى مطلوب'}, status=400)
         ann.message = message
@@ -277,7 +282,7 @@ def manager_update_announcement(request, pk):
     if 'priority' in data:
         ann.priority = data.get('priority') or ann.priority
 
-    if 'target_type' in data:
+    if 'target_type' in data and not _is_plain_manager:
         ann.target_type = data.get('target_type') or ann.target_type
 
     if 'requires_confirmation' in data:
