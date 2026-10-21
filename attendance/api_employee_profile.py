@@ -114,6 +114,23 @@ def _serialize_employee_full(emp):
         "shift": _get_emp_effective_shift(emp),
         "shift_name": _get_emp_effective_shift(emp)["name"] if _get_emp_effective_shift(emp) else "غير معين",
         "shift_timing": f"{_get_emp_effective_shift(emp)['start_time']} - {_get_emp_effective_shift(emp)['end_time']}" if _get_emp_effective_shift(emp) and _get_emp_effective_shift(emp).get('start_time') else "",
+        # شاشة تعديل الموظف في الموبايل بتقرا الحقول دي، ولما كانت ناقصة كانت بتبعت قيم فاضية
+        # فتمسح التأمين وطريقة القبض (أو التعديل يترفض لأن الاسم الإنجليزي فاضي)
+        "first_name_ar": emp.first_name_ar or "",
+        "middle_name_ar": emp.middle_name_ar or "",
+        "last_name_ar": emp.last_name_ar or "",
+        "first_name_en": emp.first_name_en or "",
+        "last_name_en": emp.last_name_en or "",
+        "branch_id": emp.branch_id,
+        "department_id": emp.department_id,
+        "job_title_id": emp.job_title_id,
+        "direct_manager_id": emp.direct_manager_id,
+        "has_insurance": bool(getattr(emp, "has_insurance", False)),
+        "insurance_number": getattr(emp, "insurance_number", "") or "",
+        "salary_payment_method": getattr(emp, "salary_payment_method", "") or "none",
+        "instapay_phone": getattr(emp, "instapay_phone", "") or "",
+        "wallet_phone": getattr(emp, "wallet_phone", "") or "",
+        "wallet_provider": getattr(emp, "wallet_provider", "") or "",
 
     }
 

@@ -93,6 +93,20 @@ def _check_manager(request):
     return None
 
 
+def _choice_code(obj, field, value):
+    """الموبايل بيبعت النوع والحالة الاجتماعية ونوع العقد بالنص العربي اللي اتعرض له (ذكر، أعزب...)،
+    فبنرجّعه للكود الصح بدل ما يتحول لقيمة افتراضية غلط"""
+    raw = str(value or "").strip()
+    try:
+        choices = obj._meta.get_field(field).choices or []
+    except Exception:
+        return raw.lower()
+    for code, label in choices:
+        if raw.lower() == str(code).lower() or raw == str(label):
+            return code
+    return raw.lower()
+
+
 def _check_structure_write(request):
     """الفروع والأقسام والمسميات: المدير العادي يشوف بس، والتعديل لصاحب الشركة والـ HR"""
     if request.method == "GET" or request.user.is_superuser:
@@ -1151,8 +1165,9 @@ def manager_update_employee(request, employee_id):
         birth_date_str = str(data.get("birth_date", birth_date_default.isoformat() if birth_date_default else "") or "").strip()
         hire_date_str = str(data.get("hire_date", hire_date_default.isoformat() if hire_date_default else "") or "").strip()
 
-        gender = str(data.get("gender", getattr(target_employee, "gender", "male") or "male")).strip().lower()
-        marital_status = str(data.get("marital_status", getattr(target_employee, "marital_status", "single") or "single")).strip().lower()
+        gender = _choice_code(target_employee, "gender", data.get("gender", getattr(target_employee, "gender", "male") or "male"))
+        marital_status = _choice_code(target_employee, "marital_status",
+                                      data.get("marital_status", getattr(target_employee, "marital_status", "single") or "single"))
         religion_raw = str(data.get("religion", getattr(target_employee, "religion", "") or "")).strip()
         religion = _normalize_religion_value(religion_raw)
 
@@ -1162,7 +1177,8 @@ def manager_update_employee(request, employee_id):
         direct_manager_id = data.get("direct_manager_id", getattr(current_direct_manager, "id", None))
 
         worker_type = str(data.get("worker_type", getattr(target_employee, "worker_type", "office") or "office")).strip()
-        contract_type = str(data.get("contract_type", getattr(target_employee, "contract_type", "permanent") or "permanent")).strip()
+        contract_type = _choice_code(target_employee, "contract_type",
+                                     data.get("contract_type", getattr(target_employee, "contract_type", "permanent") or "permanent"))
         contract_end_date_str = str(data.get("contract_end_date", contract_end_date_default.isoformat() if contract_end_date_default else "") or "").strip()
 
         basic_salary_raw = data.get("basic_salary", getattr(target_employee, "basic_salary", 0) or 0)
