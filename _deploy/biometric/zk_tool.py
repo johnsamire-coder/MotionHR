@@ -5,6 +5,8 @@
   py zk_tool.py 192.168.1.201 unlock    → بتشيل صلاحية المدير من كل اللي عليهم (بعد نسخة احتياطية)
                                           عشان قايمة الإعدادات تفتح من غير باسورد. الموظفين والبصمات زي ما هم.
   py zk_tool.py 192.168.1.201 export    → بتنزل كل البصمات في ملف attlog_<SN>.txt ينفع يترفع من صفحة "أجهزة البصمة"
+  py zk_tool.py 192.168.1.201 names     → بتبعت أسامي الموظفين اللي على الجهاز للبرنامج (عشان شاشة الربط)
+                                          الجهاز لازم يكون متسجل ومفعّل في صفحة "أجهزة البصمة"
 
 لو الجهاز عليه "Comm Key": --key 1234
 محتاج: py -m pip install pyzk
@@ -92,15 +94,44 @@ def export(conn):
     print(f'OK: {len(rows)} بصمة اتحفظت في {name} — ارفعه من صفحة "أجهزة البصمة" ← رفع ملف')
 
 
+SERVER = 'https://jssolutions-eg.com'
+
+
+def push(sn, table, body):
+    """نفس اللي الجهاز كان هيبعته لو فيه Cloud Server"""
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(f'{SERVER}/iclock/cdata?SN={sn}&table={table}', data=body.encode('utf-8'),
+                                 headers={'Content-Type': 'text/plain'}, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.status, r.read().decode('utf-8', 'replace')
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode('utf-8', 'replace')
+
+
+def names(conn):
+    sn = safe(conn.get_serialnumber)
+    users = conn.get_users()
+    body = ''.join(f'USER PIN={u.user_id}\tName={(u.name or "").strip()}\n' for u in users)
+    code, text = push(sn, 'OPERLOG', body)
+    if code == 200:
+        print(f'OK: {len(users)} اسم اتبعت — افتح "ربط الأرقام بالموظفين" في صفحة أجهزة البصمة')
+    elif code == 403:
+        print(f'FAILED: الجهاز {sn} لسه مش متسجل أو مش مفعّل في صفحة "أجهزة البصمة"')
+    else:
+        print(f'FAILED: السيرفر رد {code}: {text[:200]}')
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('ip')
-    p.add_argument('action', choices=['info', 'unlock', 'export'])
+    p.add_argument('action', choices=['info', 'unlock', 'export', 'names'])
     p.add_argument('--key', type=int, default=0)
     a = p.parse_args()
     conn = connect(a.ip, a.key)
     try:
-        {'info': info, 'unlock': unlock, 'export': export}[a.action](conn)
+        {'info': info, 'unlock': unlock, 'export': export, 'names': names}[a.action](conn)
     finally:
         safe(conn.disconnect)
 
