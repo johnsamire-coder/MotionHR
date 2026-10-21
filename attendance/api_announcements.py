@@ -282,8 +282,26 @@ def manager_update_announcement(request, pk):
     if 'priority' in data:
         ann.priority = data.get('priority') or ann.priority
 
+    # تطبيق الموبايل بيبعت "كل الموظفين" مع أي تعديل لأنه مش عارف المستهدفين الحاليين،
+    # فكان أي تعديل بسيط بيحوّل الإعلان للشركة كلها. المستهدفين بيتغيروا بس لو اتحدد قسم أو فرع صراحة.
     if 'target_type' in data and not _is_plain_manager:
-        ann.target_type = data.get('target_type') or ann.target_type
+        _new_target = data.get('target_type') or ann.target_type
+        _dept_ids = [i for i in (data.get('department_ids') or []) if i]
+        _branch_ids = [i for i in (data.get('branch_ids') or []) if i]
+        if _new_target == 'by_department' and _dept_ids:
+            from companies.models import Department
+            ann.target_type = _new_target
+            _thr = ann.target_departments.through._default_manager
+            _thr.filter(companyannouncement_id=ann.id).delete()
+            _thr.bulk_create([_thr.model(companyannouncement_id=ann.id, department_id=d) for d in
+                              Department._base_manager.filter(id__in=_dept_ids, company=company).values_list('id', flat=True)])
+        elif _new_target == 'by_branch' and _branch_ids:
+            from companies.models import Branch
+            ann.target_type = _new_target
+            _thr = ann.target_branches.through._default_manager
+            _thr.filter(companyannouncement_id=ann.id).delete()
+            _thr.bulk_create([_thr.model(companyannouncement_id=ann.id, branch_id=b) for b in
+                              Branch._base_manager.filter(id__in=_branch_ids, company=company).values_list('id', flat=True)])
 
     if 'requires_confirmation' in data:
         ann.requires_confirmation = bool(data.get('requires_confirmation'))

@@ -1654,7 +1654,7 @@ def download_employee_template(request):
     return response
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])  # التطبيق بيبعت JWT
 @permission_classes([IsAuthenticated])
 def import_employees_excel(request):
     """استقبال ملف الإكسيل وتشغيل أمر الاستيراد"""
@@ -1766,7 +1766,7 @@ def import_employees_excel(request):
 
 
 @api_view(['GET'])
-@authentication_classes([TokenAuthentication])
+@authentication_classes([TokenAuthentication, JWTAuthentication])  # التطبيق بيبعت JWT
 @permission_classes([IsAuthenticated])
 def import_logs_list(request):
     """جلب سجلات الاستيراد لآخر 3 أيام"""

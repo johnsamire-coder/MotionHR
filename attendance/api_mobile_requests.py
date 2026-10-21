@@ -789,7 +789,8 @@ def mobile_submit_request(request):
                 'message': 'لا يمكن رد المصروفات - لا يوجد حضور مسجل في هذا التاريخ'
             }, status=400)
 
-        if parsed_permission_time is None:
+        # الوقت مش مطلوب لرد المصروفات (الموبايل مابيبعتهوش)؛ الخطأ بس لو اتبعت بصيغة غلط
+        if permission_time_raw and parsed_permission_time is None:
             return Response({
                 'success': False,
                 'message': 'صيغة الوقت غير صحيحة',

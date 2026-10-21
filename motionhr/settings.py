@@ -342,7 +342,8 @@ from datetime import timedelta
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+    # أطول من مفتاح الدخول عشان التطبيق يقدر يجدد لوحده (قبل كده الاتنين كانوا بيخلصوا مع بعض فالتطبيق يقف بعد شهر)
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=90),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
     'AUTH_HEADER_TYPES': ('Bearer',),

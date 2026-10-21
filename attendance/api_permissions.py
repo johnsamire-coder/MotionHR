@@ -620,6 +620,12 @@ def target_permissions_summary(request):
             'type': 'department',
             'department_id': target_id,
             'employees_count': emps.count(),
+            # شاشة الموبايل بتقرا permissions: بنعلّم بس الصلاحيات اللي عند كل الموظفين،
+            # عشان الحفظ مايدّيش صلاحية عند موظف واحد لكل القسم
+            'permissions': [
+                {'code': c, 'scope': v['scope']}
+                for c, v in summary.items() if v['count'] == len([e for e in emps if e.user])
+            ],
             'permissions_summary': [
                 {
                     'code': c,
@@ -651,6 +657,12 @@ def target_permissions_summary(request):
             'type': 'branch',
             'branch_id': target_id,
             'employees_count': emps.count(),
+            # شاشة الموبايل بتقرا permissions: بنعلّم بس الصلاحيات اللي عند كل الموظفين،
+            # عشان الحفظ مايدّيش صلاحية عند موظف واحد لكل القسم
+            'permissions': [
+                {'code': c, 'scope': v['scope']}
+                for c, v in summary.items() if v['count'] == len([e for e in emps if e.user])
+            ],
             'permissions_summary': [
                 {
                     'code': c,

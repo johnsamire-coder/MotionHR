@@ -154,6 +154,21 @@ def _format_time(value):
         return str(value)
 
 
+def _leave_days_in_month(lv, first_day, last_day):
+    """أيام الإجازة اللي جوه الشهر بس (الإجازة اللي ممتدة على شهرين بتتقسم بالنسبة)"""
+    total = float(getattr(lv, 'days_count', 0) or 0)
+    try:
+        span = (lv.end_date - lv.start_date).days + 1
+        inside = (min(lv.end_date, last_day) - max(lv.start_date, first_day)).days + 1
+    except Exception:
+        return total or 1
+    if total == 0:
+        total = float(span)
+    if span <= 0 or inside >= span:
+        return total
+    return round(total * max(inside, 0) / span, 1)
+
+
 def _employee_name(emp):
     parts_ar = [
         getattr(emp, 'first_name_ar', '') or '',
@@ -641,7 +656,7 @@ def requests_report(request):
     pending = reqs.filter(status='pending').count()
 
     details = []
-    for r in reqs.order_by('-created_at')[:100]:
+    for r in reqs.order_by('-created_at')[:1000]:  # قبل كده كان بيقطع عند 100 من غير ما يقول
         emp = r.employee
         details.append({
             'id': r.id,
@@ -686,8 +701,8 @@ def leaves_report(request):
 
     leaves = LeaveRequest._base_manager.filter(
         employee_id__in=emp_ids,
-        start_date__gte=first_day,
         start_date__lte=last_day,
+        end_date__gte=first_day,   # الإجازة اللي بدأت الشهر اللي فات وكملت في الشهر ده كمان
     ).select_related('employee', 'leave_type')
 
     total = leaves.count()
@@ -707,12 +722,7 @@ def leaves_report(request):
                 'leaves': [],
             }
 
-        days = int(lv.days_count or 0)
-        if days == 0:
-            try:
-                days = (lv.end_date - lv.start_date).days + 1
-            except Exception:
-                days = 1
+        days = _leave_days_in_month(lv, first_day, last_day)
 
         per_employee[emp_name]['total_days'] += days
         if lv.status == 'approved':
@@ -1031,7 +1041,7 @@ def requests_report(request):
     pending = reqs.filter(status='pending').count()
 
     details = []
-    for r in reqs.order_by('-created_at')[:100]:
+    for r in reqs.order_by('-created_at')[:1000]:  # قبل كده كان بيقطع عند 100 من غير ما يقول
         emp = r.employee
         details.append({
             'id': r.id,
@@ -1078,8 +1088,8 @@ def leaves_report(request):
 
     leaves = LeaveRequest._base_manager.filter(
         employee_id__in=emp_ids,
-        start_date__gte=first_day,
         start_date__lte=last_day,
+        end_date__gte=first_day,   # الإجازة اللي بدأت الشهر اللي فات وكملت في الشهر ده كمان
     ).select_related('employee', 'leave_type')
 
     if employee_id:
@@ -1108,12 +1118,7 @@ def leaves_report(request):
                 'leaves': [],
             }
 
-        days = int(getattr(lv, 'days_count', 0) or 0)
-        if days == 0:
-            try:
-                days = (lv.end_date - lv.start_date).days + 1
-            except Exception:
-                days = 1
+        days = _leave_days_in_month(lv, first_day, last_day)
 
         per_employee[emp_id]['total_days'] += days
         if lv.status == 'approved':
@@ -1592,7 +1597,7 @@ def leaves_report_enhanced(request):
         half_day_count = 0
 
         for lv in leaves:
-            days = float(lv.days_count or 1)
+            days = _leave_days_in_month(lv, first_day, last_day)
             is_unpaid = not getattr(lv.leave_type, 'is_paid', True) if lv.leave_type else False
             is_half = days <= 0.5
             half_type = getattr(lv, 'half_day_type', '') or ''

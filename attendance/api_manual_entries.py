@@ -210,7 +210,8 @@ def _handle_list_create(request, ModelClass):
 
         data = json.loads(request.body.decode('utf-8'))
 
-        employee_id = data.get('employee_id')
+        # تطبيق الموبايل بيبعت رقم الموظف باسم employee
+        employee_id = data.get('employee_id') or data.get('employee')
         if not employee_id:
             return JsonResponse({'success': False, 'error': 'employee_id مطلوب'}, status=400)
 
@@ -372,10 +373,12 @@ def _handle_reject(request, entry_id, ModelClass):
     if entry.status != 'pending':
         return JsonResponse({'success': False, 'error': 'الطلب ليس pending'}, status=400)
 
-    data = json.loads(request.body.decode('utf-8'))
-    reason = data.get('reason', '').strip()
-    if not reason:
-        return JsonResponse({'success': False, 'error': 'سبب الرفض مطلوب'}, status=400)
+    try:
+        data = json.loads(request.body.decode('utf-8')) if request.body else {}
+    except ValueError:
+        data = {}
+    # تطبيق الموبايل بيبعت الرفض من غير سبب (قبل كده كان بيقع وماحدش بيعرف)
+    reason = str(data.get('reason') or '').strip() or 'اترفض من التطبيق من غير سبب مكتوب'
 
     entry.status = 'rejected'
     entry.rejected_by = request.user
