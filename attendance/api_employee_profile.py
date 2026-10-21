@@ -147,6 +147,10 @@ def _serialize_employee_list(emp):
         "department_id": emp.department_id,
         "branch": _name_of(emp.branch),
         "branch_id": emp.branch_id,
+        "job_title_id": emp.job_title_id,
+        # للهيكل التنظيمي في الويب وتصدير صلاحيات مستخدم معيّن (كان بيبعت رقم الموظف بدل رقم المستخدم)
+        "direct_manager_id": emp.direct_manager_id,
+        "user_id": emp.user_id,
         "phone": emp.phone,
         "national_id": emp.national_id,
         "status": emp.get_status_display() if hasattr(emp, "get_status_display") else None,

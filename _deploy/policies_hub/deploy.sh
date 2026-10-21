@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
 # رفع تصليحات مركز السياسات على السيرفر — أمر واحد:
-#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/group12-app-support/_deploy/policies_hub/deploy.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/group13-web/_deploy/policies_hub/deploy.sh | sudo bash
 #
 # لو المستودعات خاصة: مفتاح قراءة من GitHub محفوظ في /root/.motionhr_github_token
 #
@@ -14,7 +14,7 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-BRANCH="${BRANCH:-fix/group12-app-support}"
+BRANCH="${BRANCH:-fix/group13-web}"
 BE="${BE:-/var/www/motionhr}"
 WEB="${WEB:-/var/www/motionhr_web}"
 BE_SERVICE="${BE_SERVICE:-motionhr}"
@@ -64,6 +64,7 @@ BE_FILES=(
   attendance/test_group11_mobile_server.py
   leaves/api_official_holidays.py
   attendance/test_group12_app_support.py
+  attendance/test_group13_web.py
   core/export_safety.py
   attendance/api_permissions.py
   attendance/api_reminders.py
@@ -158,6 +159,56 @@ WEB_FILES=(
   src/components/maps/live-map.tsx
   src/lib/hooks/useAuth.ts
   src/lib/utils.ts
+  src/app/api/attendance/daily/route.ts
+  src/app/api/employees/import/route.ts
+  src/app/api/hr/payroll-pdf/route.ts
+  src/app/api/hr/permissions-roles/route.ts
+  src/app/api/hr/policies/attendance-policy/[id]/clone/route.ts
+  src/app/api/leaves/enhanced/route.ts
+  src/app/api/manager/team-attendance/route.ts
+  src/app/api/reports/absence/route.ts
+  src/app/api/reports/eos/export/pdf/route.ts
+  src/app/api/reports/eos/export/route.ts
+  src/app/api/reports/export/excel/route.ts
+  src/app/api/reports/export/pdf/route.ts
+  src/app/api/reports/late/route.ts
+  src/app/api/reports/leaves-basic/route.ts
+  src/app/api/reports/location-tracking/route.ts
+  src/app/api/reports/monthly-attendance/route.ts
+  src/app/api/reports/permissions/route.ts
+  src/app/api/reports/work-hours/route.ts
+  src/app/api/requests/report/route.ts
+  src/app/employee/attendance/page.tsx
+  src/app/employee/leaves/page.tsx
+  src/app/employee/org-chart/page.tsx
+  src/app/hr/branches/page.tsx
+  src/app/hr/employees/import/page.tsx
+  src/app/hr/job-titles/page.tsx
+  src/app/hr/leave-recall/page.tsx
+  src/app/hr/leaves/page.tsx
+  src/app/hr/missions/page.tsx
+  src/app/hr/org-chart/page.tsx
+  src/app/hr/permissions/assign/page.tsx
+  src/app/hr/permissions/export/page.tsx
+  src/app/hr/permissions/roles/page.tsx
+  src/app/hr/reports/daily-attendance/page.tsx
+  src/app/hr/reports/eos/page.tsx
+  src/app/hr/reports/location-tracking/page.tsx
+  src/app/hr/shifts/page.tsx
+  src/app/manager/missions/page.tsx
+  src/app/manager/my-attendance/page.tsx
+  src/app/manager/org-chart/page.tsx
+  src/app/manager/reports/page.tsx
+  src/app/manager/substitution-summary/page.tsx
+  src/components/dashboard/header.tsx
+  src/components/hr/policies/allowance-rule-dialog.tsx
+  src/components/hr/policies/insurance-policy-dialog.tsx
+  src/components/hr/policies/leave-rule-dialog.tsx
+  src/components/hr/policies/payroll-cycle-policy-dialog.tsx
+  src/components/hr/policies/payroll-policy-dialog.tsx
+  src/components/hr/policies/tax-policy-dialog.tsx
+  src/lib/stores/auth.ts
+  src/app/api/auth/logout/route.ts
 )
 
 # تنزيل نسخة من GitHub — بمفتاح القراءة لو موجود (المستودعات الخاصة)، ومن غيره لو عامة
@@ -206,7 +257,7 @@ NODE_DIR="$(dirname "$(readlink -f "$NPM")")"
 say "0/5 بتأكد إن الكود اللي على السيرفر ماتغيرش من ساعة ما اتبعت"
 # النسخ المعروفة: كود السيرفر الأصلي + كل رفعة سابقة من التصليحات دي
 # + الفرع اللي بنرفعه نفسه: لو السيرفر عليه النسخة دي خلاص، إعادة الرفع آمنة
-KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 policies-hub-deployed-5 policies-hub-deployed-6 policies-hub-deployed-7 policies-hub-deployed-8 policies-hub-deployed-9 policies-hub-deployed-10 policies-hub-deployed-11 policies-hub-deployed-12 policies-hub-deployed-13 policies-hub-deployed-14 policies-hub-deployed-15 policies-hub-deployed-16 $BRANCH"
+KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 policies-hub-deployed-5 policies-hub-deployed-6 policies-hub-deployed-7 policies-hub-deployed-8 policies-hub-deployed-9 policies-hub-deployed-10 policies-hub-deployed-11 policies-hub-deployed-12 policies-hub-deployed-13 policies-hub-deployed-14 policies-hub-deployed-15 policies-hub-deployed-16 policies-hub-deployed-17 $BRANCH"
 for ref in $KNOWN_REFS; do
   mkdir -p "$TMP/known_be/$ref" "$TMP/known_web/$ref"
   # النسخة اللي لسه ماترفعتش مش هتبقى موجودة — عادي
@@ -315,7 +366,7 @@ ok "الملفات اتحدثت (${#BE_FILES[@]} باك إند + ${#WEB_FILES[@]
 # ── 3) اختبارات الباك إند على السيرفر نفسه ──
 say "3/5 بشغّل الاختبارات (المرتبات والدخول، على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py check >/dev/null )
-if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios accounts.test_access_guard attendance.test_action_scope attendance.test_group3_misc leaves.test_leave_balance attendance.test_group4_permissions attendance.test_group5_bugs employees.test_import_bulk attendance.test_group6_web_server attendance.test_group7_safety attendance.test_group8_medium attendance.test_group9_scope attendance.test_group10_misc attendance.test_group11_mobile_server attendance.test_group12_app_support --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
+if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios accounts.test_access_guard attendance.test_action_scope attendance.test_group3_misc leaves.test_leave_balance attendance.test_group4_permissions attendance.test_group5_bugs employees.test_import_bulk attendance.test_group6_web_server attendance.test_group7_safety attendance.test_group8_medium attendance.test_group9_scope attendance.test_group10_misc attendance.test_group11_mobile_server attendance.test_group12_app_support attendance.test_group13_web --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
   grep -E "^(FAIL|ERROR):|Error" "$BK/tests.log" | head -20; tail -5 "$BK/tests.log"; false
 fi
 grep -E "^Ran |^OK" "$BK/tests.log" || true

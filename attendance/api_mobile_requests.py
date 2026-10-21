@@ -152,6 +152,16 @@ def mobile_leave_substitutes(request):
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     from employees.models import Employee
+    from django.db.models import Q
+
+    # المدير لما بيوافق على إجازة مرضية بيختار بديل لصاحب الإجازة، فالقايمة تتبني على مستوى صاحب الإجازة
+    # (قبل كده كانت بتتبني على مستوى المدير نفسه، فتطلع مديرين بس)
+    _for_id = request.query_params.get('exclude_employee_id') or request.query_params.get('for_employee_id')
+    if _for_id:
+        from attendance.action_scope import in_scope
+        _owner = Employee._base_manager.filter(id=_for_id, company=employee.company).first()
+        if _owner and in_scope(request.user, _owner):
+            employee = _owner
 
     # هل الموظف مدير؟
     is_manager = False
@@ -181,12 +191,11 @@ def mobile_leave_substitutes(request):
 
         all_ids = set(qs.values_list('id', flat=True)) | senior_ids | admins_ids
     else:
-        # الموظف العادي: كل الموظفين العاديين في الشركة
+        # الموظف العادي: كل الموظفين العاديين في الشركة (واللي مالهمش مسمى وظيفي كمان)
         qs = Employee._base_manager.filter(
             company=employee.company,
             status='active',
-            job_title__is_manager=False,
-        ).exclude(id=employee.id)
+        ).filter(Q(job_title__isnull=True) | Q(job_title__is_manager=False)).exclude(id=employee.id)
         all_ids = set(qs.values_list('id', flat=True))
 
     all_ids.discard(employee.id)

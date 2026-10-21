@@ -1025,9 +1025,11 @@ def requests_report(request):
 
     reqs = EmployeeRequest._base_manager.filter(
         employee_id__in=emp_ids,
-        created_at__date__gte=first_day,
-        created_at__date__lte=last_day,
     ).select_related('employee', 'request_type')
+    # صندوق المعلق في الويب بيطلب كل الطلبات المعلقة من غير تقييد بالشهر
+    # (قبل كده الطلب المعلق من الشهر اللي فات كان بيختفي من الصندوق)
+    if not (status_filter == 'pending' and request.query_params.get('all_months') == '1'):
+        reqs = reqs.filter(created_at__date__gte=first_day, created_at__date__lte=last_day)
 
     if employee_id:
         reqs = reqs.filter(employee_id=employee_id)

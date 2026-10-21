@@ -688,6 +688,9 @@ def manager_assign_employees_to_location(request, location_id):
     if not location:
         return Response({'success': False, 'message': 'الموقع غير موجود'}, status=404)
 
+    if location.status != 'approved':
+        return Response({'success': False, 'message': 'لازم الموقع يتعتمد الأول قبل ما تعيّن عليه موظفين'}, status=400)
+
     from employees.models import Employee
 
     # نحدد الـ scope
@@ -695,8 +698,9 @@ def manager_assign_employees_to_location(request, location_id):
     employee_ids = []
 
     if scope == 'employees':
-        employee_ids = request.data.get('employee_ids', [])
-        if not employee_ids:
+        # قايمة فاضية مسموحة: معناها شيل كل الموظفين من الموقع
+        employee_ids = request.data.get('employee_ids', None)
+        if not isinstance(employee_ids, list):
             return Response({'success': False, 'message': 'اختر موظفين'}, status=400)
     elif scope == 'department':
         dept_id = request.data.get('department_id')
@@ -719,7 +723,7 @@ def manager_assign_employees_to_location(request, location_id):
     else:
         return Response({'success': False, 'message': 'نطاق غير صحيح'}, status=400)
 
-    if not employee_ids:
+    if not employee_ids and scope != 'employees':
         return Response({'success': False, 'message': 'لا يوجد موظفون في النطاق المحدد'}, status=400)
 
     # نضيف الموظفين للموقع (Many-to-Many)
@@ -728,20 +732,26 @@ def manager_assign_employees_to_location(request, location_id):
         company=request.user.company
     )
 
-    # الحل: استخدم set() بدل add() للتأكد من الحفظ
-    existing_ids = set(location.assigned_employees.values_list('id', flat=True))
+    # بنكتب في جدول الربط مباشرة (علاقة الموظفين بتتفلتر بالشركة الحالية فـ set() ماكانتش بتشيل حد).
+    # اختيار "موظفين محددين" بيحفظ القايمة اللي اتختارت بالظبط (يضيف ويشيل)، والقسم/الفرع/الشركة بيضيفوا بس
+    rel = location.assigned_employees
+    through = rel.through._default_manager
+    src, tgt = rel.source_field_name, rel.target_field_name
+    existing_ids = set(through.filter(**{src: location.id}).values_list(f'{tgt}_id', flat=True))
     new_ids = set(employees_qs.values_list('id', flat=True))
-    all_ids = existing_ids | new_ids
+    final_ids = new_ids if scope == 'employees' else (existing_ids | new_ids)
 
-    all_emps = Employee._base_manager.filter(id__in=all_ids)
-    location.assigned_employees.set(all_emps)
-
-    location.refresh_from_db()
-    final_count = location.assigned_employees.count()
+    removed = existing_ids - final_ids
+    if removed:
+        through.filter(**{src: location.id, f'{tgt}_id__in': removed}).delete()
+    through.bulk_create([rel.through(**{f'{src}_id': location.id, f'{tgt}_id': eid})
+                         for eid in final_ids - existing_ids])
+    final_count = len(final_ids)
 
     return Response({
         'success': True,
-        'message': f'تم تعيين {len(new_ids)} موظف',
+        'message': (f'الموقع عليه دلوقتي {final_count} موظف' if scope == 'employees'
+                    else f'تم تعيين {len(new_ids)} موظف'),
         'assigned': len(new_ids),
         'total_assigned': final_count,
     })

@@ -179,6 +179,24 @@ def serialize_mission(mission, employee=None):
 # MANAGER APIs
 # ─────────────────────────────────────────────────────────────
 
+
+def _mission_times_error(d):
+    """وقت نهاية المهمة لازم يكون بعد وقت بدايتها"""
+    from django.utils.dateparse import parse_datetime
+    try:
+        start = parse_datetime(str(d.get('planned_start_time')))
+        end = parse_datetime(str(d.get('planned_end_time')))
+    except (TypeError, ValueError):
+        return 'صيغة وقت المهمة غلط'
+    if not start or not end:
+        return 'صيغة وقت المهمة غلط'
+    try:
+        if end <= start:
+            return 'وقت النهاية لازم يكون بعد وقت البداية'
+    except TypeError:   # واحد فيه منطقة زمنية والتاني لأ
+        return None
+    return None
+
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -259,6 +277,9 @@ def manager_create_mission(request):
     for field in required:
         if not d.get(field):
             return Response({'error': f'الحقل {field} مطلوب'}, status=400)
+    _times_err = _mission_times_error(d)
+    if _times_err:
+        return Response({'error': _times_err}, status=400)
 
     mission = Mission._base_manager.create(
         company=company,
@@ -1025,6 +1046,9 @@ def employee_request_mission(request):
     for field in required:
         if not d.get(field):
             return Response({'error': f'الحقل {field} مطلوب'}, status=400)
+    _times_err = _mission_times_error(d)
+    if _times_err:
+        return Response({'error': _times_err}, status=400)
 
     # لو تاريخ بداية المهمة في الماضي، لازم يكتب سبب
     from django.utils.dateparse import parse_datetime
