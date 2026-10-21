@@ -68,6 +68,18 @@ def is_manager_or_hr(user):
     return role in ('company_admin', 'hr_manager', 'manager', 'super_admin') or user.is_superuser or user.is_staff
 
 
+def manager_only(view):
+    """شاشات المدير في المهمات: للمدير/HR/صاحب الشركة بس — الموظف العادي ياخد 403"""
+    import functools
+
+    @functools.wraps(view)
+    def wrapper(request, *args, **kwargs):
+        if not is_manager_or_hr(request.user):
+            return Response({'success': False, 'error': 'صلاحية غير كافية', 'message': 'صلاحية غير كافية'}, status=403)
+        return view(request, *args, **kwargs)
+    return wrapper
+
+
 def serialize_mission(mission, employee=None):
     assignments = MissionAssignment._base_manager.filter(mission=mission).select_related('employee')
     assignment_data = []
@@ -170,6 +182,7 @@ def serialize_mission(mission, employee=None):
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_missions_list(request):
     """قائمة المهمات للمدير"""
     company = get_company(request.user)
@@ -232,6 +245,7 @@ def manager_missions_list(request):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_create_mission(request):
     """إنشاء مهمة جديدة"""
     company = get_company(request.user)
@@ -311,6 +325,7 @@ def manager_create_mission(request):
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_mission_detail(request, mission_id):
     """تفاصيل مهمة للمدير"""
     company = get_company(request.user)
@@ -325,6 +340,7 @@ def manager_mission_detail(request, mission_id):
 @api_view(['PATCH', 'PUT'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_update_mission(request, mission_id):
     """تعديل مهمة"""
     company = get_company(request.user)
@@ -362,6 +378,7 @@ def manager_update_mission(request, mission_id):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_cancel_mission(request, mission_id):
     """إلغاء مهمة"""
     company = get_company(request.user)
@@ -391,6 +408,7 @@ def manager_cancel_mission(request, mission_id):
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_pending_requests(request):
     """طلبات المهمات من الموظفين في انتظار الموافقة"""
     company = get_company(request.user)
@@ -446,6 +464,7 @@ def manager_pending_requests(request):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_approve_request(request, request_id):
     """موافقة/رفض طلب مهمة من موظف"""
     company = get_company(request.user)
@@ -511,6 +530,7 @@ def manager_approve_request(request, request_id):
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_feedback_dashboard(request):
     """داشبورد الفيدباك للمدير"""
     company = get_company(request.user)
@@ -1243,6 +1263,7 @@ def mission_locations_timeline(request, assignment_id):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_reassign_employee(request, mission_id):
     """
     المدير/HR يستبدل موظف على مهمة بموظف آخر
@@ -1457,6 +1478,7 @@ def employee_withdraw_request(request, assignment_id):
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_withdraw_requests(request):
     """قائمة طلبات الانسحاب من المهمات"""
     company = get_company(request.user)
@@ -1493,6 +1515,7 @@ def manager_withdraw_requests(request):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_respond_withdraw(request, assignment_id):
     """
     المدير يوافق أو يرفض طلب انسحاب موظف
@@ -1535,6 +1558,7 @@ def manager_respond_withdraw(request, assignment_id):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_force_cancel_mission(request, mission_id):
     """
     المدير أو HR يلغي مهمة حتى لو كانت جارية

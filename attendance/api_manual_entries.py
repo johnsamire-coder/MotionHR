@@ -65,6 +65,24 @@ def _can_manage_employee(user, employee):
     return getattr(employee, 'direct_manager_id', None) == manager_emp.id
 
 
+def _limit_to_visible(user, qs):
+    """
+    مين يشوف أنهي بنود (جزاءات/مكافآت/بدلات/سلف):
+    - صاحب الشركة / HR: الكل
+    - المدير: فريقه المباشر + بنوده هو
+    - الموظف العادي: بنوده هو بس
+    """
+    if _is_ceo(user) or _is_hr(user):
+        return qs
+    me = _get_user_employee(user)
+    if not me:
+        return qs.none()
+    from django.db.models import Q
+    if getattr(user, 'role', None) == 'manager':
+        return qs.filter(Q(employee__direct_manager_id=me.id) | Q(employee_id=me.id))
+    return qs.filter(employee_id=me.id)
+
+
 # ═══════════════════════════════════════════════════════════════
 # Serializer
 # ═══════════════════════════════════════════════════════════════
@@ -173,14 +191,8 @@ def _handle_list_create(request, ModelClass):
             if employee_id:
                 qs = qs.filter(employee_id=int(employee_id))
 
-            # الصلاحيات: المدير يشوف فقط فريقه، HR/CEO يشوفوا الكل
-            role = getattr(request.user, 'role', None)
-            if role == 'manager' and not _is_ceo(request.user) and not _is_hr(request.user):
-                manager_emp = _get_user_employee(request.user)
-                if manager_emp:
-                    qs = qs.filter(employee__direct_manager_id=manager_emp.id)
-                else:
-                    qs = qs.none()
+            # الصلاحيات: HR/CEO الكل، المدير فريقه، الموظف بنوده هو بس
+            qs = _limit_to_visible(request.user, qs)
 
             qs = qs.order_by('-created_at')
             return JsonResponse({
@@ -245,7 +257,9 @@ def _handle_list_create(request, ModelClass):
 def _handle_detail_and_actions(request, entry_id, ModelClass):
     company = request.user.company
 
-    entry = ModelClass._base_manager.filter(id=entry_id, company=company).first()
+    entry = _limit_to_visible(
+        request.user, ModelClass._base_manager.filter(id=entry_id, company=company)
+    ).first()
     if not entry:
         return JsonResponse({'success': False, 'error': 'not found'}, status=404)
 
@@ -570,7 +584,10 @@ def payroll_installment_list_create(request):
 
     if request.method == 'GET':
         try:
-            qs = PayrollInstallment._base_manager.filter(employee__company=company).select_related('employee')
+            qs = _limit_to_visible(
+                request.user,
+                PayrollInstallment._base_manager.filter(employee__company=company).select_related('employee'),
+            )
             employee_id = request.GET.get('employee_id')
             if employee_id:
                 qs = qs.filter(employee_id=int(employee_id))

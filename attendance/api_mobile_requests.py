@@ -1198,7 +1198,8 @@ def mobile_manager_action(request):
 
                 # تم إلغاء إجبار تحديد بديل عند اعتماد الإجازة المرضية (البديل اختياري دلوقتي)
 
-                item.approve(user, notes)
+                if not item.approve(user, notes):
+                    return Response({'success': False, 'message': 'الطلب ده اتراجع قبل كده', 'status': item.status}, status=409)
                 if employee_user:
                     try:
                         notify_leave_approved(
@@ -1211,7 +1212,8 @@ def mobile_manager_action(request):
                     except Exception as e:
                         print(f"FCM notification error: {e}")
             else:
-                item.reject(user, notes)
+                if not item.reject(user, notes):
+                    return Response({'success': False, 'message': 'الطلب ده اتراجع قبل كده', 'status': item.status}, status=409)
                 if employee_user:
                     try:
                         notify_leave_rejected(
@@ -2006,18 +2008,21 @@ def mobile_edit_leave(request, leave_id):
         }, status=400)
 
     d = request.data
-    if 'start_date' in d:
-        leave.start_date = d['start_date']
-    if 'end_date' in d:
-        leave.end_date = d['end_date']
+    from leaves.leave_dates import LeaveDateError, reschedule_pending_leave
+    try:
+        if 'start_date' in d or 'end_date' in d:
+            reschedule_pending_leave(leave, d.get('start_date'), d.get('end_date'))
+    except LeaveDateError as e:
+        return Response({'success': False, 'message': str(e)}, status=400)
     if 'reason' in d:
         leave.reason = d['reason']
-    leave.save()
+        leave.save(update_fields=['reason'])
 
     return Response({
         'success': True,
         'message': 'تم تعديل طلب الإجازة بنجاح',
         'leave_id': leave.id,
+        'days_count': float(leave.days_count),
     })
 
 
@@ -2045,7 +2050,8 @@ def mobile_cancel_leave(request, leave_id):
             'message': f'لا يمكن إلغاء الإجازة — حالتها: {leave.get_status_display()}'
         }, status=400)
 
-    leave.cancel()
+    if not leave.cancel():
+        return Response({'success': False, 'message': 'الإجازة اتلغت أو اتغيرت حالتها قبل كده'}, status=409)
 
     # إشعار المدير بإلغاء الموظف لإجازته
     try:
@@ -2237,16 +2243,14 @@ def manager_edit_leave(request, leave_id):
         return Response({'success': False, 'message': 'لا يمكن تعديل إجازة ملغية'}, status=400)
 
     d = request.data
-    if 'start_date' in d:
-        leave.start_date = d['start_date']
-    if 'end_date' in d:
-        leave.end_date = d['end_date']
+    from leaves.leave_dates import LeaveDateError, reschedule_pending_leave
+    try:
+        if 'start_date' in d or 'end_date' in d:
+            reschedule_pending_leave(leave, d.get('start_date'), d.get('end_date'))
+    except LeaveDateError as e:
+        return Response({'success': False, 'message': str(e)}, status=400)
     if 'reason' in d:
         leave.reason = d['reason']
-    if 'status' in d and role in ('company_admin', 'hr_manager', 'super_admin'):
-        new_status = d['status']
-        # تم إلغاء إجبار تحديد بديل عند اعتماد الإجازة المرضية (البديل اختياري دلوقتي)
-        leave.status = new_status
     if 'substitute_employee_id' in d:
         from employees.models import Employee
         try:
@@ -2258,7 +2262,26 @@ def manager_edit_leave(request, leave_id):
             leave.substitute_employee = sub
         except Employee.DoesNotExist:
             pass
-    leave.save()
+    leave.save(update_fields=['reason', 'substitute_employee'])
+
+    # تغيير الحالة بيعدّي على الموافقة/الرفض/الإلغاء عشان الرصيد والحضور يتظبطوا
+    if 'status' in d and role in ('company_admin', 'hr_manager', 'super_admin'):
+        new_status = str(d['status'] or '').strip()
+        if new_status != leave.status:
+            notes = str(d.get('review_notes', '') or '')
+            if new_status == 'approved' and leave.status == 'pending':
+                ok = leave.approve(request.user, notes)
+            elif new_status == 'rejected' and leave.status == 'pending':
+                ok = leave.reject(request.user, notes)
+            elif new_status == 'cancelled' and leave.status in ('pending', 'approved'):
+                ok = leave.cancel()
+            else:
+                return Response({
+                    'success': False,
+                    'message': f'مينفعش تغيّر حالة الإجازة من "{leave.get_status_display()}" للحالة دي',
+                }, status=400)
+            if not ok:
+                return Response({'success': False, 'message': 'الطلب ده اتراجع قبل كده', 'status': leave.status}, status=409)
 
     return Response({
         'success': True,
@@ -2297,8 +2320,9 @@ def manager_cancel_leave(request, leave_id):
     if not reason:
         return Response({'success': False, 'message': 'سبب الإلغاء مطلوب'}, status=400)
 
-    # cancel() بترجع الرصيد تلقائيًا
-    leave.cancel()
+    # cancel() بترجع الرصيد تلقائيًا، ومرة واحدة بس
+    if not leave.cancel():
+        return Response({'success': False, 'message': 'الإجازة اتلغت أو اتغيرت حالتها قبل كده'}, status=409)
     if hasattr(leave, 'cancel_reason'):
         leave.cancel_reason = reason
         leave.save(update_fields=['cancel_reason'])

@@ -531,6 +531,9 @@ def approve_work_location(request, location_id):
     })
 
 
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication, JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def reject_work_location(request, location_id):
     """
     POST /attendance/api/mobile/manager/work-locations/<id>/reject/
@@ -555,7 +558,8 @@ def reject_work_location(request, location_id):
     if not location:
         return Response({'success': False, 'message': 'الموقع غير موجود'}, status=404)
     
-    if location.status not in ('pending_manager', 'pending_hr'):
+    # نفس شرط الاعتماد: أي موقع لسه ما اتعتمدش ولا اترفض
+    if location.status in ('approved', 'rejected'):
         return Response({
             'success': False,
             'message': f'الموقع بحالة {location.get_status_display()}، لا يمكن رفضه',

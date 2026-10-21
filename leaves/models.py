@@ -486,18 +486,30 @@ class LeaveRequest(TenantModel):
         }
         return icons.get(self.status, "circle")
 
+    def _transition(self, from_statuses, **fields):
+        """
+        تغيير الحالة مرة واحدة بس (حتى لو اتضغط مرتين في نفس اللحظة):
+        التحديث بيحصل بشرط إن الحالة لسه زي ما هي. بترجع True لو اتغيرت.
+        """
+        updated = LeaveRequest._base_manager.filter(pk=self.pk, status__in=from_statuses).update(**fields)
+        if not updated:
+            self.refresh_from_db()
+            return False
+        for k, v in fields.items():
+            setattr(self, k, v)
+        return True
+
     def approve(self, user, notes=""):
-        """الموافقة على الطلب"""
-        self.status      = "approved"
-        self.reviewed_by = user
-        self.reviewed_at = timezone.now()
-        self.review_notes = notes
-        self.save()
+        """الموافقة على الطلب — من "قيد الانتظار" بس ومرة واحدة. بترجع False لو الطلب اتراجع قبل كده."""
+        if not self._transition(("pending",), status="approved", reviewed_by=user,
+                                reviewed_at=timezone.now(), review_notes=notes):
+            return False
         self._update_balance("approve")
         # LEV-7: تحديث سجلات الحضور للأيام المعتمدة
         self._update_attendance_records()
         # تفويض مؤقت لو المدير عنده بديل
         self._create_manager_substitution()
+        return True
 
     def _create_manager_substitution(self):
         """ننشئ تفويض مؤقت لو الموظف مدير وعنده بديل محدد"""
@@ -598,25 +610,25 @@ class LeaveRequest(TenantModel):
             pass
 
     def reject(self, user, notes=""):
-        """رفض الطلب"""
-        self.status       = "rejected"
-        self.reviewed_by  = user
-        self.reviewed_at  = timezone.now()
-        self.review_notes = notes
-        self.save()
+        """رفض الطلب — من "قيد الانتظار" بس ومرة واحدة"""
+        if not self._transition(("pending",), status="rejected", reviewed_by=user,
+                                reviewed_at=timezone.now(), review_notes=notes):
+            return False
         self._update_balance("reject")
         self._deactivate_manager_substitution()
+        return True
 
     def cancel(self):
-        """إلغاء الطلب"""
-        old_status  = self.status
-        self.status = "cancelled"
-        self.save()
-        if old_status == "pending":
-            self._update_balance("cancel_pending")
-        elif old_status == "approved":
-            self._update_balance("cancel_approved")
+        """إلغاء الطلب (المعلق أو المعتمد) مرة واحدة بس، والرصيد بيرجع حسب حالته قبل الإلغاء"""
+        old_status = LeaveRequest._base_manager.filter(pk=self.pk).values_list("status", flat=True).first()
+        if old_status not in ("pending", "approved"):
+            self.refresh_from_db()
+            return False
+        if not self._transition((old_status,), status="cancelled"):
+            return False
+        self._update_balance("cancel_pending" if old_status == "pending" else "cancel_approved")
         self._deactivate_manager_substitution()
+        return True
 
     def _deactivate_manager_substitution(self):
         """نوقف التفويض المؤقت لو الإجازة اترفضت أو اتلغت"""
@@ -628,25 +640,25 @@ class LeaveRequest(TenantModel):
         except Exception:
             pass
 
-    def _update_balance(self, action):
-        """تحديث رصيد الإجازات"""
-        try:
-            balance = LeaveBalance._base_manager.get(
-                employee=self.employee,
-                leave_type=self.leave_type,
-                year=self.start_date.year,
-                company=self.company,
-            )
-            if action == "approve":
-                balance.pending_days -= self.days_count
-                balance.used_days    += self.days_count
-            elif action in ("reject", "cancel_pending"):
-                balance.pending_days -= self.days_count
-            elif action == "cancel_approved":
-                balance.used_days -= self.days_count
-            balance.save()
-        except LeaveBalance.DoesNotExist:
-            pass
+    def _update_balance(self, action, days=None):
+        """تحديث رصيد الإجازات (بإضافة/طرح على قيمة قاعدة البيانات نفسها عشان طلبين في نفس اللحظة مايبوظوهاش)"""
+        from django.db.models import F
+        days = self.days_count if days is None else days
+        changes = {
+            "approve": {"pending_days": F("pending_days") - days, "used_days": F("used_days") + days},
+            "reject": {"pending_days": F("pending_days") - days},
+            "cancel_pending": {"pending_days": F("pending_days") - days},
+            "cancel_approved": {"used_days": F("used_days") - days},
+            "add_pending": {"pending_days": F("pending_days") + days},
+        }.get(action)
+        if not changes or not days:
+            return
+        LeaveBalance._base_manager.filter(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            year=self.start_date.year,
+            company=self.company,
+        ).update(**changes)
 
 class LeaveRecallRequest(TenantModel):
     """استدعاء موظف من إجازته"""
