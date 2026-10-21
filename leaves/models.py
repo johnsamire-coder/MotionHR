@@ -491,12 +491,24 @@ class LeaveRequest(TenantModel):
         تغيير الحالة مرة واحدة بس (حتى لو اتضغط مرتين في نفس اللحظة):
         التحديث بيحصل بشرط إن الحالة لسه زي ما هي. بترجع True لو اتغيرت.
         """
+        old_status = self.status
         updated = LeaveRequest._base_manager.filter(pk=self.pk, status__in=from_statuses).update(**fields)
         if not updated:
             self.refresh_from_db()
             return False
         for k, v in fields.items():
             setattr(self, k, v)
+        # التحديث ده مابيعديش على سجل التعديلات لوحده، فبنسجله هنا
+        try:
+            from audit.signals import log_change
+            if 'status' in fields:
+                _sc = dict(self._meta.get_field('status').flatchoices)
+                log_change(self, [{'field': 'status', 'label': 'الحالة',
+                                   'old': str(_sc.get(old_status, old_status)),
+                                   'new': str(_sc.get(fields['status'], fields['status']))}],
+                           note=str(fields.get('review_notes') or '')[:500])
+        except Exception:
+            pass
         return True
 
     def approve(self, user, notes=""):

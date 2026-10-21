@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     'requests_app',
     'landing',
     'subscriptions',
+    'audit',   # سجل التعديلات (مين عمل إيه وإمتى)
     'rest_framework',
     'corsheaders',
     'rest_framework.authtoken',
@@ -76,6 +77,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'audit.middleware.AuditRequestMiddleware',
     'core.middleware.AccessGuardMiddleware',
     'core.middleware.CompanyPolicyStealthFinalSyncMiddleware',
     'core.middleware.CompanyPolicyStealthSyncMiddleware',

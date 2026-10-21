@@ -48,7 +48,8 @@ def export_to_excel(title, columns, rows, user, filename=None, subtitle=None):
     company = get_company_info(user)
     wb = Workbook()
     ws = wb.active
-    ws.title = title[:31]  # Excel limit
+    import re as _re
+    ws.title = _re.sub(r'[\[\]:*?/\\]', ' ', title)[:31] or 'Report'  # Excel limit + رموز مش مسموحة في اسم الشيت
     ws.sheet_view.rightToLeft = True
 
     # اللوجو + اسم الشركة (يمين لأن الشيت RTL)

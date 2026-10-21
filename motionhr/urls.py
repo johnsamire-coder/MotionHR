@@ -92,6 +92,7 @@ urlpatterns = [
     path('subscriptions/', include('subscriptions.urls', namespace='subscriptions')),
     path('companies/',     include('companies.urls',     namespace='companies')),
     path('leaves/',        include('leaves.urls',        namespace='leaves')),
+    path('audit/',         include('audit.urls',         namespace='audit')),   # سجل التعديلات
     path('requests/',    include('requests_app.urls', namespace='requests_app')),
     path('reports/',       include('reports.urls',       namespace='reports')),
 

@@ -581,6 +581,12 @@ def mobile_login(request):
 
     cache.delete(_fail_key)
     reason = block_reason(user)
+    try:
+        from audit.signals import log_event
+        log_event('login', user=user, note='تسجيل دخول' + (' (محجوب)' if reason else ''),
+                  employee_id=getattr(get_employee_for_user(user), 'id', None))
+    except Exception:
+        pass
     if reason:
         return Response(blocked_payload(reason), status=403)
 

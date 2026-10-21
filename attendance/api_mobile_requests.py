@@ -1300,6 +1300,13 @@ def mobile_manager_action(request):
             ).update(status=_final):
                 item.refresh_from_db()
                 return Response({'success': False, 'message': 'الطلب ده اتراجع قبل كده', 'status': item.status}, status=409)
+            try:
+                from audit.signals import log_change
+                _sc = dict(EmployeeRequest._meta.get_field('status').flatchoices)
+                log_change(item, [{'field': 'status', 'label': 'الحالة', 'old': str(_sc.get(item.status, item.status)),
+                                   'new': str(_sc.get(_final, _final))}], note=notes)
+            except Exception:
+                pass
 
             if action == 'approve':
                 item.status = 'approved'
