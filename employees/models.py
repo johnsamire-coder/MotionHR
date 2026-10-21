@@ -524,20 +524,16 @@ class Employee(TenantModel):
     def save(self, *args, **kwargs):
         # توليد الرقم الوظيفي أوتوماتيك لو فاضي
         if not self.employee_code:
-            # جلب آخر رقم للشركة
-            last_employee = Employee.all_objects.filter(
-                company=self.company
-            ).order_by('-id').first()
-            
-            if last_employee and last_employee.employee_code.startswith('EMP'):
-                try:
-                    last_num = int(last_employee.employee_code.replace('EMP', ''))
-                    new_num = last_num + 1
-                except:
-                    new_num = 1
-            else:
-                new_num = 1
-            
+            # أكبر رقم EMP مستخدم في الشركة + 1، ونتأكد إنه مش مستخدم
+            # (قبل كده كان بيبص على آخر موظف بس، فلو كوده مش EMP يرجع لـ EMP00001 المكرر ويقع)
+            import re
+            codes = Employee.all_objects.filter(
+                company=self.company, employee_code__startswith='EMP'
+            ).values_list('employee_code', flat=True)
+            nums = [int(m.group(1)) for c in codes for m in [re.fullmatch(r'EMP(\d+)', c or '')] if m]
+            new_num = (max(nums) + 1) if nums else 1
+            while Employee.all_objects.filter(company=self.company, employee_code=f'EMP{new_num:05d}').exists():
+                new_num += 1
             self.employee_code = f'EMP{new_num:05d}'
         
         # مزامنة attendance_mode تلقائيًا مع worker_type عشان نضمن اتساق

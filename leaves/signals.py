@@ -46,3 +46,28 @@ def create_employee_leave_balances(sender, instance, created, **kwargs):
                 "pending_days": 0,
             },
         )
+
+
+@receiver(post_save, sender=LeaveType)
+def create_leave_type_balances(sender, instance, created, **kwargs):
+    """
+    نوع إجازة جديد (أو اتفعّل): نعمل رصيد السنة الحالية لكل موظف نشط في الشركة بنفس حساب الموظف الجديد.
+    قبل كده النوع الجديد كان بيظهر برصيد صفر وأي طلب عليه يترفض. الأرصدة الموجودة مابتتغيرش.
+    """
+    if not instance.is_active or not getattr(instance, "company_id", None):
+        return
+    year = timezone.now().year
+    have = set(LeaveBalance._base_manager.filter(
+        company_id=instance.company_id, leave_type=instance, year=year,
+    ).values_list("employee_id", flat=True))
+    for employee in Employee._base_manager.filter(company_id=instance.company_id, status="active"):
+        if employee.id in have:
+            continue
+        days = _get_entitlement_days(instance.company, employee, instance, year)
+        LeaveBalance._base_manager.get_or_create(
+            company_id=instance.company_id,
+            employee=employee,
+            leave_type=instance,
+            year=year,
+            defaults={"total_days": days, "used_days": 0, "pending_days": 0},
+        )

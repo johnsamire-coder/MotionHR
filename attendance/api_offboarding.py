@@ -10,11 +10,12 @@ from rest_framework.response import Response
 from django.db import transaction
 from employees.models import Employee
 from accounts.models import User
-from accounts.permissions_models import UserRole
+from accounts.permissions_models import RolePermission, UserPermissionOverride, UserRole
 
 
 def _is_allowed(user, permission_code):
-    if user.is_superuser or user.role in ['super_admin', 'company_admin']:
+    # الـ HR مسؤول عن الأقسام وإنهاء الخدمة زي صاحب الشركة
+    if user.is_superuser or user.role in ['super_admin', 'company_admin', 'hr_manager']:
         return True
     override = UserPermissionOverride._base_manager.filter(
         user=user, permission=permission_code
@@ -76,8 +77,17 @@ def offboard_employee(request, employee_id):
     if emp.status in STATUS_CHOICES:
         return Response({'error': f'الموظف ده بالفعل حالته {STATUS_LABELS.get(emp.status, emp.status)}'}, status=400)
 
-    new_status = (request.data.get('status') or 'resigned').strip()
-    reason = (request.data.get('reason') or '').strip()
+    # الويب بيبعت termination_type / termination_reason / termination_date، والموبايل status / reason
+    new_status = (request.data.get('status') or request.data.get('termination_type') or 'resigned').strip()
+    reason = (request.data.get('reason') or request.data.get('termination_reason') or '').strip()
+    termination_date = None
+    _td = str(request.data.get('termination_date') or '').strip()
+    if _td:
+        from datetime import datetime as _dt
+        try:
+            termination_date = _dt.strptime(_td[:10], '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'error': 'صيغة تاريخ إنهاء الخدمة غلط. استخدم YYYY-MM-DD'}, status=400)
     replacement_manager_id = request.data.get('replacement_manager_id')
 
     if new_status not in STATUS_CHOICES:
@@ -110,9 +120,32 @@ def offboard_employee(request, employee_id):
                 return Response({'error': 'المدير البديل غير موجود أو غير نشط'}, status=400)
             subordinates.update(direct_manager=replacement)
 
-        # غيّر حالة الموظف
+        # غيّر حالة الموظف، واحفظ التاريخ والسبب لو اتبعتوا (قبل كده كانوا بيضيعوا)
+        old_status = emp.status
         emp.status = new_status
-        emp.save(update_fields=['status'])
+        update_fields = ['status']
+        if termination_date:
+            emp.termination_date = termination_date
+            update_fields.append('termination_date')
+        if reason:
+            emp.termination_reason = reason
+            update_fields.append('termination_reason')
+        emp.save(update_fields=update_fields)
+
+        try:
+            from employees.models import EmployeeMovement
+            EmployeeMovement._base_manager.create(
+                company=company,
+                employee=emp,
+                movement_type={'terminated': 'termination', 'resigned': 'resignation',
+                               'suspended': 'suspension'}.get(new_status, 'other'),
+                movement_date=termination_date or __import__('datetime').date.today(),
+                old_value=old_status,
+                new_value=new_status,
+                reason=reason,
+            )
+        except Exception:
+            pass
 
         # قفّل حساب المستخدم
         if emp.user:

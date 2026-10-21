@@ -689,17 +689,6 @@ def remind_shift_coverage_gaps():
         logger.error(f"remind_shift_coverage_gaps error: {e}")
 
 # ═══════════════════════════════════════════════════════
-# الدالة الرئيسية — بيتم استدعاؤها من Cron
-# ═══════════════════════════════════════════════════════
-def run_all_reminders(reminder_type="all"):
-    """
-    نقطة الدخول الرئيسية.
-    reminder_type: all | checkin | checkout | pending | charter | documents | split_periods
-    """
-    logger.info(f"=== MotionHR Reminders — type={reminder_type} ===")
-
-    
-# ═══════════════════════════════════════════════════════
 # 7.8  تذكير بداية الشيفت قبل 15 دقيقة
 # ═══════════════════════════════════════════════════════
 def remind_shift_starting_soon():
@@ -759,7 +748,17 @@ def remind_shift_starting_soon():
         logger.error(f"remind_shift_starting_soon error: {e}")
 
 
-dispatch = {
+# ═══════════════════════════════════════════════════════
+# الدالة الرئيسية — بيتم استدعاؤها من Cron
+# ═══════════════════════════════════════════════════════
+def run_all_reminders(reminder_type="all"):
+    """
+    نقطة الدخول الرئيسية.
+    reminder_type: all | checkin | checkout | pending | charter | documents | split_periods
+    """
+    logger.info(f"=== MotionHR Reminders — type={reminder_type} ===")
+
+    dispatch = {
         "checkin": remind_missing_checkin,
         "checkout": remind_missing_checkout,
         "pending": remind_pending_requests,

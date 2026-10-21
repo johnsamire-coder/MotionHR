@@ -1449,7 +1449,8 @@ def mobile_manager_action(request):
 
             if action == 'approve':
                 # المهمة اللي بتاريخ سابق تتحط "مكتملة" على طول (الموظف مش هيبدأ/ينهي دلوقتي)
-                item.status = 'completed' if item.is_backdated else 'active'
+                # 'active' مش حالة موجودة، فالمهمة كانت بتختفي من الفلاتر — المعتمدة اسمها 'approved'
+                item.status = 'completed' if item.is_backdated else 'approved'
                 item.save()
                 # الموظف اللي طلب المهمة لازم يتعيّن عليها فعليًا عشان تظهر في شاشة مهماته
                 if employee_user:
@@ -1489,6 +1490,17 @@ def mobile_manager_action(request):
             else:
                 item.status = 'cancelled'
                 item.save()
+
+            # طلب المهمة المرتبط كان بيفضل "معلق" للأبد
+            try:
+                from attendance.missions_models import MissionRequest
+                _decision = 'approved' if action == 'approve' else 'rejected'
+                MissionRequest._base_manager.filter(mission=item).update(
+                    manager_approval=_decision, final_status=_decision, manager=user,
+                    manager_responded_at=timezone.now(), manager_notes=notes or '',
+                )
+            except Exception:
+                pass
 
             try:
                 from attendance.fcm_logic import notify_mission_request_approved, notify_mission_request_rejected
@@ -2364,8 +2376,14 @@ def create_leave_recall(request):
 
     try:
 
+        from leaves.models import LeaveRecallRequest
         company = getattr(request.user, 'company', None)
         employee = Employee._base_manager.get(id=employee_id, company=company)
+
+        from attendance.action_scope import deny_action
+        denied = deny_action(request.user, employee)
+        if denied:
+            return denied
 
         leave_request = LeaveRequest._base_manager.filter(
             employee=employee,
@@ -2391,7 +2409,6 @@ def create_leave_recall(request):
             reason=reason,
             requested_by=request.user,
             status='pending',
-            created_by=request.user,
         )
 
         # إشعار HR

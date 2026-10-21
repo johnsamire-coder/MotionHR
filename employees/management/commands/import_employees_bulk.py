@@ -154,7 +154,11 @@ def _str(row, key):
 
 
 def _dec(row, key):
-    val = row[C[key]]
+    """يرجع صفر لو العمود مش موجود (زي _str و _int) — قبل كده كان بيرمي error ويرفض الصف كله"""
+    idx = C.get(key)
+    if idx is None or idx >= len(row):
+        return Decimal("0")
+    val = row[idx]
     if val is None or str(val).strip() == "":
         return Decimal("0")
     try:
@@ -647,14 +651,13 @@ class Command(BaseCommand):
             carry    = _dec(row, carry_key)
             if entitled == 0:
                 entitled = Decimal(str(_get_entitlement_days(company, emp, lt, year)))
-            LeaveBalance._base_manager.create(
+            # الرصيد ممكن يكون اتعمل تلقائي مع إنشاء الموظف، فبنحدّثه بأرقام الشيت بدل ما نعمل واحد مكرر
+            LeaveBalance._base_manager.update_or_create(
                 company=company,
                 employee=emp,
                 leave_type=lt,
                 year=year,
-                total_days=entitled + carry,
-                used_days=used,
-                pending_days=0,
+                defaults={"total_days": entitled + carry, "used_days": used, "pending_days": 0},
             )
 
         # ═══════════════════════════════════════════════════
@@ -776,7 +779,9 @@ class Command(BaseCommand):
         if pay_method:
             emp.salary_payment_method = pay_method
 
-        manager = self._resolve_manager(company, _str(row, "direct_manager_name"), department=dept, is_manager_job=getattr(job, "is_manager", False))
+        # dept و job مش متعرفين في التحديث — بنستخدم إدارة ومسمى الموظف نفسه
+        manager = self._resolve_manager(company, _str(row, "direct_manager_name"), department=emp.department,
+                                        is_manager_job=getattr(emp.job_title, "is_manager", False))
         if manager:
             emp.direct_manager = manager
 

@@ -12,12 +12,13 @@ from django.db import transaction
 from companies.models import Department
 from employees.models import Employee
 from accounts.models import User
-from accounts.permissions_models import UserRole
+from accounts.permissions_models import RolePermission, UserPermissionOverride, UserRole
 
 
 def _is_allowed(user, permission_code):
     """تحقق إن المستخدم عنده صلاحية معينة"""
-    if user.is_superuser or user.role in ['super_admin', 'company_admin']:
+    # الـ HR مسؤول عن الأقسام وإنهاء الخدمة زي صاحب الشركة
+    if user.is_superuser or user.role in ['super_admin', 'company_admin', 'hr_manager']:
         return True
     # شيك على الصلاحيات المخصصة
     # شيك استثناء شخصي

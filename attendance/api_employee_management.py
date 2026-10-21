@@ -1515,7 +1515,7 @@ def manager_transfer_employee(request, employee_id):
 
         if new_branch_id:
             try:
-                from attendance.models import Branch
+                from companies.models import Branch
                 new_branch = Branch._base_manager.filter(
                     id=new_branch_id,
                     company_id=target_employee.company_id
@@ -1530,12 +1530,13 @@ def manager_transfer_employee(request, employee_id):
                     target_employee.branch = new_branch
                     update_fields.append("branch")
                     changes.append(f"الفرع: {old_name} → {new_branch.name_ar}")
-            except Exception as e:
-                pass
+            except Exception:
+                # ماكانش بيبان أي خطأ (والنقل مابيحصلش) — دلوقتي الخطأ بيوصل للرسالة
+                raise
 
         if new_department_id:
             try:
-                from attendance.models import Department
+                from companies.models import Department
                 new_dept = Department._base_manager.filter(
                     id=new_department_id,
                     company_id=target_employee.company_id
@@ -1572,12 +1573,13 @@ def manager_transfer_employee(request, employee_id):
                             changes.append(f"الدور: تغيّر تلقائياً لـ {new_dept.default_role.name}")
                     except Exception:
                         pass
-            except Exception as e:
-                pass
+            except Exception:
+                # ماكانش بيبان أي خطأ (والنقل مابيحصلش) — دلوقتي الخطأ بيوصل للرسالة
+                raise
 
         if new_job_title_id:
             try:
-                from attendance.models import JobTitle
+                from employees.models import JobTitle
                 new_jt = JobTitle._base_manager.filter(
                     id=new_job_title_id,
                     company_id=target_employee.company_id
@@ -1592,8 +1594,9 @@ def manager_transfer_employee(request, employee_id):
                     target_employee.job_title = new_jt
                     update_fields.append("job_title")
                     changes.append(f"المسمى: {old_name} → {new_jt.name_ar}")
-            except Exception as e:
-                pass
+            except Exception:
+                # ماكانش بيبان أي خطأ (والنقل مابيحصلش) — دلوقتي الخطأ بيوصل للرسالة
+                raise
 
         if not changes:
             return Response(

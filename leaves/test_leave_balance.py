@@ -31,8 +31,9 @@ class LeaveBalanceBase(TestCase):
         # بداية الشهر الجاي (نفس السنة لو أمكن) عشان مايبقاش فيه حضور ولا سنة تانية
         today = date.today()
         self.d0 = date(today.year, 12, 1) if today.month < 12 else date(today.year, 12, 20)
-        self.bal = LeaveBalance._base_manager.create(
-            company=self.co, employee=self.e, leave_type=self.lt, year=self.d0.year, total_days=Decimal('21'),
+        self.bal, _ = LeaveBalance._base_manager.update_or_create(
+            company=self.co, employee=self.e, leave_type=self.lt, year=self.d0.year,
+            defaults={'total_days': Decimal('21'), 'used_days': 0, 'pending_days': 0},
         )
 
     _n = 0
