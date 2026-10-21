@@ -351,31 +351,43 @@ def mobile_leave_request(request):
         except Employee.DoesNotExist:
             pass
 
-    leave_request = LeaveRequest._base_manager.create(
-        company=employee.company,
-        employee=employee,
-        leave_type=leave_type,
-        start_date=start,
-        end_date=end,
-        days_count=days_count,
-        half_day_type=_half_day_type_val,
-        leave_hours=_leave_hours,
-        reason=reason,
-        notes=_leave_notes if half_day else '',
-        status='pending',
-        substitute_employee=substitute_emp,
-    )
+    # الضغط مرتين بسرعة: بنقفل على الموظف ونعيد فحص التداخل جوه نفس العملية، فيتعمل طلب واحد بس
+    from django.db import transaction
+    from django.db.models import F
+    from decimal import Decimal as _D
+    from employees.models import Employee as _Emp
+    with transaction.atomic():
+        _Emp._base_manager.select_for_update().filter(pk=employee.pk).first()
+        if LeaveRequest._base_manager.filter(
+            company=employee.company, employee=employee, status__in=['pending', 'approved'],
+            start_date__lte=end, end_date__gte=start,
+        ).exists():
+            return Response({
+                'success': False,
+                'message': 'عندك إجازة موجودة بالفعل في نفس الفترة دي'
+            }, status=400)
 
-    year = start.year
-    balance = LeaveBalance._base_manager.filter(
-        company=employee.company,
-        employee=employee,
-        leave_type=leave_type,
-        year=year
-    ).first()
-    if balance:
-        balance.pending_days = float(balance.pending_days) + days_count
-        balance.save()
+        leave_request = LeaveRequest._base_manager.create(
+            company=employee.company,
+            employee=employee,
+            leave_type=leave_type,
+            start_date=start,
+            end_date=end,
+            days_count=days_count,
+            half_day_type=_half_day_type_val,
+            leave_hours=_leave_hours,
+            reason=reason,
+            notes=_leave_notes if half_day else '',
+            status='pending',
+            substitute_employee=substitute_emp,
+        )
+
+        LeaveBalance._base_manager.filter(
+            company=employee.company,
+            employee=employee,
+            leave_type=leave_type,
+            year=start.year
+        ).update(pending_days=F('pending_days') + _D(str(days_count)))
 
     # إشعار للمدير - طلب إجازة جديد
     try:
@@ -1831,7 +1843,9 @@ def mobile_manager_employee_route(request):
         emp_qs = emp_qs.filter(company=company)
 
     employee = emp_qs.first()
-    if not employee:
+    # المدير يشوف خط سير فريقه بس (نفس اللي بيقدر ياخد عليهم قرارات)
+    from attendance.action_scope import in_scope
+    if not employee or not in_scope(user, employee):
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     from attendance.models import LocationLog
@@ -1899,14 +1913,29 @@ def mobile_edit_request(request, request_id):
         req.details = d['details']
     if 'priority' in d:
         req.priority = d['priority']
-    if 'start_date' in d:
-        req.start_date = d['start_date'] or None
-    if 'end_date' in d:
-        req.end_date = d['end_date'] or None
-    if 'amount' in d:
-        req.amount = d['amount'] or None
-    if 'duration_hours' in d:
-        req.duration_hours = d['duration_hours'] or None
+    # المبلغ والمدة والتواريخ عدّوا على فحوصات (حد السلفة وسياسة الأذونات) وقت التقديم،
+    # فتغييرهم بعد كده بيتعمل بإلغاء الطلب وتقديمه تاني عشان يتفحصوا من جديد
+    from decimal import Decimal, InvalidOperation
+
+    def _same(field, new):
+        old = getattr(req, field)
+        if new in (None, ''):
+            return old in (None, '') or (field in ('amount', 'duration_hours') and Decimal(str(old)) == 0)
+        if old in (None, ''):
+            return False
+        if field in ('amount', 'duration_hours'):
+            try:
+                return Decimal(str(new)) == Decimal(str(old))
+            except InvalidOperation:
+                return False
+        return str(new)[:10] == str(old)[:10]
+
+    for _f in ('start_date', 'end_date', 'amount', 'duration_hours'):
+        if _f in d and not _same(_f, d[_f]):
+            return Response({
+                'success': False,
+                'message': 'لتغيير المبلغ أو المدة أو التاريخ: الغي الطلب وقدّمه من جديد',
+            }, status=400)
     req.save()
 
     return Response({

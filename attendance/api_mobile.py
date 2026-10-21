@@ -556,6 +556,12 @@ def mobile_login(request):
 
     from accounts.access import block_reason, blocked_payload
     from accounts.login_backend import SmartLoginBackend
+    from django.core.cache import cache
+
+    # بعد 10 محاولات غلط لنفس الحساب يتقفل ربع ساعة (عشان محدش يجرّب باسوردات لحد ما يصيب)
+    _fail_key = f'login_fail:{username.lower()}'
+    if (cache.get(_fail_key) or 0) >= 10:
+        return Response({'success': False, 'message': 'محاولات كتير غلط. حاول تاني بعد ربع ساعة.'}, status=429)
 
     user = authenticate(username=username, password=password)
 
@@ -566,8 +572,14 @@ def mobile_login(request):
             reason = block_reason(candidate)
             if reason:
                 return Response(blocked_payload(reason), status=403)
+        try:
+            cache.add(_fail_key, 0, 15 * 60)
+            cache.incr(_fail_key)
+        except ValueError:
+            cache.set(_fail_key, 1, 15 * 60)
         return Response({'success': False, 'message': 'بيانات الدخول غير صحيحة'}, status=401)
 
+    cache.delete(_fail_key)
     reason = block_reason(user)
     if reason:
         return Response(blocked_payload(reason), status=403)

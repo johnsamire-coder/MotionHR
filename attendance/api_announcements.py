@@ -344,6 +344,9 @@ def manager_delete_announcement(request, pk):
     except CompanyAnnouncement.DoesNotExist:
         return Response({'error': 'الإعلان غير موجود'}, status=404)
 
+    if user.role == 'manager' and ann.created_by_id != user.id:
+        return Response({'error': 'تقدر تمسح إعلاناتك أنت بس'}, status=403)
+
     # إرسال إشعار بالحذف لو المدير طلب ده
     send_deletion_notice = bool(request.data.get('send_deletion_notice', True))
     if send_deletion_notice:

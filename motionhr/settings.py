@@ -302,10 +302,12 @@ SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-CSRF_TRUSTED_ORIGINS = os.getenv(
-    'CSRF_TRUSTED_ORIGINS',
-    'http://localhost,http://127.0.0.1'
-).split(',')
+# قبل كده السطر ده كان بيمسح القايمة اللي فوق (الدومينات الحقيقية) ويحط localhost بس.
+# دلوقتي بنضيف عليها بس، فمفيش دومين كان شغال هيقف.
+CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(
+    list(globals().get('CSRF_TRUSTED_ORIGINS', []))
+    + [o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost,http://127.0.0.1').split(',') if o.strip()]
+))
 
 # Security (only in production)
 if not DEBUG:

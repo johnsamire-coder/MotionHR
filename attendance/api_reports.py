@@ -35,6 +35,9 @@ def _get_company_employees(user):
 
     if company:
         qs = qs.filter(company=company)
+    elif not (user.is_superuser or getattr(user, 'role', '') == 'super_admin'):
+        # حساب مش مربوط بشركة مايشوفش موظفين كل الشركات
+        return qs.none()
 
     # استبعاد staff
     qs = qs.exclude(user__is_staff=True)

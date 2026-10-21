@@ -355,9 +355,14 @@ def manager_update_mission(request, mission_id):
     d = request.data
     for field in ['title', 'description', 'priority', 'planned_start_time',
                   'planned_end_time', 'location_name', 'location_lat',
-                  'location_lng', 'client_name', 'client_phone', 'status']:
+                  'location_lng', 'client_name', 'client_phone']:
         if field in d:
             setattr(mission, field, d[field])
+    # الحالة بتتغير من التعديل العادي لحالة قبل البدء بس (البدء والإنهاء والإلغاء ليهم أزرارهم)
+    if 'status' in d and d['status'] != mission.status:
+        if d['status'] not in ('draft', 'pending_approval', 'approved'):
+            return Response({'error': 'الحالة دي ماتتغيرش من تعديل المهمة'}, status=400)
+        mission.status = d['status']
     mission.save()
 
     # إشعار كل الموظفين المكلفين بتعديل المهمة
@@ -884,7 +889,7 @@ def employee_end_mission(request, assignment_id):
 
     # تحقق لو كل المشاركين خلصوا → المهمة مكتملة
     mission = assignment.mission
-    all_done = not mission.assignments.exclude(
+    all_done = not MissionAssignment._base_manager.filter(mission_id=mission.id).exclude(
         status__in=('completed', 'rejected')
     ).exists()
     if all_done:
@@ -1126,7 +1131,7 @@ def employee_submit_feedback(request, mission_id):
     followup_owner_id = d.get('followup_owner_id')
     if followup_owner_id:
         try:
-            feedback.followup_owner = Employee._base_manager.get(id=followup_owner_id)
+            feedback.followup_owner = Employee._base_manager.get(id=followup_owner_id, company_id=mission.company_id)
         except Employee.DoesNotExist:
             pass
 
@@ -1196,6 +1201,15 @@ def mission_feedback_detail(request, mission_id):
         mission = Mission._base_manager.get(id=mission_id, company=employee.company)
         feedback = mission.feedback
     except (Mission.DoesNotExist, MissionFeedback.DoesNotExist):
+        return Response({'error': 'الفيدباك غير موجود'}, status=404)
+
+    # التقييم (فيه قيمة الصفقة والملاحظات الداخلية) للمشاركين ومديرينهم والـHR بس
+    from attendance.action_scope import actionable_employee_ids
+    participants = set(MissionAssignment._base_manager.filter(mission_id=mission.id).values_list('employee_id', flat=True))
+    if feedback.written_by_id:
+        participants.add(feedback.written_by_id)
+    allowed = actionable_employee_ids(request.user)
+    if employee.id not in participants and allowed is not None and not (participants & allowed):
         return Response({'error': 'الفيدباك غير موجود'}, status=404)
 
     addenda = []
@@ -1597,9 +1611,11 @@ def manager_force_cancel_mission(request, mission_id):
 
     # إلغاء كل التعيينات النشطة
     cancelled_count = 0
-    for assignment in mission.assignments.filter(
-        status__in=('pending', 'accepted', 'in_progress')
-    ):
+    for assignment in MissionAssignment._base_manager.filter(
+        mission_id=mission.id, status__in=('pending', 'accepted', 'in_progress'),
+    ).select_related('employee__user'):
+        if assignment.status == 'in_progress' and not assignment.ended_at:
+            assignment.ended_at = timezone.now()
         assignment.status = 'rejected'
         assignment.rejection_reason = f'[FORCE_CANCEL] {reason}'
         assignment.save()

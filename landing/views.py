@@ -380,7 +380,8 @@ def free_trial_register(request):
                 created_company=company,
                 created_user=user,
                 generated_username=username,
-                generated_password=password,
+                # كلمة السر بتظهر للعميل مرة واحدة في صفحة النجاح ومابتتخزنش نص واضح
+                generated_password='',
             )
 
             # ── Store in session for success page ──

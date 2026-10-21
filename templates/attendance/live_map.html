@@ -109,6 +109,12 @@
 {% block extra_js %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// الأسامي والعناوين جاية من الموظفين، فبتتنضف قبل ما تتحط في الصفحة
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"'`]/g, function (c) {
+    return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;'}[c];
+  });
+}
 // ── إعداد الخريطة ──
 var map = L.map('live-map', {
   center: [30.0444, 31.2357],
@@ -161,9 +167,9 @@ function loadLocations() {
               .addTo(map)
               .bindPopup(
                 '<div style="text-align:right;min-width:180px">' +
-                '<strong>' + loc.name + '</strong><br>' +
-                '<small class="text-muted">' + (loc.address || loc.latitude + ', ' + loc.longitude) + '</small><br>' +
-                '<small>' + (loc.timestamp || '') + '</small>' +
+                '<strong>' + esc(loc.name) + '</strong><br>' +
+                '<small class="text-muted">' + esc(loc.address || loc.latitude + ', ' + loc.longitude) + '</small><br>' +
+                '<small>' + esc(loc.timestamp || '') + '</small>' +
                 '</div>'
               );
           }
@@ -172,8 +178,8 @@ function loadLocations() {
         cardsHtml += '<div class="employee-badge bg-light mb-2 w-100" onclick="focusEmployee(' + loc.id + ',' + (isNaN(lat)?30:lat) + ',' + (isNaN(lng)?31:lng) + ')">' +
           '<span class="status-dot" style="background:' + color + '"></span>' +
           '<div class="flex-grow-1">' +
-          '<div class="fw-semibold small">' + loc.name + '</div>' +
-          '<div class="location-address">' + (loc.address || '📍 ' + (loc.latitude || '') + ', ' + (loc.longitude || '')) + '</div>' +
+          '<div class="fw-semibold small">' + esc(loc.name) + '</div>' +
+          '<div class="location-address">' + esc(loc.address || '📍 ' + (loc.latitude || '') + ', ' + (loc.longitude || '')) + '</div>' +
           '</div>' +
           '</span>' +
           '</div>';
@@ -238,8 +244,8 @@ function loadRoute(employeeId) {
         }).addTo(map).bindPopup(
           '<div style="text-align:right;min-width:180px">' +
           (label ? '<strong>' + label + '</strong><br>' : '') +
-          '<small>الوقت: ' + p.timestamp + '</small><br>' +
-          '<small class="text-muted">' + (p.address || p.lat + ', ' + p.lng) + '</small>' +
+          '<small>الوقت: ' + esc(p.timestamp) + '</small><br>' +
+          '<small class="text-muted">' + esc(p.address || p.lat + ', ' + p.lng) + '</small>' +
           '</div>'
         );
         routeMarkers.push(m);

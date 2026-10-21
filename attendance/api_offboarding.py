@@ -277,7 +277,8 @@ def toggle_employee_status(request, employee_id):
     emp.save(update_fields=['status'])
 
     if emp.user:
-        emp.user.is_active = (new_status == 'active')
+        # الإجازة مابتقفلش الحساب؛ الإيقاف بس هو اللي بيقفله
+        emp.user.is_active = (new_status != 'suspended')
         emp.user.save(update_fields=['is_active'])
 
     return Response({
