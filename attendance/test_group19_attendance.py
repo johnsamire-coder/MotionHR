@@ -175,3 +175,20 @@ class AutoAttendanceTests(PayrollScenarioBase):
         r = api(self.emp).post('/attendance/api/mobile/employee/auto-check-out/',
                                {'latitude': 30.0, 'longitude': 31.0, 'device_id': 'not-registered'}, format='json')
         self.assertEqual((r.status_code, r.data['status']), (403, 'device_not_approved'))
+
+
+class LateRollbackTests(PayrollScenarioBase):
+    def test_same_late_cannot_be_rolled_back_twice(self):
+        from accounts.models import User
+        from attendance.models import PermissionLedger
+        hr = User.objects.create_user(username='hr142', password='x', company=self.company, role='hr_manager')
+        PermissionLedger._base_manager.create(employee=self.emp, company=self.company, entry_type='auto_late',
+                                              minutes_used=20, count_used=1, reference_date=date(2026, 9, 3))
+        c = APIClient()
+        c.force_authenticate(hr)
+        url = f'/attendance/api/mobile/manager/employees/{self.emp.id}/permission-rollback/'
+        self.assertEqual(c.post(url, {'reference_date': '2026-09-03'}, format='json').status_code, 200)
+        self.assertEqual(c.post(url, {'reference_date': '2026-09-03'}, format='json').status_code, 400)
+        rb = PermissionLedger._base_manager.filter(employee=self.emp, entry_type='rollback')
+        self.assertEqual(rb.count(), 1)
+        self.assertEqual(rb.first().reference_date, date(2026, 9, 3))    # في شهر التأخير نفسه
