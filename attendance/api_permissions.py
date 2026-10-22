@@ -482,6 +482,7 @@ def set_role_default_override(request):
         return Response({'error': 'target_id مطلوب'}, status=400)
 
     valid_codes = [p[0] for p in PERMISSION_CHOICES]
+    valid_scopes = [s[0] for s in SCOPE_CHOICES]
 
     if target_type == 'user':
         target_user = User._base_manager.filter(
@@ -518,7 +519,10 @@ def set_role_default_override(request):
             scope = perm.get('scope', 'company')
             is_granted = perm.get('is_granted', True)
 
-            if code not in valid_codes:
+            if code not in valid_codes or scope not in valid_scopes:
+                continue
+            # نفس منع الشاشات التانية: الصلاحيات السيادية ماتتمنحش كاستثناء
+            if is_granted and code in SOVEREIGN_PERMISSIONS:
                 continue
 
             UserPermissionOverride._base_manager.update_or_create(
@@ -616,6 +620,12 @@ def target_permissions_summary(request):
             'type': 'department',
             'department_id': target_id,
             'employees_count': emps.count(),
+            # شاشة الموبايل بتقرا permissions: بنعلّم بس الصلاحيات اللي عند كل الموظفين،
+            # عشان الحفظ مايدّيش صلاحية عند موظف واحد لكل القسم
+            'permissions': [
+                {'code': c, 'scope': v['scope']}
+                for c, v in summary.items() if v['count'] == len([e for e in emps if e.user])
+            ],
             'permissions_summary': [
                 {
                     'code': c,
@@ -647,6 +657,12 @@ def target_permissions_summary(request):
             'type': 'branch',
             'branch_id': target_id,
             'employees_count': emps.count(),
+            # شاشة الموبايل بتقرا permissions: بنعلّم بس الصلاحيات اللي عند كل الموظفين،
+            # عشان الحفظ مايدّيش صلاحية عند موظف واحد لكل القسم
+            'permissions': [
+                {'code': c, 'scope': v['scope']}
+                for c, v in summary.items() if v['count'] == len([e for e in emps if e.user])
+            ],
             'permissions_summary': [
                 {
                     'code': c,

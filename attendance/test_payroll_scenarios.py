@@ -776,6 +776,21 @@ class InsuranceTaxTests(PayrollScenarioBase):
         # الوعاء = 10000 شهري × 12 = 120000 × 10% / 12 = 1000
         self.assertMoney(p['tax_deduction'], 1000)
 
+    def test_tax_old_version_still_applies_in_its_month(self):
+        """32 و34: تعديل سياسة الضرايب في نص الشهر مابيصفّرش ضريبة الشهر ده"""
+        TaxPolicy._base_manager.create(
+            company=self.company, start_date=date(2026, 1, 1), end_date=date(2026, 9, 30), is_superseded=True,
+            personal_exemption_single=Decimal('0'), tax_brackets=[{'from': 0, 'to': None, 'rate': 10}],
+        )
+        TaxPolicy._base_manager.create(
+            company=self.company, start_date=date(2026, 10, 1), version_number=2,
+            personal_exemption_single=Decimal('0'), tax_brackets=[{'from': 0, 'to': None, 'rate': 20}],
+        )
+        self.attend_all()
+        p = self.payroll()
+        # سبتمبر لسه على النسخة القديمة: 9000 × 12 = 108000 × 10% / 12 = 900 (مش صفر ومش 20%)
+        self.assertMoney(p['tax_deduction'], 900)
+
 
 # ═══════════════════════════════════════════════════════════════
 # 9) نهاية الخدمة

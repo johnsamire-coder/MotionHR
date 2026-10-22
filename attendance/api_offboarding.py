@@ -10,11 +10,12 @@ from rest_framework.response import Response
 from django.db import transaction
 from employees.models import Employee
 from accounts.models import User
-from accounts.permissions_models import UserRole
+from accounts.permissions_models import RolePermission, UserPermissionOverride, UserRole
 
 
 def _is_allowed(user, permission_code):
-    if user.is_superuser or user.role in ['super_admin', 'company_admin']:
+    # الـ HR مسؤول عن الأقسام وإنهاء الخدمة زي صاحب الشركة
+    if user.is_superuser or user.role in ['super_admin', 'company_admin', 'hr_manager']:
         return True
     override = UserPermissionOverride._base_manager.filter(
         user=user, permission=permission_code
@@ -26,6 +27,21 @@ def _is_allowed(user, permission_code):
         role_id__in=user_roles,
         permission=permission_code
     ).exists()
+
+
+def _has_history(emp):
+    from attendance.models import Attendance
+    from leaves.models import LeaveRequest
+    checks = [
+        Attendance._base_manager.filter(employee=emp),
+        LeaveRequest._base_manager.filter(employee=emp),
+    ]
+    try:
+        from attendance.payroll_pro_models import PayrollLine
+        checks.append(PayrollLine._base_manager.filter(employee=emp))
+    except Exception:
+        pass
+    return any(q.exists() for q in checks)
 
 
 STATUS_CHOICES = ['resigned', 'terminated', 'suspended', 'retired']
@@ -53,11 +69,25 @@ def offboard_employee(request, employee_id):
     if not emp:
         return Response({'error': 'الموظف غير موجود'}, status=404)
 
+    from attendance.action_scope import deny_account_action
+    denied = deny_account_action(request.user, emp)
+    if denied:
+        return Response({'error': denied.data['message'], 'message': denied.data['message']}, status=denied.status_code)
+
     if emp.status in STATUS_CHOICES:
         return Response({'error': f'الموظف ده بالفعل حالته {STATUS_LABELS.get(emp.status, emp.status)}'}, status=400)
 
-    new_status = (request.data.get('status') or 'resigned').strip()
-    reason = (request.data.get('reason') or '').strip()
+    # الويب بيبعت termination_type / termination_reason / termination_date، والموبايل status / reason
+    new_status = (request.data.get('status') or request.data.get('termination_type') or 'resigned').strip()
+    reason = (request.data.get('reason') or request.data.get('termination_reason') or '').strip()
+    termination_date = None
+    _td = str(request.data.get('termination_date') or '').strip()
+    if _td:
+        from datetime import datetime as _dt
+        try:
+            termination_date = _dt.strptime(_td[:10], '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'error': 'صيغة تاريخ إنهاء الخدمة غلط. استخدم YYYY-MM-DD'}, status=400)
     replacement_manager_id = request.data.get('replacement_manager_id')
 
     if new_status not in STATUS_CHOICES:
@@ -90,9 +120,32 @@ def offboard_employee(request, employee_id):
                 return Response({'error': 'المدير البديل غير موجود أو غير نشط'}, status=400)
             subordinates.update(direct_manager=replacement)
 
-        # غيّر حالة الموظف
+        # غيّر حالة الموظف، واحفظ التاريخ والسبب لو اتبعتوا (قبل كده كانوا بيضيعوا)
+        old_status = emp.status
         emp.status = new_status
-        emp.save(update_fields=['status'])
+        update_fields = ['status']
+        if termination_date:
+            emp.termination_date = termination_date
+            update_fields.append('termination_date')
+        if reason:
+            emp.termination_reason = reason
+            update_fields.append('termination_reason')
+        emp.save(update_fields=update_fields)
+
+        try:
+            from employees.models import EmployeeMovement
+            EmployeeMovement._base_manager.create(
+                company=company,
+                employee=emp,
+                movement_type={'terminated': 'termination', 'resigned': 'resignation',
+                               'suspended': 'suspension'}.get(new_status, 'other'),
+                movement_date=termination_date or __import__('datetime').date.today(),
+                old_value=old_status,
+                new_value=new_status,
+                reason=reason,
+            )
+        except Exception:
+            pass
 
         # قفّل حساب المستخدم
         if emp.user:
@@ -126,6 +179,11 @@ def reactivate_employee(request, employee_id):
 
     if not emp:
         return Response({'error': 'الموظف غير موجود'}, status=404)
+
+    from attendance.action_scope import deny_account_action
+    denied = deny_account_action(request.user, emp)
+    if denied:
+        return Response({'error': denied.data['message'], 'message': denied.data['message']}, status=denied.status_code)
 
     with transaction.atomic():
         emp.status = 'active'
@@ -204,6 +262,11 @@ def toggle_employee_status(request, employee_id):
     if not emp:
         return Response({'error': 'الموظف غير موجود'}, status=404)
 
+    from attendance.action_scope import deny_account_action
+    denied = deny_account_action(request.user, emp)
+    if denied:
+        return Response({'error': denied.data['message'], 'message': denied.data['message']}, status=denied.status_code)
+
     new_status = (request.data.get('status') or '').strip()
     VALID = ['active', 'suspended', 'on_leave']
     if new_status not in VALID:
@@ -214,7 +277,8 @@ def toggle_employee_status(request, employee_id):
     emp.save(update_fields=['status'])
 
     if emp.user:
-        emp.user.is_active = (new_status == 'active')
+        # الإجازة مابتقفلش الحساب؛ الإيقاف بس هو اللي بيقفله
+        emp.user.is_active = (new_status != 'suspended')
         emp.user.save(update_fields=['is_active'])
 
     return Response({
@@ -246,7 +310,18 @@ def delete_employee_api(request, employee_id):
     if not emp:
         return Response({'error': 'الموظف غير موجود'}, status=404)
 
+    from attendance.action_scope import deny_account_action
+    denied = deny_account_action(request.user, emp)
+    if denied:
+        return Response({'error': denied.data['message'], 'message': denied.data['message']}, status=denied.status_code)
+
     emp_name = getattr(emp, 'full_name_ar', None) or f'#{emp.id}'
+
+    # الموظف اللي ليه تاريخ (حضور/إجازات/مرتبات) مايتمسحش نهائي عشان التاريخ مايضيعش
+    if _has_history(emp):
+        return Response({
+            'error': 'الموظف ده ليه سجلات حضور أو إجازات أو مرتبات، فمينفعش يتمسح نهائي. استخدم "إنهاء الخدمة" بدل الحذف.',
+        }, status=400)
 
     if emp.user:
         emp.user.is_active = False
@@ -280,6 +355,11 @@ def offboard_employee_web(request, employee_id):
     ).first()
     if not emp:
         return Response({'error': 'الموظف غير موجود'}, status=404)
+
+    from attendance.action_scope import deny_account_action
+    denied = deny_account_action(request.user, emp)
+    if denied:
+        return Response({'error': denied.data['message'], 'message': denied.data['message']}, status=denied.status_code)
 
     STATUS_MAP = {
         'terminated': 'مفصول',

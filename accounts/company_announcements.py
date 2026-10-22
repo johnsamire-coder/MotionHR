@@ -177,8 +177,8 @@ class CompanyAnnouncement(models.Model):
         """يحسب قائمة الموظفين المستهدفين بعد الاستثناءات"""
         from employees.models import Employee
         
-        # ابدأ بكل موظفي الشركة النشطين
-        qs = Employee._base_manager.filter(company=self.company)
+        # ابدأ بكل موظفي الشركة النشطين (قبل كده كان بيشمل اللي سابوا الشركة)
+        qs = Employee._base_manager.filter(company=self.company, status='active')
 
         # حدد المستهدفين
         if self.target_type == 'specific':
@@ -193,7 +193,9 @@ class CompanyAnnouncement(models.Model):
         elif self.target_type == 'by_job_title':
             titles = [t.strip() for t in self.target_job_titles.split(',') if t.strip()]
             if titles:
-                qs = qs.filter(job_title__in=titles)
+                # المسمى الوظيفي جدول، فبنقارن بالاسم (قبل كده كانت بتقع)
+                from django.db.models import Q
+                qs = qs.filter(Q(job_title__name_ar__in=titles) | Q(job_title__name_en__in=titles))
         elif self.target_type == 'by_department':
             from django.db import connection
             with connection.cursor() as cursor:
@@ -214,15 +216,19 @@ class CompanyAnnouncement(models.Model):
             qs = qs.filter(branch_id__in=_branch_ids)
 
         # طبّق الاستثناءات
-        excluded_ids = list(self.excluded_employees.values_list('id', flat=True))
+        # (بنقرا جداول الربط مباشرة لأن علاقة الموظفين والأقسام بتتفلتر بالشركة الحالية وبترجع فاضية)
+        _ex_emp = self.excluded_employees.through._default_manager
+        excluded_ids = list(_ex_emp.filter(companyannouncement_id=self.id).values_list('employee_id', flat=True))
         if excluded_ids:
             qs = qs.exclude(id__in=excluded_ids)
 
-        excluded_titles = [t.strip() for t in self.excluded_job_titles.split(',') if t.strip()]
+        excluded_titles = [t.strip() for t in (self.excluded_job_titles or '').split(',') if t.strip()]
         if excluded_titles:
-            qs = qs.exclude(job_title__in=excluded_titles)
+            from django.db.models import Q
+            qs = qs.exclude(Q(job_title__name_ar__in=excluded_titles) | Q(job_title__name_en__in=excluded_titles))
 
-        excluded_dept_ids = list(self.excluded_departments.values_list('id', flat=True))
+        _ex_dept = self.excluded_departments.through._default_manager
+        excluded_dept_ids = list(_ex_dept.filter(companyannouncement_id=self.id).values_list('department_id', flat=True))
         if excluded_dept_ids:
             qs = qs.exclude(department_id__in=excluded_dept_ids)
 

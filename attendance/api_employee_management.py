@@ -93,6 +93,29 @@ def _check_manager(request):
     return None
 
 
+def _choice_code(obj, field, value):
+    """الموبايل بيبعت النوع والحالة الاجتماعية ونوع العقد بالنص العربي اللي اتعرض له (ذكر، أعزب...)،
+    فبنرجّعه للكود الصح بدل ما يتحول لقيمة افتراضية غلط"""
+    raw = str(value or "").strip()
+    try:
+        choices = obj._meta.get_field(field).choices or []
+    except Exception:
+        return raw.lower()
+    for code, label in choices:
+        if raw.lower() == str(code).lower() or raw == str(label):
+            return code
+    return raw.lower()
+
+
+def _check_structure_write(request):
+    """الفروع والأقسام والمسميات: المدير العادي يشوف بس، والتعديل لصاحب الشركة والـ HR"""
+    if request.method == "GET" or request.user.is_superuser:
+        return None
+    if getattr(request.user, "role", None) not in ("super_admin", "company_admin", "hr_manager"):
+        return Response({"success": False, "error": "تعديل الهيكل لصاحب الشركة والموارد البشرية بس"}, status=status.HTTP_403_FORBIDDEN)
+    return None
+
+
 def _get_company(request):
     """Get company from user or employee profile"""
     company = getattr(request.user, "company", None)
@@ -296,6 +319,9 @@ def manager_departments(request, dept_id=None):
     err = _check_manager(request)
     if err:
         return err
+    err = _check_structure_write(request)
+    if err:
+        return err
     try:
         company = _get_company(request)
         if not company:
@@ -422,6 +448,9 @@ def manager_job_titles(request):
     err = _check_manager(request)
     if err:
         return err
+    err = _check_structure_write(request)
+    if err:
+        return err
     try:
         company = _get_company(request)
         if not company:
@@ -508,7 +537,14 @@ def manager_employees_simple(request):
             return Response({"success": False, "error": "لا توجد شركة مرتبطة"}, status=400)
         from employees.models import Employee
         # جلب كل الموظفين النشطين
-        all_emps = get_visible_employees_qs(request.user).exclude(user=request.user).filter(status="active").select_related("job_title", "user", "department", "branch").order_by("first_name_ar")[:200]
+        all_emps = get_visible_employees_qs(request.user).exclude(user=request.user).filter(status="active")
+        # بحث بالاسم أو الكود (قبل كده القايمة كانت بتقف عند أول 200 موظف)
+        q = (request.GET.get("search") or "").strip()
+        if q:
+            from django.db.models import Q
+            all_emps = all_emps.filter(Q(first_name_ar__icontains=q) | Q(last_name_ar__icontains=q)
+                                       | Q(first_name_en__icontains=q) | Q(employee_code__icontains=q))
+        all_emps = all_emps.select_related("job_title", "user", "department", "branch").order_by("first_name_ar")[:2000]
         data = []
         for e in all_emps:
             user_role = getattr(e.user, "role", "employee") if e.user else "employee"
@@ -621,6 +657,10 @@ def manager_create_employee(request):
     err = _check_manager(request)
     if err:
         return err
+    # إضافة موظفين وتحديد مرتباتهم لصاحب الشركة والـ HR بس (مش المدير العادي)
+    from attendance.action_scope import is_full_access
+    if not is_full_access(request.user):
+        return Response({"success": False, "error": "إضافة الموظفين لصاحب الشركة والموارد البشرية بس"}, status=403)
 
     try:
         company = _get_company(request)
@@ -986,6 +1026,12 @@ def manager_reset_employee_password(request, employee_id):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
+        # الـ HR مايقدرش ياخد حساب صاحب الشركة أو حد في مستواه
+        from attendance.action_scope import deny_account_action
+        denied = deny_account_action(request.user, target_employee)
+        if denied:
+            return denied
+
         if not getattr(target_employee, "user", None):
             return Response(
                 {"success": False, "error": "هذا الموظف لا يملك حساب دخول"},
@@ -1085,6 +1131,14 @@ def manager_update_employee(request, employee_id):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
+        # مايعدلش بيانات (ومرتب) حد في نفس مستواه أو أعلى، ولا بياناته هو إلا صاحب الشركة
+        from attendance.action_scope import deny_account_action
+        denied = deny_account_action(
+            request.user, target_employee, allow_self=getattr(request.user, "role", None) == "company_admin"
+        )
+        if denied:
+            return denied
+
         company = target_employee.company
         data = request.data
 
@@ -1111,8 +1165,9 @@ def manager_update_employee(request, employee_id):
         birth_date_str = str(data.get("birth_date", birth_date_default.isoformat() if birth_date_default else "") or "").strip()
         hire_date_str = str(data.get("hire_date", hire_date_default.isoformat() if hire_date_default else "") or "").strip()
 
-        gender = str(data.get("gender", getattr(target_employee, "gender", "male") or "male")).strip().lower()
-        marital_status = str(data.get("marital_status", getattr(target_employee, "marital_status", "single") or "single")).strip().lower()
+        gender = _choice_code(target_employee, "gender", data.get("gender", getattr(target_employee, "gender", "male") or "male"))
+        marital_status = _choice_code(target_employee, "marital_status",
+                                      data.get("marital_status", getattr(target_employee, "marital_status", "single") or "single"))
         religion_raw = str(data.get("religion", getattr(target_employee, "religion", "") or "")).strip()
         religion = _normalize_religion_value(religion_raw)
 
@@ -1122,7 +1177,8 @@ def manager_update_employee(request, employee_id):
         direct_manager_id = data.get("direct_manager_id", getattr(current_direct_manager, "id", None))
 
         worker_type = str(data.get("worker_type", getattr(target_employee, "worker_type", "office") or "office")).strip()
-        contract_type = str(data.get("contract_type", getattr(target_employee, "contract_type", "permanent") or "permanent")).strip()
+        contract_type = _choice_code(target_employee, "contract_type",
+                                     data.get("contract_type", getattr(target_employee, "contract_type", "permanent") or "permanent"))
         contract_end_date_str = str(data.get("contract_end_date", contract_end_date_default.isoformat() if contract_end_date_default else "") or "").strip()
 
         basic_salary_raw = data.get("basic_salary", getattr(target_employee, "basic_salary", 0) or 0)
@@ -1189,7 +1245,7 @@ def manager_update_employee(request, employee_id):
         if contract_type not in ("permanent", "temporary", "training", "freelance", "part_time", "full_time", "consultant"):
             return Response({"success": False, "error": "نوع العقد غير صحيح"}, status=400)
 
-        if salary_payment_method not in ("cash", "bank", "instapay", "wallet"):
+        if salary_payment_method not in ("none", "cash", "bank", "instapay", "wallet"):  # none = الافتراضي في الموديل
             return Response({"success": False, "error": "طريقة القبض غير صحيحة"}, status=400)
 
         try:
@@ -1253,6 +1309,8 @@ def manager_update_employee(request, employee_id):
         if Employee._base_manager.filter(company=company, phone=phone).exclude(id=target_employee.id).exists():
             return Response({"success": False, "error": "رقم الموبايل مستخدم بالفعل داخل نفس الشركة"}, status=400)
 
+        _old_money = (getattr(target_employee, "basic_salary", None),
+                      getattr(target_employee, "bank_account", None), getattr(target_employee, "iban", None))
         with transaction.atomic():
             target_employee.first_name_ar = first_name_ar
             target_employee.middle_name_ar = middle_name_ar or None
@@ -1328,6 +1386,24 @@ def manager_update_employee(request, employee_id):
                 target_employee.insurance_number = insurance_number or None
 
             target_employee.save()
+
+            # سجل حركة لأي تغيير في المرتب أو الحساب البنكي (مين وإمتى)
+            from employees.models import EmployeeMovement
+            _who = request.user.get_full_name() or request.user.username
+            from decimal import Decimal as _D
+            if _old_money[0] is not None and _D(str(_old_money[0] or 0)) != _D(str(target_employee.basic_salary or 0)):
+                EmployeeMovement._base_manager.create(
+                    company=company, employee=target_employee, movement_type='salary_change',
+                    movement_date=timezone.localdate(), old_value=str(_old_money[0]),
+                    new_value=str(target_employee.basic_salary), reason=f'تعديل من {_who}',
+                )
+            if (_old_money[1] or None, _old_money[2] or None) != (getattr(target_employee, "bank_account", None) or None,
+                                                                  getattr(target_employee, "iban", None) or None):
+                EmployeeMovement._base_manager.create(
+                    company=company, employee=target_employee, movement_type='other',
+                    movement_date=timezone.localdate(), old_value='بيانات البنك القديمة',
+                    new_value='بيانات بنك جديدة', reason=f'تغيير الحساب البنكي بواسطة {_who}',
+                )
 
             if getattr(target_employee, "user", None):
                 user = target_employee.user
@@ -1489,6 +1565,11 @@ def manager_transfer_employee(request, employee_id):
                         {"success": False, "error": "لا يمكن أن يكون الموظف مديراً لنفسه"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
+                if new_mgr.id in target_employee.get_all_subordinates_ids():
+                    return Response(
+                        {"success": False, "error": "المدير الجديد تحت الموظف ده في الهيكل، فده هيعمل دايرة"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
                 if hasattr(target_employee, "direct_manager"):
                     old_name = target_employee.direct_manager.full_name_ar if target_employee.direct_manager else "لا يوجد"
                     target_employee.direct_manager = new_mgr
@@ -1497,7 +1578,7 @@ def manager_transfer_employee(request, employee_id):
 
         if new_branch_id:
             try:
-                from attendance.models import Branch
+                from companies.models import Branch
                 new_branch = Branch._base_manager.filter(
                     id=new_branch_id,
                     company_id=target_employee.company_id
@@ -1512,12 +1593,13 @@ def manager_transfer_employee(request, employee_id):
                     target_employee.branch = new_branch
                     update_fields.append("branch")
                     changes.append(f"الفرع: {old_name} → {new_branch.name_ar}")
-            except Exception as e:
-                pass
+            except Exception:
+                # ماكانش بيبان أي خطأ (والنقل مابيحصلش) — دلوقتي الخطأ بيوصل للرسالة
+                raise
 
         if new_department_id:
             try:
-                from attendance.models import Department
+                from companies.models import Department
                 new_dept = Department._base_manager.filter(
                     id=new_department_id,
                     company_id=target_employee.company_id
@@ -1554,12 +1636,13 @@ def manager_transfer_employee(request, employee_id):
                             changes.append(f"الدور: تغيّر تلقائياً لـ {new_dept.default_role.name}")
                     except Exception:
                         pass
-            except Exception as e:
-                pass
+            except Exception:
+                # ماكانش بيبان أي خطأ (والنقل مابيحصلش) — دلوقتي الخطأ بيوصل للرسالة
+                raise
 
         if new_job_title_id:
             try:
-                from attendance.models import JobTitle
+                from employees.models import JobTitle
                 new_jt = JobTitle._base_manager.filter(
                     id=new_job_title_id,
                     company_id=target_employee.company_id
@@ -1574,8 +1657,9 @@ def manager_transfer_employee(request, employee_id):
                     target_employee.job_title = new_jt
                     update_fields.append("job_title")
                     changes.append(f"المسمى: {old_name} → {new_jt.name_ar}")
-            except Exception as e:
-                pass
+            except Exception:
+                # ماكانش بيبان أي خطأ (والنقل مابيحصلش) — دلوقتي الخطأ بيوصل للرسالة
+                raise
 
         if not changes:
             return Response(
@@ -1869,6 +1953,11 @@ def manager_get_location_report(request):
         except Employee.DoesNotExist:
             return Response({'success': False, 'error': 'الموظف غير موجود'}, status=404)
 
+        # مواقع الموظف: هو نفسه، أو مديره/الـ HR اللي هو في نطاقهم
+        from attendance.action_scope import in_scope, is_self
+        if not is_self(request.user, employee) and not in_scope(request.user, employee):
+            return Response({'success': False, 'error': 'الموظف غير موجود'}, status=404)
+
         locations = LocationHistory._base_manager.filter(
             employee=employee,
             shift_date=shift_date,
@@ -1960,6 +2049,10 @@ def manager_upload_company_logo(request):
         allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
         if logo_file.content_type not in allowed:
             return Response({'success': False, 'error': 'نوع الملف غير مدعوم (JPEG/PNG/GIF/WEBP فقط)'}, status=400)
+        from core.upload_validation import upload_error
+        _err = upload_error(logo_file, kind='image')
+        if _err:
+            return Response({'success': False, 'error': _err}, status=400)
 
         if logo_file.size > 5 * 1024 * 1024:
             return Response({'success': False, 'error': 'حجم الملف أكبر من 5MB'}, status=400)
@@ -2146,8 +2239,12 @@ def manager_hierarchy_tree(request):
             if e.direct_manager_id:
                 children_map.setdefault(e.direct_manager_id, []).append(e)
         
+        visited = set()
+
         def serialize(emp):
-            children = children_map.get(emp.id, [])
+            # لو فيه دايرة (أ مدير ب وب مدير أ) مانلفّش فيها للأبد
+            visited.add(emp.id)
+            children = [c for c in children_map.get(emp.id, []) if c.id not in visited]
             # ترتيب: المديرين اللي عندهم فريق الأول
             children_sorted = sorted(
                 children,
@@ -2161,8 +2258,8 @@ def manager_hierarchy_tree(request):
             job_title_en = ""
             try:
                 if emp.job_title:
-                    job_title_ar = emp.job_title.title or ""
-                    job_title_en = getattr(emp.job_title, 'title_en', '') or ""
+                    job_title_ar = emp.job_title.name_ar or ""
+                    job_title_en = emp.job_title.name_en or ""
             except Exception:
                 pass
             
@@ -2178,11 +2275,11 @@ def manager_hierarchy_tree(request):
                 "photo": None,
                 "role": getattr(emp.user, "role", "employee") if emp.user else "employee",
                 "team_size": len(children_map.get(emp.id, [])),
-                "children": [serialize(c) for c in children_sorted]
+                "children": [serialize(c) for c in children_sorted if c.id not in visited]
             }
         
-        # الجذور = اللي مالهمش direct_manager
-        roots = [e for e in all_emps if not e.direct_manager_id]
+        # الجذور = اللي مالهمش direct_manager (أو مديره مش موظف نشط)
+        roots = [e for e in all_emps if not e.direct_manager_id or e.direct_manager_id not in emp_dict]
         roots_sorted = sorted(
             roots,
             key=lambda x: (
@@ -2191,11 +2288,17 @@ def manager_hierarchy_tree(request):
             )
         )
         
+        root_list = [serialize(r) for r in roots_sorted]
+        # اللي واقعين في دايرة مديرين مالهمش جذر، فبنظهرهم برضه بدل ما يختفوا
+        for e in all_emps:
+            if e.id not in visited:
+                root_list.append(serialize(e))
+
         return Response({
             "success": True,
             "company_name": getattr(company, "name_ar", "") or getattr(company, "name_en", "") or str(company),
             "total_employees": all_emps.count(),
-            "root": [serialize(r) for r in roots_sorted]
+            "root": root_list
         })
     
     except Exception as e:
@@ -2225,6 +2328,11 @@ def manager_employee_detail(request, employee_id):
         employee = Employee._base_manager.select_related(
             "user", "company", "branch", "department", "job_title", "direct_manager__user"
         ).filter(id=employee_id, company=company).first()
+        # المدير العادي يشوف ملفه وملفات فريقه بس (فيها المرتب والبنك والرقم القومي)
+        if employee and getattr(request.user, "role", None) == "manager" and employee.user_id != request.user.id:
+            from attendance.action_scope import in_scope
+            if not in_scope(request.user, employee):
+                employee = None
 
         if not employee:
             return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
@@ -2338,6 +2446,9 @@ def manager_job_title_detail(request, title_id):
     err = _check_manager(request)
     if err:
         return err
+    err = _check_structure_write(request)
+    if err:
+        return err
     try:
         company = _get_company(request)
         if not company:
@@ -2414,6 +2525,9 @@ def manager_job_title_detail(request, title_id):
 @permission_classes([IsAuthenticated])
 def manager_branches(request):
     err = _check_manager(request)
+    if err:
+        return err
+    err = _check_structure_write(request)
     if err:
         return err
     try:
@@ -2533,6 +2647,9 @@ def manager_branches(request):
 @permission_classes([IsAuthenticated])
 def manager_departments(request, dept_id=None):
     err = _check_manager(request)
+    if err:
+        return err
+    err = _check_structure_write(request)
     if err:
         return err
     try:

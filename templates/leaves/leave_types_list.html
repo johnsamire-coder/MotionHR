@@ -77,7 +77,7 @@
             </a>
             <form method="post"
                   action="{% url 'leaves:leave_type_delete' lt.pk %}"
-                  onsubmit="return confirm('حذف {{ lt.name }}؟')">
+                  onsubmit="return confirm('حذف {{ lt.name|escapejs }}؟')">
               {% csrf_token %}
               <button type="submit" class="btn btn-sm btn-outline-danger">
                 <i class="bi bi-trash"></i>

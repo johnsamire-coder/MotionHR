@@ -178,11 +178,18 @@
         color: 'white',
         weight: 2,
         fillOpacity: 0.8
-    }).addTo(map).bindPopup(`
-        <strong>نقطة {{ forloop.counter }}</strong><br>
-        الوقت: {{ loc.timestamp|time:"H:i:s" }}<br>
-        {% if loc.address %}{{ loc.address|truncatechars:80 }}{% endif %}
-    `);
+    }).addTo(map).bindPopup((function () {
+        // العنوان جاي من الموظف، فبيتعرض كنص بس
+        const pop = document.createElement('div');
+        const st = document.createElement('strong');
+        st.textContent = 'نقطة {{ forloop.counter }}';
+        pop.appendChild(st);
+        pop.appendChild(document.createElement('br'));
+        pop.appendChild(document.createTextNode('الوقت: {{ loc.timestamp|time:"H:i:s" }}'));
+        pop.appendChild(document.createElement('br'));
+        pop.appendChild(document.createTextNode('{{ loc.address|default:""|truncatechars:80|escapejs }}'));
+        return pop;
+    })());
     {% endfor %}
     
     if (points.length > 1) {

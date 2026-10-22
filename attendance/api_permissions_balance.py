@@ -173,6 +173,10 @@ def employee_permission_balance(request, employee_id):
     except Employee.DoesNotExist:
         return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
 
+    from attendance.action_scope import deny_action
+    if deny_action(request.user, employee, allow_self=True):
+        return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
+
     # نستخدم نفس المنطق
     policy = _get_active_policy(employee)
 
@@ -233,6 +237,11 @@ def grant_extra_permission(request, employee_id):
     except Employee.DoesNotExist:
         return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
 
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, employee)
+    if denied:
+        return Response({"success": False, "error": denied.data["message"]}, status=denied.status_code)
+
     data = request.data
     minutes = int(data.get("minutes", 0))
     count = int(data.get("count", 0))
@@ -280,6 +289,11 @@ def rollback_late(request, employee_id):
         employee = Employee._base_manager.get(id=employee_id)
     except Employee.DoesNotExist:
         return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
+
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, employee)
+    if denied:
+        return Response({"success": False, "error": denied.data["message"]}, status=denied.status_code)
 
     data = request.data
     reference_date = data.get("reference_date")

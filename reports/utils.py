@@ -6,6 +6,7 @@ reports/utils.py — Patch 49a Fix3
   department.name_ar
 """
 
+from core.export_safety import safe_cell_value
 from datetime import date, timedelta, datetime
 from django.http import HttpResponse
 from django.utils import timezone
@@ -98,10 +99,10 @@ def get_employee_attendance_details(company, start_date, end_date):
             work_seconds = 0
             for a in qs:
                 if a.check_in_time and a.check_out_time:
-                    ci = datetime.combine(date.today(), a.check_in_time)
-                    co = datetime.combine(date.today(), a.check_out_time)
-                    if co > ci:
-                        work_seconds += (co - ci).seconds
+                    # الوقتين DateTime كاملين، فالفرق بينهم مباشرة (قبل كده كانت بتقع)
+                    diff = (a.check_out_time - a.check_in_time).total_seconds()
+                    if diff > 0:
+                        work_seconds += diff
             work_hours = round(work_seconds / 3600, 1)
         else:
             work_hours = round(float(work_hours_sum), 1)
@@ -226,7 +227,7 @@ def export_to_excel(headers, rows, filename="report", company=None, report_title
     for row_idx, row in enumerate(rows):
         bg = LIGHT_ROW if row_idx % 2 == 0 else WHITE
         for col_idx, val in enumerate(row, 1):
-            cell = ws.cell(row=current_row, column=col_idx, value=val)
+            cell = ws.cell(row=current_row, column=col_idx, value=safe_cell_value(val))
             cell.fill      = PatternFill("solid", fgColor=bg)
             cell.font      = Font(name='Cairo', size=10)
             cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)

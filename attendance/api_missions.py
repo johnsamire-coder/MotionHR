@@ -68,6 +68,18 @@ def is_manager_or_hr(user):
     return role in ('company_admin', 'hr_manager', 'manager', 'super_admin') or user.is_superuser or user.is_staff
 
 
+def manager_only(view):
+    """شاشات المدير في المهمات: للمدير/HR/صاحب الشركة بس — الموظف العادي ياخد 403"""
+    import functools
+
+    @functools.wraps(view)
+    def wrapper(request, *args, **kwargs):
+        if not is_manager_or_hr(request.user):
+            return Response({'success': False, 'error': 'صلاحية غير كافية', 'message': 'صلاحية غير كافية'}, status=403)
+        return view(request, *args, **kwargs)
+    return wrapper
+
+
 def serialize_mission(mission, employee=None):
     assignments = MissionAssignment._base_manager.filter(mission=mission).select_related('employee')
     assignment_data = []
@@ -167,9 +179,28 @@ def serialize_mission(mission, employee=None):
 # MANAGER APIs
 # ─────────────────────────────────────────────────────────────
 
+
+def _mission_times_error(d):
+    """وقت نهاية المهمة لازم يكون بعد وقت بدايتها"""
+    from django.utils.dateparse import parse_datetime
+    try:
+        start = parse_datetime(str(d.get('planned_start_time')))
+        end = parse_datetime(str(d.get('planned_end_time')))
+    except (TypeError, ValueError):
+        return 'صيغة وقت المهمة غلط'
+    if not start or not end:
+        return 'صيغة وقت المهمة غلط'
+    try:
+        if end <= start:
+            return 'وقت النهاية لازم يكون بعد وقت البداية'
+    except TypeError:   # واحد فيه منطقة زمنية والتاني لأ
+        return None
+    return None
+
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_missions_list(request):
     """قائمة المهمات للمدير"""
     company = get_company(request.user)
@@ -232,6 +263,7 @@ def manager_missions_list(request):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_create_mission(request):
     """إنشاء مهمة جديدة"""
     company = get_company(request.user)
@@ -245,6 +277,9 @@ def manager_create_mission(request):
     for field in required:
         if not d.get(field):
             return Response({'error': f'الحقل {field} مطلوب'}, status=400)
+    _times_err = _mission_times_error(d)
+    if _times_err:
+        return Response({'error': _times_err}, status=400)
 
     mission = Mission._base_manager.create(
         company=company,
@@ -311,6 +346,7 @@ def manager_create_mission(request):
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_mission_detail(request, mission_id):
     """تفاصيل مهمة للمدير"""
     company = get_company(request.user)
@@ -325,6 +361,7 @@ def manager_mission_detail(request, mission_id):
 @api_view(['PATCH', 'PUT'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_update_mission(request, mission_id):
     """تعديل مهمة"""
     company = get_company(request.user)
@@ -339,9 +376,14 @@ def manager_update_mission(request, mission_id):
     d = request.data
     for field in ['title', 'description', 'priority', 'planned_start_time',
                   'planned_end_time', 'location_name', 'location_lat',
-                  'location_lng', 'client_name', 'client_phone', 'status']:
+                  'location_lng', 'client_name', 'client_phone']:
         if field in d:
             setattr(mission, field, d[field])
+    # الحالة بتتغير من التعديل العادي لحالة قبل البدء بس (البدء والإنهاء والإلغاء ليهم أزرارهم)
+    if 'status' in d and d['status'] != mission.status:
+        if d['status'] not in ('draft', 'pending_approval', 'approved'):
+            return Response({'error': 'الحالة دي ماتتغيرش من تعديل المهمة'}, status=400)
+        mission.status = d['status']
     mission.save()
 
     # إشعار كل الموظفين المكلفين بتعديل المهمة
@@ -362,6 +404,7 @@ def manager_update_mission(request, mission_id):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_cancel_mission(request, mission_id):
     """إلغاء مهمة"""
     company = get_company(request.user)
@@ -391,6 +434,7 @@ def manager_cancel_mission(request, mission_id):
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_pending_requests(request):
     """طلبات المهمات من الموظفين في انتظار الموافقة"""
     company = get_company(request.user)
@@ -446,6 +490,7 @@ def manager_pending_requests(request):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_approve_request(request, request_id):
     """موافقة/رفض طلب مهمة من موظف"""
     company = get_company(request.user)
@@ -511,6 +556,7 @@ def manager_approve_request(request, request_id):
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_feedback_dashboard(request):
     """داشبورد الفيدباك للمدير"""
     company = get_company(request.user)
@@ -767,6 +813,10 @@ def employee_start_mission(request, assignment_id):
     if assignment.started_at:
         return Response({'error': 'المهمة بدأت مسبقاً'}, status=400)
 
+    # المأمورية الملغية أو اللي لسه مستنية موافقة مينفعش تبدأ (قبل كده كانت بترجع "جارية")
+    if assignment.mission.status in ('cancelled', 'pending_approval', 'rejected', 'completed'):
+        return Response({'error': 'المأمورية دي ملغية أو لسه ما اتوافقش عليها، مينفعش تبدأها'}, status=400)
+
     lat = request.data.get('lat')
     lng = request.data.get('lng')
 
@@ -860,7 +910,7 @@ def employee_end_mission(request, assignment_id):
 
     # تحقق لو كل المشاركين خلصوا → المهمة مكتملة
     mission = assignment.mission
-    all_done = not mission.assignments.exclude(
+    all_done = not MissionAssignment._base_manager.filter(mission_id=mission.id).exclude(
         status__in=('completed', 'rejected')
     ).exists()
     if all_done:
@@ -958,6 +1008,10 @@ def employee_upload_attachment(request, assignment_id):
     file = request.FILES.get('file')
     if not file:
         return Response({'error': 'لم يتم إرسال ملف'}, status=400)
+    from core.upload_validation import upload_error
+    _err = upload_error(file)
+    if _err:
+        return Response({'error': _err}, status=400)
 
     caption = request.data.get('caption', '')
     attachment = MissionAttachment._base_manager.create(
@@ -992,6 +1046,9 @@ def employee_request_mission(request):
     for field in required:
         if not d.get(field):
             return Response({'error': f'الحقل {field} مطلوب'}, status=400)
+    _times_err = _mission_times_error(d)
+    if _times_err:
+        return Response({'error': _times_err}, status=400)
 
     # لو تاريخ بداية المهمة في الماضي، لازم يكتب سبب
     from django.utils.dateparse import parse_datetime
@@ -1098,7 +1155,7 @@ def employee_submit_feedback(request, mission_id):
     followup_owner_id = d.get('followup_owner_id')
     if followup_owner_id:
         try:
-            feedback.followup_owner = Employee._base_manager.get(id=followup_owner_id)
+            feedback.followup_owner = Employee._base_manager.get(id=followup_owner_id, company_id=mission.company_id)
         except Employee.DoesNotExist:
             pass
 
@@ -1170,6 +1227,15 @@ def mission_feedback_detail(request, mission_id):
     except (Mission.DoesNotExist, MissionFeedback.DoesNotExist):
         return Response({'error': 'الفيدباك غير موجود'}, status=404)
 
+    # التقييم (فيه قيمة الصفقة والملاحظات الداخلية) للمشاركين ومديرينهم والـHR بس
+    from attendance.action_scope import actionable_employee_ids
+    participants = set(MissionAssignment._base_manager.filter(mission_id=mission.id).values_list('employee_id', flat=True))
+    if feedback.written_by_id:
+        participants.add(feedback.written_by_id)
+    allowed = actionable_employee_ids(request.user)
+    if employee.id not in participants and allowed is not None and not (participants & allowed):
+        return Response({'error': 'الفيدباك غير موجود'}, status=404)
+
     addenda = []
     for a in feedback.addenda.select_related('added_by').all():
         addenda.append({
@@ -1215,9 +1281,11 @@ def mission_locations_timeline(request, assignment_id):
     employee = get_employee(request.user)
     try:
         assignment = MissionAssignment._base_manager.get(id=assignment_id)
-        # المدير أو الموظف نفسه
-        if assignment.employee != employee and not is_manager_or_hr(request.user):
-            return Response({'error': 'غير مصرح'}, status=403)
+        # الموظف نفسه، أو مدير/HR الموظف ده في نطاقه (شركته / فريقه)
+        if assignment.employee != employee:
+            from attendance.action_scope import in_scope
+            if not is_manager_or_hr(request.user) or not in_scope(request.user, assignment.employee):
+                return Response({'error': 'التعيين غير موجود'}, status=404)
     except MissionAssignment.DoesNotExist:
         return Response({'error': 'التعيين غير موجود'}, status=404)
 
@@ -1241,6 +1309,7 @@ def mission_locations_timeline(request, assignment_id):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_reassign_employee(request, mission_id):
     """
     المدير/HR يستبدل موظف على مهمة بموظف آخر
@@ -1317,8 +1386,11 @@ def manager_reassign_employee(request, mission_id):
             return Response({'error': 'الموظف الجديد مُعيَّن على هذه المهمة مسبقاً'}, status=400)
 
         # نقفل طلب الموظف الطالب القديم (مو مستغل)
+        # ونقفل موافقة المدير كمان عشان مايفضلش ظاهر عنده كطلب معلق
         mission_req.final_status = 'rejected'
-        mission_req.save(update_fields=['final_status'])
+        if mission_req.manager_approval == 'pending':
+            mission_req.manager_approval = 'rejected'
+        mission_req.save(update_fields=['final_status', 'manager_approval'])
 
         # إشعارات
         try:
@@ -1455,6 +1527,7 @@ def employee_withdraw_request(request, assignment_id):
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_withdraw_requests(request):
     """قائمة طلبات الانسحاب من المهمات"""
     company = get_company(request.user)
@@ -1491,6 +1564,7 @@ def manager_withdraw_requests(request):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_respond_withdraw(request, assignment_id):
     """
     المدير يوافق أو يرفض طلب انسحاب موظف
@@ -1533,6 +1607,7 @@ def manager_respond_withdraw(request, assignment_id):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
+@manager_only
 def manager_force_cancel_mission(request, mission_id):
     """
     المدير أو HR يلغي مهمة حتى لو كانت جارية
@@ -1563,9 +1638,11 @@ def manager_force_cancel_mission(request, mission_id):
 
     # إلغاء كل التعيينات النشطة
     cancelled_count = 0
-    for assignment in mission.assignments.filter(
-        status__in=('pending', 'accepted', 'in_progress')
-    ):
+    for assignment in MissionAssignment._base_manager.filter(
+        mission_id=mission.id, status__in=('pending', 'accepted', 'in_progress'),
+    ).select_related('employee__user'):
+        if assignment.status == 'in_progress' and not assignment.ended_at:
+            assignment.ended_at = timezone.now()
         assignment.status = 'rejected'
         assignment.rejection_reason = f'[FORCE_CANCEL] {reason}'
         assignment.save()

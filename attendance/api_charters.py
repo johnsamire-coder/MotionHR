@@ -20,6 +20,14 @@ def _check_manager(request):
     return None
 
 
+def _check_hr(request):
+    """إنشاء وتعديل وحذف اللائحة لصاحب الشركة والموارد البشرية بس (زي الموبايل)"""
+    user = request.user
+    if not (user.is_superuser or getattr(user, 'role', '') in ('super_admin', 'company_admin', 'hr_manager')):
+        return Response({"success": False, "error": "تعديل اللائحة لصاحب الشركة والموارد البشرية بس"}, status=403)
+    return None
+
+
 def _get_employee(user):
     from employees.models import Employee
     return Employee._base_manager.filter(user=user).first()
@@ -100,7 +108,7 @@ def manager_charters_list(request):
 @permission_classes([IsAuthenticated])
 def manager_charters_create(request):
     """إنشاء لائحة جديدة مستهدفة"""
-    err = _check_manager(request)
+    err = _check_hr(request)
     if err:
         return err
     from companies.models import WorkCharter, Department, Branch
@@ -153,9 +161,9 @@ def manager_charters_create(request):
         attachment=attachment_file if attachment_file else None,
     )
     if target_dept_ids:
-        charter.target_departments.set(Department.objects.filter(id__in=target_dept_ids, company=company))
+        charter.target_departments.set(Department._base_manager.filter(id__in=target_dept_ids, company=company))
     if target_branch_ids:
-        charter.target_branches.set(Branch.objects.filter(id__in=target_branch_ids, company=company))
+        charter.target_branches.set(Branch._base_manager.filter(id__in=target_branch_ids, company=company))
 
     return Response({"success": True, "message": "تم إنشاء اللائحة", "charter": _serialize_charter(charter, request)})
 
@@ -165,7 +173,7 @@ def manager_charters_create(request):
 @permission_classes([IsAuthenticated])
 def manager_charters_update(request, charter_id):
     """تعديل لائحة موجودة"""
-    err = _check_manager(request)
+    err = _check_hr(request)
     if err:
         return err
     from companies.models import WorkCharter, Department, Branch
@@ -179,12 +187,15 @@ def manager_charters_update(request, charter_id):
     if not charter:
         return Response({"success": False, "error": "اللائحة غير موجودة"}, status=404)
 
+    old_text = (charter.title, charter.content or '', charter.introduction or '')
     if 'title' in request.data:
         charter.title = request.data.get('title', charter.title)
     if 'content' in request.data:
         charter.content = request.data.get('content', charter.content)
     if 'introduction' in request.data:
         charter.introduction = request.data.get('introduction', charter.introduction)
+    # لو النص اتغير: إصدار جديد والموظفين يوافقوا تاني (زي الموبايل)
+    content_changed = old_text != (charter.title, charter.content or '', charter.introduction or '')
     if 'is_mandatory' in request.data:
         charter.is_mandatory = str(request.data.get('is_mandatory')).lower() in ['1', 'true', 'yes']
     if 'is_active' in request.data:
@@ -196,10 +207,16 @@ def manager_charters_update(request, charter_id):
         allowed = {'.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg'}
         if ext not in allowed:
             return Response({"success": False, "error": "نوع الملف غير مدعوم"}, status=400)
+        from core.upload_validation import upload_error
+        _err = upload_error(attachment_file)
+        if _err:
+            return Response({"success": False, "error": _err}, status=400)
         charter.attachment = attachment_file
+        content_changed = True
 
-    if str(request.data.get('remove_attachment', '')).lower() in ['1', 'true', 'yes']:
+    if str(request.data.get('remove_attachment', '')).lower() in ['1', 'true', 'yes'] and charter.attachment:
         charter.attachment = None
+        content_changed = True
 
     if 'target_roles' in request.data:
         try:
@@ -207,19 +224,24 @@ def manager_charters_update(request, charter_id):
         except (ValueError, TypeError):
             pass
 
+    if content_changed:
+        from companies.models import CharterAcceptance
+        charter.version += 1
     charter.save()
+    if content_changed:
+        CharterAcceptance._base_manager.filter(charter=charter).delete()
 
     if 'target_departments' in request.data:
         try:
             dept_ids = json.loads(request.data.get('target_departments') or '[]')
-            charter.target_departments.set(Department.objects.filter(id__in=dept_ids, company=company))
+            charter.target_departments.set(Department._base_manager.filter(id__in=dept_ids, company=company))
         except (ValueError, TypeError):
             pass
 
     if 'target_branches' in request.data:
         try:
             branch_ids = json.loads(request.data.get('target_branches') or '[]')
-            charter.target_branches.set(Branch.objects.filter(id__in=branch_ids, company=company))
+            charter.target_branches.set(Branch._base_manager.filter(id__in=branch_ids, company=company))
         except (ValueError, TypeError):
             pass
 
@@ -231,7 +253,7 @@ def manager_charters_update(request, charter_id):
 @permission_classes([IsAuthenticated])
 def manager_charters_delete(request, charter_id):
     """حذف لائحة"""
-    err = _check_manager(request)
+    err = _check_hr(request)
     if err:
         return err
     from companies.models import WorkCharter
@@ -244,6 +266,12 @@ def manager_charters_delete(request, charter_id):
     if not charter:
         return Response({"success": False, "error": "اللائحة غير موجودة"}, status=404)
 
+    from companies.models import CharterAcceptance
+    if CharterAcceptance._base_manager.filter(charter=charter).exists():
+        # فيه موظفين وقّعوا: نوقفها بس عشان سجل توقيعاتهم مايضيعش
+        charter.is_active = False
+        charter.save(update_fields=['is_active', 'updated_at'])
+        return Response({"success": True, "message": "اللائحة اتوقفت (اتسابت محفوظة عشان توقيعات الموظفين عليها)"})
     charter.delete()
     return Response({"success": True, "message": "تم حذف اللائحة"})
 

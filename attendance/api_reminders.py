@@ -19,8 +19,11 @@ def trigger_reminder(request):
     POST /attendance/api/mobile/manager/reminders/trigger/
     body: {"type": "checkin" | "checkout" | "pending" | "charter" | "all"}
     """
-    if getattr(request.user, "role", None) not in ALLOWED_ROLES:
-        return Response({"error": "غير مصرح"}, status=status.HTTP_403_FORBIDDEN)
+    # التشغيل اليدوي بيبعت لكل الشركات على المنصة، فهو للسوبر أدمن بس.
+    # التذكيرات بتتبعت لوحدها في مواعيدها لكل شركة.
+    if not (request.user.is_superuser or getattr(request.user, "role", None) == "super_admin"):
+        return Response({"error": "التذكيرات بتتبعت لوحدها في مواعيدها، والتشغيل اليدوي لإدارة المنصة بس"},
+                        status=status.HTTP_403_FORBIDDEN)
 
     reminder_type = request.data.get("type", "all")
     valid_types = ["all", "checkin", "checkout", "pending", "charter", "documents"]

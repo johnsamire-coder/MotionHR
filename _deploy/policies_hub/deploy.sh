@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
 # رفع تصليحات مركز السياسات على السيرفر — أمر واحد:
-#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/policies-hub/_deploy/policies_hub/deploy.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/group16-documents/_deploy/policies_hub/deploy.sh | sudo bash
+#
+# لو المستودعات خاصة: مفتاح قراءة من GitHub محفوظ في /root/.motionhr_github_token
 #
 # بيعمل:
 #   1) نسخة احتياطية من الكود (الباك إند والويب) ومن قاعدة البيانات
@@ -12,16 +14,113 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-BRANCH="${BRANCH:-fix/policies-hub}"
+BRANCH="${BRANCH:-fix/group16-documents}"
 BE="${BE:-/var/www/motionhr}"
 WEB="${WEB:-/var/www/motionhr_web}"
 BE_SERVICE="${BE_SERVICE:-motionhr}"
 WEB_SERVICE="${WEB_SERVICE:-motionhr-web}"
 TS="$(date +%Y%m%d_%H%M%S)"
+START_ISO="$(date -u +%Y-%m-%dT%H:%M:%S+00:00)"
 BK="/var/backups/motionhr_policies_${TS}"
 TMP="$(mktemp -d)"
 
 BE_FILES=(
+  accounts/access.py
+  accounts/company_announcements.py
+  accounts/activation.py
+  accounts/fcm_service.py
+  accounts/jwt_serializers.py
+  accounts/login_backend.py
+  accounts/test_access_guard.py
+  accounts/views.py
+  attendance/action_scope.py
+  attendance/api_announcements.py
+  attendance/api_company_policy.py
+  attendance/api_departments.py
+  attendance/api_employee_management.py
+  attendance/api_employee_profile.py
+  attendance/api_offboarding.py
+  attendance/test_group4_permissions.py
+  attendance/test_group5_bugs.py
+  attendance/test_group6_web_server.py
+  attendance/reminders.py
+  employees/models.py
+  employees/management/commands/import_employees_bulk.py
+  employees/test_import_bulk.py
+  leaves/signals.py
+  attendance/api_attachments.py
+  attendance/api_charters.py
+  attendance/api_shifts.py
+  attendance/test_group7_safety.py
+  attendance/test_group8_medium.py
+  attendance/test_group9_scope.py
+  accounts/admin.py
+  accounts/announcements_service.py
+  attendance/report_export_helper.py
+  employees/exports.py
+  reports/utils.py
+  attendance/test_group10_misc.py
+  employees/views.py
+  attendance/test_group11_mobile_server.py
+  leaves/api_official_holidays.py
+  attendance/test_group12_app_support.py
+  attendance/test_group13_web.py
+  attendance/urls.py
+  motionhr/urls.py
+  attendance/api_field_visits_report.py
+  attendance/test_group14_reports.py
+  biometric/__init__.py
+  biometric/api.py
+  biometric/apps.py
+  biometric/iclock.py
+  biometric/management/__init__.py
+  biometric/management/commands/__init__.py
+  biometric/management/commands/biometric_setup.py
+  biometric/models.py
+  biometric/services.py
+  biometric/tests.py
+  biometric/urls.py
+  audit/__init__.py
+  audit/api.py
+  audit/apps.py
+  audit/management/__init__.py
+  audit/management/commands/__init__.py
+  audit/management/commands/audit_setup.py
+  audit/middleware.py
+  audit/models.py
+  audit/signals.py
+  audit/tests.py
+  audit/urls.py
+  core/export_safety.py
+  attendance/api_permissions.py
+  attendance/api_reminders.py
+  core/admin.py
+  landing/views.py
+  templates/attendance/live_map.html
+  templates/attendance/tracking_detail.html
+  templates/companies/branches_list.html
+  templates/leaves/leave_types_list.html
+  core/upload_validation.py
+  attendance/api_manual_entries.py
+  attendance/api_missions.py
+  attendance/api_mobile.py
+  attendance/api_mobile_requests.py
+  attendance/api_permissions_balance.py
+  attendance/api_work_locations.py
+  attendance/test_group3_misc.py
+  leaves/leave_dates.py
+  leaves/models.py
+  leaves/test_leave_balance.py
+  leaves/views.py
+  attendance/test_action_scope.py
+  companies/admin.py
+  companies/management/__init__.py
+  companies/management/commands/__init__.py
+  companies/management/commands/company_access.py
+  core/middleware.py
+  core/push_helper.py
+  motionhr/settings.py
+  subscriptions/views.py
   attendance/api_attendance_policy.py
   attendance/api_eos_policy.py
   attendance/api_payroll.py
@@ -33,14 +132,143 @@ BE_FILES=(
   leaves/api_leave_policy.py
   leaves/services_leave_accrual.py
   motionhr/settings_test.py
+  attendance/test_group16_documents.py
 )
 WEB_FILES=(
+  src/app/api/employee/announcements/route.ts
+  src/app/api/employee/my-missions/route.ts
+  src/app/api/employee/my-permissions/route.ts
+  src/app/api/employee/my-work-locations/route.ts
+  src/app/api/employee/today-sessions/route.ts
+  src/app/api/hr/leave-recalls/route.ts
+  src/app/api/hr/policies-allowance/route.ts
+  src/app/api/hr/policies-attendance/route.ts
+  src/app/api/hr/policies-bonus/route.ts
+  src/app/api/hr/policies-deduction/route.ts
+  src/app/api/hr/policies-leave/route.ts
+  src/app/api/hr/policies/allowance-policies/[id]/route.ts
+  src/app/api/hr/policies/bonus-policies/[id]/route.ts
+  src/app/api/hr/policies/deduction-policies/[id]/route.ts
+  src/app/api/hr/work-location-types/route.ts
+  src/app/api/manager/mission-requests/route.ts
+  src/app/api/manager/shift-changes/route.ts
+  src/app/api/manager/withdraw-requests/route.ts
+  src/app/employee/dashboard/page.tsx
+  src/app/employee/field-visits/page.tsx
+  src/app/employee/missions/page.tsx
+  src/app/employee/permissions/page.tsx
+  src/app/hr/attendance/page.tsx
+  src/app/hr/manual-entries/page.tsx
   src/app/hr/policies/page.tsx
+  src/app/hr/reports/leaves-basic/page.tsx
+  src/app/hr/settings/page.tsx
+  src/app/hr/work-locations/page.tsx
+  src/app/manager/attendance/page.tsx
+  src/app/manager/locations/page.tsx
+  src/app/manager/my-field-visits/page.tsx
+  src/app/manager/my-missions/page.tsx
+  src/app/manager/requests/page.tsx
+  src/components/auth/access-guard.tsx
+  src/components/auth/login-form.tsx
   src/components/hr/policies/attendance-policy-dialog.tsx
   src/components/hr/policies/bonus-rule-dialog.tsx
   src/components/hr/policies/leave-policy-dialog.tsx
   src/components/hr/policies/penalty-rule-dialog.tsx
+  src/lib/providers.tsx
+  src/app/api/manager/team/route.ts
+  src/app/api/profile/route.ts
+  src/app/change-password/page.tsx
+  src/app/employee/requests/page.tsx
+  src/app/hr/announcements/page.tsx
+  src/app/hr/employees/page.tsx
+  src/app/hr/requests/page.tsx
+  src/app/manager/layout.tsx
+  src/components/maps/live-map.tsx
+  src/lib/hooks/useAuth.ts
+  src/lib/utils.ts
+  src/app/api/attendance/daily/route.ts
+  src/app/api/employees/import/route.ts
+  src/app/api/hr/payroll-pdf/route.ts
+  src/app/api/hr/permissions-roles/route.ts
+  src/app/api/hr/policies/attendance-policy/[id]/clone/route.ts
+  src/app/api/leaves/enhanced/route.ts
+  src/app/api/manager/team-attendance/route.ts
+  src/app/api/reports/absence/route.ts
+  src/app/api/reports/eos/export/pdf/route.ts
+  src/app/api/reports/eos/export/route.ts
+  src/app/api/reports/export/excel/route.ts
+  src/app/api/reports/export/pdf/route.ts
+  src/app/api/reports/late/route.ts
+  src/app/api/reports/leaves-basic/route.ts
+  src/app/api/reports/location-tracking/route.ts
+  src/app/api/reports/monthly-attendance/route.ts
+  src/app/api/reports/permissions/route.ts
+  src/app/api/reports/work-hours/route.ts
+  src/app/api/requests/report/route.ts
+  src/app/employee/attendance/page.tsx
+  src/app/employee/leaves/page.tsx
+  src/app/employee/org-chart/page.tsx
+  src/app/hr/branches/page.tsx
+  src/app/hr/employees/import/page.tsx
+  src/app/hr/job-titles/page.tsx
+  src/app/hr/leave-recall/page.tsx
+  src/app/hr/leaves/page.tsx
+  src/app/hr/missions/page.tsx
+  src/app/hr/org-chart/page.tsx
+  src/app/hr/permissions/assign/page.tsx
+  src/app/hr/permissions/export/page.tsx
+  src/app/hr/permissions/roles/page.tsx
+  src/app/hr/reports/daily-attendance/page.tsx
+  src/app/hr/reports/eos/page.tsx
+  src/app/hr/reports/location-tracking/page.tsx
+  src/app/hr/shifts/page.tsx
+  src/app/manager/missions/page.tsx
+  src/app/manager/my-attendance/page.tsx
+  src/app/manager/org-chart/page.tsx
+  src/app/manager/reports/page.tsx
+  src/app/manager/substitution-summary/page.tsx
+  src/components/dashboard/header.tsx
+  src/components/hr/policies/allowance-rule-dialog.tsx
+  src/components/hr/policies/insurance-policy-dialog.tsx
+  src/components/hr/policies/leave-rule-dialog.tsx
+  src/components/hr/policies/payroll-cycle-policy-dialog.tsx
+  src/components/hr/policies/payroll-policy-dialog.tsx
+  src/components/hr/policies/tax-policy-dialog.tsx
+  src/lib/stores/auth.ts
+  src/app/api/auth/logout/route.ts
+  src/app/hr/employees/[id]/page.tsx
+  src/app/hr/reports/page.tsx
+  src/components/dashboard/sidebar.tsx
+  src/lib/stores/language.ts
+  src/app/api/audit/employee/[id]/route.ts
+  src/app/api/audit/filters/route.ts
+  src/app/api/audit/logs/route.ts
+  src/app/api/reports/field-visits/[id]/route.ts
+  src/app/api/reports/field-visits/route.ts
+  src/app/hr/audit/page.tsx
+  src/app/hr/reports/field-visits/page.tsx
+  src/app/manager/field-visits-report/page.tsx
+  src/components/reports/field-visits-report.tsx
+  src/lib/audit-proxy.ts
+  src/app/api/biometric/[...path]/route.ts
+  src/app/hr/biometric/page.tsx
+  src/lib/documents-proxy.ts
+  src/components/employees/employee-documents.tsx
+  src/app/api/hr/employees/[id]/documents/route.ts
+  src/app/api/hr/employees/[id]/documents/[docId]/route.ts
 )
+
+# تنزيل نسخة من GitHub — بمفتاح القراءة لو موجود (المستودعات الخاصة)، ومن غيره لو عامة
+GH_TOKEN_FILE="${GH_TOKEN_FILE:-/root/.motionhr_github_token}"
+GH_TOKEN=""
+[ -r "$GH_TOKEN_FILE" ] && GH_TOKEN="$(tr -d '[:space:]' < "$GH_TOKEN_FILE")"
+gh_tarball() {  # $1 = اسم المستودع ، $2 = الفرع ، $3 = الملف
+  if [ -n "$GH_TOKEN" ]; then
+    curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/johnsamire-coder/$1/tarball/$2" -o "$3"
+  else
+    curl -fsSL "https://codeload.github.com/johnsamire-coder/$1/tar.gz/refs/heads/$2" -o "$3"
+  fi
+}
 
 say()  { echo -e "\n\033[1;34m▶ $*\033[0m"; }
 ok()   { echo -e "\033[1;32m✔ $*\033[0m"; }
@@ -76,12 +304,17 @@ NODE_DIR="$(dirname "$(readlink -f "$NPM")")"
 say "0/5 بتأكد إن الكود اللي على السيرفر ماتغيرش من ساعة ما اتبعت"
 # النسخ المعروفة: كود السيرفر الأصلي + كل رفعة سابقة من التصليحات دي
 # + الفرع اللي بنرفعه نفسه: لو السيرفر عليه النسخة دي خلاص، إعادة الرفع آمنة
-KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 $BRANCH"
+KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 policies-hub-deployed-5 policies-hub-deployed-6 policies-hub-deployed-7 policies-hub-deployed-8 policies-hub-deployed-9 policies-hub-deployed-10 policies-hub-deployed-11 policies-hub-deployed-12 policies-hub-deployed-13 policies-hub-deployed-14 policies-hub-deployed-15 policies-hub-deployed-16 policies-hub-deployed-17 policies-hub-deployed-18 policies-hub-deployed-19 policies-hub-deployed-20 $BRANCH"
 for ref in $KNOWN_REFS; do
   mkdir -p "$TMP/known_be/$ref" "$TMP/known_web/$ref"
-  curl -fsSL "https://codeload.github.com/johnsamire-coder/motionhr/tar.gz/refs/heads/$ref" | tar -xz -C "$TMP/known_be/$ref" --strip-components=1
-  curl -fsSL "https://codeload.github.com/johnsamire-coder/motionhr_web/tar.gz/refs/heads/$ref" | tar -xz -C "$TMP/known_web/$ref" --strip-components=1
+  # النسخة اللي لسه ماترفعتش مش هتبقى موجودة — عادي
+  gh_tarball motionhr "$ref" "$TMP/k.tgz" 2>/dev/null && tar -xzf "$TMP/k.tgz" -C "$TMP/known_be/$ref" --strip-components=1
+  gh_tarball motionhr_web "$ref" "$TMP/k.tgz" 2>/dev/null && tar -xzf "$TMP/k.tgz" -C "$TMP/known_web/$ref" --strip-components=1
 done
+rm -f "$TMP/k.tgz"
+# لازم على الأقل النسخة اللي على السيرفر دلوقتي تكون نزلت، وإلا الفحص مالوش لازمة
+[ -f "$TMP/known_be/policies-hub-deployed-3/manage.py" ] && [ -f "$TMP/known_web/policies-hub-deployed-3/package.json" ] || {
+  trap - ERR; fail "معرفتش أنزّل النسخ المعروفة من GitHub (النت أو مفتاح GitHub). ماحصلش أي تغيير على السيرفر."; exit 1; }
 _known() {  # $1 = be|web ، $2 = الملف ، $3 = المسار على السيرفر
   [ -e "$3" ] || return 0
   local found_any=0
@@ -108,21 +341,26 @@ mkdir -p "$BK"
 ( cd "$BE" && for f in "${BE_FILES[@]}"; do [ -e "$f" ] && echo "$f"; done > "$BK/backend_existing_files.txt"; true )
 ( cd "$BE" && for f in "${BE_FILES[@]}"; do [ -e "$f" ] || echo "$f"; done > "$BK/backend_new_files.txt"; true )
 ( cd "$BE" && tar -czf "$BK/backend_files.tar.gz" -T "$BK/backend_existing_files.txt" )
-( cd "$WEB" && tar -czf "$BK/web_files.tar.gz" "${WEB_FILES[@]}" )
+( cd "$WEB" && for f in "${WEB_FILES[@]}"; do [ -e "$f" ] && echo "$f"; done > "$BK/web_existing_files.txt"; true )
+( cd "$WEB" && for f in "${WEB_FILES[@]}"; do [ -e "$f" ] || echo "$f"; done > "$BK/web_new_files.txt"; true )
+( cd "$WEB" && tar -czf "$BK/web_files.tar.gz" -T "$BK/web_existing_files.txt" )
 if [ -d "$WEB/.next" ]; then ( cd "$WEB" && tar -czf "$BK/web_next_build.tar.gz" .next ); fi
 
 cat > "$BK/rollback.sh" <<ROLLBACK
 #!/usr/bin/env bash
 # الرجوع للنسخة اللي كانت قبل رفع $TS
 set -u
+[ -f "$BK/cron_created" ] && rm -f /etc/cron.d/motionhr-document-reminders && echo "▶ شلت جدول تذكير المستندات"
 echo "▶ بشيل القواعد اللي اتنقلت من سياسات الحضور (السياسات الأصلية لسه موجودة)..."
-cd "$BE" && sudo -H -u $BE_OWNER "$PY" manage.py shell -c "from attendance.company_policy_models import PenaltyRule, BonusRule; print(PenaltyRule._base_manager.filter(change_reason__startswith='converted_from_policy:').delete()[0] + BonusRule._base_manager.filter(change_reason__startswith='converted_from_policy:').delete()[0], 'قاعدة')" 2>/dev/null | tail -1 || true
+# بس القواعد اللي اتنقلت في الرفعة دي (مش اللي اتنقلت في رفعات قبلها)
+cd "$BE" && sudo -H -u $BE_OWNER "$PY" manage.py shell -c "from django.utils.dateparse import parse_datetime; from attendance.company_policy_models import PenaltyRule, BonusRule; t = parse_datetime('$START_ISO'); print(PenaltyRule._base_manager.filter(change_reason__startswith='converted_from_policy:', created_at__gte=t).delete()[0] + BonusRule._base_manager.filter(change_reason__startswith='converted_from_policy:', created_at__gte=t).delete()[0], 'قاعدة')" 2>/dev/null | tail -1 || true
 echo "▶ برجّع ملفات الباك إند..."
 cd "$BE" && tar -xzf "$BK/backend_files.tar.gz"
-while read -r f; do [ -n "\$f" ] && rm -f "$BE/\$f"; done < "$BK/backend_new_files.txt"
+while read -r f; do [ -n "\$f" ] && rm -f "$BE/\$f" && rmdir -p --ignore-fail-on-non-empty "\$(dirname "$BE/\$f")" 2>/dev/null; done < "$BK/backend_new_files.txt"
 chown $BE_OWNER: \$(tar -tzf "$BK/backend_files.tar.gz") 2>/dev/null || true
 echo "▶ برجّع ملفات الويب..."
 cd "$WEB" && tar -xzf "$BK/web_files.tar.gz"
+while read -r f; do [ -n "\$f" ] && rm -f "$WEB/\$f" && rmdir -p --ignore-fail-on-non-empty "\$(dirname "$WEB/\$f")" 2>/dev/null; done < "$BK/web_new_files.txt"
 if [ -f "$BK/web_next_build.tar.gz" ]; then rm -rf "$WEB/.next" && tar -xzf "$BK/web_next_build.tar.gz" && chown -R $WEB_OWNER: "$WEB/.next"; fi
 systemctl restart $BE_SERVICE
 systemctl restart $WEB_SERVICE
@@ -162,23 +400,44 @@ trap 'rollback' ERR
 
 # ── 2) تنزيل التصليحات ──
 say "2/5 بنزّل التصليحات من GitHub"
-curl -fsSL "https://codeload.github.com/johnsamire-coder/motionhr/tar.gz/refs/heads/$BRANCH" -o "$TMP/be.tgz"
-curl -fsSL "https://codeload.github.com/johnsamire-coder/motionhr_web/tar.gz/refs/heads/$BRANCH" -o "$TMP/web.tgz"
+gh_tarball motionhr "$BRANCH" "$TMP/be.tgz"
+gh_tarball motionhr_web "$BRANCH" "$TMP/web.tgz"
 mkdir -p "$TMP/be" "$TMP/web"
 tar -xzf "$TMP/be.tgz" -C "$TMP/be" --strip-components=1
 tar -xzf "$TMP/web.tgz" -C "$TMP/web" --strip-components=1
 for f in "${BE_FILES[@]}"; do install -D -o "$BE_OWNER" -g "$(stat -c %G "$BE/manage.py")" -m 644 "$TMP/be/$f" "$BE/$f"; done
+WEB_CHANGED=0
+for f in "${WEB_FILES[@]}"; do cmp -s "$TMP/web/$f" "$WEB/$f" || WEB_CHANGED=1; done
 for f in "${WEB_FILES[@]}"; do install -D -o "$WEB_OWNER" -g "$(stat -c %G "$WEB/package.json")" -m 644 "$TMP/web/$f" "$WEB/$f"; done
 ok "الملفات اتحدثت (${#BE_FILES[@]} باك إند + ${#WEB_FILES[@]} ويب)"
 
 # ── 3) اختبارات الباك إند على السيرفر نفسه ──
-say "3/5 بشغّل اختبارات المرتبات (198 اختبار على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
+say "3/5 بشغّل الاختبارات (المرتبات والدخول، على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py check >/dev/null )
-if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
+if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios accounts.test_access_guard attendance.test_action_scope attendance.test_group3_misc leaves.test_leave_balance attendance.test_group4_permissions attendance.test_group5_bugs employees.test_import_bulk attendance.test_group6_web_server attendance.test_group7_safety attendance.test_group8_medium attendance.test_group9_scope attendance.test_group10_misc attendance.test_group11_mobile_server attendance.test_group12_app_support attendance.test_group13_web attendance.test_group14_reports attendance.test_group16_documents audit biometric --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
   grep -E "^(FAIL|ERROR):|Error" "$BK/tests.log" | head -20; tail -5 "$BK/tests.log"; false
 fi
 grep -E "^Ran |^OK" "$BK/tests.log" || true
 ok "كل الاختبارات نجحت"
+
+# ── 3أ) جدول سجل التعديلات (جدول جديد مستقل؛ مابيلمسش أي جدول تاني ولا تاريخ الـ migrations) ──
+say "3أ بجهز جدول سجل التعديلات وجداول أجهزة البصمة"
+( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py audit_setup >"$BK/audit_setup.log" 2>&1 ) || { cat "$BK/audit_setup.log"; fail "جدول سجل التعديلات ماتعملش"; false; }
+grep -v "objects imported" "$BK/audit_setup.log" || true
+ok "سجل التعديلات جاهز"
+( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py biometric_setup >"$BK/biometric_setup.log" 2>&1 ) || { cat "$BK/biometric_setup.log"; fail "جداول البصمة ماتعملتش"; false; }
+grep -v "objects imported" "$BK/biometric_setup.log" || true
+ok "جداول أجهزة البصمة جاهزة"
+
+# ── 3ج) تذكير المستندات اللي قربت تنتهي: مرة كل يوم الصبح (ملف لوحده، مابيلمسش أي جدولة تانية) ──
+CRON_FILE=/etc/cron.d/motionhr-document-reminders
+if [ -d /etc/cron.d ] && [ ! -e "$CRON_FILE" ]; then
+  printf '# MotionHR: document expiry reminders (added by deploy script)\nSHELL=/bin/bash\n5 7 * * * %s cd %s && %s manage.py send_reminders --type documents >/dev/null 2>&1\n' \
+    "$BE_OWNER" "$BE" "$PY" > "$CRON_FILE"
+  chmod 644 "$CRON_FILE"
+  touch "$BK/cron_created"
+  ok "تذكير المستندات اتجدول (كل يوم الصبح)"
+fi
 
 # ── 3ب) نقل قواعد سياسات الحضور لكروتها المنفصلة (بيتأكد إن ولا مرتب اتغير قبل ما يحفظ) ──
 say "3ب نقل قواعد التأخير والغياب والأوفر تايم لكروتها المنفصلة"
@@ -189,14 +448,18 @@ grep -v "objects imported" "$BK/convert.log" || true
 ok "النقل تم من غير ما أي رقم يتغير"
 
 # ── 4) بناء الويب ──
-say "4/5 ببني الويب (ممكن ياخد كام دقيقة)"
-( cd "$WEB" && sudo -H -u "$WEB_OWNER" env PATH="$(dirname "$NPM"):$NODE_DIR:/usr/local/bin:/usr/bin:/bin" "$NPM" run build >"$BK/web_build.log" 2>&1 ) || { tail -30 "$BK/web_build.log"; false; }
-ok "الويب اتبنى"
+if [ "$WEB_CHANGED" = 1 ]; then
+  say "4/5 ببني الويب (ممكن ياخد كام دقيقة)"
+  ( cd "$WEB" && sudo -H -u "$WEB_OWNER" env PATH="$(dirname "$NPM"):$NODE_DIR:/usr/local/bin:/usr/bin:/bin" "$NPM" run build >"$BK/web_build.log" 2>&1 ) || { tail -30 "$BK/web_build.log"; false; }
+  ok "الويب اتبنى"
+else
+  say "4/5 الويب ماتغيرش — مش محتاج يتبني"
+fi
 
 # ── 5) إعادة التشغيل والتأكد ──
 say "5/5 بعيد تشغيل الخدمات"
 systemctl restart "$BE_SERVICE"
-systemctl restart "$WEB_SERVICE"
+[ "$WEB_CHANGED" = 1 ] && systemctl restart "$WEB_SERVICE"
 sleep 5
 systemctl is-active --quiet "$BE_SERVICE" || { journalctl -u "$BE_SERVICE" -n 30 --no-pager; false; }
 systemctl is-active --quiet "$WEB_SERVICE" || { journalctl -u "$WEB_SERVICE" -n 30 --no-pager; false; }
@@ -204,6 +467,9 @@ ok "الخدمتين شغالين"
 
 trap - ERR
 rm -rf "$TMP"
+if ! grep -q '^EMAIL_HOST_PASSWORD=.' "$BE/.env" 2>/dev/null; then
+  echo -e "\n\033[1;33m⚠ باسورد إيميل البرنامج لسه مش متحط في ملف .env — الإيميلات (زي استعادة الباسورد) واقفة لحد ما تحطه.\033[0m"
+fi
 echo
 echo "════════════════════════════════════════════"
 ok "تم الرفع بنجاح ✅"

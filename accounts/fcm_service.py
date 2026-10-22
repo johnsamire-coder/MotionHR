@@ -60,6 +60,11 @@ def send_notification_to_user(user, title, body, data=None, title_en=None, body_
 
     _log_notification(user, title, body, data)
 
+    # الشركة الموقوفة مابيوصلهاش إشعارات، وبترجع أول ما تشتغل
+    from accounts.access import notifications_allowed
+    if not notifications_allowed(user):
+        return {"success": False, "sent": 0, "failed": 0, "errors": ["Company suspended"]}
+
     if not init_firebase():
         return {"success": False, "sent": 0, "failed": 0, "errors": ["Firebase init failed"]}
 
@@ -277,7 +282,7 @@ def notify_manager_new_request(company, employee_name, request_type, request_id=
     )
 
 
-def notify_manager_new_leave(company, employee_name, leave_type, leave_id=None):
+def notify_manager_new_leave(company, employee_name, leave_type, leave_id=None, employee=None):
     data = {
         'type': 'new_leave',
         'screen': 'manager_pending',
@@ -292,10 +297,11 @@ def notify_manager_new_leave(company, employee_name, leave_type, leave_id=None):
         data=data,
         title_en='📩 New Leave Request',
         body_en=f'Employee {employee_name} submitted a leave request: {leave_type}',
+        employee=employee,
     )
 
 
-def notify_manager_out_of_geofence(company, employee_name, distance):
+def notify_manager_out_of_geofence(company, employee_name, distance, employee=None):
     return send_notification_to_managers(
         company=company,
         title='⚠️ محاولة حضور خارج النطاق',
@@ -303,6 +309,7 @@ def notify_manager_out_of_geofence(company, employee_name, distance):
         data={'type': 'geofence_violation'},
         title_en='⚠️ Out of Geofence Attempt',
         body_en=f'Employee {employee_name} tried to check in from {distance}m away',
+        employee=employee,
     )
 
 

@@ -152,6 +152,16 @@ def mobile_leave_substitutes(request):
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     from employees.models import Employee
+    from django.db.models import Q
+
+    # المدير لما بيوافق على إجازة مرضية بيختار بديل لصاحب الإجازة، فالقايمة تتبني على مستوى صاحب الإجازة
+    # (قبل كده كانت بتتبني على مستوى المدير نفسه، فتطلع مديرين بس)
+    _for_id = request.query_params.get('exclude_employee_id') or request.query_params.get('for_employee_id')
+    if _for_id:
+        from attendance.action_scope import in_scope
+        _owner = Employee._base_manager.filter(id=_for_id, company=employee.company).first()
+        if _owner and in_scope(request.user, _owner):
+            employee = _owner
 
     # هل الموظف مدير؟
     is_manager = False
@@ -181,12 +191,11 @@ def mobile_leave_substitutes(request):
 
         all_ids = set(qs.values_list('id', flat=True)) | senior_ids | admins_ids
     else:
-        # الموظف العادي: كل الموظفين العاديين في الشركة
+        # الموظف العادي: كل الموظفين العاديين في الشركة (واللي مالهمش مسمى وظيفي كمان)
         qs = Employee._base_manager.filter(
             company=employee.company,
             status='active',
-            job_title__is_manager=False,
-        ).exclude(id=employee.id)
+        ).filter(Q(job_title__isnull=True) | Q(job_title__is_manager=False)).exclude(id=employee.id)
         all_ids = set(qs.values_list('id', flat=True))
 
     all_ids.discard(employee.id)
@@ -351,31 +360,43 @@ def mobile_leave_request(request):
         except Employee.DoesNotExist:
             pass
 
-    leave_request = LeaveRequest._base_manager.create(
-        company=employee.company,
-        employee=employee,
-        leave_type=leave_type,
-        start_date=start,
-        end_date=end,
-        days_count=days_count,
-        half_day_type=_half_day_type_val,
-        leave_hours=_leave_hours,
-        reason=reason,
-        notes=_leave_notes if half_day else '',
-        status='pending',
-        substitute_employee=substitute_emp,
-    )
+    # الضغط مرتين بسرعة: بنقفل على الموظف ونعيد فحص التداخل جوه نفس العملية، فيتعمل طلب واحد بس
+    from django.db import transaction
+    from django.db.models import F
+    from decimal import Decimal as _D
+    from employees.models import Employee as _Emp
+    with transaction.atomic():
+        _Emp._base_manager.select_for_update().filter(pk=employee.pk).first()
+        if LeaveRequest._base_manager.filter(
+            company=employee.company, employee=employee, status__in=['pending', 'approved'],
+            start_date__lte=end, end_date__gte=start,
+        ).exists():
+            return Response({
+                'success': False,
+                'message': 'عندك إجازة موجودة بالفعل في نفس الفترة دي'
+            }, status=400)
 
-    year = start.year
-    balance = LeaveBalance._base_manager.filter(
-        company=employee.company,
-        employee=employee,
-        leave_type=leave_type,
-        year=year
-    ).first()
-    if balance:
-        balance.pending_days = float(balance.pending_days) + days_count
-        balance.save()
+        leave_request = LeaveRequest._base_manager.create(
+            company=employee.company,
+            employee=employee,
+            leave_type=leave_type,
+            start_date=start,
+            end_date=end,
+            days_count=days_count,
+            half_day_type=_half_day_type_val,
+            leave_hours=_leave_hours,
+            reason=reason,
+            notes=_leave_notes if half_day else '',
+            status='pending',
+            substitute_employee=substitute_emp,
+        )
+
+        LeaveBalance._base_manager.filter(
+            company=employee.company,
+            employee=employee,
+            leave_type=leave_type,
+            year=start.year
+        ).update(pending_days=F('pending_days') + _D(str(days_count)))
 
     # إشعار للمدير - طلب إجازة جديد
     try:
@@ -777,7 +798,8 @@ def mobile_submit_request(request):
                 'message': 'لا يمكن رد المصروفات - لا يوجد حضور مسجل في هذا التاريخ'
             }, status=400)
 
-        if parsed_permission_time is None:
+        # الوقت مش مطلوب لرد المصروفات (الموبايل مابيبعتهوش)؛ الخطأ بس لو اتبعت بصيغة غلط
+        if permission_time_raw and parsed_permission_time is None:
             return Response({
                 'success': False,
                 'message': 'صيغة الوقت غير صحيحة',
@@ -1161,8 +1183,12 @@ def mobile_manager_action(request):
         }, status=400)
 
     try:
+        from attendance.action_scope import deny_action, deny_mission_action
         if item_type == 'leave':
             item = LeaveRequest._base_manager.get(id=item_id)
+            denied = deny_action(user, item.employee)
+            if denied:
+                return denied
 
             employee_user = None
             try:
@@ -1194,7 +1220,8 @@ def mobile_manager_action(request):
 
                 # تم إلغاء إجبار تحديد بديل عند اعتماد الإجازة المرضية (البديل اختياري دلوقتي)
 
-                item.approve(user, notes)
+                if not item.approve(user, notes):
+                    return Response({'success': False, 'message': 'الطلب ده اتراجع قبل كده', 'status': item.status}, status=409)
                 if employee_user:
                     try:
                         notify_leave_approved(
@@ -1207,7 +1234,8 @@ def mobile_manager_action(request):
                     except Exception as e:
                         print(f"FCM notification error: {e}")
             else:
-                item.reject(user, notes)
+                if not item.reject(user, notes):
+                    return Response({'success': False, 'message': 'الطلب ده اتراجع قبل كده', 'status': item.status}, status=409)
                 if employee_user:
                     try:
                         notify_leave_rejected(
@@ -1247,6 +1275,9 @@ def mobile_manager_action(request):
 
         elif item_type == 'request':
             item = EmployeeRequest._base_manager.get(id=item_id)
+            denied = deny_action(user, item.employee)
+            if denied:
+                return denied
 
             employee_user = None
             try:
@@ -1261,6 +1292,21 @@ def mobile_manager_action(request):
                 request_title = item.subject if hasattr(item, 'subject') else ''
             except Exception:
                 request_type_name = 'طلب'
+
+            # الطلب بيتقرر مرة واحدة بس (الضغط مرتين، أو موافقة بعد رفض، كانوا بيتنفذوا)
+            _final = 'approved' if action == 'approve' else 'rejected'
+            if not EmployeeRequest._base_manager.filter(
+                pk=item.pk, status__in=('pending', 'manager_approved', 'hr_approved'),
+            ).update(status=_final):
+                item.refresh_from_db()
+                return Response({'success': False, 'message': 'الطلب ده اتراجع قبل كده', 'status': item.status}, status=409)
+            try:
+                from audit.signals import log_change
+                _sc = dict(EmployeeRequest._meta.get_field('status').flatchoices)
+                log_change(item, [{'field': 'status', 'label': 'الحالة', 'old': str(_sc.get(item.status, item.status)),
+                                   'new': str(_sc.get(_final, _final))}], note=notes)
+            except Exception:
+                pass
 
             if action == 'approve':
                 item.status = 'approved'
@@ -1431,13 +1477,17 @@ def mobile_manager_action(request):
         elif item_type == 'mission':
             from attendance.missions_models import Mission, MissionAssignment
             item = Mission._base_manager.get(id=item_id)
+            denied = deny_mission_action(user, item)
+            if denied:
+                return denied
 
             employee_user = item.created_by
             mission_title = item.title or ''
 
             if action == 'approve':
                 # المهمة اللي بتاريخ سابق تتحط "مكتملة" على طول (الموظف مش هيبدأ/ينهي دلوقتي)
-                item.status = 'completed' if item.is_backdated else 'active'
+                # 'active' مش حالة موجودة، فالمهمة كانت بتختفي من الفلاتر — المعتمدة اسمها 'approved'
+                item.status = 'completed' if item.is_backdated else 'approved'
                 item.save()
                 # الموظف اللي طلب المهمة لازم يتعيّن عليها فعليًا عشان تظهر في شاشة مهماته
                 if employee_user:
@@ -1477,6 +1527,17 @@ def mobile_manager_action(request):
             else:
                 item.status = 'cancelled'
                 item.save()
+
+            # طلب المهمة المرتبط كان بيفضل "معلق" للأبد
+            try:
+                from attendance.missions_models import MissionRequest
+                _decision = 'approved' if action == 'approve' else 'rejected'
+                MissionRequest._base_manager.filter(mission=item).update(
+                    manager_approval=_decision, final_status=_decision, manager=user,
+                    manager_responded_at=timezone.now(), manager_notes=notes or '',
+                )
+            except Exception:
+                pass
 
             try:
                 from attendance.fcm_logic import notify_mission_request_approved, notify_mission_request_rejected
@@ -1533,12 +1594,13 @@ def mobile_manager_employees_attendance(request):
     else:
         target_date = timezone.localdate()
 
-    scope_employee_ids = list(_get_direct_team_employees(user).values_list('id', flat=True))
-    # لو الأدمن/HR معندهوش فريق مباشر مربوط بيه، يشوف الشركة كلها (زي الداشبورد)
-    if not scope_employee_ids and (user.is_superuser or role in FULL_ACCESS_ROLES):
+    # الأدمن والـ HR يشوفوا الشركة كلها دايماً (حتى لو ليهم فريق مباشر)، والمدير فريقه بس
+    if user.is_superuser or role in FULL_ACCESS_ROLES:
         scope_employee_ids = list(
             _Emp._base_manager.filter(company=company, status='active').values_list('id', flat=True)
         )
+    else:
+        scope_employee_ids = list(_get_direct_team_employees(user).values_list('id', flat=True))
 
     records = Attendance._base_manager.filter(
         date=target_date,
@@ -1721,7 +1783,8 @@ def mobile_manager_live_locations(request):
         ).order_by('-timestamp').first()
 
         if last_log:
-            log_date = last_log.timestamp.date() if last_log.timestamp else None
+            # بتوقيت مصر (قبل كده جرينتش، فالصبح بدري كان بيبان "مش من النهارده")
+            log_date = timezone.localtime(last_log.timestamp).date() if last_log.timestamp else None
             is_online = log_date == today
             items.append({
                 'employee_id': emp.id,
@@ -1732,7 +1795,7 @@ def mobile_manager_live_locations(request):
                 'longitude': float(last_log.longitude),
                 'accuracy': float(last_log.accuracy) if last_log.accuracy else 0,
                 'address': getattr(last_log, 'address', '') or '',
-                'timestamp': last_log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if last_log.timestamp else '',
+                'timestamp': timezone.localtime(last_log.timestamp).strftime('%Y-%m-%d %H:%M:%S') if last_log.timestamp else '',
                 'status': 'online' if is_online else 'offline',
                 'has_location': True,
                 'attendance_registered': True,
@@ -1799,7 +1862,9 @@ def mobile_manager_employee_route(request):
         emp_qs = emp_qs.filter(company=company)
 
     employee = emp_qs.first()
-    if not employee:
+    # المدير يشوف خط سير فريقه بس (نفس اللي بيقدر ياخد عليهم قرارات)
+    from attendance.action_scope import in_scope
+    if not employee or not in_scope(user, employee):
         return Response({'success': False, 'message': 'الموظف غير موجود'}, status=404)
 
     from attendance.models import LocationLog
@@ -1820,7 +1885,7 @@ def mobile_manager_employee_route(request):
             'longitude': float(log.longitude),
             'accuracy': float(log.accuracy) if log.accuracy else 0,
             'address': getattr(log, 'address', '') or '',
-            'timestamp': log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else '',
+            'timestamp': timezone.localtime(log.timestamp).strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else '',
         })
 
     return Response({
@@ -1867,14 +1932,29 @@ def mobile_edit_request(request, request_id):
         req.details = d['details']
     if 'priority' in d:
         req.priority = d['priority']
-    if 'start_date' in d:
-        req.start_date = d['start_date'] or None
-    if 'end_date' in d:
-        req.end_date = d['end_date'] or None
-    if 'amount' in d:
-        req.amount = d['amount'] or None
-    if 'duration_hours' in d:
-        req.duration_hours = d['duration_hours'] or None
+    # المبلغ والمدة والتواريخ عدّوا على فحوصات (حد السلفة وسياسة الأذونات) وقت التقديم،
+    # فتغييرهم بعد كده بيتعمل بإلغاء الطلب وتقديمه تاني عشان يتفحصوا من جديد
+    from decimal import Decimal, InvalidOperation
+
+    def _same(field, new):
+        old = getattr(req, field)
+        if new in (None, ''):
+            return old in (None, '') or (field in ('amount', 'duration_hours') and Decimal(str(old)) == 0)
+        if old in (None, ''):
+            return False
+        if field in ('amount', 'duration_hours'):
+            try:
+                return Decimal(str(new)) == Decimal(str(old))
+            except InvalidOperation:
+                return False
+        return str(new)[:10] == str(old)[:10]
+
+    for _f in ('start_date', 'end_date', 'amount', 'duration_hours'):
+        if _f in d and not _same(_f, d[_f]):
+            return Response({
+                'success': False,
+                'message': 'لتغيير المبلغ أو المدة أو التاريخ: الغي الطلب وقدّمه من جديد',
+            }, status=400)
     req.save()
 
     return Response({
@@ -1996,18 +2076,21 @@ def mobile_edit_leave(request, leave_id):
         }, status=400)
 
     d = request.data
-    if 'start_date' in d:
-        leave.start_date = d['start_date']
-    if 'end_date' in d:
-        leave.end_date = d['end_date']
+    from leaves.leave_dates import LeaveDateError, reschedule_pending_leave
+    try:
+        if 'start_date' in d or 'end_date' in d:
+            reschedule_pending_leave(leave, d.get('start_date'), d.get('end_date'))
+    except LeaveDateError as e:
+        return Response({'success': False, 'message': str(e)}, status=400)
     if 'reason' in d:
         leave.reason = d['reason']
-    leave.save()
+        leave.save(update_fields=['reason'])
 
     return Response({
         'success': True,
         'message': 'تم تعديل طلب الإجازة بنجاح',
         'leave_id': leave.id,
+        'days_count': float(leave.days_count),
     })
 
 
@@ -2035,7 +2118,8 @@ def mobile_cancel_leave(request, leave_id):
             'message': f'لا يمكن إلغاء الإجازة — حالتها: {leave.get_status_display()}'
         }, status=400)
 
-    leave.cancel()
+    if not leave.cancel():
+        return Response({'success': False, 'message': 'الإجازة اتلغت أو اتغيرت حالتها قبل كده'}, status=409)
 
     # إشعار المدير بإلغاء الموظف لإجازته
     try:
@@ -2074,6 +2158,11 @@ def manager_edit_request(request, request_id):
         req = EmployeeRequest._base_manager.get(id=request_id)
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
+
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, req.employee)
+    if denied:
+        return denied
 
     if req.status in ('cancelled',):
         return Response({
@@ -2128,6 +2217,11 @@ def manager_cancel_request(request, request_id):
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
 
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, req.employee)
+    if denied:
+        return denied
+
     if req.status == 'cancelled':
         return Response({'success': False, 'message': 'الطلب ملغي مسبقاً'}, status=400)
 
@@ -2162,6 +2256,11 @@ def manager_reopen_request(request, request_id):
         req = EmployeeRequest._base_manager.get(id=request_id)
     except EmployeeRequest.DoesNotExist:
         return Response({'success': False, 'message': 'الطلب غير موجود'}, status=404)
+
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, req.employee)
+    if denied:
+        return denied
 
     if req.status not in ('rejected', 'cancelled'):
         return Response({
@@ -2203,20 +2302,23 @@ def manager_edit_leave(request, leave_id):
     except Exception:
         return Response({'success': False, 'message': 'طلب الإجازة غير موجود'}, status=404)
 
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, leave.employee)
+    if denied:
+        return denied
+
     if leave.status == 'cancelled':
         return Response({'success': False, 'message': 'لا يمكن تعديل إجازة ملغية'}, status=400)
 
     d = request.data
-    if 'start_date' in d:
-        leave.start_date = d['start_date']
-    if 'end_date' in d:
-        leave.end_date = d['end_date']
+    from leaves.leave_dates import LeaveDateError, reschedule_pending_leave
+    try:
+        if 'start_date' in d or 'end_date' in d:
+            reschedule_pending_leave(leave, d.get('start_date'), d.get('end_date'))
+    except LeaveDateError as e:
+        return Response({'success': False, 'message': str(e)}, status=400)
     if 'reason' in d:
         leave.reason = d['reason']
-    if 'status' in d and role in ('company_admin', 'hr_manager', 'super_admin'):
-        new_status = d['status']
-        # تم إلغاء إجبار تحديد بديل عند اعتماد الإجازة المرضية (البديل اختياري دلوقتي)
-        leave.status = new_status
     if 'substitute_employee_id' in d:
         from employees.models import Employee
         try:
@@ -2228,7 +2330,26 @@ def manager_edit_leave(request, leave_id):
             leave.substitute_employee = sub
         except Employee.DoesNotExist:
             pass
-    leave.save()
+    leave.save(update_fields=['reason', 'substitute_employee'])
+
+    # تغيير الحالة بيعدّي على الموافقة/الرفض/الإلغاء عشان الرصيد والحضور يتظبطوا
+    if 'status' in d and role in ('company_admin', 'hr_manager', 'super_admin'):
+        new_status = str(d['status'] or '').strip()
+        if new_status != leave.status:
+            notes = str(d.get('review_notes', '') or '')
+            if new_status == 'approved' and leave.status == 'pending':
+                ok = leave.approve(request.user, notes)
+            elif new_status == 'rejected' and leave.status == 'pending':
+                ok = leave.reject(request.user, notes)
+            elif new_status == 'cancelled' and leave.status in ('pending', 'approved'):
+                ok = leave.cancel()
+            else:
+                return Response({
+                    'success': False,
+                    'message': f'مينفعش تغيّر حالة الإجازة من "{leave.get_status_display()}" للحالة دي',
+                }, status=400)
+            if not ok:
+                return Response({'success': False, 'message': 'الطلب ده اتراجع قبل كده', 'status': leave.status}, status=409)
 
     return Response({
         'success': True,
@@ -2255,6 +2376,11 @@ def manager_cancel_leave(request, leave_id):
     except Exception:
         return Response({'success': False, 'message': 'طلب الإجازة غير موجود'}, status=404)
 
+    from attendance.action_scope import deny_action
+    denied = deny_action(request.user, leave.employee)
+    if denied:
+        return denied
+
     if leave.status == 'cancelled':
         return Response({'success': False, 'message': 'الإجازة ملغية مسبقاً'}, status=400)
 
@@ -2262,8 +2388,9 @@ def manager_cancel_leave(request, leave_id):
     if not reason:
         return Response({'success': False, 'message': 'سبب الإلغاء مطلوب'}, status=400)
 
-    # cancel() بترجع الرصيد تلقائيًا
-    leave.cancel()
+    # cancel() بترجع الرصيد تلقائيًا، ومرة واحدة بس
+    if not leave.cancel():
+        return Response({'success': False, 'message': 'الإجازة اتلغت أو اتغيرت حالتها قبل كده'}, status=409)
     if hasattr(leave, 'cancel_reason'):
         leave.cancel_reason = reason
         leave.save(update_fields=['cancel_reason'])
@@ -2305,8 +2432,14 @@ def create_leave_recall(request):
 
     try:
 
+        from leaves.models import LeaveRecallRequest
         company = getattr(request.user, 'company', None)
         employee = Employee._base_manager.get(id=employee_id, company=company)
+
+        from attendance.action_scope import deny_action
+        denied = deny_action(request.user, employee)
+        if denied:
+            return denied
 
         leave_request = LeaveRequest._base_manager.filter(
             employee=employee,
@@ -2332,7 +2465,6 @@ def create_leave_recall(request):
             reason=reason,
             requested_by=request.user,
             status='pending',
-            created_by=request.user,
         )
 
         # إشعار HR

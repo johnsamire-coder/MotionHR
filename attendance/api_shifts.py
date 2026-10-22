@@ -77,6 +77,18 @@ def _check_manager(request):
     return None
 
 
+def _check_hr_write(request):
+    """
+    تعريف الشيفتات والتناوب وتعديل/إلغاء تعيينها للشركة: صاحب الشركة والـ HR بس.
+    المدير العادي بيشوف، وبيطلب تعيين شيفت لفريقه (والطلب بيروح للـ HR يوافق).
+    """
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return None
+    if request.user.is_superuser or _get_user_role(request) in HR_ROLES:
+        return None
+    return Response({"success": False, "error": "تعديل الشيفتات والتناوب لصاحب الشركة والموارد البشرية بس"}, status=403)
+
+
 def _get_company(request):
     company = getattr(request.user, "company", None)
     if company:
@@ -428,6 +440,9 @@ def manager_shift_create(request):
     err = _check_manager(request)
     if err:
         return err
+    err = _check_hr_write(request)
+    if err:
+        return err
     try:
         company = _get_company(request)
         if not company:
@@ -530,6 +545,9 @@ def manager_shift_create(request):
 @permission_classes([IsAuthenticated])
 def manager_shift_update(request, shift_id):
     err = _check_manager(request)
+    if err:
+        return err
+    err = _check_hr_write(request)
     if err:
         return err
     try:
@@ -640,6 +658,9 @@ def manager_shift_delete(request, shift_id):
     err = _check_manager(request)
     if err:
         return err
+    err = _check_hr_write(request)
+    if err:
+        return err
     try:
         company = _get_company(request)
         from attendance.models import (
@@ -661,17 +682,22 @@ def manager_shift_delete(request, shift_id):
         total_usage = active_employee_shifts + active_assignments + active_overrides + rotation_slots
 
         if total_usage > 0 or attendance_count > 0:
-            # Hard delete + مسح كل الـ assignments و emp_shifts القديمة
-            # (الحضور بيفضل بدون شيفت لأن الـ FK فيها on_delete=SET_NULL)
-            EmployeeShift._base_manager.filter(shift=shift).delete()
-            ShiftAssignment._base_manager.filter(shift=shift).delete()
-            ShiftOverride._base_manager.filter(shift=shift).delete()
-            ShiftRotationSlot._base_manager.filter(shift=shift).delete()
+            # الشيفت مستخدم: بنوقفه بس من غير ما نمسح تاريخه
+            # (قبل كده كان بيمسح التعيينات القديمة والتناوب ويفصل سجلات الحضور القديمة عنه)
+            if rotation_slots > 0:
+                rot_names = sorted(set(ShiftRotationSlot._base_manager.filter(shift=shift).values_list("rotation__name", flat=True)))
+                return Response({
+                    "success": False,
+                    "error": f"الشيفت ده جزء من تناوب ({'، '.join(n for n in rot_names if n)}). شيله من التناوب الأول وبعدين أوقفه.",
+                }, status=400)
 
-            # الحضور القديم نخليه بدون shift (لا نمسحه!)
-            Attendance._base_manager.filter(shift=shift).update(shift=None)
+            today = timezone.localdate()
+            # التعيينات الشغالة بتنتهي النهارده (والقديمة بتفضل زي ما هي في التاريخ)
+            EmployeeShift._base_manager.filter(shift=shift, is_active=True).update(is_active=False, end_date=today)
+            ShiftAssignment._base_manager.filter(shift=shift, is_active=True).update(is_active=False, end_date=today)
+            # الاستثناءات اللي جاية بس اللي بتتشال
+            ShiftOverride._base_manager.filter(shift=shift, override_date__gt=today).delete()
 
-            # الآن نقدر نمسح الشيفت
             shift.is_active = False
             shift.save()
 
@@ -692,7 +718,7 @@ def manager_shift_delete(request, shift_id):
             return Response({
                 "success": True,
                 "soft_deleted": True,
-                "message": f"تم إلغاء تفعيل الشيفت (لا يمكن حذفه لوجود: {details_text})",
+                "message": f"تم إيقاف الشيفت والاحتفاظ بتاريخه (مامسحناهوش لوجود: {details_text})",
                 "usage": {
                     "employee_shifts": active_employee_shifts,
                     "assignments": active_assignments,
@@ -1745,6 +1771,19 @@ def shift_override_create(request):
         employee = Employee._base_manager.get(id=employee_id, company=company)
         shift = Shift._base_manager.get(id=shift_id, company=company)
 
+        # المدير العادي: لفريقه بس، ومن النهارده ورايح (الأيام اللي فاتت بتغيّر حساب حضورها)
+        if not request.user.is_superuser and _get_user_role(request) not in HR_ROLES:
+            from attendance.action_scope import in_scope
+            from datetime import date as _date
+            if not in_scope(request.user, employee):
+                return Response({"success": False, "error": "الموظف مش في فريقك"}, status=403)
+            try:
+                _od = _date.fromisoformat(str(override_date)[:10])
+            except ValueError:
+                return Response({"success": False, "error": "صيغة التاريخ غلط. استخدم YYYY-MM-DD"}, status=400)
+            if _od < timezone.localdate():
+                return Response({"success": False, "error": "مينفعش تعمل استثناء شيفت ليوم فات. كلم الموارد البشرية."}, status=403)
+
         override, created = ShiftOverride._base_manager.update_or_create(
             employee=employee,
             override_date=override_date,
@@ -2304,6 +2343,9 @@ def manager_shift_assignment_update(request, assignment_id):
     err = _check_manager(request)
     if err:
         return err
+    err = _check_hr_write(request)
+    if err:
+        return err
     try:
         company = _get_company(request)
         from attendance.models import ShiftAssignment
@@ -2385,6 +2427,9 @@ def manager_shift_assignment_delete(request, assignment_id):
     err = _check_manager(request)
     if err:
         return err
+    err = _check_hr_write(request)
+    if err:
+        return err
     try:
         company = _get_company(request)
         from attendance.models import ShiftAssignment
@@ -2421,6 +2466,9 @@ def manager_shift_assignment_delete(request, assignment_id):
 @permission_classes([IsAuthenticated])
 def rotation_list_create(request):
     err = _check_manager(request)
+    if err:
+        return err
+    err = _check_hr_write(request)
     if err:
         return err
     company = _get_company(request)
@@ -2588,6 +2636,9 @@ def rotation_detail(request, rotation_id):
     err = _check_manager(request)
     if err:
         return err
+    err = _check_hr_write(request)
+    if err:
+        return err
     company = _get_company(request)
     from attendance.models import ShiftRotation, ShiftRotationSlot
 
@@ -2682,6 +2733,9 @@ def rotation_detail(request, rotation_id):
 @permission_classes([IsAuthenticated])
 def rotation_assign(request, rotation_id):
     err = _check_manager(request)
+    if err:
+        return err
+    err = _check_hr_write(request)
     if err:
         return err
     company = _get_company(request)
@@ -2806,6 +2860,9 @@ def rotation_assignments_list(request, rotation_id):
 def rotation_assignment_delete(request, assignment_id):
     """حذف (إلغاء تفعيل) تعيين تناوب"""
     err = _check_manager(request)
+    if err:
+        return err
+    err = _check_hr_write(request)
     if err:
         return err
     try:

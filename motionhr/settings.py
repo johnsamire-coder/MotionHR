@@ -63,6 +63,8 @@ INSTALLED_APPS = [
     'requests_app',
     'landing',
     'subscriptions',
+    'audit',   # سجل التعديلات (مين عمل إيه وإمتى)
+    'biometric',   # أجهزة البصمة ZKTeco
     'rest_framework',
     'corsheaders',
     'rest_framework.authtoken',
@@ -76,6 +78,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'audit.middleware.AuditRequestMiddleware',
+    'core.middleware.AccessGuardMiddleware',
     'core.middleware.CompanyPolicyStealthFinalSyncMiddleware',
     'core.middleware.CompanyPolicyStealthSyncMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -183,7 +187,7 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'JsSolutions.eg@gmail.com'
-EMAIL_HOST_PASSWORD = 'fjfq dljn adzs wzpd'
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')  # من ملف .env على السيرفر
 DEFAULT_FROM_EMAIL = 'MotionHR <JsSolutions.eg@gmail.com>'
 
 # ─────────────────────────────────────────────
@@ -301,10 +305,12 @@ SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-CSRF_TRUSTED_ORIGINS = os.getenv(
-    'CSRF_TRUSTED_ORIGINS',
-    'http://localhost,http://127.0.0.1'
-).split(',')
+# قبل كده السطر ده كان بيمسح القايمة اللي فوق (الدومينات الحقيقية) ويحط localhost بس.
+# دلوقتي بنضيف عليها بس، فمفيش دومين كان شغال هيقف.
+CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(
+    list(globals().get('CSRF_TRUSTED_ORIGINS', []))
+    + [o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost,http://127.0.0.1').split(',') if o.strip()]
+))
 
 # Security (only in production)
 if not DEBUG:
@@ -339,9 +345,13 @@ from datetime import timedelta
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+    # أطول من مفتاح الدخول عشان التطبيق يقدر يجدد لوحده (قبل كده الاتنين كانوا بيخلصوا مع بعض فالتطبيق يقف بعد شهر)
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=90),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    # الحساب الموقوف أو الشركة الموقوفة مايطلعلهمش توكن جديد
+    'TOKEN_OBTAIN_SERIALIZER': 'accounts.jwt_serializers.AccessTokenObtainPairSerializer',
+    'TOKEN_REFRESH_SERIALIZER': 'accounts.jwt_serializers.AccessTokenRefreshSerializer',
 }

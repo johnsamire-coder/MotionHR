@@ -5,6 +5,7 @@ Excel + PDF export للموظفين — مع دعم عربي حقيقي في PDF
 
 import os
 import re
+from core.export_safety import safe_cell_value
 from io import BytesIO
 from django.http import HttpResponse
 from django.utils import timezone
@@ -189,7 +190,7 @@ def export_employees_excel(employees, user=None):
         bg = LIGHT_ROW if idx % 2 == 0 else WHITE
         row_data = get_employee_row(emp)
         for col_idx, val in enumerate(row_data, 1):
-            cell = ws.cell(row=row_num, column=col_idx, value=val)
+            cell = ws.cell(row=row_num, column=col_idx, value=safe_cell_value(val))
             cell.fill = PatternFill("solid", fgColor=bg)
             cell.font = Font(name='Cairo', size=10)
             cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)

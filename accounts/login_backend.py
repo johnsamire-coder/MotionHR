@@ -24,26 +24,10 @@ class SmartLoginBackend(ModelBackend):
         if not username or not password:
             return None
 
-        username = username.strip()
-
         try:
-            # نبحث بكل الطرق في وقت واحد
-            user = User.objects.filter(
-                Q(username__iexact=username) |
-                Q(email__iexact=username) |
-                Q(phone=username)
-            ).first()
-
-            # لو مش لاقيه جرب الرقم الوظيفي
-            if not user:
-                from employees.models import Employee
-                emp = Employee.objects.filter(
-                    employee_code__iexact=username
-                ).select_related('user').first()
-                if emp and emp.user:
-                    user = emp.user
-
-            if user and user.check_password(password):
+            user = self.find_user(username)
+            # الحساب الموقوف مايدخلش (user_can_authenticate بيشيك على is_active)
+            if user and user.check_password(password) and self.user_can_authenticate(user):
                 return user
 
         except Exception:
@@ -51,8 +35,38 @@ class SmartLoginBackend(ModelBackend):
 
         return None
 
+    @staticmethod
+    def find_user(username):
+        """
+        اسم المستخدم الأول (فريد)، وبعدين الإيميل أو الموبايل، وبعدين الرقم الوظيفي.
+        الإيميل/الموبايل/الرقم الوظيفي لازم يطابقوا حساب واحد بس — الرقم الوظيفي بيتكرر بين الشركات
+        (EMP00001 في كل شركة)، فلو اتكرر مانخمنش (عشان محدش يدخل حساب شركة تانية).
+        """
+        username = (username or '').strip()
+        if not username:
+            return None
+        user = User.objects.filter(username__iexact=username).first()
+        if user:
+            return user
+
+        users = list(User.objects.filter(Q(email__iexact=username) | Q(phone=username))[:2])
+        if len(users) == 1:
+            return users[0]
+        if users:
+            return None
+
+        from employees.models import Employee
+        # _base_manager: وقت الدخول مفيش شركة محددة، فـ objects كانت بترجع فاضي
+        emps = list(Employee._base_manager.filter(
+            employee_code__iexact=username, user__isnull=False,
+        ).select_related('user')[:2])
+        if len(emps) == 1:
+            return emps[0].user
+        return None
+
     def get_user(self, user_id):
         try:
-            return User.objects.get(pk=user_id)
+            user = User.objects.get(pk=user_id)
         except User.DoesNotExist:
             return None
+        return user if self.user_can_authenticate(user) else None

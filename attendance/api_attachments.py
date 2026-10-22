@@ -75,6 +75,11 @@ def get_file_type(mime_type):
 
 def validate_file(uploaded_file):
     """Validate file size and type"""
+    # الامتداد كمان (نوع الملف اللي الجهاز بيبعته ممكن يتزوّر)
+    from core.upload_validation import upload_error
+    _err = upload_error(uploaded_file)
+    if _err:
+        return False, _err
     if uploaded_file.size > MAX_FILE_SIZE_MB * 1024 * 1024:
         return False, f"الملف كبير جداً. الحد الأقصى {MAX_FILE_SIZE_MB} MB"
 
@@ -149,6 +154,23 @@ def get_content_object(model_name, object_id):
     except Exception as e:
         print(f"[get_content_object] Error: {e}")
         return None, None
+
+
+def _user_company_id(user):
+    from attendance.action_scope import _user_company_id as _cid
+    return _cid(user)
+
+
+def _attachment_company_id(attachment):
+    """شركة المرفق: من الطلب اللي تبعه، ولو اتمسح من اللي رفعه"""
+    obj = attachment.content_object
+    cid = getattr(obj, "company_id", None) if obj is not None else None
+    if cid:
+        return cid
+    if getattr(attachment, "company_id", None):
+        return attachment.company_id
+    uploader = getattr(attachment, "uploaded_by", None)
+    return _user_company_id(uploader) if uploader else None
 
 
 def check_object_permission(user, obj):
@@ -343,11 +365,17 @@ def delete_attachment(request, attachment_id):
     except Attachment.DoesNotExist:
         return Response({"error": "المرفق غير موجود"}, status=404)
 
-    # Only uploader or admin can delete
+    # صاحب المرفق، أو صاحب الشركة/HR في نفس شركة المرفق، أو السوبر أدمن
     is_uploader = attachment.uploaded_by_id == request.user.id
-    is_admin = hasattr(request.user, "role") and request.user.role in ("company_admin", "super_admin")
+    role = getattr(request.user, "role", "")
+    is_super = role == "super_admin" or request.user.is_superuser
+    is_company_admin = (
+        role in ("company_admin", "hr_manager")
+        and _attachment_company_id(attachment) is not None
+        and _attachment_company_id(attachment) == _user_company_id(request.user)
+    )
 
-    if not (is_uploader or is_admin):
+    if not (is_uploader or is_super or is_company_admin):
         return Response({"error": "غير مصرح لك بحذف هذا المرفق"}, status=403)
 
     # Delete files from disk
@@ -376,9 +404,20 @@ def download_attachment(request, attachment_id):
     except Attachment.DoesNotExist:
         raise Http404("Attachment not found")
 
-    # Check permission via content_object
+    # الصلاحية من الطلب اللي المرفق تبعه؛ ولو الطلب اتمسح: صاحب المرفق أو إدارة نفس الشركة بس
     if attachment.content_object:
         if not check_object_permission(request.user, attachment.content_object):
+            return Response({"error": "غير مصرح"}, status=403)
+    else:
+        role = getattr(request.user, "role", "")
+        allowed = (
+            attachment.uploaded_by_id == request.user.id
+            or role == "super_admin" or request.user.is_superuser
+            or (role in ("company_admin", "hr_manager")
+                and _attachment_company_id(attachment) is not None
+                and _attachment_company_id(attachment) == _user_company_id(request.user))
+        )
+        if not allowed:
             return Response({"error": "غير مصرح"}, status=403)
 
     try:

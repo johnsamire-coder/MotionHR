@@ -58,6 +58,22 @@ def announcements_list(request):
     ).order_by('-publish_at')
 
     emp = get_employee(user)
+
+    # كل واحد يشوف الإعلانات الموجهة له بس؛ صاحب الشركة والـ HR يشوفوا الكل، واللي كتب الإعلان يشوفه
+    from attendance.action_scope import is_full_access
+    if not is_full_access(user):
+        visible = []
+        for a in qs:
+            if a.created_by_id == user.id:
+                visible.append(a.id)
+                continue
+            try:
+                if emp and a.get_target_employees().filter(id=emp.id).exists():
+                    visible.append(a.id)
+            except Exception:
+                pass
+        qs = qs.filter(id__in=visible)
+
     read_ids = set()
     if emp:
         read_ids = set(
@@ -161,10 +177,10 @@ def manager_create_announcement(request):
             _direct_report_ids = list(
                 Employee._base_manager.filter(direct_manager=_mgr_emp).values_list('id', flat=True)
             )
-        if _direct_report_ids:
-            _target_type = 'specific'
-        else:
-            _target_type = 'all'
+        if not _direct_report_ids:
+            # قبل كده كان بيتبعت للشركة كلها
+            return Response({'error': 'مالكش فريق مباشر تبعتله إعلان. الإعلان للشركة كلها من الموارد البشرية.'}, status=400)
+        _target_type = 'specific'
 
     ann = CompanyAnnouncement._base_manager.create(
         company=user.company,
@@ -240,6 +256,11 @@ def manager_update_announcement(request, pk):
     except CompanyAnnouncement.DoesNotExist:
         return Response({'error': 'الإعلان غير موجود'}, status=404)
 
+    # المدير العادي بيعدّل إعلاناته هو بس، ومايغيرش المستهدفين (عشان مايبقاش للشركة كلها)
+    _is_plain_manager = user.role == 'manager'
+    if _is_plain_manager and ann.created_by_id != user.id:
+        return Response({'error': 'تقدر تعدّل إعلاناتك أنت بس'}, status=403)
+
     data = request.data
 
     if 'title' in data:
@@ -249,8 +270,8 @@ def manager_update_announcement(request, pk):
         ann.title = title
 
     if 'message' in data or 'content' in data:
-        ann.message = (data.get('message') or data.get('content') or '').strip()
-        message = str(data.get('message') or '').strip()
+        # الويب بيبعت content والموبايل message
+        message = str(data.get('message') or data.get('content') or '').strip()
         if not message:
             return Response({'error': 'المحتوى مطلوب'}, status=400)
         ann.message = message
@@ -261,8 +282,26 @@ def manager_update_announcement(request, pk):
     if 'priority' in data:
         ann.priority = data.get('priority') or ann.priority
 
-    if 'target_type' in data:
-        ann.target_type = data.get('target_type') or ann.target_type
+    # تطبيق الموبايل بيبعت "كل الموظفين" مع أي تعديل لأنه مش عارف المستهدفين الحاليين،
+    # فكان أي تعديل بسيط بيحوّل الإعلان للشركة كلها. المستهدفين بيتغيروا بس لو اتحدد قسم أو فرع صراحة.
+    if 'target_type' in data and not _is_plain_manager:
+        _new_target = data.get('target_type') or ann.target_type
+        _dept_ids = [i for i in (data.get('department_ids') or []) if i]
+        _branch_ids = [i for i in (data.get('branch_ids') or []) if i]
+        if _new_target == 'by_department' and _dept_ids:
+            from companies.models import Department
+            ann.target_type = _new_target
+            _thr = ann.target_departments.through._default_manager
+            _thr.filter(companyannouncement_id=ann.id).delete()
+            _thr.bulk_create([_thr.model(companyannouncement_id=ann.id, department_id=d) for d in
+                              Department._base_manager.filter(id__in=_dept_ids, company=company).values_list('id', flat=True)])
+        elif _new_target == 'by_branch' and _branch_ids:
+            from companies.models import Branch
+            ann.target_type = _new_target
+            _thr = ann.target_branches.through._default_manager
+            _thr.filter(companyannouncement_id=ann.id).delete()
+            _thr.bulk_create([_thr.model(companyannouncement_id=ann.id, branch_id=b) for b in
+                              Branch._base_manager.filter(id__in=_branch_ids, company=company).values_list('id', flat=True)])
 
     if 'requires_confirmation' in data:
         ann.requires_confirmation = bool(data.get('requires_confirmation'))
@@ -322,6 +361,9 @@ def manager_delete_announcement(request, pk):
         ann = CompanyAnnouncement._base_manager.get(id=pk, company=company)
     except CompanyAnnouncement.DoesNotExist:
         return Response({'error': 'الإعلان غير موجود'}, status=404)
+
+    if user.role == 'manager' and ann.created_by_id != user.id:
+        return Response({'error': 'تقدر تمسح إعلاناتك أنت بس'}, status=403)
 
     # إرسال إشعار بالحذف لو المدير طلب ده
     send_deletion_notice = bool(request.data.get('send_deletion_notice', True))
@@ -436,23 +478,8 @@ def manager_list_announcements(request):
 
 
 def _is_announcement_targeted_to_employee(ann, employee):
-    """يتأكد هل الإعلان موجه للموظف ده بناءً على نوع الاستهداف"""
-    if employee.id in ann.excluded_employees.values_list('id', flat=True):
-        return False
-
-    if ann.target_type == 'all':
-        return True
-    elif ann.target_type == 'specific':
-        return ann.target_employees.filter(id=employee.id).exists()
-    elif ann.target_type == 'by_job_title':
-        job_title_name = getattr(employee.job_title, 'name_ar', '') if employee.job_title else ''
-        targets = [t.strip() for t in (ann.target_job_titles or '').split(',')]
-        return job_title_name in targets
-    elif ann.target_type == 'by_department':
-        return ann.target_departments.filter(id=employee.department_id).exists()
-    elif ann.target_type == 'by_branch':
-        return ann.target_branches.filter(id=employee.branch_id).exists()
-    return False
+    """يتأكد هل الإعلان موجه للموظف ده (نفس حساب المستهدفين والاستثناءات)"""
+    return ann.get_target_employees().filter(id=employee.id).exists()
 
 
 @api_view(['GET'])

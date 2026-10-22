@@ -524,20 +524,16 @@ class Employee(TenantModel):
     def save(self, *args, **kwargs):
         # توليد الرقم الوظيفي أوتوماتيك لو فاضي
         if not self.employee_code:
-            # جلب آخر رقم للشركة
-            last_employee = Employee.all_objects.filter(
-                company=self.company
-            ).order_by('-id').first()
-            
-            if last_employee and last_employee.employee_code.startswith('EMP'):
-                try:
-                    last_num = int(last_employee.employee_code.replace('EMP', ''))
-                    new_num = last_num + 1
-                except:
-                    new_num = 1
-            else:
-                new_num = 1
-            
+            # أكبر رقم EMP مستخدم في الشركة + 1، ونتأكد إنه مش مستخدم
+            # (قبل كده كان بيبص على آخر موظف بس، فلو كوده مش EMP يرجع لـ EMP00001 المكرر ويقع)
+            import re
+            codes = Employee.all_objects.filter(
+                company=self.company, employee_code__startswith='EMP'
+            ).values_list('employee_code', flat=True)
+            nums = [int(m.group(1)) for c in codes for m in [re.fullmatch(r'EMP(\d+)', c or '')] if m]
+            new_num = (max(nums) + 1) if nums else 1
+            while Employee.all_objects.filter(company=self.company, employee_code=f'EMP{new_num:05d}').exists():
+                new_num += 1
             self.employee_code = f'EMP{new_num:05d}'
         
         # مزامنة attendance_mode تلقائيًا مع worker_type عشان نضمن اتساق
@@ -559,31 +555,37 @@ class Employee(TenantModel):
         """
         جلب كل المرؤوسين (بشكل شجري)
         يعني الموظفين المباشرين + موظفينهم + هكذا
+        (لو فيه دايرة في المديرين — أ مدير ب وب مدير أ — مابيعلقش)
         """
-        subordinates = list(self.subordinates.all())
-        all_subs = list(subordinates)
-        
-        for sub in subordinates:
-            all_subs.extend(sub.get_all_subordinates())
-        
+        all_subs, seen, level = [], {self.id}, [self]
+        while level:
+            nxt = []
+            for emp in level:
+                for sub in Employee._base_manager.filter(direct_manager_id=emp.id):
+                    if sub.id not in seen:
+                        seen.add(sub.id)
+                        all_subs.append(sub)
+                        nxt.append(sub)
+            level = nxt
         return all_subs
-    
+
     def get_all_subordinates_ids(self):
         """جلب IDs كل المرؤوسين + نفسه"""
         ids = [self.id]
         for sub in self.get_all_subordinates():
             ids.append(sub.id)
         return ids
-    
+
     def get_manager_chain(self):
-        """جلب سلسلة المديرين من فوق"""
-        chain = []
+        """جلب سلسلة المديرين من فوق (ومابيلفّش في دايرة)"""
+        chain, seen = [], {self.id}
         current = self.direct_manager
-        while current:
+        while current and current.id not in seen:
+            seen.add(current.id)
             chain.append(current)
             current = current.direct_manager
         return chain
-    
+
     def can_view_employee(self, other_employee):
         """هل يقدر يشوف بيانات موظف تاني؟"""
         # لو نفس الموظف

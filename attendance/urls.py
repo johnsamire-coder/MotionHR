@@ -14,6 +14,7 @@ from rest_framework_simplejwt.views import (
 )
 from .api_employee_management import manager_reset_employee_password, employee_save_location, manager_get_location_report, manager_update_company_info, manager_upload_company_logo, manager_update_employee, manager_company_info, manager_transfer_employee, manager_organization_tree, manager_hierarchy_tree
 from . import views
+from . import api_field_visits_report
 from .api_field_visits import (
     field_visit_start,
     field_visit_end,
@@ -318,6 +319,7 @@ urlpatterns += [
     path('api/mobile/charters/<int:charter_id>/accept/', api_charters.my_charter_accept),
     path('api/mobile/manager/employees/<int:emp_id>/profile/', api_employee_profile.manager_employee_profile),
     path('api/mobile/manager/employees/<int:emp_id>/documents/', api_employee_profile.manager_employee_documents),
+    path('api/mobile/manager/employees/<int:emp_id>/documents/<int:doc_id>/', api_employee_profile.manager_employee_document_detail),
     path('api/mobile/manager/employees/<int:emp_id>/movements/', api_employee_profile.manager_employee_movements),
     path("api/mobile/attachments/upload/", api_attachments.upload_attachment),
     path("api/mobile/attachments/list/", api_attachments.list_attachments),
@@ -727,6 +729,9 @@ urlpatterns += [
     path('api/mobile/field-visits/start/', field_visit_start, name='field_visit_start'),
     path('api/mobile/field-visits/<int:visit_id>/', field_visit_detail, name='field_visit_detail'),
     path('api/mobile/field-visits/end/<int:visit_id>/', field_visit_end, name='field_visit_end'),
+    # تقرير الزيارات الميدانية للـ HR والمدير
+    path('api/mobile/manager/reports/field-visits/', api_field_visits_report.field_visits_report, name='report_field_visits'),
+    path('api/mobile/manager/reports/field-visits/<int:visit_id>/', api_field_visits_report.field_visit_report_detail, name='report_field_visit_detail'),
 
 
     # ═══════════════════════════════════════════════════

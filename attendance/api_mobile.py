@@ -554,10 +554,41 @@ def mobile_login(request):
     if not username or not password:
         return Response({'success': False, 'message': 'اسم المستخدم وكلمة السر مطلوبين'}, status=400)
 
+    from accounts.access import block_reason, blocked_payload
+    from accounts.login_backend import SmartLoginBackend
+    from django.core.cache import cache
+
+    # بعد 10 محاولات غلط لنفس الحساب يتقفل ربع ساعة (عشان محدش يجرّب باسوردات لحد ما يصيب)
+    _fail_key = f'login_fail:{username.lower()}'
+    if (cache.get(_fail_key) or 0) >= 10:
+        return Response({'success': False, 'message': 'محاولات كتير غلط. حاول تاني بعد ربع ساعة.'}, status=429)
+
     user = authenticate(username=username, password=password)
 
     if not user:
+        # باسورد صح بس الحساب موقوف: نقوله السبب بدل "بيانات غلط"
+        candidate = SmartLoginBackend.find_user(username)
+        if candidate and not candidate.is_active and candidate.check_password(password):
+            reason = block_reason(candidate)
+            if reason:
+                return Response(blocked_payload(reason), status=403)
+        try:
+            cache.add(_fail_key, 0, 15 * 60)
+            cache.incr(_fail_key)
+        except ValueError:
+            cache.set(_fail_key, 1, 15 * 60)
         return Response({'success': False, 'message': 'بيانات الدخول غير صحيحة'}, status=401)
+
+    cache.delete(_fail_key)
+    reason = block_reason(user)
+    try:
+        from audit.signals import log_event
+        log_event('login', user=user, note='تسجيل دخول' + (' (محجوب)' if reason else ''),
+                  employee_id=getattr(get_employee_for_user(user), 'id', None))
+    except Exception:
+        pass
+    if reason:
+        return Response(blocked_payload(reason), status=403)
 
     token, _ = Token._base_manager.get_or_create(user=user)
 
@@ -1655,51 +1686,53 @@ def mobile_attendance_status(request):
     # ═══════════════════════════════════════════════════
     # ATT-10b: GPS Detection - يسجل Alert لو GPS مقفول
     # ═══════════════════════════════════════════════════
-    try:
-        _lat = request.GET.get('latitude')
-        _lng = request.GET.get('longitude')
-        _has_gps = _lat not in (None, '', 'null') and _lng not in (None, '', 'null')
+    # صفحات الويب بتسأل عن الحالة من غير موقع — ده مش معناه إن الـ GPS مقفول
+    if request.GET.get('source') != 'web':
+        try:
+            _lat = request.GET.get('latitude')
+            _lng = request.GET.get('longitude')
+            _has_gps = _lat not in (None, '', 'null') and _lng not in (None, '', 'null')
 
-        from attendance.models import TrackingAlert
-        _now = timezone.now()
+            from attendance.models import TrackingAlert
+            _now = timezone.now()
 
-        _open_alert = TrackingAlert._base_manager.filter(
-            company=employee.company,
-            employee=employee,
-            date=today,
-            status='open',
-            notes__icontains='GPS'
-        ).first()
+            _open_alert = TrackingAlert._base_manager.filter(
+                company=employee.company,
+                employee=employee,
+                date=today,
+                status='open',
+                notes__icontains='GPS'
+            ).first()
 
-        if not _has_gps:
-            # GPS مقفول - نسجل Alert
-            if _open_alert:
-                # تحديث Alert الموجود
-                _open_alert.last_seen_at = _now
-                _open_alert.save(update_fields=['last_seen_at'])
+            if not _has_gps:
+                # GPS مقفول - نسجل Alert
+                if _open_alert:
+                    # تحديث Alert الموجود
+                    _open_alert.last_seen_at = _now
+                    _open_alert.save(update_fields=['last_seen_at'])
+                else:
+                    # إنشاء Alert جديد
+                    TrackingAlert._base_manager.create(
+                        company=employee.company,
+                        employee=employee,
+                        date=today,
+                        started_at=_now,
+                        last_seen_at=_now,
+                        minutes_outside=0,
+                        last_latitude=None,
+                        last_longitude=None,
+                        last_address='',
+                        status='open',
+                        notes='GPS disabled - detected from status ping',
+                    )
             else:
-                # إنشاء Alert جديد
-                TrackingAlert._base_manager.create(
-                    company=employee.company,
-                    employee=employee,
-                    date=today,
-                    started_at=_now,
-                    last_seen_at=_now,
-                    minutes_outside=0,
-                    last_latitude=None,
-                    last_longitude=None,
-                    last_address='',
-                    status='open',
-                    notes='GPS disabled - detected from status ping',
-                )
-        else:
-            # GPS شغال - نقفل أي Alert مفتوح
-            if _open_alert:
-                _open_alert.status = 'resolved'
-                _open_alert.resolved_at = _now
-                _open_alert.save(update_fields=['status', 'resolved_at'])
-    except Exception:
-        pass
+                # GPS شغال - نقفل أي Alert مفتوح
+                if _open_alert:
+                    _open_alert.status = 'resolved'
+                    _open_alert.resolved_at = _now
+                    _open_alert.save(update_fields=['status', 'resolved_at'])
+        except Exception:
+            pass
     # ═══════════════════════════════════════════════════
     
     # ═══════════════════════════════════════════════════
@@ -2077,7 +2110,7 @@ def mobile_attendance_history(request):
 def mobile_change_password(request):
     """تغيير كلمة المرور من تطبيق الموبايل"""
     user = request.user
-    current_password = request.data.get('current_password', '').strip()
+    current_password = (request.data.get('current_password') or request.data.get('old_password') or '').strip()  # الويب كان بيبعت old_password
     new_password = request.data.get('new_password', '').strip()
 
     if not current_password or not new_password:
@@ -2169,10 +2202,11 @@ def mobile_geofence_set(request):
     """حفظ موقع الشركة من الموبايل (للمدير فقط)"""
     user = request.user
     role = getattr(user, 'role', 'employee') or 'employee'
-    manager_roles = ['super_admin', 'company_admin', 'hr_manager', 'manager']
+    # موقع الشركة ونطاق الحضور بتاعها كله لصاحب الشركة والـ HR بس
+    manager_roles = ['super_admin', 'company_admin', 'hr_manager']
 
-    if role not in manager_roles:
-        return Response({'success': False, 'message': 'ليس لديك صلاحية'}, status=403)
+    if role not in manager_roles and not user.is_superuser:
+        return Response({'success': False, 'message': 'تغيير موقع الشركة لصاحب الشركة والموارد البشرية بس'}, status=403)
 
     latitude = request.data.get('latitude')
     longitude = request.data.get('longitude')
@@ -2509,6 +2543,13 @@ def manager_device_action(request, device_id):
         if not device:
             return Response({'success': False, 'message': 'الجهاز مش موجود'}, status=404)
 
+        # الجهاز لازم يكون لموظف في نطاق المدير (شركته / فريقه)
+        from attendance.action_scope import deny_action
+        from employees.models import Employee as _DevEmp
+        dev_emp = _DevEmp._base_manager.filter(user_id=device.user_id).first()
+        if not dev_emp or deny_action(request.user, dev_emp):
+            return Response({'success': False, 'message': 'الجهاز مش موجود'}, status=404)
+
         if action == 'approve':
             device.status = 'approved'
             device.auto_attendance_enabled = True
@@ -2808,8 +2849,9 @@ def mobile_charter_update(request):
 
     user = request.user
     role = getattr(user, 'role', '')
-    if not (user.is_staff or user.is_superuser or role in ['super_admin', 'admin', 'company_admin', 'hr_manager', 'manager']):
-        return Response({"success": False, "error": "غير مصرح"}, status=403)
+    # لائحة الشركة كلها (وموافقات الموظفين عليها) لصاحب الشركة والـ HR بس
+    if not (user.is_superuser or role in ['super_admin', 'company_admin', 'hr_manager']):
+        return Response({"success": False, "error": "تعديل اللائحة لصاحب الشركة والموارد البشرية بس"}, status=403)
 
     employee = Employee._base_manager.filter(user=user).first()
     company = getattr(user, "company", None) or getattr(employee, "company", None)
@@ -3048,52 +3090,17 @@ def _can_track_location(employee):
     except Exception:
         return False
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
 def activate_account(request):
     """
-    تفعيل حساب الموظف لأول مرة عن طريق رقم الموبايل + آخر 4 أرقام من الرقم القومي.
+    تفعيل حساب الموظف لأول مرة عن طريق رقم الموبايل + آخر 4 أرقام من الرقم القومي (الويب).
     خطوة 1 (من غير new_password): التحقق من الهوية وإرجاع username.
     خطوة 2 (مع new_password): تحديث كلمة السر.
     """
-    from employees.models import Employee
-    import re
-
-    data = request.data
-    phone = str(data.get('phone', '')).strip()
-    national_id_suffix = str(data.get('national_id_suffix', '')).strip()
-    new_password = str(data.get('new_password', '')).strip()
-
-    if not phone or not national_id_suffix:
-        return Response({'success': False, 'message': 'رقم الموبايل وآخر 4 أرقام من الرقم القومي مطلوبين'}, status=400)
-
-    clean_phone = re.sub(r'\D', '', phone)
-    if len(national_id_suffix) != 4 or not national_id_suffix.isdigit():
-        return Response({'success': False, 'message': 'آخر 4 أرقام من الرقم القومي غير صحيحة'}, status=400)
-
-    employee = Employee._base_manager.filter(
-        phone__endswith=clean_phone[-10:],
-        national_id__endswith=national_id_suffix,
-        status='active',
-    ).first()
-
-    if not employee or not employee.user:
-        return Response({'success': False, 'message': 'بيانات غير مطابقة. تأكد من إدخال البيانات المسجلة بالشركة'}, status=400)
-
-    if not new_password:
-        # خطوة 1: التحقق فقط
-        return Response({
-            'success': True,
-            'message': 'تم التحقق من هويتك بنجاح!',
-            'username': employee.user.username,
-        })
-
-    if len(new_password) < 8:
-        return Response({'success': False, 'message': 'كلمة المرور يجب أن تكون 8 رموز على الأقل'}, status=400)
-
-    employee.user.set_password(new_password)
-    employee.user.must_change_password = False
-    employee.user.save()
-
-    return Response({'success': True, 'message': 'تم تفعيل حسابك بنجاح!'})
+    from accounts.activation import activate_account_response
+    return activate_account_response(request)
 
 
 @api_view(['GET'])

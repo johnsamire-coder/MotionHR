@@ -22,7 +22,7 @@ class TrialSignupLeadAdmin(admin.ModelAdmin):
     search_fields = ('company_name', 'contact_name', 'phone', 'whatsapp', 'email')
     ordering = ('-created_at',)
     readonly_fields = (
-        'generated_username', 'generated_password',
+        'generated_username',
         'created_company', 'created_user',
         'trial_start_date', 'trial_end_date',
         'created_at', 'updated_at',
@@ -38,7 +38,7 @@ class TrialSignupLeadAdmin(admin.ModelAdmin):
         }),
         ('التجربة المجانية', {
             'fields': ('trial_start_date', 'trial_end_date',
-                       'generated_username', 'generated_password',
+                       'generated_username',
                        'created_company', 'created_user'),
             'classes': ('collapse',),
         }),

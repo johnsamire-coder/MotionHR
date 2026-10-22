@@ -65,6 +65,24 @@ def _can_manage_employee(user, employee):
     return getattr(employee, 'direct_manager_id', None) == manager_emp.id
 
 
+def _limit_to_visible(user, qs):
+    """
+    مين يشوف أنهي بنود (جزاءات/مكافآت/بدلات/سلف):
+    - صاحب الشركة / HR: الكل
+    - المدير: فريقه المباشر + بنوده هو
+    - الموظف العادي: بنوده هو بس
+    """
+    if _is_ceo(user) or _is_hr(user):
+        return qs
+    me = _get_user_employee(user)
+    if not me:
+        return qs.none()
+    from django.db.models import Q
+    if getattr(user, 'role', None) == 'manager':
+        return qs.filter(Q(employee__direct_manager_id=me.id) | Q(employee_id=me.id))
+    return qs.filter(employee_id=me.id)
+
+
 # ═══════════════════════════════════════════════════════════════
 # Serializer
 # ═══════════════════════════════════════════════════════════════
@@ -173,14 +191,8 @@ def _handle_list_create(request, ModelClass):
             if employee_id:
                 qs = qs.filter(employee_id=int(employee_id))
 
-            # الصلاحيات: المدير يشوف فقط فريقه، HR/CEO يشوفوا الكل
-            role = getattr(request.user, 'role', None)
-            if role == 'manager' and not _is_ceo(request.user) and not _is_hr(request.user):
-                manager_emp = _get_user_employee(request.user)
-                if manager_emp:
-                    qs = qs.filter(employee__direct_manager_id=manager_emp.id)
-                else:
-                    qs = qs.none()
+            # الصلاحيات: HR/CEO الكل، المدير فريقه، الموظف بنوده هو بس
+            qs = _limit_to_visible(request.user, qs)
 
             qs = qs.order_by('-created_at')
             return JsonResponse({
@@ -198,7 +210,8 @@ def _handle_list_create(request, ModelClass):
 
         data = json.loads(request.body.decode('utf-8'))
 
-        employee_id = data.get('employee_id')
+        # تطبيق الموبايل بيبعت رقم الموظف باسم employee
+        employee_id = data.get('employee_id') or data.get('employee')
         if not employee_id:
             return JsonResponse({'success': False, 'error': 'employee_id مطلوب'}, status=400)
 
@@ -207,6 +220,9 @@ def _handle_list_create(request, ModelClass):
             return JsonResponse({'success': False, 'error': 'الموظف غير موجود'}, status=404)
 
         # التحقق من صلاحية المدير
+        if employee.user_id == request.user.id and not _is_ceo(request.user):
+            return JsonResponse({'success': False, 'error': 'مينفعش تضيف بند لنفسك. لازم حد أعلى منك يضيفه.'}, status=403)
+
         if not _can_manage_employee(request.user, employee):
             return JsonResponse({
                 'success': False,
@@ -245,7 +261,9 @@ def _handle_list_create(request, ModelClass):
 def _handle_detail_and_actions(request, entry_id, ModelClass):
     company = request.user.company
 
-    entry = ModelClass._base_manager.filter(id=entry_id, company=company).first()
+    entry = _limit_to_visible(
+        request.user, ModelClass._base_manager.filter(id=entry_id, company=company)
+    ).first()
     if not entry:
         return JsonResponse({'success': False, 'error': 'not found'}, status=404)
 
@@ -355,10 +373,12 @@ def _handle_reject(request, entry_id, ModelClass):
     if entry.status != 'pending':
         return JsonResponse({'success': False, 'error': 'الطلب ليس pending'}, status=400)
 
-    data = json.loads(request.body.decode('utf-8'))
-    reason = data.get('reason', '').strip()
-    if not reason:
-        return JsonResponse({'success': False, 'error': 'سبب الرفض مطلوب'}, status=400)
+    try:
+        data = json.loads(request.body.decode('utf-8')) if request.body else {}
+    except ValueError:
+        data = {}
+    # تطبيق الموبايل بيبعت الرفض من غير سبب (قبل كده كان بيقع وماحدش بيعرف)
+    reason = str(data.get('reason') or '').strip() or 'اترفض من التطبيق من غير سبب مكتوب'
 
     entry.status = 'rejected'
     entry.rejected_by = request.user
@@ -570,7 +590,10 @@ def payroll_installment_list_create(request):
 
     if request.method == 'GET':
         try:
-            qs = PayrollInstallment._base_manager.filter(employee__company=company).select_related('employee')
+            qs = _limit_to_visible(
+                request.user,
+                PayrollInstallment._base_manager.filter(employee__company=company).select_related('employee'),
+            )
             employee_id = request.GET.get('employee_id')
             if employee_id:
                 qs = qs.filter(employee_id=int(employee_id))
@@ -596,8 +619,9 @@ def payroll_installment_list_create(request):
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
     try:
-        if not _is_manager(request.user):
-            return JsonResponse({'success': False, 'error': 'غير مسموح - فقط المدراء'}, status=403)
+        # السلفة بتتخصم من المرتب: إنشاؤها لصاحب الشركة والـ HR بس، ومش لنفسه
+        if not (_is_ceo(request.user) or _is_hr(request.user)):
+            return JsonResponse({'success': False, 'error': 'إضافة السلف لصاحب الشركة والموارد البشرية بس'}, status=403)
 
         data = json.loads(request.body.decode('utf-8'))
         employee_id = data.get('employee_id')
@@ -615,9 +639,28 @@ def payroll_installment_list_create(request):
             employee = Employee._base_manager.get(id=employee_id, company=company)
         except Employee.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'الموظف غير موجود'}, status=404)
+        if employee.user_id == request.user.id and not _is_ceo(request.user):
+            return JsonResponse({'success': False, 'error': 'مينفعش تعمل سلفة لنفسك. لازم صاحب الشركة يعملها.'}, status=403)
 
-        start_month = int(start_month)
-        start_year = int(start_year)
+        # المبلغ والقسط لازم يكونوا موجبين، والقسط مايزيدش عن السلفة
+        # (القسط السالب كان بيتحول لزيادة في المرتب كل شهر)
+        from decimal import Decimal, InvalidOperation
+        try:
+            _total = Decimal(str(total_amount))
+            _monthly = Decimal(str(monthly_amount))
+        except (InvalidOperation, ValueError):
+            return JsonResponse({'success': False, 'error': 'المبلغ والقسط لازم يكونوا أرقام'}, status=400)
+        if _total <= 0 or _monthly <= 0:
+            return JsonResponse({'success': False, 'error': 'المبلغ والقسط الشهري لازم يكونوا أكبر من صفر'}, status=400)
+        if _monthly > _total:
+            return JsonResponse({'success': False, 'error': 'القسط الشهري مينفعش يكون أكبر من إجمالي السلفة'}, status=400)
+        try:
+            start_month = int(start_month)
+            start_year = int(start_year)
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'شهر وسنة البداية لازم يكونوا أرقام'}, status=400)
+        if not 1 <= start_month <= 12:
+            return JsonResponse({'success': False, 'error': 'شهر البداية لازم يكون من 1 لـ 12'}, status=400)
 
         existing_run = PayrollRun._base_manager.filter(
             company=company, year=start_year, month=start_month

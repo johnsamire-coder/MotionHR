@@ -247,7 +247,9 @@ def leave_request_detail(request, pk):
 def leave_approve(request, pk):
     lr    = get_object_or_404(LeaveRequest, pk=pk, company=request.user.company)
     notes = request.POST.get("notes", "")
-    lr.approve(request.user, notes)
+    if not lr.approve(request.user, notes):
+        messages.error(request, "الطلب ده اتراجع قبل كده")
+        return redirect("leaves:leave_request_detail", pk=pk)
     messages.success(request, "✅ تمت الموافقة على طلب الإجازة")
     return redirect("leaves:leave_request_detail", pk=pk)
 
@@ -257,7 +259,9 @@ def leave_approve(request, pk):
 def leave_reject(request, pk):
     lr    = get_object_or_404(LeaveRequest, pk=pk, company=request.user.company)
     notes = request.POST.get("notes", "")
-    lr.reject(request.user, notes)
+    if not lr.reject(request.user, notes):
+        messages.error(request, "الطلب ده اتراجع قبل كده")
+        return redirect("leaves:leave_request_detail", pk=pk)
     messages.warning(request, "⚠️ تم رفض طلب الإجازة")
     return redirect("leaves:leave_request_detail", pk=pk)
 
@@ -266,7 +270,9 @@ def leave_reject(request, pk):
 @require_POST
 def leave_cancel(request, pk):
     lr = get_object_or_404(LeaveRequest, pk=pk, company=request.user.company)
-    lr.cancel()
+    if not lr.cancel():
+        messages.error(request, "الطلب ده اتلغى أو اتراجع قبل كده")
+        return redirect("leaves:leave_requests_list")
     messages.info(request, "ℹ️ تم إلغاء طلب الإجازة")
     return redirect("leaves:leave_requests_list")
 

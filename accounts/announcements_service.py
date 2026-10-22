@@ -39,7 +39,8 @@ def broadcast_announcement(announcement):
                 }
             )
             
-            if success:
+            # الدالة بترجع dict، فالنجاح هو إن فيه جهاز وصله فعلاً
+            if isinstance(success, dict) and success.get('sent', 0) > 0:
                 sent_count += 1
         except Exception as e:
             # لو حصل خطأ لموظف معين، سيبه وكمل الباقيين
@@ -48,3 +49,29 @@ def broadcast_announcement(announcement):
     
     return sent_count
 
+
+
+def broadcast_system_announcement(announcement):
+    """
+    إشعار النظام (من لوحة الأدمن) لكل المستخدمين النشطين اللي عندهم موبايل متسجل.
+    الشركات الموقوفة بتتخطى لوحدها. بترجع عدد اللي وصلهم.
+    """
+    from accounts.fcm_models import FCMDeviceToken
+    from accounts.models import User
+    if not getattr(announcement, 'send_to_all', True):
+        return 0
+    user_ids = FCMDeviceToken._default_manager.values_list('user_id', flat=True).distinct()
+    sent_count = 0
+    for user in User._base_manager.filter(id__in=user_ids, is_active=True):
+        try:
+            result = send_notification_to_user(
+                user=user,
+                title=announcement.title,
+                body=announcement.message,
+                data={'type': 'system_announcement', 'announcement_id': str(announcement.id)},
+            )
+            if isinstance(result, dict) and result.get('sent', 0) > 0:
+                sent_count += 1
+        except Exception as e:
+            print(f"❌ Failed to send to {user}: {e}")
+    return sent_count

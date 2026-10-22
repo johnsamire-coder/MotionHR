@@ -490,3 +490,111 @@ class CompanyPolicyStealthFinalSyncMiddleware:
 
         return response
 
+
+
+# ═════════════════════════════════════════════════════════════
+# حماية الدخول: الحساب الموقوف، الشركة الموقوفة، والموقع القديم
+# ═════════════════════════════════════════════════════════════
+
+_BLOCK_PAGE = """<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>MotionHR</title>
+<style>body{{font-family:Tahoma,Arial,sans-serif;background:#f4f6fa;color:#1f2937;margin:0;
+display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px}}
+.box{{background:#fff;border-radius:12px;padding:32px;max-width:480px;text-align:center;
+box-shadow:0 2px 12px rgba(0,0,0,.08)}}h1{{font-size:20px;margin:0 0 12px}}p{{line-height:1.8}}
+button{{margin-top:16px;padding:8px 20px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;cursor:pointer}}
+</style></head><body><div class="box"><h1>{title}</h1><p>{message}</p>
+<form method="post" action="/logout/"><input type="hidden" name="csrfmiddlewaretoken" value="{csrf}">
+<button type="submit">تسجيل الخروج</button></form></div></body></html>"""
+
+OLD_SITE_CLOSED_MSG = (
+    'صفحات الموقع القديم بقت للإدارة بس. '
+    'من فضلك استخدم موقع الويب app.jssolutions-eg.com أو تطبيق الموبايل.'
+)
+
+
+def _block_page(request, title, message):
+    from django.http import HttpResponse
+    from django.middleware.csrf import get_token
+    from django.utils.html import escape
+    html = _BLOCK_PAGE.format(title=escape(title), message=escape(message), csrf=get_token(request))
+    return HttpResponse(html, status=403)
+
+
+def _user_from_auth_header(request):
+    """المستخدم صاحب التوكن (Token أو Bearer) حتى لو حسابه موقوف — من غير ما نرفض الطلب هنا"""
+    header = request.META.get('HTTP_AUTHORIZATION', '')
+    parts = header.split()
+    if len(parts) != 2:
+        return None
+    kind, key = parts
+    try:
+        if kind == 'Token':
+            from rest_framework.authtoken.models import Token
+            tok = Token._base_manager.select_related('user').filter(key=key).first()
+            return tok.user if tok else None
+        if kind == 'Bearer':
+            from django.contrib.auth import get_user_model
+            from rest_framework_simplejwt.authentication import JWTAuthentication
+            from rest_framework_simplejwt.settings import api_settings
+            validated = JWTAuthentication().get_validated_token(key.encode())
+            uid = validated.get(api_settings.USER_ID_CLAIM)
+            return get_user_model()._base_manager.filter(**{api_settings.USER_ID_FIELD: uid}).first()
+    except Exception:
+        return None
+    return None
+
+
+class AccessGuardMiddleware:
+    """
+    1) أي طلب من حساب موقوف أو من شركة موقوفة بيترفض برسالة واضحة
+       (الـ API بـ 401 عشان الويب يرجّعه لصفحة الدخول، والصفحات بصفحة رسالة).
+    2) صفحات الموقع القديم (Django) بقت للسوبر أدمن بس — أي طلب بجلسة الموقع القديم
+       من غير توكن على مساراته (حتى اللي فيها api) بيتقفل على غير السوبر أدمن.
+    """
+
+    OLD_SITE_PREFIXES = (
+        '/dashboard/', '/search/', '/accounts/', '/employees/', '/attendance/',
+        '/subscriptions/', '/companies/', '/leaves/', '/requests/', '/reports/',
+        '/announcements/', '/password-change/',
+    )
+    OLD_SITE_OPEN = ('/subscriptions/contact-sales',)
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        path = request.path
+        if path.startswith(('/static/', '/media/')) or path.endswith('/logout/'):
+            return self.get_response(request)
+
+        from accounts.access import block_reason, blocked_payload, is_super_admin
+
+        is_api = '/api/' in path
+        session_user = getattr(request, 'user', None)
+        if not (session_user and session_user.is_authenticated):
+            session_user = None
+
+        user = session_user
+        if user is None and request.META.get('HTTP_AUTHORIZATION'):
+            user = _user_from_auth_header(request)
+
+        if user is not None:
+            reason = block_reason(user)
+            if reason:
+                if is_api or session_user is None:
+                    from django.http import JsonResponse
+                    return JsonResponse(blocked_payload(reason), status=401,
+                                        json_dumps_params={'ensure_ascii': False})
+                if path not in ('/login/',):
+                    return _block_page(request, 'مش متاح', reason[1])
+
+        # الويب الجديد والموبايل بيبعتوا توكن؛ الطلب اللي من غير توكن جاي من صفحات الموقع القديم
+        # (حتى لو في رابطه api زي attendance/api/employee-route)
+        if (session_user is not None and not request.META.get('HTTP_AUTHORIZATION')
+                and path.startswith(self.OLD_SITE_PREFIXES)
+                and not path.startswith(self.OLD_SITE_OPEN)
+                and not is_super_admin(session_user)):
+            return _block_page(request, 'الصفحة دي مقفولة', OLD_SITE_CLOSED_MSG)
+
+        return self.get_response(request)

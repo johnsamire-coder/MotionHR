@@ -46,7 +46,9 @@ def _rule_data(rule):
         "branch_name": rule.branch.name_ar if rule.branch else None,
         "department_id": rule.department_id,
         "department_name": rule.department.name_ar if rule.department else None,
-        "employee_ids": list(rule.employees.values_list("id", flat=True)),
+        # من جدول الربط مباشرة (علاقة الموظفين بتتفلتر بالشركة الحالية وبترجع فاضية)
+        "employee_ids": list(rule.employees.through._default_manager.filter(
+            **{rule.employees.source_field_name: rule.id}).values_list(rule.employees.target_field_name + "_id", flat=True)),
         "treatment": rule.treatment,
         "treatment_display": rule.get_treatment_display(),
         "bonus_calc_method": rule.bonus_calc_method,
@@ -74,6 +76,20 @@ def _holiday_data(holiday):
             for r in OfficialHolidayRule._base_manager.filter(holiday=holiday).prefetch_related("employees")
         ],
     }
+
+
+def _rules_problem(rules_data, company):
+    """قاعدة لفرع أو إدارة لازم يبقى ليها فرع أو إدارة فعلاً (قبل كده كانت بتتحفظ فاضية فماتتطبقش على حد)"""
+    from companies.models import Branch, Department
+    for r in rules_data or []:
+        scope = r.get("scope", "company")
+        if scope == "branch" and not Branch._base_manager.filter(id=r.get("branch_id") or 0, company=company).exists():
+            return "اختار الفرع اللي الإجازة هتتطبق عليه"
+        if scope == "department" and not Department._base_manager.filter(id=r.get("department_id") or 0, company=company).exists():
+            return "اختار الإدارة اللي الإجازة هتتطبق عليها"
+        if scope == "employees" and not (r.get("employee_ids") or r.get("employees")):
+            return "اختار الموظفين اللي الإجازة هتتطبق عليهم"
+    return None
 
 
 def _save_rules(holiday, rules_data, company):
@@ -243,6 +259,10 @@ def official_holiday_list_create(request):
             "error": "تاريخ النهاية لازم يكون بعد تاريخ البداية"
         }, status=400)
 
+    _problem = _rules_problem(data.get("rules", []), company)
+    if _problem:
+        return Response({"success": False, "error": _problem}, status=400)
+
     try:
         holiday = OfficialHoliday._base_manager.create(
             company=company,
@@ -337,6 +357,10 @@ def official_holiday_detail(request, holiday_id):
             "success": False,
             "error": "تاريخ النهاية لازم يكون بعد تاريخ البداية"
         }, status=400)
+
+    _problem = _rules_problem(data.get("rules", []), company) if "rules" in data else None
+    if _problem:
+        return Response({"success": False, "error": _problem}, status=400)
 
     try:
         holiday.name = name

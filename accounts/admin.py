@@ -81,9 +81,9 @@ class SystemAnnouncementAdmin(admin.ModelAdmin):
 
         # لو الإشعار جديد ونشط، ابعت push notifications
         if not change and obj.is_active and obj.send_push:
-            from .announcements_service import broadcast_announcement
+            from .announcements_service import broadcast_system_announcement
             try:
-                sent_count = broadcast_announcement(obj)
+                sent_count = broadcast_system_announcement(obj)
                 obj.total_sent = sent_count
                 obj.save(update_fields=['total_sent'])
                 self.message_user(
