@@ -736,6 +736,8 @@ class AllowanceRuleTests(PayrollScenarioBase):
 
 class InsuranceTaxTests(PayrollScenarioBase):
     def test_insurance_policy_percent(self):
+        self.emp.has_insurance = True      # التأمين الاجتماعي على المؤمن عليهم بس
+        self.emp.save()
         CompanyInsurancePolicy._base_manager.create(
             company=self.company, insurance_type='social', name_ar='تأمينات',
             company_share_type='percent', company_share_value=Decimal('18.75'),
@@ -1054,6 +1056,8 @@ class RealisticMonthTests(PayrollScenarioBase):
             company=self.company, name='مواصلات', allowance_type='transport', calculation_type='per_day',
             fixed_amount=Decimal('20'), start_date=date(2026, 1, 1),
         )
+        self.emp.has_insurance = True
+        self.emp.save()
         CompanyInsurancePolicy._base_manager.create(
             company=self.company, insurance_type='social', name_ar='تأمينات',
             company_share_type='percent', company_share_value=Decimal('18.75'),

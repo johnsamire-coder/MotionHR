@@ -1326,6 +1326,30 @@ def mobile_attendance_action(request):
             except Exception as _le:
                 print(f'LateIncident save error: {_le}')
 
+            # النهارده وصل لإنذار: نبلّغ المدير المباشر والـ HR (مرة واحدة عند كل مستوى)
+            if late_warning_info.get('reached_now'):
+                try:
+                    from accounts.fcm_service import send_notification_to_user
+                    from accounts.models import User
+                    _ids = set(User.objects.filter(company_id=employee.company_id, role__in=['hr_manager', 'company_admin'],
+                                                   is_active=True).values_list('id', flat=True))
+                    _mgr = getattr(employee, 'direct_manager', None)
+                    if _mgr is not None and _mgr.user_id:
+                        _ids.add(_mgr.user_id)
+                    _ids.discard(employee.user_id)
+                    _name = employee.full_name_ar or employee.employee_code
+                    for _u in User.objects.filter(id__in=_ids, is_active=True):
+                        send_notification_to_user(
+                            user=_u,
+                            title=f"⚠️ {late_warning_info['message_ar'].split(':')[0]} — {_name}",
+                            body=f"{_name}: التأخير رقم {late_warning_info['incident_number']} الشهر ده.",
+                            title_en=f"⚠️ {late_warning_info['message_en'].split(':')[0]} — {_name}",
+                            body_en=f"{_name}: late arrival #{late_warning_info['incident_number']} this month.",
+                            data={'type': 'late_warning', 'employee_id': str(employee.id)},
+                        )
+                except Exception as _ne:
+                    print(f'late warning notify error: {_ne}')
+
         # ── on_mission flag ──
         try:
             from attendance.missions_models import MissionAssignment

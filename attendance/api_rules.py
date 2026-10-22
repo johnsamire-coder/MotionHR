@@ -228,6 +228,11 @@ def _handle_detail(request, rule_id, ModelClass, to_dict_func, core_fields, extr
             edit_mode = 'new_version' if is_core_change else 'metadata_only'
 
         if edit_mode == 'metadata_only':
+            # الحقول اللي مالهاش أثر على المبالغ (زي إعدادات الإنذارات) بتتحفظ على نفس النسخة
+            if extra_update_fn:
+                for k, v in extra_update_fn(data, rule).items():
+                    if k not in core_fields and k in data:
+                        setattr(rule, k, v)
             if 'name' in data: rule.name = data['name']
             if 'is_active' in data: rule.is_active = bool(data['is_active'])
             if 'end_date' in data: rule.end_date = data['end_date'] or None

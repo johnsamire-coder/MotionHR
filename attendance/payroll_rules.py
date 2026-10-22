@@ -2884,77 +2884,68 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 # ═══════════════════════════════════════════════════════════════
 def get_late_warning_info(employee, target_date, late_minutes):
     """
-    ترجع معلومات الإنذار للموظف بناءً على عدد مرات التأخير في الشهر
+    الإنذارات التصاعدية للتأخير — جزء من كارت قاعدة التأخير نفسه (لائحة الجزاءات):
+    التأخير رقم كذا في الشهر = إنذار أول / إنذار تاني / إنذار فصل.
+    الإنذارات مابتخصمش فلوس: الخصم بييجي من شرائح نفس القاعدة في المرتب، فمفيش خصم مرتين.
 
-    Args:
-        employee: الموظف
-        target_date: تاريخ التأخير
-        late_minutes: عدد دقائق التأخير (محسوبة بعد فترة السماح)
-
-    Returns:
-        dict: {
-            'warning_level': 0-2,    # 0 = عادي, 1 = إنذار أول, 2 = إنذار ثاني
-            'late_count': int,       # عدد مرات التأخير في الشهر
-            'message': str,          # رسالة عربية
-            'deduction_days': float, # عدد أيام الخصم
-        }
-        or None في حالة الخطأ
+    بتتنادى قبل حفظ تأخير النهارده. بترجع None لو الإنذارات مش مفعلة للموظف.
     """
     try:
         from attendance.models import Attendance
         from attendance.company_policy_models import PenaltyRule
 
         company = getattr(employee, 'company', None)
-        if not company:
+        if not company or late_minutes <= 0:
             return None
-
-        # الشهر الحالي
         if isinstance(target_date, str):
             from datetime import datetime
             target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+
+        rules = [r for r in PenaltyRule._base_manager.filter(
+            company=company, penalty_type='late_arrival', is_active=True, start_date__lte=target_date,
+        ).filter(Q(end_date__isnull=True) | Q(end_date__gte=target_date)) if r.applies_to_employee(employee)]
+        if not rules:
+            return None
+        rule = max(rules, key=lambda r: (_SCOPE_RANK.get(r.scope, 0), r.start_date, r.version_number or 0, r.id))
+        if not rule.warnings_enabled:
+            return None
+
         month_start = target_date.replace(day=1)
+        # تأخيرات الشهر قبل النهارده + النهارده
+        incident = Attendance._base_manager.filter(
+            employee=employee, date__gte=month_start, date__lt=target_date, late_minutes__gt=0,
+        ).count() + 1
 
-        # عدد مرات التأخير في الشهر (بما فيها الحالية)
-        late_count = Attendance._base_manager.filter(
-            employee=employee,
-            date__gte=month_start,
-            date__lte=target_date,
-            late_minutes__gt=0,
-        ).count()
-
-        # نجيب الـ PenaltyRule للشركة
-        rule = PenaltyRule._base_manager.filter(
-            company=company,
-            warnings_enabled=True,
-            is_active=True,
-        ).first()
-
-        # الحالة الافتراضية (بدون rule)
-        if not rule:
-            return {
-                'warning_level': 0,
-                'late_count': late_count,
-                'message': f'عدد مرات التأخير هذا الشهر: {late_count}',
-                'deduction_days': 0,
-            }
-
-        # تحديد مستوى الإنذار
-        warning_level = 0
-        deduction_days = 0
-        message = f'عدد مرات التأخير هذا الشهر: {late_count}'
-
-        if rule.second_warning_after and late_count >= rule.second_warning_after:
-            warning_level = 2
-            message = f'إنذار ثاني - وصل التأخير إلى {late_count} مرات في الشهر'
-        elif rule.first_warning_after and late_count >= rule.first_warning_after:
-            warning_level = 1
-            message = f'إنذار أول - وصل التأخير إلى {late_count} مرات في الشهر'
-
+        levels = [
+            (rule.termination_after, 3, 'إنذار فصل', 'Termination warning'),
+            (rule.second_warning_after, 2, 'إنذار تاني', 'Second warning'),
+            (rule.first_warning_after, 1, 'إنذار أول', 'First warning'),
+        ]
+        level, threshold, label_ar, label_en = 0, rule.first_warning_after or 0, '', ''
+        for after, lv, ar, en in levels:
+            if after and incident >= after:
+                level, threshold, label_ar, label_en = lv, after, ar, en
+                break
+        if level:
+            message_ar = f'{label_ar}: ده التأخير رقم {incident} الشهر ده.'
+            message_en = f'{label_en}: this is late arrival #{incident} this month.'
+        else:
+            left = (rule.first_warning_after or 0) - incident
+            message_ar = f'ده التأخير رقم {incident} الشهر ده. فاضل {left} مرة على الإنذار الأول.'
+            message_en = f'Late arrival #{incident} this month. {left} more before the first warning.'
         return {
-            'warning_level': warning_level,
-            'late_count': late_count,
-            'message': message,
-            'deduction_days': deduction_days,
+            'is_warning_enabled': True,
+            'warning_level': level,
+            'late_count': incident,
+            'incident_number': incident,
+            'threshold': threshold,
+            'reached_now': bool(level) and incident == threshold,   # النهارده بالظبط وصل للإنذار ده
+            'should_deduct': False,
+            'deduction_days': 0,
+            'message': message_ar,
+            'message_ar': message_ar,
+            'message_en': message_en,
         }
     except Exception:
+        logger.exception('payroll_rules error in get_late_warning_info')
         return None

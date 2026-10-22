@@ -637,11 +637,10 @@ def payroll_settings(request):
             'payroll_period_label_mode': getattr(company, 'payroll_period_label_mode', 'cutoff_month') if company else 'cutoff_month',
         })
     except Exception as e:
-        return Response({
-            'status': 'saved_default',
-            **DEFAULT_SETTINGS,
-            'note': str(e),
-        })
+        import logging
+        logging.getLogger(__name__).exception('payroll settings save failed')
+        # قبل كده كان بيرجع "اتحفظ" بأرقام افتراضية، فالشاشة كانت بتفتكر إنه نجح
+        return Response({'success': False, 'error': f'الإعدادات ماتحفظتش: {e}'}, status=500)
 
 
 def payroll_run_employees(company, year, month):
