@@ -312,14 +312,20 @@ def rollback_late(request, employee_id):
     if not late_entry:
         return Response({"success": False, "error": "مفيش تأخير مسجل في اليوم ده"}, status=404)
 
-    # نعمل حركة عكسية
+    # نفس التأخير مايتلغيش مرتين (قبل كده كل ضغطة كانت بتزود الرصيد)
+    from django.db.models import Q
+    if PermissionLedger._base_manager.filter(employee=employee, entry_type='rollback').filter(
+            Q(reference_date=late_entry.reference_date) | Q(notes__contains=f"إلغاء تأخير يوم {reference_date} ")).exists():
+        return Response({"success": False, "error": "التأخير ده اتلغى قبل كده"}, status=400)
+
+    # نعمل حركة عكسية — في نفس يوم التأخير عشان تتحسب في رصيد شهره
     PermissionLedger._base_manager.create(
         employee=employee,
         company=employee.company,
         entry_type='rollback',
         minutes_used=-late_entry.minutes_used,
         count_used=-late_entry.count_used,
-        reference_date=date.today(),
+        reference_date=late_entry.reference_date,
         notes=f"إلغاء تأخير يوم {reference_date} بواسطة {request.user.get_full_name()}: {notes}",
     )
 

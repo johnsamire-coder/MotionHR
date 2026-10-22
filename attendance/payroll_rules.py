@@ -41,10 +41,21 @@ def _calc_late_minutes(shift, att):
     try:
         from django.utils import timezone
         check_in_local = timezone.localtime(att.check_in_time)
-        shift_start = datetime.combine(check_in_local.date(), shift.start_time)
+        shift_start = None
+        if shift_mode in ('variable_weekly', 'variable_daily'):
+            # الشيفت المتغير: بداية اليوم من جدوله (قبل كده من الوقت الأساسي فالتأخير كان بيطلع غلط)
+            from attendance.api_mobile import get_shift_periods
+            _day = getattr(att, 'date', None) or check_in_local.date()
+            _periods = get_shift_periods(shift, _day)
+            if _periods:
+                shift_start = timezone.localtime(_periods[0]['start']).replace(tzinfo=None)
+        if shift_start is None:
+            if not shift.start_time:
+                return 0
+            shift_start = datetime.combine(check_in_local.date(), shift.start_time)
 
         # الشيفت الليلي: لو الحضور بعد نص الليل والشيفت بيبدأ قبله → الشيفت بدأ امبارح
-        if getattr(shift, 'crosses_midnight', False):
+        if getattr(shift, 'crosses_midnight', False) and shift.start_time:
             if check_in_local.time() < shift.start_time:
                 shift_start -= timedelta(days=1)
 
@@ -231,14 +242,16 @@ def get_payroll_period_bounds(company, year, month):
             else:
                 prev_year, prev_month = year, month - 1
 
-            first_day = date(prev_year, prev_month, cutoff_day + 1)
+            # لو اليوم ده مش موجود في الشهر اللي فات (يوم 29 في فبراير مثلاً) الفترة تبدأ من أول شهر القفل،
+            # وإلا كانت بتقع للشهر الميلادي وأيام آخر الشهر بتتحسب مرتين
+            if cutoff_day + 1 > monthrange(prev_year, prev_month)[1]:
+                first_day = date(year, month, 1)
+            else:
+                first_day = date(prev_year, prev_month, cutoff_day + 1)
             return first_day, last_day
 
     except Exception:
-        logger.exception(
-        "payroll_rules error in get_payroll_period_bounds",
-        extra={'employee_id': getattr(employee, 'id', None) if 'employee' in dir() else None}
-        )
+        logger.exception("payroll_rules error in get_payroll_period_bounds")
 
     # fallback: شهر ميلادي عادي
     first_day = date(year, month, 1)
@@ -323,6 +336,27 @@ def get_company_working_days(company, year, month):
     return working_dates
 
 
+
+
+def official_holiday_treatment_on(employee, day):
+    """معاملة الإجازة الرسمية للموظف في يوم واحد (paid_leave / work_with_bonus / ...) أو None لو مفيش إجازة"""
+    try:
+        from leaves.official_holiday_models import OfficialHoliday, OfficialHolidayRule
+        company = getattr(employee, 'company', None)
+        if not company:
+            return None
+        holiday = OfficialHoliday._base_manager.filter(
+            company=company, is_active=True, start_date__lte=day, end_date__gte=day,
+        ).order_by('start_date').first()
+        if holiday is None:
+            return None
+        for rule in OfficialHolidayRule._base_manager.filter(holiday=holiday).prefetch_related('employees').order_by('priority'):
+            if rule.applies_to_employee(employee):
+                return rule.treatment
+        return 'paid_leave'
+    except Exception:
+        logger.exception('payroll_rules error in official_holiday_treatment_on')
+        return None
 
 
 def get_official_holiday_treatment(employee, year, month):
@@ -609,7 +643,39 @@ def get_unpaid_leave_dates(employee, year, month):
     return unpaid_dates
 
 
-def _get_allowances(employee, first_day, last_day, lang='ar'):
+def _one_time_outside(item, first_day, last_day):
+    """بند "مش شهري" (مرة واحدة) بيدخل بس في فترة المرتب اللي فيها تاريخ بدايته"""
+    if getattr(item, 'is_monthly', True):
+        return False
+    start = getattr(item, 'start_date', None)
+    return not (start and first_day <= start <= last_day)
+
+
+_SCOPE_RANK = {'employees': 4, 'department': 3, 'branch': 2, 'company': 1}
+
+
+def pick_effective_insurance_policies(policies, employee):
+    """
+    سياسة واحدة بس لكل نوع تأمين (اجتماعي/طبي) على الموظف: الأخص (موظفين > قسم > فرع > شركة)،
+    ولو متساويين الأحدث. قبل كده كل السياسات المنطبقة كانت بتتجمع فالتأمين بيتخصم مرتين.
+    """
+    best = {}
+    for p in policies:
+        if not p.applies_to_employee(employee):
+            continue
+        key = (_SCOPE_RANK.get(p.scope, 0), p.start_date, getattr(p, 'version_number', 0) or 0, p.id)
+        cur = best.get(p.insurance_type)
+        if cur is None or key > cur[0]:
+            best[p.insurance_type] = (key, p)
+    return [v[1] for v in best.values()]
+
+
+def daily_salary_for(employee, year, month):
+    """أجر اليوم الواحد في كل الحسابات: الأساسي ÷ عدد أيام شهر القفل"""
+    return _safe_float(getattr(employee, 'basic_salary', 0)) / monthrange(year, month)[1]
+
+
+def _get_allowances(employee, first_day, last_day, lang='ar', year=None, month=None):
     total = 0.0
     items = []
 
@@ -623,6 +689,8 @@ def _get_allowances(employee, first_day, last_day, lang='ar'):
         ).filter(Q(end_date__isnull=True) | Q(end_date__gte=first_day))
 
         for item in qs:
+            if _one_time_outside(item, first_day, last_day):
+                continue
             amount = _safe_float(item.amount)
             total += amount
             items.append({
@@ -652,7 +720,7 @@ def _get_allowances(employee, first_day, last_day, lang='ar'):
             ).filter(Q(end_date__isnull=True) | Q(end_date__gte=first_day))
 
             for policy in policies:
-                if not policy.applies_to_employee(employee):
+                if not policy.applies_to_employee(employee) or _one_time_outside(policy, first_day, last_day):
                     continue
                 amount = _safe_float(policy.amount)
                 total += amount
@@ -675,12 +743,13 @@ def _get_allowances(employee, first_day, last_day, lang='ar'):
     # 3) بدلات يدوية معتمدة من HR (ManualAllowance)
     try:
         from .company_policy_models import ManualAllowance
-        import calendar
-        days_in_month = calendar.monthrange(first_day.year, first_day.month)[1]
+        # شهر القفل نفسه (مع يوم قفل، أول يوم في الفترة بيبقى في الشهر اللي قبله)
+        _y, _m = (year, month) if year and month else (last_day.year, last_day.month)
+        days_in_month = monthrange(_y, _m)[1]
         manual_allowances = ManualAllowance._base_manager.filter(
             employee=employee,
-            target_year=first_day.year,
-            target_month=first_day.month,
+            target_year=_y,
+            target_month=_m,
             status__in=['approved', 'applied'],
         )
         for entry in manual_allowances:
@@ -734,6 +803,8 @@ def _get_monthly_deductions(employee, year, month, lang='ar'):
         ).filter(Q(end_date__isnull=True) | Q(end_date__gte=first_day))
 
         for item in qs:
+            if _one_time_outside(item, first_day, last_day):
+                continue
             amount = _safe_float(item.amount)
             row = {
                 'type': item.deduction_type,
@@ -838,10 +909,9 @@ def _get_bonuses(employee, year, month, lang='ar'):
     try:
         from .company_policy_models import CompanyBonusPolicy
         from datetime import date
-        first_day = date(year, month, 1)
         company = getattr(employee, 'company', None)
-        _bounds = get_payroll_period_bounds(company, year, month) if company else (date(year, month, 1), date(year, month, 28))
-        last_day = _bounds[1]
+        _bounds = get_payroll_period_bounds(company, year, month) if company else _period_bounds(year, month)
+        first_day, last_day = _bounds
 
         if company:
             policies = CompanyBonusPolicy._base_manager.filter(
@@ -851,7 +921,7 @@ def _get_bonuses(employee, year, month, lang='ar'):
             ).filter(Q(end_date__isnull=True) | Q(end_date__gte=first_day))
 
             for policy in policies:
-                if not policy.applies_to_employee(employee):
+                if not policy.applies_to_employee(employee) or _one_time_outside(policy, first_day, last_day):
                     continue
                 amount = _safe_float(policy.amount)
                 total += amount
@@ -950,7 +1020,7 @@ def _get_bonuses(employee, year, month, lang='ar'):
         from .company_policy_models import ManualBonus
         import calendar
         _bounds = get_payroll_period_bounds(company, year, month) if company else None
-        days_in_month = (_bounds[1] - _bounds[0]).days + 1 if _bounds else calendar.monthrange(year, month)[1]
+        days_in_month = monthrange(year, month)[1]   # نفس أجر اليوم في باقي المرتب (الأساسي ÷ أيام شهر القفل)
         manual_bonuses = ManualBonus._base_manager.filter(
             employee=employee,
             target_year=year,
@@ -997,7 +1067,7 @@ def _get_general_deductions(employee, first_day, last_day, lang='ar'):
             ).filter(Q(end_date__isnull=True) | Q(end_date__gte=first_day))
 
             for policy in policies:
-                if not policy.applies_to_employee(employee):
+                if not policy.applies_to_employee(employee) or _one_time_outside(policy, first_day, last_day):
                     continue
                 amount = _safe_float(policy.amount)
                 total += amount
@@ -1051,8 +1121,14 @@ def _get_penalties(employee, year, month, lang='ar'):
             payroll_month=payroll_month_str,
             payroll_applied=False,
         )
+        _fractions = {'quarter_day_deduction': 0.25, 'half_day_deduction': 0.5, 'full_day_deduction': 1.0}
         for action in disc_actions:
+            if getattr(action, 'deduction_created', False):
+                continue   # النظام القديم عمله خصم منفصل (Deduction) فبيتحسب من هناك
             amount = _safe_float(action.deduction_amount)
+            if amount <= 0 and action.action_type in _fractions:
+                # خصم يوم/نص/ربع من غير مبلغ مكتوب: بنفس أجر اليوم في المرتب
+                amount = round(daily_salary_for(employee, year, month) * _fractions[action.action_type], 2)
             if amount > 0:
                 total += amount
                 name_ar = f"جزاء تأديبي - {action.get_action_type_display()}"
@@ -1078,7 +1154,7 @@ def _get_penalties(employee, year, month, lang='ar'):
         import calendar
         company = getattr(employee, 'company', None)
         _bounds = get_payroll_period_bounds(company, year, month) if company else None
-        days_in_month = (_bounds[1] - _bounds[0]).days + 1 if _bounds else calendar.monthrange(year, month)[1]
+        days_in_month = monthrange(year, month)[1]   # نفس أجر اليوم في باقي المرتب (الأساسي ÷ أيام شهر القفل)
         manual_penalties = ManualPenalty._base_manager.filter(
             employee=employee,
             target_year=year,
@@ -1196,6 +1272,33 @@ def _get_active_policy(company, target_date, department=None, branch=None):
     return None
 
 
+# أنواع قديمة كان الويب بيحفظها في قواعد التأخير/الغياب ومش من اختيارات الموديل
+_LEGACY_DAY_FRACTIONS = {'quarter_day': 0.25, 'half_day': 0.5, 'full_day': 1.0}
+
+
+def normalize_rule_type(deduction_type, value):
+    """
+    (نوع الخصم، القيمة) بأسماء الموديل: day_fraction / fixed_amount / per_minute / warning.
+    الأنواع القديمة: fixed = مبلغ ثابت، ربع/نص/يوم كامل = كسر يوم، percent = نسبة من اليوم،
+    hourly = مبلغ للساعة، none = من غير خصم.
+    """
+    kind = (deduction_type or '').strip()
+    value = _safe_float(value)
+    if kind in ('day_fraction', 'fixed_amount', 'per_minute', 'warning'):
+        return kind, value
+    if kind == 'fixed':
+        return 'fixed_amount', value
+    if kind in _LEGACY_DAY_FRACTIONS:
+        return 'day_fraction', _LEGACY_DAY_FRACTIONS[kind] * (value if value > 0 else 1)
+    if kind == 'percent':
+        return 'day_fraction', value / 100.0
+    if kind == 'hourly':
+        return 'per_minute', value / 60.0
+    if kind == 'none':
+        return 'warning', 0.0
+    return kind, value
+
+
 def _apply_late_rule(policy, late_minutes, daily_salary, per_minute=0.0):
     """قواعد التأخير بتاعة سياسة الحضور (LateRule) على تأخير يوم واحد.
     لائحة الجزاءات (PenaltyRule) بتتطبق قبلها في calculate_effective_payroll.
@@ -1227,12 +1330,13 @@ def _apply_late_rule(policy, late_minutes, daily_salary, per_minute=0.0):
 
         amount = 0.0
         if rules:
-            if rules.deduction_type == 'day_fraction':
-                amount = daily_salary * float(rules.deduction_value)
-            elif rules.deduction_type == 'fixed_amount':
-                amount = float(rules.deduction_value)
-            elif rules.deduction_type == 'per_minute':
-                amount = late_minutes * float(rules.deduction_value)
+            kind, value = normalize_rule_type(rules.deduction_type, rules.deduction_value)
+            if kind == 'day_fraction':
+                amount = daily_salary * value
+            elif kind == 'fixed_amount':
+                amount = value
+            elif kind == 'per_minute':
+                amount = late_minutes * value
         return round(amount + extra * per_minute, 2)
     except Exception:
         logger.exception("payroll_rules error in _apply_late_rule")
@@ -1591,19 +1695,20 @@ def _apply_absence_rule(policy, absent_days, daily_salary):
         return 0.0
     try:
         from attendance.models import AbsenceRule
-        rule = AbsenceRule.objects.filter(
-            policy=policy,
-            absence_type='unexcused'
-        ).order_by('display_order').first()
+        rules = AbsenceRule.objects.filter(policy=policy)
+        # قاعدة الغياب بدون إذن، ولو مش موجودة أول قاعدة غياب في السياسة
+        rule = rules.filter(absence_type='unexcused').order_by('display_order').first() or \
+            rules.order_by('display_order').first()
 
         if not rule:
             return round(absent_days * daily_salary, 2)
 
-        if rule.deduction_type == 'day_fraction':
-            return round(absent_days * daily_salary * float(rule.deduction_value), 2)
-        elif rule.deduction_type == 'fixed_amount':
-            return round(absent_days * float(rule.deduction_value), 2)
-        elif rule.deduction_type == 'warning':
+        kind, value = normalize_rule_type(rule.deduction_type, rule.deduction_value)
+        if kind == 'day_fraction':
+            return round(absent_days * daily_salary * value, 2)
+        elif kind == 'fixed_amount':
+            return round(absent_days * value, 2)
+        elif kind == 'warning':
             return 0.0
     except Exception:
         logger.exception("payroll_rules error in _apply_absence_rule")
@@ -2432,7 +2537,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         not_employed_days = (emp_start - first_day).days + (last_day - emp_end).days
     not_employed_deduction = round(not_employed_days * daily_salary, 2)
 
-    allowances_total, allowance_items = _get_allowances(employee, first_day, last_day, lang=lang)
+    allowances_total, allowance_items = _get_allowances(employee, first_day, last_day, lang=lang, year=year, month=month)
     deductions = _get_monthly_deductions(employee, year, month, lang=lang)
     general_deductions_total, general_deduction_items = _get_general_deductions(employee, first_day, last_day, lang=lang)
     bonuses_total, bonus_items = _get_bonuses(employee, year, month, lang=lang)
@@ -2481,9 +2586,7 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
         ).filter(
             Q(end_date__isnull=True) | Q(end_date__gte=last_day)
         )
-        for policy in insurance_policies:
-            if not policy.applies_to_employee(employee):
-                continue
+        for policy in pick_effective_insurance_policies(insurance_policies, employee):
             calc = policy.calculate_deduction(employee)
             if policy.insurance_type == 'social':
                 social_insurance_employee += float(calc['employee_share'])
@@ -2539,14 +2642,31 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     )
 
     def _visits_count():
+        """
+        الزيارات اللي بتتحسب في بدل الزيارة: اللي خلصت فعلاً (ليها وقت مغادرة ومش ملغية)
+        ومدتها 5 دقايق على الأقل، والزيارات المتكررة لنفس المكان في نفس اليوم بتتحسب مرة واحدة.
+        """
         try:
             from attendance.models import LocationCheckIn
-            return LocationCheckIn._base_manager.filter(
+            visits = LocationCheckIn._base_manager.filter(
                 employee=employee,
                 arrival_time__date__gte=first_day,
                 arrival_time__date__lte=last_day,
-            ).count()
+                departure_time__isnull=False,
+            ).exclude(status='cancelled').values_list(
+                'arrival_time', 'departure_time', 'arrival_latitude', 'arrival_longitude', 'location_name')
+            seen = set()
+            for arr, dep, lat, lng, name in visits:
+                if (dep - arr).total_seconds() < 5 * 60:
+                    continue
+                if lat is not None and lng is not None:
+                    place = (round(float(lat), 3), round(float(lng), 3))   # ~100 متر
+                else:
+                    place = (name or '').strip().lower()
+                seen.add((timezone.localtime(arr).date(), place))
+            return len(seen)
         except Exception:
+            logger.exception('payroll_rules error in _visits_count')
             return 0
 
     def _worked_days(min_hours=0):
@@ -2641,7 +2761,12 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
     _had_real_engagement = (present_days + late_days + mission_days + on_leave_days) > 0
     _weekend_extra_deduction = 0.0
     if not _exempt and not _had_real_engagement and weekend_days > 0:
-        _weekend_extra_deduction = round(weekend_days * daily_salary, 2)
+        # الويكند بيتخصم بنفس سعر يوم الغياب الفعلي (لو قاعدة الغياب إنذار بس أو نص يوم، الويكند زيها)
+        if absent_days > 0:
+            _weekend_rate = min(absence_deduction / absent_days, daily_salary)
+        else:
+            _weekend_rate = daily_salary
+        _weekend_extra_deduction = round(weekend_days * max(_weekend_rate, 0), 2)
         absence_deduction = round(absence_deduction + _weekend_extra_deduction, 2)
         attended_days = present_days + late_days + mission_days + on_leave_days
     else:
@@ -2791,77 +2916,68 @@ def calculate_effective_payroll(employee, year, month, settings=None, lang='ar')
 # ═══════════════════════════════════════════════════════════════
 def get_late_warning_info(employee, target_date, late_minutes):
     """
-    ترجع معلومات الإنذار للموظف بناءً على عدد مرات التأخير في الشهر
+    الإنذارات التصاعدية للتأخير — جزء من كارت قاعدة التأخير نفسه (لائحة الجزاءات):
+    التأخير رقم كذا في الشهر = إنذار أول / إنذار تاني / إنذار فصل.
+    الإنذارات مابتخصمش فلوس: الخصم بييجي من شرائح نفس القاعدة في المرتب، فمفيش خصم مرتين.
 
-    Args:
-        employee: الموظف
-        target_date: تاريخ التأخير
-        late_minutes: عدد دقائق التأخير (محسوبة بعد فترة السماح)
-
-    Returns:
-        dict: {
-            'warning_level': 0-2,    # 0 = عادي, 1 = إنذار أول, 2 = إنذار ثاني
-            'late_count': int,       # عدد مرات التأخير في الشهر
-            'message': str,          # رسالة عربية
-            'deduction_days': float, # عدد أيام الخصم
-        }
-        or None في حالة الخطأ
+    بتتنادى قبل حفظ تأخير النهارده. بترجع None لو الإنذارات مش مفعلة للموظف.
     """
     try:
         from attendance.models import Attendance
         from attendance.company_policy_models import PenaltyRule
 
         company = getattr(employee, 'company', None)
-        if not company:
+        if not company or late_minutes <= 0:
             return None
-
-        # الشهر الحالي
         if isinstance(target_date, str):
             from datetime import datetime
             target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+
+        rules = [r for r in PenaltyRule._base_manager.filter(
+            company=company, penalty_type='late_arrival', is_active=True, start_date__lte=target_date,
+        ).filter(Q(end_date__isnull=True) | Q(end_date__gte=target_date)) if r.applies_to_employee(employee)]
+        if not rules:
+            return None
+        rule = max(rules, key=lambda r: (_SCOPE_RANK.get(r.scope, 0), r.start_date, r.version_number or 0, r.id))
+        if not rule.warnings_enabled:
+            return None
+
         month_start = target_date.replace(day=1)
+        # تأخيرات الشهر قبل النهارده + النهارده
+        incident = Attendance._base_manager.filter(
+            employee=employee, date__gte=month_start, date__lt=target_date, late_minutes__gt=0,
+        ).count() + 1
 
-        # عدد مرات التأخير في الشهر (بما فيها الحالية)
-        late_count = Attendance._base_manager.filter(
-            employee=employee,
-            date__gte=month_start,
-            date__lte=target_date,
-            late_minutes__gt=0,
-        ).count()
-
-        # نجيب الـ PenaltyRule للشركة
-        rule = PenaltyRule._base_manager.filter(
-            company=company,
-            warnings_enabled=True,
-            is_active=True,
-        ).first()
-
-        # الحالة الافتراضية (بدون rule)
-        if not rule:
-            return {
-                'warning_level': 0,
-                'late_count': late_count,
-                'message': f'عدد مرات التأخير هذا الشهر: {late_count}',
-                'deduction_days': 0,
-            }
-
-        # تحديد مستوى الإنذار
-        warning_level = 0
-        deduction_days = 0
-        message = f'عدد مرات التأخير هذا الشهر: {late_count}'
-
-        if rule.second_warning_after and late_count >= rule.second_warning_after:
-            warning_level = 2
-            message = f'إنذار ثاني - وصل التأخير إلى {late_count} مرات في الشهر'
-        elif rule.first_warning_after and late_count >= rule.first_warning_after:
-            warning_level = 1
-            message = f'إنذار أول - وصل التأخير إلى {late_count} مرات في الشهر'
-
+        levels = [
+            (rule.termination_after, 3, 'إنذار فصل', 'Termination warning'),
+            (rule.second_warning_after, 2, 'إنذار تاني', 'Second warning'),
+            (rule.first_warning_after, 1, 'إنذار أول', 'First warning'),
+        ]
+        level, threshold, label_ar, label_en = 0, rule.first_warning_after or 0, '', ''
+        for after, lv, ar, en in levels:
+            if after and incident >= after:
+                level, threshold, label_ar, label_en = lv, after, ar, en
+                break
+        if level:
+            message_ar = f'{label_ar}: ده التأخير رقم {incident} الشهر ده.'
+            message_en = f'{label_en}: this is late arrival #{incident} this month.'
+        else:
+            left = (rule.first_warning_after or 0) - incident
+            message_ar = f'ده التأخير رقم {incident} الشهر ده. فاضل {left} مرة على الإنذار الأول.'
+            message_en = f'Late arrival #{incident} this month. {left} more before the first warning.'
         return {
-            'warning_level': warning_level,
-            'late_count': late_count,
-            'message': message,
-            'deduction_days': deduction_days,
+            'is_warning_enabled': True,
+            'warning_level': level,
+            'late_count': incident,
+            'incident_number': incident,
+            'threshold': threshold,
+            'reached_now': bool(level) and incident == threshold,   # النهارده بالظبط وصل للإنذار ده
+            'should_deduct': False,
+            'deduction_days': 0,
+            'message': message_ar,
+            'message_ar': message_ar,
+            'message_en': message_en,
         }
     except Exception:
+        logger.exception('payroll_rules error in get_late_warning_info')
         return None

@@ -83,3 +83,12 @@ find_gps_users.py
 backups/
 *.bak_*
 *.py.bad_*
+
+# قواعد بيانات ونسخ احتياطية — مكانها على السيرفر بس، مش على GitHub
+db.sqlite3
+*.sqlite3
+*.sqlite3-journal
+/backups/
+*.sql
+*.sql.gz
+*.dump

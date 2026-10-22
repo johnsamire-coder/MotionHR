@@ -847,24 +847,31 @@ def employee_start_mission(request, assignment_id):
     auto_checkin_done = False
     try:
         from attendance.models import Attendance
-        today = now.date()
-        existing = Attendance._base_manager.filter(
-            employee=employee,
-            date=today
-        ).first()
-
-        if not existing:
+        today = timezone.localdate(now)        # بتوقيت مصر (قبل كده UTC)
+        existing = Attendance._base_manager.filter(employee=employee, date=today).first()
+        note = f'حضور تلقائي - مهمة: {assignment.mission.title}'
+        if existing is None:
+            # قبل كده كان بيبعت وقت من غير تاريخ وحقل مش موجود فالحضور عمره ما اتسجل
             Attendance._base_manager.create(
-                employee=employee,
-                company=employee.company,
-                date=today,
-                check_in_time=now.time(),
-                status='present',
-                notes=f'حضور تلقائي - مهمة: {assignment.mission.title}',
+                employee=employee, company=employee.company, date=today, check_in_time=now,
+                status='present', on_mission=True, check_in_notes=note,
+                check_in_latitude=round(float(lat), 6) if lat else None,
+                check_in_longitude=round(float(lng), 6) if lng else None,
             )
             auto_checkin_done = True
-    except Exception as e:
-        pass
+        elif existing.check_in_time is None:
+            existing.check_in_time = now
+            existing.status = 'present'
+            existing.on_mission = True
+            existing.check_in_notes = note
+            existing.save()
+            auto_checkin_done = True
+        elif not existing.on_mission:
+            existing.on_mission = True
+            existing.save(update_fields=['on_mission'])
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('mission start auto check-in failed')
     try:
         emp_name = f"{employee.first_name_ar} {employee.last_name_ar}".strip()
         notify_manager_visit_start(

@@ -186,7 +186,8 @@ def leave_request_add(request):
                 lr.leave_type  = get_object_or_404(LeaveType, pk=leave_type_id, company=company)
                 lr.start_date  = start
                 lr.end_date    = end
-                lr.days_count  = days
+                from leaves.leave_dates import count_leave_days
+                lr.days_count  = count_leave_days(lr.employee, lr.leave_type, start, end)
                 lr.reason      = reason
                 lr.notes       = request.POST.get("notes", "")
                 lr.status      = "pending"
@@ -215,7 +216,7 @@ def leave_request_add(request):
     # لو موظف عادي - يشوف نفسه بس
     if request.user.role == 'employee':
         try:
-            current_emp = Emp.objects.filter(user=request.user).first()
+            current_emp = Employee._base_manager.filter(user=request.user).first()
             if current_emp:
                 employees = [current_emp]
         except Exception:

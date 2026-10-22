@@ -1920,7 +1920,9 @@ def late_notification_detail(request, pk):
             salary = getattr(notif.employee, "basic_salary", None) or 0
             day_value = 0
             try:
-                day_value = float(salary) / 30 if salary else 0
+                from attendance.payroll_rules import daily_salary_for
+                _today = timezone.localdate()
+                day_value = daily_salary_for(notif.employee, _today.year, _today.month)
             except Exception:
                 day_value = 0
 

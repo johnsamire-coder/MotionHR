@@ -2,7 +2,7 @@
 leave_dates.py
 تعديل تواريخ طلب إجازة لسه "قيد الانتظار": نفس فحوصات تقديم الطلب، وعدد الأيام والرصيد المعلق بيتعدلوا بالفرق.
 """
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 
@@ -55,7 +55,9 @@ def reschedule_pending_leave(leave, start_value, end_value):
 
     # نفس طريقة العد وقت تقديم الطلب
     half_day = bool(leave.half_day_type) and new_start == new_end
-    new_days = Decimal('0.5') if half_day else Decimal((new_end - new_start).days + 1)
+    new_days = count_leave_days(leave.employee, leave.leave_type, new_start, new_end, half_day=half_day)
+    if new_days <= 0:
+        raise LeaveDateError('الفترة دي كلها أيام راحة أو إجازات رسمية')
     old_days = Decimal(str(leave.days_count or 0))
     delta = new_days - old_days
 
@@ -76,3 +78,34 @@ def reschedule_pending_leave(leave, start_value, end_value):
     if delta:
         leave._update_balance('add_pending', days=delta)
     return True
+
+
+# الأنواع دي بتتحسب بأيام التقويم كلها (زي قانون العمل)، والباقي بأيام الشغل بس
+CALENDAR_DAY_CATEGORIES = ('sick', 'maternity')
+
+
+def count_leave_days(employee, leave_type, start, end, half_day=False):
+    """
+    عدد أيام الإجازة اللي بتتخصم من الرصيد: من غير أيام الراحة الأسبوعية والإجازات الرسمية المدفوعة
+    (قبل كده كانت أيام تقويم، فالجمعة والعطلات كانت بتتخصم من رصيد الموظف).
+    """
+    if half_day and start == end:
+        return Decimal('0.5')
+    if getattr(leave_type, 'category', '') in CALENDAR_DAY_CATEGORIES:
+        return Decimal((end - start).days + 1)
+    from attendance.payroll_rules import official_holiday_treatment_on
+    work = {0: True, 1: True, 2: True, 3: True, 4: False, 5: True, 6: True}
+    try:
+        from attendance.company_policy_models import CompanyWorkPolicy
+        p = CompanyWorkPolicy._base_manager.filter(company_id=employee.company_id).first()
+        if p:
+            work = {0: p.work_monday, 1: p.work_tuesday, 2: p.work_wednesday, 3: p.work_thursday,
+                    4: p.work_friday, 5: p.work_saturday, 6: p.work_sunday}
+    except Exception:
+        pass
+    n, d = 0, start
+    while d <= end:
+        if work.get(d.weekday(), True) and official_holiday_treatment_on(employee, d) != 'paid_leave':
+            n += 1
+        d += timedelta(days=1)
+    return Decimal(n)

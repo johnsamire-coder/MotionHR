@@ -204,14 +204,33 @@ def disciplinary_actions(request):
     except Employee.DoesNotExist:
         return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
 
+    import re
+    action_type = str(data.get("action_type") or "verbal_warning")
+    if action_type not in dict(DisciplinaryAction.ACTION_TYPES):
+        return Response({"success": False, "error": "نوع الجزاء غير صحيح"}, status=400)
+    try:
+        deduction_amount = float(data.get("deduction_amount") or 0)
+    except (TypeError, ValueError):
+        return Response({"success": False, "error": "مبلغ الخصم لازم يكون رقم"}, status=400)
+    if deduction_amount < 0:
+        return Response({"success": False, "error": "مبلغ الخصم مينفعش يكون سالب"}, status=400)
+    payroll_month = str(data.get("payroll_month") or "").strip()
+    if not payroll_month:
+        _t = timezone.localdate()
+        payroll_month = f"{_t.year}-{_t.month:02d}"     # من غير شهر = مرتب الشهر الحالي
+    m = re.fullmatch(r"(\d{4})-(\d{1,2})", payroll_month)
+    if not m or not 1 <= int(m.group(2)) <= 12:
+        return Response({"success": False, "error": "شهر المرتب لازم يكون بالشكل 2026-10"}, status=400)
+    payroll_month = f"{m.group(1)}-{int(m.group(2)):02d}"
+
     try:
         action = DisciplinaryAction._base_manager.create(
             company=company,
             employee=employee,
-            action_type=str(data.get("action_type", "verbal_warning")),
+            action_type=action_type,
             reason=str(data.get("reason", "")),
-            deduction_amount=float(data.get("deduction_amount", 0)),
-            payroll_month=str(data.get("payroll_month", "")),
+            deduction_amount=deduction_amount,
+            payroll_month=payroll_month,
             notes=str(data.get("notes", "")),
             status="pending",
             performed_by=request.user,

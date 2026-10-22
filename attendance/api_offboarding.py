@@ -8,6 +8,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db import transaction
+from django.utils import timezone
 from employees.models import Employee
 from accounts.models import User
 from accounts.permissions_models import RolePermission, UserPermissionOverride, UserRole
@@ -124,9 +125,9 @@ def offboard_employee(request, employee_id):
         old_status = emp.status
         emp.status = new_status
         update_fields = ['status']
-        if termination_date:
-            emp.termination_date = termination_date
-            update_fields.append('termination_date')
+        # من غير تاريخ = النهارده (المرتب بيحسب لحد يوم إنهاء الخدمة، فلازم يبقى فيه تاريخ)
+        emp.termination_date = termination_date or timezone.localdate()
+        update_fields.append('termination_date')
         if reason:
             emp.termination_reason = reason
             update_fields.append('termination_reason')
@@ -187,7 +188,8 @@ def reactivate_employee(request, employee_id):
 
     with transaction.atomic():
         emp.status = 'active'
-        emp.save(update_fields=['status'])
+        emp.termination_date = None   # رجع الشغل: تاريخ إنهاء الخدمة القديم كان هيوقف مرتبه
+        emp.save(update_fields=['status', 'termination_date'])
 
         if emp.user:
             emp.user.is_active = True
@@ -391,12 +393,14 @@ def offboard_employee_web(request, employee_id):
     with transaction.atomic():
         old_status = emp.status
         emp.status = termination_type
+        emp.termination_date = None
         if termination_date:
             try:
                 from datetime import datetime
                 emp.termination_date = datetime.strptime(termination_date, '%Y-%m-%d').date()
             except Exception:
                 pass
+        emp.termination_date = emp.termination_date or timezone.localdate()
         if reason:
             emp.termination_reason = reason
         emp.save(update_fields=['status', 'termination_date', 'termination_reason'])

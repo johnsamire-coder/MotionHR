@@ -723,6 +723,9 @@ class CompanyInsurancePolicy(TenantModel):
         """هل التأمين ده ينطبق على الموظف ده؟"""
         if not self.is_active:
             return False
+        # التأمين الاجتماعي على المؤمن عليهم بس (علامة "مؤمن عليه" في بيانات الموظف)
+        if self.insurance_type == 'social' and not getattr(employee, 'has_insurance', False):
+            return False
         if self.scope == 'company':
             return True
         elif self.scope == 'branch':

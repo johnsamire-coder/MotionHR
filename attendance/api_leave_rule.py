@@ -284,6 +284,9 @@ def leave_rule_detail(request, rule_id):
         last_day = monthrange(today.year, today.month)[1]
         current_month_end = _date(today.year, today.month, last_day)
 
+        if rule.is_superseded:
+            # نسخة قديمة اتقفلت: تعديلها كان بيعمل نسخة جديدة موازية ويمد تاريخ القديمة
+            return JsonResponse({'success': False, 'error': 'دي نسخة قديمة اتقفلت ومينفعش تتعدل. عدّل النسخة الحالية.'}, status=400)
         rule.end_date = current_month_end
         rule.is_superseded = True
         rule.save()

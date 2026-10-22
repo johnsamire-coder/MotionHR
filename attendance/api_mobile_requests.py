@@ -3,6 +3,9 @@ APIs للطلبات والإجازات من تطبيق الموبايل
 """
 from django.utils import timezone
 from django.db.models import Q
+import logging
+
+logger = logging.getLogger(__name__)
 from accounts.fcm_service import (
     notify_request_approved,
     notify_request_rejected,
@@ -317,10 +320,11 @@ def mobile_leave_request(request):
         }, status=400)
 
 
-    if half_day and start_date == end_date:
-        days_count = 0.5
-    else:
-        days_count = (end - start).days + 1
+    from leaves.leave_dates import count_leave_days
+    days_count = float(count_leave_days(employee, leave_type, start, end,
+                                        half_day=str(half_day).strip().lower() not in ('', 'false', '0', 'none', 'null')))
+    if days_count <= 0:
+        return Response({"success": False, "error": "الفترة دي كلها أيام راحة أو إجازات رسمية، مفيش أيام بتتخصم"}, status=400)
 
     # فحص الرصيد للإجازات المدفوعة فقط
     if leave_type.is_paid:
@@ -1342,6 +1346,12 @@ def mobile_manager_action(request):
                                     employee=item.employee,
                                     date=_att_date,
                                 ).first()
+                                if _att is None and (_check_in_str or _check_out_str):
+                                    # الموظف كان متسجل غايب (مفيش سجل خالص): نعمله سجل حضور بالأوقات المعتمدة
+                                    _att = Attendance._base_manager.create(
+                                        company=item.employee.company, employee=item.employee,
+                                        date=_att_date, status='present',
+                                    )
 
                                 if _att:
                                     _old_data = {
@@ -1349,6 +1359,7 @@ def mobile_manager_action(request):
                                         'check_out_time': str(_att.check_out_time),
                                     }
 
+                                    _tz = timezone   # كان اسم مش متعرف فالتعديل كله كان بيفشل في صمت
                                     _tz_local = _tz.get_current_timezone()
 
                                     if _check_in_str and _correction_type in ('check_in', 'both', 'full_day'):
@@ -1369,6 +1380,14 @@ def mobile_manager_action(request):
                                         except Exception:
                                             pass
 
+                                    try:
+                                        from attendance.payroll_rules import _calc_late_minutes, _get_shift_for_date
+                                        _sh = _att.shift or _get_shift_for_date(item.employee, _att_date)
+                                        if _att.check_in_time:
+                                            _att.late_minutes = int(_calc_late_minutes(_sh, _att) or 0)
+                                            _att.status = 'late' if _att.late_minutes > 0 else 'present'
+                                    except Exception:
+                                        logger.exception('attendance correction late recompute failed')
                                     _att.is_manually_edited = True
                                     _att.admin_notes = f'[تعديل بموافقة HR] طلب #{item.id}'
                                     _att.calculate_work_hours()
@@ -2653,7 +2672,11 @@ def hr_create_leave(request):
     if end < start:
         return Response({"success": False, "error": "تاريخ النهاية قبل البداية"}, status=400)
 
-    days_count = 0.5 if (half_day and start_date_str == end_date_str) else (end - start).days + 1
+    from leaves.leave_dates import count_leave_days
+    days_count = float(count_leave_days(employee, leave_type, start, end,
+                                        half_day=str(half_day).strip().lower() not in ('', 'false', '0', 'none', 'null')))
+    if days_count <= 0:
+        return Response({"success": False, "error": "الفترة دي كلها أيام راحة أو إجازات رسمية، مفيش أيام بتتخصم"}, status=400)
 
     if leave_type.is_paid:
         balance = LeaveBalance._base_manager.filter(

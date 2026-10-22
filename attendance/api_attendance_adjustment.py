@@ -114,6 +114,19 @@ def manager_adjust_attendance(request, attendance_id):
         if not req_status:
             attendance.status = 'present'
 
+    # التأخير بيتحسب من وقت الحضور الجديد، ولو الـ HR حدد "حاضر" يبقى سامح في التأخير
+    try:
+        from attendance.payroll_rules import _calc_late_minutes, _get_shift_for_date
+        if req_status == 'present':
+            attendance.late_minutes = 0
+        elif attendance.check_in_time and (req_check_in is not None or req_status == 'late'):
+            _shift = attendance.shift or _get_shift_for_date(attendance.employee, attendance.date)
+            attendance.late_minutes = int(_calc_late_minutes(_shift, attendance) or 0)
+            if attendance.late_minutes > 0 and not req_status:
+                attendance.status = 'late'
+    except Exception:
+        pass
+
     attendance.is_manually_edited = True
     actor_name = user.get_full_name() or user.username
     audit_msg = 'تعديل بواسطة (' + actor_name + '): ' + ', '.join(changes) + ' | السبب: ' + reason

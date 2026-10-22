@@ -559,7 +559,9 @@ def manual_entry_approval_settings(request):
                 })
         return JsonResponse({'success': True, 'settings': result})
 
-    # POST — تحديث إعداد واحد أو أكتر
+    # POST — تحديث إعداد واحد أو أكتر: صاحب الشركة بس (الـ HR كان يقدر يلغي الموافقة فطلباته تتعتمد لوحدها)
+    if not _is_ceo(request.user):
+        return JsonResponse({'success': False, 'error': 'تغيير إعدادات الموافقة لصاحب الشركة بس'}, status=403)
     try:
         data = json.loads(request.body.decode('utf-8'))
         items = data.get('settings', [])
@@ -571,7 +573,7 @@ def manual_entry_approval_settings(request):
                 continue
             ManualEntryApprovalSetting._base_manager.update_or_create(
                 company=company, entry_type=entry_type, category=category,
-                defaults={'requires_approval': requires_approval, 'updated_by': request.user},
+                defaults={'requires_approval': bool(requires_approval)},   # الجدول مافيهوش updated_by فالحفظ كان بيقع
             )
         return JsonResponse({'success': True, 'message': 'تم حفظ الإعدادات'})
     except Exception as e:

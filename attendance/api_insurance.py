@@ -218,8 +218,8 @@ def insurance_policy_detail(request, policy_id):
             return JsonResponse({'success': True, 'policy': _policy_to_dict(policy)})
 
         if request.method == 'DELETE':
-            policy.delete()
-            return JsonResponse({'success': True, 'message': 'تم حذف السياسة'})
+            from attendance.policy_versions import soft_delete
+            return JsonResponse({'success': True, 'message': soft_delete(policy)})
 
         # PUT / PATCH — نعمل نسخة جديدة (Versioning)
         data = json.loads(request.body.decode('utf-8'))
@@ -289,6 +289,9 @@ def insurance_policy_detail(request, policy_id):
         current_month_end = date(today.year, today.month, last_day)
 
         # ─── قفل النسخة القديمة ───
+        if policy.is_superseded:
+            # نسخة قديمة اتقفلت: تعديلها كان بيعمل نسخة جديدة موازية ويمد تاريخ القديمة
+            return JsonResponse({'success': False, 'error': 'دي نسخة قديمة اتقفلت ومينفعش تتعدل. عدّل النسخة الحالية.'}, status=400)
         policy.end_date = current_month_end
         policy.is_superseded = True
         policy.save()
@@ -390,7 +393,8 @@ def employee_insurances(request, employee_id):
         social = {'has_policy': False}
         medical = {'has_policy': False}
 
-        for policy in policies:
+        from attendance.payroll_rules import pick_effective_insurance_policies
+        for policy in pick_effective_insurance_policies(policies, employee):
             if not policy.applies_to_employee(employee):
                 continue
 
