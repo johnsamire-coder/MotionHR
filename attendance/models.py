@@ -1671,6 +1671,16 @@ class DailyAttendanceSummary(TenantModel):
         return f"{self.employee} - {self.date} - {self.status}"
 
     @classmethod
+    def _on_approved_leave(cls, employee, target_date):
+        try:
+            from leaves.models import LeaveRequest
+            return LeaveRequest._base_manager.filter(
+                employee=employee, status='approved', start_date__lte=target_date, end_date__gte=target_date,
+            ).exists()
+        except Exception:
+            return False
+
+    @classmethod
     def compute_for_day(cls, employee, target_date):
         """
         يحسب أو يحدث الملخص اليومي لموظف في يوم معين.
@@ -1715,8 +1725,15 @@ class DailyAttendanceSummary(TenantModel):
 
             if not att or not getattr(att, 'check_in_time', None):
                 from attendance.mission_days import employee_mission_dates
-                if day_shift and not day_shift.is_work_day(target_date):
+                from attendance.payroll_rules import official_holiday_treatment_on
+                if att and att.status in ('on_leave', 'holiday'):
+                    status = att.status            # HR أو اعتماد الإجازة حددوه
+                elif day_shift and not day_shift.is_work_day(target_date):
                     status = 'weekend'
+                elif cls._on_approved_leave(employee, target_date):
+                    status = 'on_leave'            # قبل كده كانت بتتكتب غياب في الحساب الليلي
+                elif official_holiday_treatment_on(employee, target_date) == 'paid_leave':
+                    status = 'holiday'
                 elif target_date in employee_mission_dates(employee, target_date, target_date):
                     status = 'mission'
                 else:
@@ -1741,7 +1758,13 @@ class DailyAttendanceSummary(TenantModel):
                 return obj
 
             shift_mode = getattr(day_shift, 'shift_mode', '') if day_shift else ''
-            if day_shift and shift_mode == 'split_fixed':
+            # تعديل يدوي من الـ HR: الحساب الليلي مايرجعش التأخير اللي اتسامح فيه أو الحالة اللي اتغيرت
+            _manual = bool(getattr(att, 'is_manually_edited', False))
+            if _manual:
+                late_min = int(att.late_minutes or 0)
+                work_h = float(getattr(att, 'work_hours', 0) or 0)
+                ot_h = _calc_overtime_hours(day_shift, att)
+            elif day_shift and shift_mode == 'split_fixed':
                 sessions = list(AttendanceSession._base_manager.filter(
                     attendance=att
                 ).order_by('session_number'))
@@ -1757,7 +1780,9 @@ class DailyAttendanceSummary(TenantModel):
             is_night = _is_night_shift(day_shift)
             is_weekend = _is_weekend_work(day_shift, target_date)
 
-            if late_min > 0:
+            if _manual and att.status in ('absent', 'on_leave', 'holiday', 'mission'):
+                status = att.status
+            elif late_min > 0:
                 status = 'late'
             else:
                 status = 'present'

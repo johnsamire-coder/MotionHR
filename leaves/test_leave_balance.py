@@ -174,7 +174,8 @@ class EditDatesTests(LeaveBalanceBase):
 
     def test_extend_beyond_balance_refused(self):
         lv = self.request_leave(1)
-        r = self.edit(lv, {'end_date': str(self.d0 + timedelta(days=24))})   # 25 يوم والمتاح 21
+        # 40 يوم تقويم = حوالي 29 يوم شغل (الإجازة بأيام الشغل بس) والمتاح 21
+        r = self.edit(lv, {'end_date': str(self.d0 + timedelta(days=39))})
         self.assertEqual(r.status_code, 400)
         self.assertIn('غير كافي', r.json()['message'])
         lv.refresh_from_db()

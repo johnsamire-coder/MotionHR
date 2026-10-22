@@ -41,10 +41,21 @@ def _calc_late_minutes(shift, att):
     try:
         from django.utils import timezone
         check_in_local = timezone.localtime(att.check_in_time)
-        shift_start = datetime.combine(check_in_local.date(), shift.start_time)
+        shift_start = None
+        if shift_mode in ('variable_weekly', 'variable_daily'):
+            # الشيفت المتغير: بداية اليوم من جدوله (قبل كده من الوقت الأساسي فالتأخير كان بيطلع غلط)
+            from attendance.api_mobile import get_shift_periods
+            _day = getattr(att, 'date', None) or check_in_local.date()
+            _periods = get_shift_periods(shift, _day)
+            if _periods:
+                shift_start = timezone.localtime(_periods[0]['start']).replace(tzinfo=None)
+        if shift_start is None:
+            if not shift.start_time:
+                return 0
+            shift_start = datetime.combine(check_in_local.date(), shift.start_time)
 
         # الشيفت الليلي: لو الحضور بعد نص الليل والشيفت بيبدأ قبله → الشيفت بدأ امبارح
-        if getattr(shift, 'crosses_midnight', False):
+        if getattr(shift, 'crosses_midnight', False) and shift.start_time:
             if check_in_local.time() < shift.start_time:
                 shift_start -= timedelta(days=1)
 
@@ -325,6 +336,27 @@ def get_company_working_days(company, year, month):
     return working_dates
 
 
+
+
+def official_holiday_treatment_on(employee, day):
+    """معاملة الإجازة الرسمية للموظف في يوم واحد (paid_leave / work_with_bonus / ...) أو None لو مفيش إجازة"""
+    try:
+        from leaves.official_holiday_models import OfficialHoliday, OfficialHolidayRule
+        company = getattr(employee, 'company', None)
+        if not company:
+            return None
+        holiday = OfficialHoliday._base_manager.filter(
+            company=company, is_active=True, start_date__lte=day, end_date__gte=day,
+        ).order_by('start_date').first()
+        if holiday is None:
+            return None
+        for rule in OfficialHolidayRule._base_manager.filter(holiday=holiday).prefetch_related('employees').order_by('priority'):
+            if rule.applies_to_employee(employee):
+                return rule.treatment
+        return 'paid_leave'
+    except Exception:
+        logger.exception('payroll_rules error in official_holiday_treatment_on')
+        return None
 
 
 def get_official_holiday_treatment(employee, year, month):

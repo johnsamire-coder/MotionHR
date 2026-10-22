@@ -401,3 +401,23 @@ def is_realistic_travel_smart(employee, from_lat, from_lng, to_lat, to_lng,
         'reason': reason,
     }
 
+
+
+def is_mocked_location(request):
+    """التطبيق (من إصدار 1.6) بيبعت is_mocked لو الموقع جاي من برنامج تزييف موقع (أندرويد)"""
+    return str(request.data.get('is_mocked') or '').strip().lower() in ('1', 'true', 'yes')
+
+
+def record_mock_location_alert(employee, action):
+    """تنبيه للمدير إن الموظف حاول يبصم بموقع مزيف"""
+    try:
+        from django.utils import timezone
+        from attendance.models import TrackingAlert
+        now = timezone.now()
+        TrackingAlert._base_manager.create(
+            company=employee.company, employee=employee, date=timezone.localdate(), started_at=now,
+            last_seen_at=now, minutes_outside=0, status='open',
+            notes=f'محاولة {action} بموقع مزيف (Fake GPS)',
+        )
+    except Exception:
+        pass

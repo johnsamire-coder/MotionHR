@@ -11,6 +11,9 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+import logging
+
+logger = logging.getLogger(__name__)
 
 from .models import Attendance
 
@@ -230,6 +233,26 @@ def _send_auto_checkout_notification(user, employee, lang, check_out_str, work_h
 # API Views
 # ─────────────────────────────────────────
 
+def _device_denied(request, user, lang):
+    """
+    الحضور التلقائي من جهاز مش معتمد مرفوض. جهاز مش متسجل خالص (رقم غريب) مرفوض برضو؛
+    التطبيق بيسجل جهازه وقت الدخول فالرقم اللي بيبعته دايماً متسجل.
+    """
+    device_id = str(request.data.get('device_id') or '').strip()
+    if not device_id:
+        return None
+    from accounts.fcm_models import TrustedDevice
+    device = TrustedDevice._base_manager.filter(user=user, device_id=device_id).first()
+    if device is None or not device.auto_attendance_enabled:
+        return Response({
+            'success': False,
+            'status': 'device_not_approved',
+            'message': 'الجهاز غير معتمد — Auto Attendance متوقف حتى موافقة المدير' if lang == 'ar'
+            else 'Device not approved — Auto Attendance disabled until manager approval',
+        }, status=403)
+    return None
+
+
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -246,19 +269,13 @@ def auto_check_in(request):
         return Response({'error': _msg('employee_not_found', lang)}, status=404)
 
     # ─── Device Approval Check ───
-    device_id = request.data.get('device_id', '').strip()
-    if device_id:
-        try:
-            from accounts.fcm_models import TrustedDevice
-            device = TrustedDevice._base_manager.filter(user=user, device_id=device_id).first()
-            if device and not device.auto_attendance_enabled:
-                return Response({
-                    'success': False,
-                    'status': 'device_not_approved',
-                    'message': 'الجهاز غير معتمد — Auto Attendance متوقف حتى موافقة المدير' if lang == 'ar' else 'Device not approved — Auto Attendance disabled until manager approval',
-                }, status=403)
-        except Exception:
-            pass
+    denied = _device_denied(request, user, lang)
+    if denied:
+        return denied
+    from attendance.location_utils import is_mocked_location, record_mock_location_alert
+    if is_mocked_location(request):
+        record_mock_location_alert(emp, 'حضور تلقائي')
+        return Response({'status': 'mocked_location', 'message': 'الموقع ده جاي من برنامج تزييف موقع (Fake GPS). اقفل البرنامج وحاول تاني.' if lang == 'ar' else 'This location comes from a fake GPS app. Turn it off and try again.'}, status=400)
     # ─────────────────────────────
 
     lat = request.data.get('latitude')
@@ -372,10 +389,11 @@ def auto_check_in(request):
 
     # هل عمل check-in النهارده أو امبارح (لشيفتات بعد نص الليل)؟
     from datetime import timedelta
-    existing = Attendance._base_manager.filter(
-        employee=emp,
-        date__in=[today, today - timedelta(days=1)],
-        check_in_time__isnull=False,
+    # حضور النهارده، أو حضور امبارح لسه مفتوح (شيفت ليلي). قبل كده أي حضور امبارح حتى لو اتقفل
+    # كان بيمنع حضور النهارده، فاللي بيعتمد على الحضور التلقائي كان بيتسجل غايب يوم آه ويوم لأ
+    from django.db.models import Q as _Q
+    existing = Attendance._base_manager.filter(employee=emp, check_in_time__isnull=False).filter(
+        _Q(date=today) | _Q(date=today - timedelta(days=1), check_out_time__isnull=True)
     ).order_by('-date').first()
 
     if existing:
@@ -471,6 +489,19 @@ def auto_check_in(request):
             if prev_start <= local_now_for_att_date <= prev_end_estimate:
                 att_date = today - timedelta(days=1)
 
+    # إجازة معتمدة أو يوم راحة: مفيش حضور تلقائي (زي الحضور اليدوي)
+    try:
+        from leaves.models import LeaveRequest
+        if LeaveRequest._base_manager.filter(employee=emp, status='approved', start_date__lte=att_date,
+                                             end_date__gte=att_date).exists():
+            return Response({'status': 'on_leave', 'message': 'أنت في إجازة معتمدة النهارده' if lang == 'ar'
+                             else 'You are on an approved leave today'}, status=400)
+    except Exception:
+        logger.exception('auto_check_in leave check failed')
+    if shift and hasattr(shift, 'is_work_day') and not shift.is_work_day(att_date):
+        return Response({'status': 'weekly_off', 'message': 'النهارده يوم راحتك' if lang == 'ar'
+                         else 'Today is your day off'}, status=400)
+
     att, created = Attendance._base_manager.get_or_create(
         employee=emp,
         date=att_date,
@@ -481,6 +512,7 @@ def auto_check_in(request):
             'check_in_latitude': lat,
             'check_in_longitude': lon,
             'company': emp.company,
+            'shift': shift,
         }
     )
 
@@ -525,6 +557,14 @@ def auto_check_out(request):
 
     if not emp:
         return Response({'error': _msg('employee_not_found', lang)}, status=404)
+
+    denied = _device_denied(request, user, lang)
+    if denied:
+        return denied
+    from attendance.location_utils import is_mocked_location, record_mock_location_alert
+    if is_mocked_location(request):
+        record_mock_location_alert(emp, 'انصراف تلقائي')
+        return Response({'status': 'mocked_location', 'message': 'الموقع ده جاي من برنامج تزييف موقع (Fake GPS). اقفل البرنامج وحاول تاني.' if lang == 'ar' else 'This location comes from a fake GPS app. Turn it off and try again.'}, status=400)
 
     lat = request.data.get('latitude')
     lon = request.data.get('longitude')
@@ -625,28 +665,43 @@ def auto_check_out(request):
     work_hours = round(max(0, work_duration.total_seconds()) / 3600, 2)
     check_out_str = local_now.strftime('%I:%M %p')
 
-    # حساب الأوفرتايم
-    shift = _get_employee_shift(emp)
+    # الأوفرتايم والانصراف المبكر من حدود شيفت يوم الحضور نفسه
+    # (قبل كده المقارنة بين وقت بمنطقة زمنية ووقت من غيرها كانت بتقع فالأوفرتايم دايماً صفر)
+    shift = getattr(att, 'shift', None) or _get_employee_shift(emp)
     overtime_hours = 0.0
-    if shift and shift.end_time:
-        try:
-            shift_end = shift.end_time
-            if isinstance(shift_end, str):
-                h, m = shift_end.split(':')
-                shift_end = time(int(h), int(m))
-            shift_end_dt = datetime.combine(today, shift_end)
-            if check_out_dt > shift_end_dt:
-                ot = check_out_dt - shift_end_dt
-                overtime_hours = round(ot.total_seconds() / 3600, 2)
-        except Exception:
-            pass
+    early_leave_minutes = 0
+    try:
+        from attendance.api_mobile import get_shift_bounds
+        _start_dt, shift_end_dt = get_shift_bounds(shift, att.date) if shift else (None, None)
+        if shift_end_dt:
+            if now > shift_end_dt:
+                overtime_hours = round((now - shift_end_dt).total_seconds() / 3600, 2)
+            else:
+                early_leave_minutes = int((shift_end_dt - now).total_seconds() // 60)
+                # الانصراف التلقائي قبل آخر الشيفت بأكتر من نص ساعة مرفوض (زي الانصراف اليدوي من غير إذن)
+                if early_leave_minutes > 30:
+                    return Response({
+                        'status': 'shift_not_ended',
+                        'message': 'لسه وقت الشيفت ماخلصش. الانصراف التلقائي بيشتغل قرب آخر الشيفت بس.'
+                        if lang == 'ar' else 'Your shift has not ended yet. Auto check-out works only near the end of the shift.',
+                        'shift_end': timezone.localtime(shift_end_dt).strftime('%I:%M %p'),
+                    }, status=400)
+    except Exception:
+        logger.exception('auto_check_out shift bounds failed')
 
+    att.early_leave_minutes = early_leave_minutes
     att.check_out_time = now
     att.work_hours = work_hours
     att.overtime_hours = overtime_hours
     att.check_out_latitude = lat
     att.check_out_longitude = lon
     att.save()
+    try:
+        from attendance.models import AttendanceSession, DailyAttendanceSummary
+        AttendanceSession._base_manager.filter(attendance=att, check_out_time__isnull=True).update(check_out_time=now)
+        DailyAttendanceSummary.compute_for_day(emp, att.date)
+    except Exception:
+        logger.exception('auto_check_out summary failed')
 
     # FCM notification
     _send_auto_checkout_notification(
@@ -681,14 +736,15 @@ def auto_checkin_status(request):
     from datetime import timedelta
 
     # شيفت بعد نص الليل: نبحث في اليوم الحالي واليوم السابق
-    att = Attendance._base_manager.filter(
-        employee=emp,
-        date__in=[today, today - timedelta(days=1)],
-        check_in_time__isnull=False,
+    # النهارده، أو امبارح لو لسه مفتوح (شيفت ليلي) — حضور امبارح المقفول مايتحسبش حضور النهارده
+    from django.db.models import Q as _Q
+    att = Attendance._base_manager.filter(employee=emp, check_in_time__isnull=False).filter(
+        _Q(date=today) | _Q(date=today - timedelta(days=1), check_out_time__isnull=True)
     ).order_by('-date').first()
 
     if not att:
         return Response({
+            'success': True,
             'status': 'not_checked_in',
             'message': _msg('not_checked_in', lang),
             'has_check_in': False,

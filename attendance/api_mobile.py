@@ -471,6 +471,9 @@ def get_missing_periods(shift, day, employee):
     return missed
 
 
+VARIABLE_SHIFT_MODES = ('variable_weekly', 'variable_weekly_flex', 'variable_daily', 'split_fixed')
+
+
 def get_shift_bounds(shift, day):
     """
     بترجع حدود الشيفت (start, end) كـ datetime aware.
@@ -480,6 +483,12 @@ def get_shift_bounds(shift, day):
     - لو start_time قبل 12: الشيفت بدأ يوم day-1 وبينتهي يوم day
     """
     from datetime import datetime, timedelta
+
+    # الشيفت المتغير (جدول أسبوعي/يومي) والمقسم: الحدود من فترات اليوم نفسه مش من الوقت الأساسي
+    if shift and (getattr(shift, 'shift_mode', '') or '') in VARIABLE_SHIFT_MODES:
+        periods = get_shift_periods(shift, day)
+        if periods:
+            return periods[0]['start'], periods[-1]['end']
 
     if not shift or not shift.start_time or not shift.end_time:
         return None, None
@@ -903,6 +912,12 @@ def mobile_attendance_action(request):
     if action not in ['check_in', 'check_out']:
         return Response({'success': False, 'message': 'نوع العملية لازم يكون check_in أو check_out'}, status=400)
 
+    from attendance.location_utils import is_mocked_location, record_mock_location_alert
+    if is_mocked_location(request):
+        record_mock_location_alert(employee, action)
+        return Response({'success': False, 'mocked_location': True,
+                         **bilingual_message(employee, 'الموقع ده جاي من برنامج تزييف موقع (Fake GPS). اقفل البرنامج وحاول تاني.', 'This location comes from a fake GPS app. Turn it off and try again.')}, status=400)
+
     if latitude in [None, ''] or longitude in [None, '']:
         _create_gps_disabled_alert(employee, action)
         return Response({'success': False, 'message': 'الموقع الجغرافي غير متاح. يرجى تفعيل GPS والمحاولة مرة أخرى'}, status=400)
@@ -959,32 +974,22 @@ def mobile_attendance_action(request):
             "can_request_recall": True,
         }, status=400)
 
-    # ── تحقق أن الموظف مربوط فعلياً بشيفت (EmployeeShift أو ShiftAssignment) ──
+    # ── تحقق أن الموظف مربوط فعلياً بشيفت ──
+    # نفس ترتيب الشيفت الفعلي (تعيين للموظف/القسم/الفرع/الشركة، تناوب، استثناء يومي، أو الربط القديم)؛
+    # الفحص القديم كان بيتجاهل تعيين الشركة كلها والتناوبات فكان بيمنع ناس مربوطين فعلاً
     if action == 'check_in':
-        from attendance.models import EmployeeShift as _EmpShift
-        from attendance.models import ShiftAssignment as _ShiftAssign
-        from django.db.models import Q
-
-        # فحص 1: EmployeeShift (ربط مباشر)
-        has_emp_shift = _EmpShift._base_manager.filter(
-            employee=employee,
-            is_active=True,
-        ).exists()
-
-        # فحص 2: ShiftAssignment (ربط بالموظف مباشرة أو بالقسم/الفرع)
-        emp_dept_id = getattr(employee, 'department_id', None)
-        emp_branch_id = getattr(employee, 'branch_id', None)
-
-        assignment_q = Q(employee=employee)
-        if emp_dept_id:
-            assignment_q |= Q(assignment_type='department', department_id=emp_dept_id)
-        if emp_branch_id:
-            assignment_q |= Q(assignment_type='branch', branch_id=emp_branch_id)
-
-        has_shift_assignment = _ShiftAssign._base_manager.filter(
-            company=employee.company,
-            is_active=True,
-        ).filter(assignment_q).exists()
+        from datetime import timedelta
+        from attendance.api_shifts import get_effective_shift
+        _sources_ok = None
+        for _d in (today, today - timedelta(days=1)):     # شيفت ليلي بدأ امبارح
+            try:
+                _sh, _src = get_effective_shift(employee, _d) or (None, None)
+            except Exception:
+                _sh, _src = None, None
+            if _sh is not None and _src not in (None, 'company_default', 'company_first_active_fallback'):
+                _sources_ok = _src
+                break
+        has_emp_shift = has_shift_assignment = bool(_sources_ok)
 
         if not has_emp_shift and not has_shift_assignment:
             return Response({
@@ -1351,18 +1356,15 @@ def mobile_attendance_action(request):
                     print(f'late warning notify error: {_ne}')
 
         # ── on_mission flag ──
+        # (الاستعلام القديم كان على حقول مش موجودة فكان بيقع في صمت والعلامة عمرها ما اتفعلت)
         try:
-            from attendance.missions_models import MissionAssignment
-            has_mission = MissionAssignment._base_manager.filter(
-                employee=employee,
-                mission__date=today,
-                status='approved',
-            ).exists()
-            if has_mission:
+            from attendance.mission_days import employee_mission_dates
+            if today in employee_mission_dates(employee, today, today):
                 attendance.on_mission = True
                 attendance.save(update_fields=['on_mission'])
         except Exception:
-            pass
+            import logging
+            logging.getLogger(__name__).exception('on_mission flag failed')
 
         from attendance.models import AttendanceSession
 

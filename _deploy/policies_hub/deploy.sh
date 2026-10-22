@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
 # رفع تصليحات مركز السياسات على السيرفر — أمر واحد:
-#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/group18-payroll/_deploy/policies_hub/deploy.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/johnsamire-coder/motionhr/fix/group19-attendance/_deploy/policies_hub/deploy.sh | sudo bash
 #
 # لو المستودعات خاصة: مفتاح قراءة من GitHub محفوظ في /root/.motionhr_github_token
 #
@@ -14,7 +14,7 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-BRANCH="${BRANCH:-fix/group18-payroll}"
+BRANCH="${BRANCH:-fix/group19-attendance}"
 BE="${BE:-/var/www/motionhr}"
 WEB="${WEB:-/var/www/motionhr_web}"
 BE_SERVICE="${BE_SERVICE:-motionhr}"
@@ -144,6 +144,11 @@ BE_FILES=(
   attendance/policy_versions.py
   attendance/test_group18_payroll.py
   attendance/views.py
+  attendance/api_attendance_adjustment.py
+  attendance/api_auto_checkin.py
+  attendance/location_utils.py
+  attendance/models.py
+  attendance/test_group19_attendance.py
 )
 WEB_FILES=(
   src/app/api/employee/announcements/route.ts
@@ -271,6 +276,7 @@ WEB_FILES=(
   src/app/hr/reports/insurance/page.tsx
   src/app/hr/reports/tax/page.tsx
   src/app/hr/payroll-runs/page.tsx
+  src/components/hr/policies/official-holiday-dialog.tsx
 )
 
 # تنزيل نسخة من GitHub — بمفتاح القراءة لو موجود (المستودعات الخاصة)، ومن غيره لو عامة
@@ -319,7 +325,7 @@ NODE_DIR="$(dirname "$(readlink -f "$NPM")")"
 say "0/5 بتأكد إن الكود اللي على السيرفر ماتغيرش من ساعة ما اتبعت"
 # النسخ المعروفة: كود السيرفر الأصلي + كل رفعة سابقة من التصليحات دي
 # + الفرع اللي بنرفعه نفسه: لو السيرفر عليه النسخة دي خلاص، إعادة الرفع آمنة
-KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 policies-hub-deployed-5 policies-hub-deployed-6 policies-hub-deployed-7 policies-hub-deployed-8 policies-hub-deployed-9 policies-hub-deployed-10 policies-hub-deployed-11 policies-hub-deployed-12 policies-hub-deployed-13 policies-hub-deployed-14 policies-hub-deployed-15 policies-hub-deployed-16 policies-hub-deployed-17 policies-hub-deployed-18 policies-hub-deployed-19 policies-hub-deployed-20 policies-hub-deployed-21 policies-hub-deployed-22 $BRANCH"
+KNOWN_REFS="live-server-snapshot policies-hub-deployed-1 policies-hub-deployed-2 policies-hub-deployed-3 policies-hub-deployed-4 policies-hub-deployed-5 policies-hub-deployed-6 policies-hub-deployed-7 policies-hub-deployed-8 policies-hub-deployed-9 policies-hub-deployed-10 policies-hub-deployed-11 policies-hub-deployed-12 policies-hub-deployed-13 policies-hub-deployed-14 policies-hub-deployed-15 policies-hub-deployed-16 policies-hub-deployed-17 policies-hub-deployed-18 policies-hub-deployed-19 policies-hub-deployed-20 policies-hub-deployed-21 policies-hub-deployed-22 policies-hub-deployed-23 $BRANCH"
 for ref in $KNOWN_REFS; do
   mkdir -p "$TMP/known_be/$ref" "$TMP/known_web/$ref"
   # النسخة اللي لسه ماترفعتش مش هتبقى موجودة — عادي
@@ -429,7 +435,7 @@ ok "الملفات اتحدثت (${#BE_FILES[@]} باك إند + ${#WEB_FILES[@]
 # ── 3) اختبارات الباك إند على السيرفر نفسه ──
 say "3/5 بشغّل الاختبارات (المرتبات والدخول، على قاعدة بيانات وهمية) — بياخد دقيقتين تقريباً"
 ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py check >/dev/null )
-if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios accounts.test_access_guard attendance.test_action_scope attendance.test_group3_misc leaves.test_leave_balance attendance.test_group4_permissions attendance.test_group5_bugs employees.test_import_bulk attendance.test_group6_web_server attendance.test_group7_safety attendance.test_group8_medium attendance.test_group9_scope attendance.test_group10_misc attendance.test_group11_mobile_server attendance.test_group12_app_support attendance.test_group13_web attendance.test_group14_reports attendance.test_group16_documents attendance.test_group17_money attendance.test_group18_payroll audit biometric --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
+if ! ( cd "$BE" && sudo -H -u "$BE_OWNER" "$PY" manage.py test attendance.test_payroll_scenarios accounts.test_access_guard attendance.test_action_scope attendance.test_group3_misc leaves.test_leave_balance attendance.test_group4_permissions attendance.test_group5_bugs employees.test_import_bulk attendance.test_group6_web_server attendance.test_group7_safety attendance.test_group8_medium attendance.test_group9_scope attendance.test_group10_misc attendance.test_group11_mobile_server attendance.test_group12_app_support attendance.test_group13_web attendance.test_group14_reports attendance.test_group16_documents attendance.test_group17_money attendance.test_group18_payroll attendance.test_group19_attendance audit biometric --settings=motionhr.settings_test --noinput >"$BK/tests.log" 2>&1 ); then
   grep -E "^(FAIL|ERROR):|Error" "$BK/tests.log" | head -20; tail -5 "$BK/tests.log"; false
 fi
 grep -E "^Ran |^OK" "$BK/tests.log" || true

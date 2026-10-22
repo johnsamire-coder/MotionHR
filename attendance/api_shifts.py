@@ -168,15 +168,35 @@ def _shift_data(shift, lang='ar'):
     }
 
 
+def _close_overlapping(qs, new_start, new_end):
+    """
+    قبل إضافة شيفت جديد للموظف من تاريخ معين: الشيفت اللي بدأ قبله بيقفل يوم قبله،
+    واللي بيبدأ جوه الفترة الجديدة بيتلغي. اللي مش متداخل بيفضل زي ما هو.
+    قبل كده كل شيفتات الموظف كانت بتتلغي في الحال، حتى الحالي لو الجديد لسه هيبدأ بعد شهر.
+    """
+    from datetime import date as _d, timedelta as _td
+    new_end = new_end or _d.max
+    for row in qs:
+        row_end = row.end_date or _d.max
+        if row.start_date > new_end or row_end < new_start:
+            continue
+        if row.start_date < new_start:
+            row.end_date = new_start - _td(days=1)
+            row.save(update_fields=['end_date'])
+        else:
+            row.is_active = False
+            row.save(update_fields=['is_active'])
+
+
 def get_effective_shift(employee, target_date):
     """
     يجيب الشيفت الفعلي للموظف في يوم معين
     الأولوية:
     1. ShiftOverride
-    2. ShiftAssignment للموظف
-    3. ShiftAssignment للقسم
-    4. ShiftAssignment للفرع
-    5. ShiftAssignment للشركة
+    2. ShiftAssignment للموظف ← تناوب الموظف
+    3. ShiftAssignment للقسم ← تناوب القسم
+    4. ShiftAssignment للفرع ← تناوب الفرع
+    5. ShiftAssignment للشركة ← تناوب الشركة
     6. EmployeeShift القديم (fallback)
     7. Shift الافتراضي للشركة
     8. None
@@ -194,51 +214,6 @@ def get_effective_shift(employee, target_date):
         return override.shift, 'override'
 
     active_date_filter = Q(end_date__isnull=True) | Q(end_date__gte=target_date)
-
-    # 2) تعيين مباشر للموظف
-    employee_assignment = ShiftAssignment._base_manager.filter(
-        company=employee.company,
-        assignment_type='employee',
-        employee=employee,
-        is_active=True,
-        start_date__lte=target_date,
-    ).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
-    if employee_assignment:
-        return employee_assignment.shift, 'employee_assignment'
-
-    # 3) تعيين القسم
-    if getattr(employee, 'department_id', None):
-        department_assignment = ShiftAssignment._base_manager.filter(
-            company=employee.company,
-            assignment_type='department',
-            department_id=employee.department_id,
-            is_active=True,
-            start_date__lte=target_date,
-        ).exclude(excluded_employees=employee).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
-        if department_assignment:
-            return department_assignment.shift, 'department_assignment'
-
-    # 4) تعيين الفرع
-    if getattr(employee, 'branch_id', None):
-        branch_assignment = ShiftAssignment._base_manager.filter(
-            company=employee.company,
-            assignment_type='branch',
-            branch_id=employee.branch_id,
-            is_active=True,
-            start_date__lte=target_date,
-        ).exclude(excluded_employees=employee).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
-        if branch_assignment:
-            return branch_assignment.shift, 'branch_assignment'
-
-    # 5) تعيين الشركة
-    company_assignment = ShiftAssignment._base_manager.filter(
-        company=employee.company,
-        assignment_type='company',
-        is_active=True,
-        start_date__lte=target_date,
-    ).exclude(excluded_employees=employee).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
-    if company_assignment:
-        return company_assignment.shift, 'company_assignment'
 
     # 6) تناوب الشيفتات (ShiftRotation)
     from attendance.models import ShiftRotation, ShiftRotationSlot, ShiftRotationAssignment
@@ -260,6 +235,18 @@ def get_effective_shift(employee, target_date):
         ).select_related('shift').first()
         return slot.shift if slot else None
 
+    # كل مستوى: التعيين الثابت وبعده التناوب على نفس المستوى (قبل كده أي تعيين للشركة كان بيلغي كل التناوبات)
+    # 2) تعيين مباشر للموظف
+    employee_assignment = ShiftAssignment._base_manager.filter(
+        company=employee.company,
+        assignment_type='employee',
+        employee=employee,
+        is_active=True,
+        start_date__lte=target_date,
+    ).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+    if employee_assignment:
+        return employee_assignment.shift, 'employee_assignment'
+
     # 6a) تناوب للموظف مباشرة
     emp_rotation_assignment = ShiftRotationAssignment._base_manager.filter(
         company=employee.company,
@@ -272,6 +259,18 @@ def get_effective_shift(employee, target_date):
         rotation_shift = _get_shift_from_rotation(emp_rotation_assignment.rotation)
         if rotation_shift:
             return rotation_shift, 'rotation_employee'
+
+    # 3) تعيين القسم
+    if getattr(employee, 'department_id', None):
+        department_assignment = ShiftAssignment._base_manager.filter(
+            company=employee.company,
+            assignment_type='department',
+            department_id=employee.department_id,
+            is_active=True,
+            start_date__lte=target_date,
+        ).exclude(excluded_employees=employee).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+        if department_assignment:
+            return department_assignment.shift, 'department_assignment'
 
     # 6b) تناوب للقسم
     if getattr(employee, 'department_id', None):
@@ -287,6 +286,18 @@ def get_effective_shift(employee, target_date):
             if rotation_shift:
                 return rotation_shift, 'rotation_department'
 
+    # 4) تعيين الفرع
+    if getattr(employee, 'branch_id', None):
+        branch_assignment = ShiftAssignment._base_manager.filter(
+            company=employee.company,
+            assignment_type='branch',
+            branch_id=employee.branch_id,
+            is_active=True,
+            start_date__lte=target_date,
+        ).exclude(excluded_employees=employee).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+        if branch_assignment:
+            return branch_assignment.shift, 'branch_assignment'
+
     # 6c) تناوب للفرع
     if getattr(employee, 'branch_id', None):
         branch_rotation_assignment = ShiftRotationAssignment._base_manager.filter(
@@ -300,6 +311,16 @@ def get_effective_shift(employee, target_date):
             rotation_shift = _get_shift_from_rotation(branch_rotation_assignment.rotation)
             if rotation_shift:
                 return rotation_shift, 'rotation_branch'
+
+    # 5) تعيين الشركة
+    company_assignment = ShiftAssignment._base_manager.filter(
+        company=employee.company,
+        assignment_type='company',
+        is_active=True,
+        start_date__lte=target_date,
+    ).exclude(excluded_employees=employee).filter(active_date_filter).select_related('shift').order_by('priority', '-start_date').first()
+    if company_assignment:
+        return company_assignment.shift, 'company_assignment'
 
     # 6d) تناوب للشركة
     company_rotation_assignment = ShiftRotationAssignment._base_manager.filter(
@@ -1003,7 +1024,8 @@ def manager_shift_assign(request):
 
             for existing_assignment in active_direct_assignments:
                 existing_end = existing_assignment.end_date or date.max
-                if existing_assignment.start_date <= new_end and start_date <= existing_end:
+                # شيفت بدأ قبل الجديد مش تعارض: هيتقفل يوم قبل بداية الجديد
+                if start_date <= existing_assignment.start_date <= new_end:
                     overlapping_assignment = existing_assignment
                     break
 
@@ -1100,11 +1122,11 @@ def manager_shift_assign(request):
 
         # legacy mirror للموظفين المتأثرين بالتعيين الجماعي (company/branch/department)
         for emp in grouped_affected.values():
-            EmployeeShift._base_manager.filter(
+            _close_overlapping(EmployeeShift._base_manager.filter(
                 employee=emp,
                 is_active=True,
                 company=company
-            ).update(is_active=False)
+            ), start_date, end_date)
             EmployeeShift._base_manager.create(
                 company=company,
                 employee=emp,
@@ -1153,12 +1175,12 @@ def manager_shift_assign(request):
                     "existing_end_date": str(overlapping_assignment.end_date) if overlapping_assignment.end_date else None,
                 }, status=400)
 
-            ShiftAssignment._base_manager.filter(
+            _close_overlapping(ShiftAssignment._base_manager.filter(
                 company=company,
                 assignment_type='employee',
                 employee=employee,
                 is_active=True
-            ).update(is_active=False)
+            ), start_date, end_date)
 
             created_assignments.append(
                 ShiftAssignment._base_manager.create(
@@ -1176,11 +1198,11 @@ def manager_shift_assign(request):
             )
 
             # legacy mirror للموظف المباشر فقط
-            EmployeeShift._base_manager.filter(
+            _close_overlapping(EmployeeShift._base_manager.filter(
                 employee=employee,
                 is_active=True,
                 company=company
-            ).update(is_active=False)
+            ), start_date, end_date)
 
             EmployeeShift._base_manager.create(
                 company=company,
@@ -1446,12 +1468,12 @@ def shift_change_request_action(request, request_id):
 
         if action == 'approve':
             # طبّق الشيفت الجديد على النظام الحالي
-            ShiftAssignment._base_manager.filter(
+            _close_overlapping(ShiftAssignment._base_manager.filter(
                 company=company,
                 assignment_type='employee',
                 employee=change_req.employee,
                 is_active=True
-            ).update(is_active=False)
+            ), change_req.effective_from, change_req.effective_to)
 
             ShiftAssignment._base_manager.create(
                 company=company,
@@ -1467,11 +1489,11 @@ def shift_change_request_action(request, request_id):
             )
 
             # legacy mirror لعدم كسر أي جزء قديم
-            EmployeeShift._base_manager.filter(
+            _close_overlapping(EmployeeShift._base_manager.filter(
                 employee=change_req.employee,
                 company=company,
                 is_active=True
-            ).update(is_active=False)
+            ), change_req.effective_from, change_req.effective_to)
 
             EmployeeShift._base_manager.create(
                 company=company,
@@ -2038,6 +2060,10 @@ def partial_checkout(request):
         employee = Employee._base_manager.filter(user=request.user).first()
         if not employee:
             return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
+        from attendance.location_utils import is_mocked_location, record_mock_location_alert
+        if is_mocked_location(request):
+            record_mock_location_alert(employee, 'خروج/رجوع')
+            return Response({"success": False, "error": "الموقع ده جاي من برنامج تزييف موقع (Fake GPS). اقفل البرنامج وحاول تاني."}, status=400)
 
         today = timezone.localdate()
         attendance = Attendance._base_manager.filter(
@@ -2102,6 +2128,10 @@ def resume_checkin(request):
         employee = Employee._base_manager.filter(user=request.user).first()
         if not employee:
             return Response({"success": False, "error": "الموظف غير موجود"}, status=404)
+        from attendance.location_utils import is_mocked_location, record_mock_location_alert
+        if is_mocked_location(request):
+            record_mock_location_alert(employee, 'خروج/رجوع')
+            return Response({"success": False, "error": "الموقع ده جاي من برنامج تزييف موقع (Fake GPS). اقفل البرنامج وحاول تاني."}, status=400)
 
         today = timezone.localdate()
         attendance = Attendance._base_manager.filter(
@@ -2438,18 +2468,38 @@ def manager_shift_assignment_delete(request, assignment_id):
         except ShiftAssignment.DoesNotExist:
             return Response({"success": False, "error": "التعيين غير موجود أو اتحذف قبل كده"}, status=404)
 
-        assignment.is_active = False
-        assignment.save()
+        from datetime import timedelta as _td
+        from attendance.models import EmployeeShift
+        today = timezone.localdate()
 
-        # لو التعيين كان لموظف مباشر → نلغي الـ EmployeeShift المرآة برضو
+        def _stop(row):
+            # اللي اتطبق في أيام فاتت بيقف من النهارده (الأيام القديمة تفضل على شيفتها)، واللي لسه مابدأش بيتلغي
+            if row.start_date and row.start_date < today:
+                row.end_date = min(row.end_date or today, today - _td(days=1))
+                row.save(update_fields=['end_date'])
+            else:
+                row.is_active = False
+                row.save(update_fields=['is_active'])
+
+        _stop(assignment)
+
+        # الـ EmployeeShift المرآة: للموظف المباشر، أو لكل موظفين القسم/الفرع/الشركة في التعيين الجماعي
+        # (قبل كده الجماعي كانت مرايته بتفضل شغالة فالموظفين يفضلوا على الشيفت الملغي)
+        mirrors = EmployeeShift._base_manager.filter(company=company, shift=assignment.shift, is_active=True)
         if assignment.assignment_type == 'employee' and assignment.employee:
-            from attendance.models import EmployeeShift
-            EmployeeShift._base_manager.filter(
-                company=company,
-                employee=assignment.employee,
-                shift=assignment.shift,
-                is_active=True,
-            ).update(is_active=False)
+            mirrors = mirrors.filter(employee=assignment.employee)
+        else:
+            mirrors = mirrors.filter(start_date=assignment.start_date)
+            if assignment.assignment_type == 'department':
+                mirrors = mirrors.filter(employee__department_id=assignment.department_id)
+            elif assignment.assignment_type == 'branch':
+                mirrors = mirrors.filter(employee__branch_id=assignment.branch_id)
+            keep = ShiftAssignment._base_manager.filter(
+                company=company, assignment_type='employee', shift=assignment.shift, is_active=True,
+            ).values_list('employee_id', flat=True)
+            mirrors = mirrors.exclude(employee_id__in=list(keep))
+        for m in mirrors:
+            _stop(m)
 
         return Response({"success": True, "message": "تم إلغاء التعيين بنجاح", "assignment_id": assignment_id})
     except Exception as e:
