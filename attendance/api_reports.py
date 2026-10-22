@@ -4,6 +4,7 @@ Batch 1: Attendance / Late / Absence
 """
 from datetime import datetime, timedelta, date
 from django.utils import timezone
+from django.db.models import Q
 from calendar import monthrange
 
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -2175,43 +2176,74 @@ def _bank_transfer_data(user, year, month):
     return rows
 
 
-def _insurance_data(user):
-    """التأمينات"""
+def _month_payroll(user, year, month):
+    """
+    [(employee, حساب المرتب, سطر المسير لو موجود)] لموظفين الشركة في الشهر.
+    التقارير المالية بتاخد أرقامها من نفس حساب المرتب بدل معادلات منفصلة.
+    """
     from employees.models import Employee
+    from attendance.payroll_pro_models import PayrollLine, PayrollRun
+    from attendance.payroll_rules import calculate_effective_payroll
+    import logging
     company = getattr(user, 'company', None)
+    if not company:
+        return []
+    run = PayrollRun._base_manager.filter(company=company, year=year, month=month).first()
+    lines = {l.employee_id: l for l in PayrollLine._base_manager.filter(payroll_run=run)} if run else {}
+    out = []
+    emps = Employee._base_manager.filter(company=company).filter(
+        Q(status='active') | Q(id__in=list(lines))).order_by('employee_code')
+    for emp in emps:
+        try:
+            p = calculate_effective_payroll(emp, year, month)
+        except Exception:
+            logging.getLogger(__name__).exception('report payroll failed', extra={'employee_id': emp.id})
+            p = None
+        out.append((emp, p, lines.get(emp.id)))
+    return out
+
+
+def _insurance_data(user, year, month):
+    """التأمينات: نفس المخصوم في المرتب (سياسات التأمين أو إعدادات الرواتب) + حصة الشركة"""
     rows = []
-    insured = Employee._base_manager.filter(company=company, status='active', has_insurance=True)
-    for emp in insured:
-        base = float(emp.basic_salary or 0)
-        ins_base = float(getattr(emp, 'insurance_base_salary', None) or base)
+    for emp, p, line in _month_payroll(user, year, month):
+        if p is None:
+            rows.append({'employee_code': emp.employee_code, 'employee_name': f'{_employee_name(emp)} [تعذر الحساب]',
+                         'insurance_number': emp.insurance_number or '', 'basic_salary': round(float(emp.basic_salary or 0), 2),
+                         'insurance_amount': 0, 'company_share': 0})
+            continue
+        employee_share = float(line.insurance_deduction) if line is not None else float(p.get('insurance_deduction') or 0)
+        company_share = float(p.get('total_company_insurance_contribution') or 0)
+        if employee_share <= 0 and company_share <= 0:
+            continue
         rows.append({
             'employee_code': emp.employee_code,
             'employee_name': _employee_name(emp),
             'insurance_number': emp.insurance_number or '',
-            'basic_salary': round(base, 2),
-            'insurance_base': round(ins_base, 2),
-            'insurance_amount': round(ins_base * 0.11, 2),
+            'basic_salary': round(float(emp.basic_salary or 0), 2),
+            'insurance_amount': round(employee_share, 2),
+            'company_share': round(company_share, 2),
         })
     return rows
 
 
 def _tax_data(user, year, month):
-    """الضرائب"""
-    from employees.models import Employee, Deduction
-    company = getattr(user, 'company', None)
+    """الضرائب: ضريبة المرتب المحسوبة فعلاً (قبل كده كان بيقرا جدول محدش بيكتب فيه فبيطلع فاضي)"""
+    from employees.models import Deduction
     rows = []
-    for emp in Employee._base_manager.filter(company=company, status='active'):
-        taxes = Deduction._base_manager.filter(
-            employee=emp, deduction_type='tax', year=year, month=month,
-        )
-        tax_sum = sum(float(d.amount) for d in taxes)
-        if tax_sum > 0:
-            rows.append({
-                'employee_code': emp.employee_code,
-                'employee_name': _employee_name(emp),
-                'basic_salary': round(float(emp.basic_salary or 0), 2),
-                'tax_amount': round(tax_sum, 2),
-            })
+    for emp, p, line in _month_payroll(user, year, month):
+        manual = sum(float(d.amount) for d in Deduction._base_manager.filter(
+            employee=emp, deduction_type='tax', year=year, month=month))
+        tax = float((p or {}).get('tax_deduction') or 0) + manual
+        if tax <= 0 and p is not None:
+            continue
+        rows.append({
+            'employee_code': emp.employee_code,
+            'employee_name': _employee_name(emp) + ('' if p is not None else ' [تعذر الحساب]'),
+            'basic_salary': round(float(emp.basic_salary or 0), 2),
+            'gross_salary': round(float((p or {}).get('gross_salary') or 0), 2),
+            'tax_amount': round(tax, 2),
+        })
     return rows
 
 
@@ -2485,7 +2517,16 @@ def _payroll_data(user, year, month):
             })
         except Exception as e:
             import logging
-            logging.getLogger(__name__).error(f'_payroll_data error for {emp}: {e}')
+            logging.getLogger(__name__).exception(f'_payroll_data error for {emp}: {e}')
+            # الموظف يظهر بأصفار وعلامة بدل ما يختفي من الملف من غير ما حد ياخد باله
+            rows.append({
+                'employee_code': getattr(emp, 'employee_code', '') or '',
+                'employee_name': f'{_employee_name(emp)} [خطأ - راجع الحساب]',
+                'department': getattr(getattr(emp, 'department', None), 'name_ar', '') or '',
+                **{k: 0 for k in ('basic_salary', 'allowances_total', 'bonuses_total', 'overtime_bonus', 'gross_salary',
+                                  'late_deduction', 'absence_deduction', 'insurance_deduction', 'total_deductions',
+                                  'net_salary')},
+            })
     return rows
 
 
@@ -2540,9 +2581,10 @@ insurance_report, insurance_export_excel, insurance_export_pdf = _make_report_vi
         ('employee_name', 'اسم الموظف', 25),
         ('insurance_number', 'رقم التأمين', 18),
         ('basic_salary', 'الراتب الأساسي', 15),
-        ('insurance_base', 'الأساس التأميني', 18),
-        ('insurance_amount', 'مبلغ التأمين', 15),
+        ('insurance_amount', 'حصة الموظف', 15),
+        ('company_share', 'حصة الشركة', 15),
     ],
+    needs_year_month=True,
 )
 
 tax_report, tax_export_excel, tax_export_pdf = _make_report_views(
@@ -2551,6 +2593,7 @@ tax_report, tax_export_excel, tax_export_pdf = _make_report_views(
         ('employee_code', 'الكود', 15),
         ('employee_name', 'اسم الموظف', 25),
         ('basic_salary', 'الراتب الأساسي', 18),
+        ('gross_salary', 'إجمالي المرتب', 18),
         ('tax_amount', 'مبلغ الضريبة', 18),
     ],
     needs_year_month=True,

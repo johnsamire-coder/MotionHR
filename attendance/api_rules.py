@@ -9,6 +9,8 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
 import json
+
+from attendance.policy_versions import changed_fields, month_edges, soft_delete
 from datetime import date
 
 from .company_policy_models import PenaltyRule, BonusRule, AllowanceRule
@@ -205,12 +207,23 @@ def _handle_detail(request, rule_id, ModelClass, to_dict_func, core_fields, extr
             return JsonResponse({'success': True, 'rule': to_dict_func(rule)})
 
         if request.method == 'DELETE':
-            rule.delete()
-            return JsonResponse({'success': True, 'message': 'تم الحذف'})
+            return JsonResponse({'success': True, 'message': soft_delete(rule)})
 
         data = json.loads(request.body.decode('utf-8'))
+
+        # إيقاف القاعدة: بتقف من آخر الشهر ده (قبل كده الإيقاف من التطبيق كان بيعمل نسخة جديدة شغالة)
+        if 'is_active' in data and not bool(data['is_active']) and rule.is_active:
+            first, last, _ = month_edges()
+            if rule.start_date and rule.start_date > last:
+                rule.is_active = False          # لسه مابدأتش: مفيش شهور اتحسبت بيها
+            else:
+                rule.end_date = min(rule.end_date or last, last)
+            rule.save()
+            return JsonResponse({'success': True, 'message': 'القاعدة هتقف من الشهر الجاي',
+                                 'edit_mode': 'deactivated', 'rule': to_dict_func(rule)})
+
         edit_mode = data.get('edit_mode', 'auto')
-        is_core_change = any(f in data for f in core_fields)
+        is_core_change = bool(changed_fields(rule, data, core_fields, current_ids=_m2m_read_ids(rule)))
         if edit_mode == 'auto':
             edit_mode = 'new_version' if is_core_change else 'metadata_only'
 
@@ -238,6 +251,9 @@ def _handle_detail(request, rule_id, ModelClass, to_dict_func, core_fields, extr
         last_day = monthrange(today.year, today.month)[1]
         current_month_end = _date(today.year, today.month, last_day)
 
+        if rule.is_superseded:
+            # نسخة قديمة اتقفلت: تعديلها كان بيعمل نسخة جديدة موازية ويمد تاريخ القديمة
+            return JsonResponse({'success': False, 'error': 'دي نسخة قديمة اتقفلت ومينفعش تتعدل. عدّل النسخة الحالية.'}, status=400)
         rule.end_date = current_month_end
         rule.is_superseded = True
         rule.save()

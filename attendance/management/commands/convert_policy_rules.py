@@ -18,6 +18,9 @@ from django.utils import timezone
 MARK = 'converted_from_policy:'
 
 
+from attendance.payroll_rules import normalize_rule_type
+
+
 class _Undo(Exception):
     pass
 
@@ -30,25 +33,25 @@ def _late_tiers(rules):
         to = int(r.to_minutes)
         if i + 1 < len(rules) and rules[i + 1].from_minutes > to + 1:
             to = rules[i + 1].from_minutes - 1
-        value = float(r.deduction_value or 0)
-        if r.deduction_type == 'none':
-            tier = {'deduction_type': 'fixed_total', 'value': 0}
-        elif r.deduction_type == 'day_fraction':
+        kind, value = normalize_rule_type(r.deduction_type, r.deduction_value)
+        if kind == 'day_fraction':
             tier = {'deduction_type': 'day_fraction', 'value': value}
-        elif r.deduction_type == 'fixed_amount':
+        elif kind == 'fixed_amount':
             tier = {'deduction_type': 'fixed_total', 'value': value}
-        else:  # per_minute
+        elif kind == 'per_minute':
             tier = {'deduction_type': 'fixed_per_unit', 'value': value}
+        else:  # none/warning أو نوع مش معروف = من غير خصم
+            tier = {'deduction_type': 'fixed_total', 'value': 0}
         tier.update({'from': int(r.from_minutes), 'to': to})
         tiers.append(tier)
     return tiers
 
 
 def _absence_tiers(rule):
-    value = float(rule.deduction_value or 0)
-    if rule.deduction_type == 'day_fraction':
+    kind, value = normalize_rule_type(rule.deduction_type, rule.deduction_value)
+    if kind == 'day_fraction':
         t = {'deduction_type': 'day_fraction', 'value': value}
-    elif rule.deduction_type == 'fixed_amount':
+    elif kind == 'fixed_amount':
         t = {'deduction_type': 'fixed_per_unit', 'value': value}
     else:  # warning = إنذار بس من غير خصم
         t = {'deduction_type': 'fixed_total', 'value': 0}
@@ -96,7 +99,8 @@ class Command(BaseCommand):
                 out(f'  [{pol.company_id}] {pol.name}: اتنقلت قبل كده — هتتخطى')
                 continue
             late = list(LateRule.objects.filter(policy=pol))
-            absence = AbsenceRule.objects.filter(policy=pol, absence_type='unexcused').order_by('display_order').first()
+            absence = AbsenceRule.objects.filter(policy=pol, absence_type='unexcused').order_by('display_order').first() or \
+                AbsenceRule.objects.filter(policy=pol).order_by('display_order').first()
             ot = OvertimeRule.objects.filter(policy=pol, overtime_type='after_shift').order_by('display_order').first()
             if not (late or absence or ot):
                 continue

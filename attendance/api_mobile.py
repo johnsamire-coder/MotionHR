@@ -1306,7 +1306,8 @@ def mobile_attendance_action(request):
                 # لو فيه خصم فعلي، سجله في جدول الخصومات
                 if late_warning_info['should_deduct'] and late_warning_info['deduction_days'] > 0:
                     try:
-                        daily_salary = float(getattr(employee, 'basic_salary', 0) or 0) / 30.0
+                        from attendance.payroll_rules import daily_salary_for
+                        daily_salary = daily_salary_for(employee, today.year, today.month)
                         deduction_amount = daily_salary * late_warning_info['deduction_days']
                         Deduction._base_manager.create(
                             company=employee.company,

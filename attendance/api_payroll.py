@@ -255,7 +255,7 @@ def payroll_summary(request):
         if getattr(emp, 'termination_date', None) and emp.termination_date < month_start:
             continue
 
-        payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+        payroll = apply_approved_run(emp, calculate_effective_payroll(emp, year, month, settings, lang=lang), year, month)
         results.append(_serialize_summary_row(payroll))
 
         grand_total_salary += payroll['basic_salary']
@@ -505,7 +505,7 @@ def payroll_employee_detail(request):
         return Response({'error': 'Employee not found'}, status=404)
 
     settings = _get_payroll_settings(user)
-    payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+    payroll = apply_approved_run(emp, calculate_effective_payroll(emp, year, month, settings, lang=lang), year, month)
 
     if req_format == 'pdf':
         try:
@@ -644,10 +644,69 @@ def payroll_settings(request):
         })
 
 
+def payroll_run_employees(company, year, month):
+    """
+    موظفين مسير الشهر: كل اللي كان شغال في أي يوم من فترة المرتب، مش بس اللي حالته "نشط" النهارده.
+    اللي في إجازة أو موقوف ليه سطر، واللي ساب الشغل في نص الشهر بيتحسبله لحد يوم إنهاء خدمته.
+    """
+    from django.db.models import Q
+    from employees.models import Employee
+    from attendance.payroll_rules import get_payroll_period_bounds
+    p_first, p_last = get_payroll_period_bounds(company, year, month)
+    left = ('terminated', 'resigned', 'retired')
+    return Employee._base_manager.filter(company=company).filter(
+        Q(hire_date__isnull=True) | Q(hire_date__lte=p_last)
+    ).filter(
+        Q(termination_date__gte=p_first) |
+        (Q(termination_date__isnull=True) & ~Q(status__in=left))
+    )
+
+
+_LINE_FIELDS = (
+    ('basic_salary', 'basic_salary'), ('allowances_total', 'allowances_total'), ('overtime_bonus', 'overtime_total'),
+    ('bonuses_total', 'bonuses_total'), ('gross_salary', 'gross_salary'), ('late_deduction', 'late_deduction'),
+    ('absence_deduction', 'absence_deduction'), ('insurance_deduction', 'insurance_deduction'),
+    ('installments_total', 'installments_total'), ('penalties_total', 'penalties_total'),
+    ('extra_deductions_total', 'extra_deductions_total'), ('total_deductions', 'total_deductions'),
+    ('net_salary', 'net_salary'),
+)
+
+
+def apply_approved_run(emp, payroll, year, month):
+    """
+    لو مسير الشهر ده اتعتمد: أرقام الكشف هي اللي في المسير المعتمد (اللي اتصرف فعلاً)
+    مش حساب جديد ممكن يكون اتغير بعد الاعتماد.
+    """
+    from attendance.payroll_pro_models import PayrollLine
+    line = PayrollLine._base_manager.filter(
+        employee=emp, payroll_run__year=year, payroll_run__month=month,
+        payroll_run__status__in=('approved', 'locked'),
+    ).first()
+    payroll['is_final'] = line is not None
+    if line is not None:
+        for key, field in _LINE_FIELDS:
+            payroll[key] = float(getattr(line, field) or 0)
+        payroll['payroll_run_id'] = line.payroll_run_id
+    return add_other_items(payroll)
+
+
+def add_other_items(payroll):
+    """
+    "استحقاقات أخرى" و"خصومات أخرى": الفرق بين الإجمالي والبنود اللي الشاشات بتعرضها،
+    عشان البنود تجمع على الإجمالي المكتوب.
+    """
+    f = lambda k: float(payroll.get(k) or 0)
+    shown_earn = f('basic_salary') + f('allowances_total') + f('overtime_bonus') + f('bonuses_total')
+    shown_ded = sum(f(k) for k in ('late_deduction', 'absence_deduction', 'insurance_deduction', 'installments_total',
+                                   'penalties_total', 'extra_deductions_total', 'tax_deduction'))
+    payroll['other_earnings'] = round(max(f('gross_salary') - shown_earn, 0), 2)
+    payroll['other_deductions'] = round(max(f('total_deductions') - shown_ded, 0), 2)
+    return payroll
+
+
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
-
 def employee_payslip(request):
     """
     كشف راتب الموظف لنفسه
@@ -665,7 +724,7 @@ def employee_payslip(request):
         return Response({'error': 'Employee not found'}, status=404)
 
     settings = _get_payroll_settings(user)
-    payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+    payroll = apply_approved_run(emp, calculate_effective_payroll(emp, year, month, settings, lang=lang), year, month)
 
     if req_format == 'pdf':
         try:
@@ -698,10 +757,16 @@ def payroll_runs_list(request):
         if not company:
             return Response({'success': False, 'error': 'لا توجد شركة مرتبطة'}, status=400)
 
-        runs = PayrollRun._base_manager.filter(
-            company=company
-        ).select_related('approved_by').order_by('-year', '-month')[:24]
+        runs = PayrollRun._base_manager.filter(company=company)
+        # التطبيق بيبعت الشهر المختار: نرجع مسير الشهر ده بس (قبل كده كل المسيرات كانت بتظهر باسمه)
+        _y, _m = request.GET.get('year'), request.GET.get('month')
+        if _y and _m and str(_y).isdigit() and str(_m).isdigit():
+            runs = runs.filter(year=int(_y), month=int(_m))
+        runs = runs.select_related('approved_by').order_by('-year', '-month')[:24]
 
+        from django.db.models import Sum
+        nets = dict(PayrollLine._base_manager.filter(payroll_run__in=[r.id for r in runs]).values_list(
+            'payroll_run_id').annotate(t=Sum('net_salary')).values_list('payroll_run_id', 't'))
         data = []
         for r in runs:
             data.append({
@@ -719,6 +784,7 @@ def payroll_runs_list(request):
                 'approved_at': str(r.approved_at)[:16] if r.approved_at else None,
                 'created_at': str(r.created_at)[:16] if r.created_at else None,
                 'notes': r.notes or '',
+                'grand_net': round(float(nets.get(r.id) or 0), 2),
             })
 
         return Response({'success': True, 'runs': data, 'count': len(data)})
@@ -792,83 +858,87 @@ def payroll_run_create(request):
         # ===== نهاية القواعد =====
 
         # لو فيه run موجود لنفس الشهر وحالته draft → نمسحه ونعيد الحساب
-        existing = PayrollRun._base_manager.filter(
-            company=company, year=year, month=month
-        ).first()
+        from django.db import transaction as _tx
+        with _tx.atomic():
+            # قفل المسير عشان محدش يعتمده وإحنا بنعيد حسابه
+            existing = PayrollRun._base_manager.select_for_update().filter(
+                company=company, year=year, month=month
+            ).first()
 
-        if existing and existing.status in ('approved', 'locked'):
-            return Response({
-                'success': False,
-                'error': f'يوجد تشغيل معتمد/مقفول لهذا الشهر (ID: {existing.id}). لا يمكن إعادة التشغيل.'
-            }, status=400)
+            if existing and existing.status in ('approved', 'locked'):
+                return Response({
+                    'success': False,
+                    'error': f'يوجد تشغيل معتمد/مقفول لهذا الشهر (ID: {existing.id}). لا يمكن إعادة التشغيل.'
+                }, status=400)
 
-        if existing:
-            # السطور القديمة للمسودة (المدير المرتبط بالجدول بيتفلتر بالشركة فكان بيرجع فاضي ومابيمسحش)
-            PayrollLine._base_manager.filter(payroll_run=existing).delete()
-            run = existing
-            run.notes = notes
-            run.status = 'draft'
-            run.save()
-        else:
-            run = PayrollRun._base_manager.create(
-                company=company,
-                year=year,
-                month=month,
-                status='draft',
-                notes=notes,
-                created_by=user,
-            )
-
-        settings = _get_payroll_settings(user)
-        employees = Employee._base_manager.filter(
-            company=company,
-            status='active'
-        ).select_related('user', 'branch', 'department', 'job_title')
-
-        results = []
-        errors = []
-        grand_net = 0.0
-
-        for emp in employees:
-            try:
-                payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
-
-                PayrollLine._base_manager.create(
+            if existing:
+                # السطور القديمة للمسودة (المدير المرتبط بالجدول بيتفلتر بالشركة فكان بيرجع فاضي ومابيمسحش)
+                PayrollLine._base_manager.filter(payroll_run=existing).delete()
+                run = existing
+                run.notes = notes
+                run.status = 'draft'
+                run.save()
+            else:
+                run = PayrollRun._base_manager.create(
                     company=company,
-                    payroll_run=run,
-                    employee=emp,
-                    basic_salary=payroll.get('basic_salary', 0),
-                    allowances_total=payroll.get('allowances_total', 0),
-                    overtime_total=payroll.get('overtime_bonus', 0),
-                    bonuses_total=payroll.get('bonuses_total', 0),
-                    gross_salary=payroll.get('gross_salary', 0),
-                    late_deduction=payroll.get('late_deduction', 0),
-                    absence_deduction=payroll.get('absence_deduction', 0),
-                    insurance_deduction=payroll.get('insurance_deduction', 0),
-                    installments_total=payroll.get('installments_total', 0),
-                    penalties_total=payroll.get('penalties_total', 0),
-                    extra_deductions_total=payroll.get('extra_deductions_total', 0),
-                    total_deductions=payroll.get('total_deductions', 0),
-                    net_salary=payroll.get('net_salary', 0),
-                    working_days=payroll.get('total_working_days', 0),
-                    attended_days=payroll.get('attended_days', 0),
-                    absent_days=payroll.get('absent_days', 0),
-                    late_days=payroll.get('late_days', 0),
-                    mission_days=payroll.get('mission_days', 0),
-                    on_leave_days=payroll.get('on_leave_days', 0),
-                    late_minutes=payroll.get('total_late_minutes', 0),
-                    overtime_hours=payroll.get('overtime_hours', 0),
-                    currency=payroll.get('currency', 'EGP'),
+                    year=year,
+                    month=month,
+                    status='draft',
+                    notes=notes,
                     created_by=user,
                 )
-                grand_net += float(payroll.get('net_salary', 0) or 0)
-                results.append(emp.id)
-            except Exception as emp_err:
-                errors.append({
-                    'employee_id': emp.id,
-                    'employee_name': f'{getattr(emp, "first_name_ar", "")} {getattr(emp, "last_name_ar", "")}'.strip(),
-                    'error': str(emp_err),
-                })
+
+            settings = _get_payroll_settings(user)
+            employees = payroll_run_employees(company_obj or company, year, month).select_related(
+                'user', 'branch', 'department', 'job_title')
+
+            results = []
+            errors = []
+            grand_net = 0.0
+
+            for emp in employees:
+                try:
+                    with _tx.atomic():   # موظف فشل مايبوظش باقي المسير
+                        payroll = calculate_effective_payroll(emp, year, month, settings, lang=lang)
+
+                        PayrollLine._base_manager.create(
+                            company=company,
+                            payroll_run=run,
+                            employee=emp,
+                            basic_salary=payroll.get('basic_salary', 0),
+                            allowances_total=payroll.get('allowances_total', 0),
+                            overtime_total=payroll.get('overtime_bonus', 0),
+                            bonuses_total=payroll.get('bonuses_total', 0),
+                            gross_salary=payroll.get('gross_salary', 0),
+                            late_deduction=payroll.get('late_deduction', 0),
+                            absence_deduction=payroll.get('absence_deduction', 0),
+                            insurance_deduction=payroll.get('insurance_deduction', 0),
+                            installments_total=payroll.get('installments_total', 0),
+                            penalties_total=payroll.get('penalties_total', 0),
+                            extra_deductions_total=payroll.get('extra_deductions_total', 0),
+                            total_deductions=payroll.get('total_deductions', 0),
+                            net_salary=payroll.get('net_salary', 0),
+                            working_days=payroll.get('total_working_days', 0),
+                            attended_days=payroll.get('attended_days', 0),
+                            absent_days=payroll.get('absent_days', 0),
+                            late_days=payroll.get('late_days', 0),
+                            mission_days=payroll.get('mission_days', 0),
+                            on_leave_days=payroll.get('on_leave_days', 0),
+                            late_minutes=payroll.get('total_late_minutes', 0),
+                            overtime_hours=payroll.get('overtime_hours', 0),
+                            currency=payroll.get('currency', 'EGP'),
+                            created_by=user,
+                        )
+                        grand_net += float(payroll.get('net_salary', 0) or 0)
+                        results.append(emp.id)
+                except Exception as emp_err:
+                    import logging
+                    logging.getLogger(__name__).exception('payroll run employee failed', extra={'employee_id': emp.id})
+                    errors.append({
+                        'employee_id': emp.id,
+                        'employee_name': f'{getattr(emp, "first_name_ar", "")} {getattr(emp, "last_name_ar", "")}'.strip(),
+                        'error': str(emp_err),
+                    })
 
         return Response({
             'success': True,
@@ -880,7 +950,10 @@ def payroll_run_create(request):
             'grand_net': round(grand_net, 2),
             'errors_count': len(errors),
             'errors': errors,
-            'message': f'تم حساب مرتبات {len(results)} موظف بنجاح',
+            'partial': bool(errors),
+            'message': (f'تم حساب مرتبات {len(results)} موظف بنجاح' if not errors else
+                        f'اتحسب {len(results)} موظف، و{len(errors)} موظف ماتحسبش — راجعهم قبل الاعتماد: '
+                        + '، '.join(e['employee_name'] for e in errors[:5])),
         })
     except Exception as e:
         return Response({'success': False, 'error': str(e)}, status=500)
@@ -1041,6 +1114,16 @@ def payroll_run_approve(request, run_id):
             run = PayrollRun._base_manager.select_for_update().get(id=run.id)
             if run.status != 'draft':
                 return Response({'success': False, 'error': 'التشغيل معتمد بالفعل'}, status=400)
+            from attendance.payroll_pro_models import PayrollLine
+            line_emps = set(PayrollLine._base_manager.filter(payroll_run=run).values_list('employee_id', flat=True))
+            if not line_emps:
+                return Response({'success': False, 'error': 'المسير فاضي (مفيش ولا موظف اتحسب). شغّل المسير الأول.'},
+                                status=400)
+            missing = payroll_run_employees(run.company, run.year, run.month).exclude(id__in=line_emps)
+            if missing.exists():
+                names = '، '.join(f'{e.first_name_ar} {e.last_name_ar}'.strip() for e in missing[:5])
+                return Response({'success': False, 'error': f'فيه {missing.count()} موظف مرتبهم ماتحسبش في المسير '
+                                 f'({names}). شغّل المسير تاني بعد ما تصلح المشكلة.'}, status=400)
             # الأقساط اللي اتخصمت في المسير ده بتتسجل مدفوعة، فالسلفة بتقف لما تخلص
             record_installments_paid(run)
             if INSTALLMENTS_MARK not in (run.notes or ''):

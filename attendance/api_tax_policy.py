@@ -120,8 +120,8 @@ def tax_policy_detail(request, policy_id):
             return JsonResponse({'success': True, 'policy': _to_dict(p)})
 
         if request.method == 'DELETE':
-            p.delete()
-            return JsonResponse({'success': True, 'message': 'تم الحذف'})
+            from attendance.policy_versions import soft_delete
+            return JsonResponse({'success': True, 'message': soft_delete(p)})
 
         data = json.loads(request.body.decode('utf-8'))
         edit_mode = data.get('edit_mode', 'auto')
@@ -148,6 +148,9 @@ def tax_policy_detail(request, policy_id):
         next_month_start = _date(today.year + 1, 1, 1) if today.month == 12 else _date(today.year, today.month + 1, 1)
         current_month_end = _date(today.year, today.month, monthrange(today.year, today.month)[1])
 
+        if p.is_superseded:
+            # نسخة قديمة اتقفلت: تعديلها كان بيعمل نسخة جديدة موازية ويمد تاريخ القديمة
+            return JsonResponse({'success': False, 'error': 'دي نسخة قديمة اتقفلت ومينفعش تتعدل. عدّل النسخة الحالية.'}, status=400)
         p.end_date = current_month_end
         p.is_superseded = True
         p.save()

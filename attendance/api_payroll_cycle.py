@@ -212,6 +212,9 @@ def payroll_cycle_detail(request, policy_id):
         current_month_end = _date(today.year, today.month, last_day)
 
         # قفل النسخة القديمة
+        if policy.is_superseded:
+            # نسخة قديمة اتقفلت: تعديلها كان بيعمل نسخة جديدة موازية ويمد تاريخ القديمة
+            return JsonResponse({'success': False, 'error': 'دي نسخة قديمة اتقفلت ومينفعش تتعدل. عدّل النسخة الحالية.'}, status=400)
         policy.end_date = current_month_end
         policy.is_superseded = True
         policy.save()
