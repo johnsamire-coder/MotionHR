@@ -502,7 +502,9 @@ def absence_report(request):
                 # في أي خطأ: الأمان عدم احتساب اليوم غياب مبكراً
                 effective_working_dates = [d for d in effective_working_dates if d != today]
 
-        absent_dates = [d for d in effective_working_dates if d not in attended_dates]
+        from attendance.mission_days import employee_mission_dates
+        _mission_days_set = employee_mission_dates(emp, emp_start, emp_end)
+        absent_dates = [d for d in effective_working_dates if d not in attended_dates and d not in _mission_days_set]
         emp_working_dates = effective_working_dates
 
         if absent_dates:
@@ -1793,6 +1795,29 @@ def location_tracking_report(request):
         'employees': results,
     })
 
+
+def _eos_amount_for(emp, years, basic, as_of_date):
+    """
+    مكافأة نهاية الخدمة: من سياسة نهاية الخدمة المعتمدة في مركز السياسات لو موجودة
+    (أحدث نسخة سارية في التاريخ وتخص الموظف)، ولو مفيش سياسة نرجع للمعادلة القديمة.
+    """
+    try:
+        from django.db.models import Q
+        from attendance.company_policy_models import EndOfServicePolicy
+        policies = EndOfServicePolicy._base_manager.filter(
+            company=emp.company, is_active=True, start_date__lte=as_of_date,
+        ).filter(Q(end_date__isnull=True) | Q(end_date__gte=as_of_date)).order_by('-version_number', '-created_at')
+        for pol in policies:
+            if pol.applies_to_employee(emp):
+                return round(float(pol.calculate_eos(years, basic, 'termination').get('net_amount', 0)), 2)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("eos policy calculation failed")
+    if years <= 5:
+        return round((basic * 0.5) * years, 2)
+    return round((basic * 0.5 * 5) + (basic * (years - 5)), 2)
+
+
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -1831,10 +1856,7 @@ def eos_report(request):
         years_of_service = round(service_days / 365.25, 2)
         basic_salary = round(float(emp.basic_salary or 0), 2)
 
-        if years_of_service <= 5:
-            eos_amount = (basic_salary * 0.5) * years_of_service
-        else:
-            eos_amount = (basic_salary * 0.5 * 5) + (basic_salary * (years_of_service - 5))
+        eos_amount = _eos_amount_for(emp, years_of_service, basic_salary, as_of_date)
 
         eos_amount = round(eos_amount, 2)
         total_eos_amount += eos_amount
@@ -1898,10 +1920,7 @@ def eos_export_excel(request):
             continue
         years = round(service_days / 365.25, 2)
         basic = round(float(emp.basic_salary or 0), 2)
-        if years <= 5:
-            eos = round((basic * 0.5) * years, 2)
-        else:
-            eos = round((basic * 0.5 * 5) + (basic * (years - 5)), 2)
+        eos = _eos_amount_for(emp, years, basic, as_of_date)
 
         rows.append({
             'employee_code': emp.employee_code or '',
@@ -1975,10 +1994,7 @@ def eos_export_pdf(request):
             continue
         years = round(service_days / 365.25, 2)
         basic = round(float(emp.basic_salary or 0), 2)
-        if years <= 5:
-            eos = round((basic * 0.5) * years, 2)
-        else:
-            eos = round((basic * 0.5 * 5) + (basic * (years - 5)), 2)
+        eos = _eos_amount_for(emp, years, basic, as_of_date)
 
         rows.append({
             'employee_code': emp.employee_code or '',

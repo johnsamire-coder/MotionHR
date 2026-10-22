@@ -16,37 +16,31 @@ User = get_user_model()
 
 def generate_password(length=10):
     """
-    توليد كلمة سر آمنة
-    - حروف كبيرة + صغيرة + أرقام + رموز
+    توليد كلمة سر افتراضية: 123456
+    الموظف هيغيرها عند أول دخول (must_change_password=True)
     """
-    chars = (
-        string.ascii_uppercase +   # A-Z
-        string.ascii_lowercase +   # a-z
-        string.digits +            # 0-9
-        "@#$%"                     # رموز بسيطة
-    )
-    # نضمن وجود كل نوع
-    password = [
-        random.choice(string.ascii_uppercase),
-        random.choice(string.ascii_lowercase),
-        random.choice(string.digits),
-        random.choice("@#$%"),
-    ]
-    # باقي الطول عشوائي
-    password += random.choices(chars, k=length - 4)
-    random.shuffle(password)
-    return "".join(password)
+    return "123456"
 
 
 def generate_username(employee):
     """
-    توليد username ذكي: اسم + حرفين + آخر 4 من القومي
-    مثال: ahmedmo2345
+    توليد username من رقم الموبايل
+    مثال: 01012345678
     """
+    phone = (employee.phone or '').strip()
+    if phone:
+        # نشيل أي مسافات أو رموز
+        phone = ''.join(c for c in phone if c.isdigit() or c == '+')
+        if phone.startswith('+'):
+            return phone[1:]  # نشيل +
+        if phone.startswith('0'):
+            return phone  # 01012345678
+        return '0' + phone
+    # لو مفيش موبايل، نستخدم الاسم (fallback)
     full_name = f"{employee.first_name_ar or ''} {employee.last_name_ar or ''}".strip()
     if not full_name:
         full_name = employee.employee_code or "user"
-    nid = getattr(employee, 'national_id', '') or getattr(employee, 'phone', '') or "1234"
+    nid = getattr(employee, 'national_id', '') or "1234"
     return generate_employee_username(full_name, nid)
 
 

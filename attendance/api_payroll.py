@@ -142,6 +142,10 @@ def _serialize_summary_row(payroll):
         'weekend_allowance': payroll.get('weekend_allowance', 0),
         'field_allowance': payroll.get('field_allowance', 0),
         'field_allowance_type': payroll.get('field_allowance_type', 'none'),
+        'meal_allowance': payroll.get('meal_allowance', 0),
+        'transport_allowance': payroll.get('transport_allowance', 0),
+        'other_rule_allowances': payroll.get('other_rule_allowances', 0),
+        'rule_allowances_total': payroll.get('rule_allowances_total', 0),
         'gross_salary': payroll.get('gross_salary', 0),
         'policy_name': payroll.get('policy_name'),
 
@@ -150,6 +154,10 @@ def _serialize_summary_row(payroll):
         'late_deduction': payroll.get('late_deduction', 0),
         'absence_deduction': payroll.get('absence_deduction', 0),
         'insurance_deduction': payroll.get('insurance_deduction', 0),
+        'tax_deduction': payroll.get('tax_deduction', 0),
+        'unpaid_leave_deduction': payroll.get('unpaid_leave_deduction', 0),
+        'missing_checkout_deduction': payroll.get('missing_checkout_deduction', 0),
+        'not_employed_deduction': payroll.get('not_employed_deduction', 0),
         # ═══ New insurance system ═══
         'social_insurance_employee': payroll.get('social_insurance_employee', 0),
         'social_insurance_company': payroll.get('social_insurance_company', 0),

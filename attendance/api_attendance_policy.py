@@ -195,6 +195,7 @@ def policy_list_create(request):
 
         # إضافة القواعد لو موجودة في الـ request
         _save_policy_rules(policy, data)
+        _save_policy_assignment(policy, company, data)
 
         return Response({
             "success": True,
@@ -261,6 +262,7 @@ def policy_detail(request, policy_id):
     policy.save()
 
     _save_policy_rules(policy, data)
+    _save_policy_assignment(policy, company, data)
 
     return Response({
         "success": True,
@@ -289,10 +291,16 @@ def policy_approve(request, policy_id):
     if policy.status not in ('draft',):
         return Response({"success": False, "error": "السياسة مش في حالة مسودة"}, status=400)
 
-    # أرشف أي سياسة active موجودة بنفس النطاق
-    AttendancePolicy._base_manager.filter(
-        company=company, status='active'
-    ).update(status='archived')
+    # مانأرشفش باقي سياسات الشركة: كل سياسة ليها نطاقها (شركة/فرع/قسم).
+    # السياسة الجديدة بتاخد مكان القديمة في نفس النطاق بس.
+    from attendance.models import AttendancePolicyAssignment
+    for a in AttendancePolicyAssignment._base_manager.filter(policy=policy):
+        AttendancePolicyAssignment._base_manager.filter(
+            policy__company=company,
+            assignment_type=a.assignment_type,
+            department_id=a.department_id,
+            branch_id=a.branch_id,
+        ).exclude(policy=policy).delete()
 
     policy.status = 'active'
     policy.approved_by = request.user
@@ -351,6 +359,47 @@ def policy_assign(request, policy_id):
         "message": "تم ربط السياسة بنجاح",
         "assignment_id": assignment.id,
     })
+
+
+def _save_policy_assignment(policy, company, data):
+    """
+    ربط السياسة بنطاقها من نفس طلب الحفظ (الويب بيبعت assignment_type/branch_id/department_id).
+    نفس منطق policy_assign: الربط الجديد بيحل محل أي ربط قديم لنفس النطاق.
+    """
+    if "assignment_type" not in data:
+        return
+    from attendance.models import AttendancePolicyAssignment
+
+    assignment_type = str(data.get("assignment_type") or "company").strip()
+    if assignment_type not in ("company", "branch", "department"):
+        assignment_type = "company"
+    branch_id = data.get("branch_id") or None if assignment_type == "branch" else None
+    department_id = data.get("department_id") or None if assignment_type == "department" else None
+    if assignment_type == "branch" and not branch_id:
+        return
+    if assignment_type == "department" and not department_id:
+        return
+
+    priority = {"department": 1, "branch": 2, "company": 3}[assignment_type]
+
+    # السياسة ليها نطاق واحد من الشاشة دي. ربط السياسات التانية بنفس النطاق
+    # بيتشال وقت الاعتماد مش وقت حفظ المسودة.
+    AttendancePolicyAssignment._base_manager.filter(policy=policy).delete()
+    if policy.status == 'active':
+        AttendancePolicyAssignment._base_manager.filter(
+            policy__company=company,
+            assignment_type=assignment_type,
+            department_id=department_id,
+            branch_id=branch_id,
+        ).delete()
+    AttendancePolicyAssignment._base_manager.create(
+        company=company,
+        policy=policy,
+        assignment_type=assignment_type,
+        department_id=department_id,
+        branch_id=branch_id,
+        priority=priority,
+    )
 
 
 def _save_policy_rules(policy, data):

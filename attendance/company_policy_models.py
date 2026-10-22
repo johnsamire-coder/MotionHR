@@ -1167,6 +1167,8 @@ class PenaltyRule(TenantModel):
             return val, matched_tier
         elif dt == 'percent_basic':
             return (basic * val) / Decimal('100'), matched_tier
+        elif dt == 'day_fraction':
+            return daily * val, matched_tier
         elif dt == 'quarter_day':
             return daily / Decimal('4'), matched_tier
         elif dt == 'half_day':
@@ -2154,10 +2156,13 @@ class EndOfServicePolicy(TenantModel):
         total_months = Decimal('0')
         remaining_years = years
 
+        # الشرائح بتتحفظ من الويب والموبايل بـ from_year/to_year وقديماً بـ from_years/to_years
         for tier in (self.service_tiers or []):
-            t_from = Decimal(str(tier.get('from_years', 0)))
-            t_to = tier.get('to_years')
-            months_per_year = Decimal(str(tier.get('months_per_year', 0)))
+            t_from = Decimal(str(tier.get('from_years', tier.get('from_year', 0)) or 0))
+            t_to = tier.get('to_years', tier.get('to_year'))
+            if t_to == '':
+                t_to = None
+            months_per_year = Decimal(str(tier.get('months_per_year', 0) or 0))
 
             if remaining_years <= 0:
                 break

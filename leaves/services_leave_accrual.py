@@ -39,9 +39,6 @@ def calculate_employee_leave_entitlement(employee, leave_type, as_of_date=None):
         Q(to_months__isnull=True) | Q(to_months__gte=service_months)
     ).order_by("-from_months").first()
 
-    if not tier:
-        return Decimal(str(getattr(leave_type, 'days_allowed', 0) or 0))
-
     # فحص نوع الإجازة
     rule = LeavePolicyTypeRule._base_manager.filter(
         policy=policy,
@@ -52,12 +49,16 @@ def calculate_employee_leave_entitlement(employee, leave_type, as_of_date=None):
     if rule:
         if rule.entitlement_mode == "fixed_days":
             return Decimal(str(rule.fixed_days or 0))
-        elif rule.entitlement_mode == "from_service_tier":
-            return Decimal(str(tier.annual_entitlement_days or 0))
         elif rule.entitlement_mode == "subset_of_parent":
             return Decimal(str(rule.subset_limit_days or 0))
+        elif rule.entitlement_mode == "from_service_tier" and tier:
+            return Decimal(str(tier.annual_entitlement_days or 0))
 
-    return Decimal(str(tier.annual_entitlement_days or 0))
+    # شرائح مدة الخدمة بتخص الإجازة السنوية بس؛ باقي الأنواع (مرضي/وضع/...) بعددها في نوع الإجازة
+    if tier and getattr(leave_type, 'category', '') == 'annual':
+        return Decimal(str(tier.annual_entitlement_days or 0))
+
+    return Decimal(str(getattr(leave_type, 'days_allowed', 0) or 0))
 
 
 def refresh_employee_leave_balances(employee, as_of_date=None):
