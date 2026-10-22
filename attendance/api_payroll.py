@@ -803,7 +803,8 @@ def payroll_run_create(request):
             }, status=400)
 
         if existing:
-            existing.lines.all().delete()
+            # السطور القديمة للمسودة (المدير المرتبط بالجدول بيتفلتر بالشركة فكان بيرجع فاضي ومابيمسحش)
+            PayrollLine._base_manager.filter(payroll_run=existing).delete()
             run = existing
             run.notes = notes
             run.status = 'draft'
@@ -969,6 +970,42 @@ def payroll_run_detail(request, run_id):
         return Response({'success': False, 'error': str(e)}, status=500)
 
 
+# علامة على المسير إن أقساطه اتسجلت مدفوعة وقت الاعتماد (عشان أمر التصحيح مايحسبهاش مرتين)
+INSTALLMENTS_MARK = '[أقساط السلف اتسجلت]'
+
+
+def installment_due(inst, year, month):
+    """
+    قسط السلفة اللي بيتخصم في شهر معين (نفس حساب المرتب):
+    القسط الشهري أو الباقي لو أقل، ومن شهر البداية بس.
+    """
+    from decimal import Decimal
+    if inst.status != 'active' or (inst.start_year, inst.start_month) > (year, month):
+        return Decimal('0')
+    remaining = (inst.total_amount or 0) - (inst.paid_amount or 0)
+    if remaining <= 0:
+        return Decimal('0')
+    return min(inst.monthly_amount or 0, remaining)
+
+
+def record_installments_paid(run):
+    """عند اعتماد المسير: نزوّد المدفوع لكل سلفة اتخصم قسطها، ونقفل اللي خلصت"""
+    from decimal import Decimal
+    from attendance.payroll_pro_models import PayrollInstallment, PayrollLine
+    emp_ids = list(PayrollLine._base_manager.filter(payroll_run=run).values_list('employee_id', flat=True))
+    for inst in PayrollInstallment._base_manager.select_for_update().filter(employee_id__in=emp_ids, status='active'):
+        pay = installment_due(inst, run.year, run.month)
+        if pay <= 0:
+            if (inst.total_amount or 0) - (inst.paid_amount or 0) <= 0:
+                inst.status = 'completed'
+                inst.save(update_fields=['status'])
+            continue
+        inst.paid_amount = (inst.paid_amount or 0) + pay
+        if inst.total_amount - inst.paid_amount <= Decimal('0.009'):
+            inst.status = 'completed'
+        inst.save(update_fields=['paid_amount', 'status'])
+
+
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, JWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -999,10 +1036,19 @@ def payroll_run_approve(request, run_id):
         if run.status == 'locked':
             return Response({'success': False, 'error': 'التشغيل مقفول ولا يمكن اعتماده مرة أخرى'}, status=400)
 
-        run.status = 'approved'
-        run.approved_by = user
-        run.approved_at = timezone.now()
-        run.save()
+        from django.db import transaction
+        with transaction.atomic():
+            run = PayrollRun._base_manager.select_for_update().get(id=run.id)
+            if run.status != 'draft':
+                return Response({'success': False, 'error': 'التشغيل معتمد بالفعل'}, status=400)
+            # الأقساط اللي اتخصمت في المسير ده بتتسجل مدفوعة، فالسلفة بتقف لما تخلص
+            record_installments_paid(run)
+            if INSTALLMENTS_MARK not in (run.notes or ''):
+                run.notes = f'{run.notes}\n{INSTALLMENTS_MARK}'.strip()
+            run.status = 'approved'
+            run.approved_by = user
+            run.approved_at = timezone.now()
+            run.save()
 
         return Response({
             'success': True,

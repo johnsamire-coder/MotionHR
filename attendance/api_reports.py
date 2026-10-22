@@ -2128,22 +2128,49 @@ def _reimbursements_data(user):
     return rows
 
 
-def _bank_transfer_data(user):
-    """كشف تحويلات البنك"""
+def _bank_transfer_data(user, year, month):
+    """
+    كشف تحويلات البنك لشهر معين: المبلغ = صافي المرتب (مش الأساسي).
+    لو فيه مسير للشهر ده بناخد الصافي من سطر الموظف فيه، وإلا بنحسبه زي كشف المرتب.
+    """
     from employees.models import Employee
+    from attendance.payroll_pro_models import PayrollLine, PayrollRun
+    from attendance.payroll_rules import calculate_effective_payroll
+    from django.db.models import Q
+    import logging
+    logger = logging.getLogger(__name__)
     company = getattr(user, 'company', None)
+    if not company:
+        return []
+    run = PayrollRun._base_manager.filter(company=company, year=year, month=month).first()
+    lines = {}
+    if run:
+        lines = {l.employee_id: l for l in PayrollLine._base_manager.filter(payroll_run=run)}
+    emps = Employee._base_manager.filter(company=company, salary_payment_method='bank').filter(
+        Q(status='active') | Q(id__in=list(lines))
+    ).exclude(bank_account__isnull=True).exclude(bank_account='').order_by('employee_code')
+    status_ar = dict(PayrollRun.STATUS_CHOICES)
     rows = []
-    emps = Employee._base_manager.filter(
-        company=company, status='active', salary_payment_method='bank',
-    ).exclude(bank_account__isnull=True).exclude(bank_account='')
     for emp in emps:
+        line = lines.get(emp.id)
+        if line is not None:
+            net = float(line.net_salary or 0)
+            source = f'المسير ({status_ar.get(run.status, run.status)})'
+        else:
+            try:
+                net = float(calculate_effective_payroll(emp, year, month).get('net_salary') or 0)
+                source = 'محسوب (مفيش مسير)'
+            except Exception:
+                logger.exception('bank transfer net salary failed', extra={'employee_id': emp.id})
+                net, source = 0.0, 'تعذر الحساب — راجع المرتب'
         rows.append({
             'employee_code': emp.employee_code,
             'employee_name': _employee_name(emp),
             'bank_name': emp.bank_name or '',
             'account_number': emp.bank_account or '',
             'iban': emp.iban or '',
-            'amount': round(float(emp.basic_salary or 0), 2),
+            'amount': round(max(net, 0), 2),
+            'source': source,
         })
     return rows
 
@@ -2493,15 +2520,17 @@ reimbursements_report, reimbursements_export_excel, reimbursements_export_pdf = 
 )
 
 bank_transfer_report, bank_transfer_export_excel, bank_transfer_export_pdf = _make_report_views(
-    'bank_transfer', _bank_transfer_data, 'كشف تحويلات البنك',
+    'bank_transfer', _bank_transfer_data, 'كشف تحويلات البنك (صافي المرتب)',
     [
         ('employee_code', 'الكود', 15),
         ('employee_name', 'اسم الموظف', 25),
         ('bank_name', 'البنك', 20),
         ('account_number', 'رقم الحساب', 20),
         ('iban', 'IBAN', 25),
-        ('amount', 'المبلغ', 15),
+        ('amount', 'المبلغ (الصافي)', 15),
+        ('source', 'المصدر', 20),
     ],
+    needs_year_month=True,
 )
 
 insurance_report, insurance_export_excel, insurance_export_pdf = _make_report_views(

@@ -1601,7 +1601,7 @@ def flex_adjustment_review(request, adjustment_id):
         notes = request.data.get('notes', '')
         adj.status = 'approved' if action == 'approve' else 'rejected'
         adj.reviewed_by = request.user
-        adj.reviewed_at = tz.now()
+        adj.reviewed_at = timezone.now()
         adj.review_notes = notes
         adj.save()
 
