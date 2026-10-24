@@ -1157,6 +1157,7 @@ def manager_update_employee(request, employee_id):
         phone2 = str(data.get("phone2", getattr(target_employee, "phone2", "") or "")).strip()
         email = str(data.get("email", getattr(target_employee, "email", "") or "")).strip()
         national_id = str(data.get("national_id", getattr(target_employee, "national_id", "") or "")).strip()
+        employee_code_input = str(data.get("employee_code", "") or "").strip()
 
         birth_date_default = getattr(target_employee, "birth_date", None)
         hire_date_default = getattr(target_employee, "hire_date", None)
@@ -1309,6 +1310,12 @@ def manager_update_employee(request, employee_id):
         if Employee._base_manager.filter(company=company, phone=phone).exclude(id=target_employee.id).exists():
             return Response({"success": False, "error": "رقم الموبايل مستخدم بالفعل داخل نفس الشركة"}, status=400)
 
+        if employee_code_input and employee_code_input != (target_employee.employee_code or ""):
+            if len(employee_code_input) > 20:
+                return Response({"success": False, "error": "الكود الوظيفي طويل (الحد الأقصى 20 حرفاً)"}, status=400)
+            if Employee._base_manager.filter(company=company, employee_code=employee_code_input).exclude(id=target_employee.id).exists():
+                return Response({"success": False, "error": "الرقم الوظيفي موجود مسبقاً"}, status=400)
+
         _old_money = (getattr(target_employee, "basic_salary", None),
                       getattr(target_employee, "bank_account", None), getattr(target_employee, "iban", None))
         with transaction.atomic():
@@ -1323,6 +1330,8 @@ def manager_update_employee(request, employee_id):
                 target_employee.phone2 = phone2 or None
             target_employee.email = email or None
             target_employee.national_id = national_id
+            if employee_code_input and employee_code_input != (target_employee.employee_code or ""):
+                target_employee.employee_code = employee_code_input
             target_employee.birth_date = birth_date
             target_employee.gender = gender
             target_employee.hire_date = hire_date
