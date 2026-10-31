@@ -78,20 +78,18 @@
 
 ## 3. هيكل المستودع
 
-> **مهم:** فيه نسختين جوه المستودع. **النسخة الشغالة هي فولدر `motion-store/`** (أحدث، وفيها 18 شاشة). الفولدرات `backend/` و `frontend/` اللي في الجذر نسخة أقدم (12 شاشة بس). سكريبت `Start-MotionStore.ps1` بيشغّل من `motion-store/`.
+> البرنامج كله جوه فولدر `motion-store/`. النسخة القديمة اللي كانت في أول المستودع (`backend/` و `frontend/`) **اتمسحت** يوم 31 أكتوبر 2026.
 
 ```
 MotionStore/
-├── README.md, docker-compose.yml, RUN_MOTION_STORE.bat   ← نسخة الجذر القديمة
-├── Start-MotionStore.ps1     ← تشغيل النسخة الشغالة على جهاز المحل (E:\MotionStore\motion-store)
+├── README.md                 ← بيشاور على motion-store/
+├── Start-MotionStore.ps1     ← تشغيل البرنامج على جهاز المحل (E:\MotionStore\motion-store)
 ├── NoQuickEdit.ps1           ← بيقفل Quick Edit في الشاشة السودا علشان السيرفر مايقفش لو حد داس عليها
-├── pricing_inspection.txt    ← كشف قديم على موديلات التسعير
-├── docs/MOTION_STORE_MASTER_SPEC.md
-├── backend/, frontend/       ← النسخة القديمة
-└── motion-store/             ← ✅ النسخة الشغالة
+└── motion-store/             ← البرنامج
     ├── RUN_MOTION_STORE.bat  ← تشغيل ذكي على أي جهاز
     ├── docker-compose.yml    ← PostgreSQL 16
     ├── docs/MOTION_STORE_MASTER_SPEC.md   ← المواصفات المعتمدة
+    ├── docs/MOTION_STORE_HANDBOOK.md      ← الوثيقة دي
     ├── motionstore_inspection_report*.txt ← تقارير كشف
     ├── backups/before-sorting-20260928-154414/
     ├── backend/
@@ -103,9 +101,10 @@ MotionStore/
     │   │   ├── products, suppliers, purchasing, raw_lots, sorting, costing
     │   │   ├── inventory, waste, transfers, stock_count
     │   │   ├── pricing, discounts, sales, returns, customers
-    │   │   ├── shifts, treasury, payments, accounting
+    │   │   ├── shifts, treasury, payments
+    │   │   ├── accounting  ← + auto_journals.py (قيود الشراء والفرز) + أمر post_missing_journals
     │   │   └── reports, printing
-    │   └── tests/ (test_end_to_end_flow, test_online_shift_closing, test_stock_bands_refresh)
+    │   └── tests/ (test_end_to_end_flow, test_online_shift_closing, test_stock_bands_refresh, test_auto_journals)
     └── frontend/
         ├── package.json, vite.config.js, tailwind.config.js
         └── src/
@@ -558,12 +557,32 @@ Tenant (العميل)
 | 5030 | خسائر هبوط أسعار المخزون |
 | 5040 | فروقات أسعار الشراء |
 
-**القيود اللي الكود بيعملها فعلاً لوحده:**
-- **البيع (`process_pos_sale`):** مدين 1030 النقدية (أو 1050 العملاء للآجل) ← دائن 4010 المبيعات، ومدين 5010 تكلفة المبيعات ← دائن 1020 المخزون.
-- **المرتجع (`process_sales_return*`):** العكس: مدين 4010 ← دائن 1030 أو 1050، ومدين 1020 ← دائن 5010.
-- **تسوية الجرد (`stock_count/services.py`):** العجز مدين 5030 ← دائن 1020، والزيادة مدين 1020 ← دائن 3010.
+**القيود اللي البرنامج بيعملها لوحده:**
 
-> قيود الشراء والفرز (1010 و 2010 و 5020) موجودة في دليل الحسابات، بس الكود لسه **مابيعملهاش لوحده**. حركات الخزن بتتسجل في `TreasuryTransaction`.
+| العملية | القيد | المكان في الكود |
+| --- | --- | --- |
+| فاتورة شراء | من حـ/ 1010 مخزون البالات الخام إلى حـ/ 2010 الموردين، بإجمالي الفاتورة شامل النقل | `apps/accounting/auto_journals.py` ← `sync_purchase_journal` |
+| تعديل فاتورة شراء | قيد تسوية بالفرق بس (`JV-PUR-<رقم>-ADJ1`)، ومفيش قيد بيتمسح | نفس الدالة |
+| إلغاء فاتورة شراء | قيد عكسي للقيد الأصلي | نفس الدالة |
+| الفرز والترحيل للمخزون | من حـ/ 1020 بضاعة تامة (تكلفة اللي دخل المخزن) + من حـ/ 5020 خسائر هالك الفرز (باقي تكلفة البالة) إلى حـ/ 1010 مخزون البالات الخام (تكلفة البالة كلها) | `post_sorting_journal` (بتتنادى من `post_sorting_to_inventory`) |
+| البيع | من حـ/ 1030 النقدية (أو 1050 العملاء للآجل) إلى حـ/ 4010 المبيعات، ومن حـ/ 5010 تكلفة المبيعات إلى حـ/ 1020 | `process_pos_sale` |
+| المرتجع | عكس قيد البيع | `process_sales_return*` |
+| تسوية الجرد | العجز: من 5030 إلى 1020. الزيادة: من 1020 إلى 3010 | `stock_count/services.py` |
+| المصروف | من حساب المصروف إلى 1030، والإلغاء عكسه | `_expense_journal` |
+
+**أمان قيود الشراء والفرز:**
+- القيد بيتعمل في خطوة منفصلة (savepoint). لو فشل لأي سبب، الفاتورة أو الفرز **بيتحفظوا عادي** زي الأول، والغلطة بتتسجل في اللوج.
+- مفيش تغيير في جداول القاعدة (مفيش migrations).
+
+**القيود القديمة (اللي اتعملت قبل الإضافة دي):**
+```bash
+cd motion-store/backend
+python manage.py post_missing_journals            # معاينة بس، مابيكتبش حاجة
+python manage.py post_missing_journals --apply    # بيعمل القيود الناقصة
+```
+بيدوّر على كل فاتورة شراء أو فرز من غير قيد، وبيعمله بتاريخ المستند نفسه. لو اتشغّل تاني مابيكررش حاجة.
+
+> **لسه مابيتعملش قيد لوحده:** دفع المورد (المفروض من حـ/ 2010 إلى حـ/ النقدية). حركته بتتسجل في الخزنة بس، فرصيد 2010 في الحسابات هيبان أكبر من الحقيقي لحد ما ده يتضاف.
 
 ---
 
@@ -599,12 +618,15 @@ python manage.py test tests
 | `test_end_to_end_flow.py` | الدورة الكاملة: مورد ← شراء ← استلام بالة ← فرز ← تكلفة ← دفتر مخزون ← وردية ← بيع ← تكلفة مبيعات ← قيد مزدوج ← تقارير ربح البالة |
 | `test_online_shift_closing.py` | طلبات الأونلاين ليها تقفيل منفصل عن الدرج |
 | `test_stock_bands_refresh.py` | تحديث مجموعات الأكواد |
+| `test_auto_journals.py` | قيد الشراء، والتعديل والإلغاء بالفرق، والاستبدال، وقيد الفرز (الحسابات = قيمة المخزون)، وإن فشل القيد مايوقفش الشراء، وأمر القيود الناقصة |
+
+> `test_end_to_end_flow.py` فيه اختبار واحد بيفشل من قبل التعديلات دي (متوقع خسارة هالك 1000 والحساب الحالي بيطلّع 0)، ومحتاج يتظبط على طريقة التكلفة الحالية.
 
 ---
 
 ## 16. ملاحظات وتحذيرات
 
-- **النسخة الشغالة في `motion-store/`**، والجذر نسخة قديمة. أي تعديل يتعمل في `motion-store/`.
+- البرنامج كله في `motion-store/`، والنسخة القديمة اتمسحت.
 - السكريبت `RUN_MOTION_STORE.bat` بيعمل مستخدم `admin` بباسورد بسيط مكتوب جوه السكريبت، و`docker-compose.yml` فيه باسورد تطوير. **لازم يتغيّروا** قبل أي تشغيل عند عميل، والمستودع عام.
 - `DJANGO_DEBUG` افتراضياً `True` و `ALLOWED_HOSTS='*'`، ولازم يتظبطوا في التشغيل الحقيقي.
 - التشغيل الحالي محلي على جهاز المحل (Django `runserver` + Vite dev). لسه مفيش إعداد نشر على سيرفر (gunicorn/nginx).
